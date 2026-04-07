@@ -1,0 +1,685 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #0f0c29;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* ========== Element Plus 深色主题适配 ========== */
+
+/* el-select 选择器输入框 - 必须放在最前面 */
+.el-select {
+  --el-fill-color-blank: transparent !important;
+  --el-bg-color: transparent !important;
+  --el-text-color-regular: rgba(255, 255, 255, 0.9) !important;
+  --el-text-color-placeholder: rgba(255, 255, 255, 0.4) !important;
+  --el-border-color: rgba(255, 255, 255, 0.15) !important;
+  --el-border-color-hover: rgba(102, 126, 234, 0.5) !important;
+}
+
+.el-select .el-input__wrapper {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: none !important;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.el-select .el-input__wrapper:hover {
+  border-color: rgba(102, 126, 234, 0.5) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
+.el-select .el-input__wrapper.is-focus {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
+}
+
+.el-select .el-input__inner {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.el-select .el-input__suffix,
+.el-select .el-input__suffix-inner,
+.el-select .el-select__caret,
+.el-select .el-icon {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+/* el-select 下拉面板 */
+.el-select-dropdown,
+.el-select__popper.el-popper {
+  background: rgba(30, 30, 50, 0.98) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  backdrop-filter: blur(10px);
+}
+
+.el-select-dropdown__item {
+  color: rgba(255, 255, 255, 0.85) !important;
+  background: transparent !important;
+}
+
+.el-select-dropdown__item:hover,
+.el-select-dropdown__item.hover {
+  background: rgba(102, 126, 234, 0.2) !important;
+  color: #fff !important;
+}
+
+.el-select-dropdown__item.selected {
+  color: #fff !important;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%) !important;
+}
+
+.el-select-dropdown__item.is-disabled {
+  color: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* el-date-picker 下拉面板 */
+.el-date-editor.el-input,
+.el-date-editor.el-input__wrapper {
+  --el-fill-color-blank: transparent !important;
+  --el-bg-color: transparent !important;
+}
+
+.el-picker__popper,
+.el-picker-panel,
+.el-date-picker {
+  background: rgba(30, 30, 50, 0.98) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  backdrop-filter: blur(10px);
+}
+
+.el-picker-panel__body-wrapper,
+.el-picker-panel__body {
+  background: transparent !important;
+}
+
+.el-picker-panel .el-date-picker__header,
+.el-picker-panel__header {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.el-picker-panel .el-date-picker__header-label,
+.el-picker-panel__header-label {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.el-picker-panel .el-date-picker__header-label:hover,
+.el-picker-panel__header-label:hover {
+  color: #667eea !important;
+}
+
+.el-picker-panel .el-picker-panel__icon-btn,
+.el-picker-panel__icon-btn {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.el-picker-panel .el-picker-panel__icon-btn:hover,
+.el-picker-panel__icon-btn:hover {
+  color: #667eea !important;
+}
+
+.el-picker-panel .el-date-table th,
+.el-date-table th {
+  color: rgba(255, 255, 255, 0.5) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.el-picker-panel .el-date-table td.available .el-date-table-cell__text,
+.el-date-table td.available .el-date-table-cell__text {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.el-picker-panel .el-date-table td.available:hover .el-date-table-cell__text,
+.el-date-table td.available:hover .el-date-table-cell__text {
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.15);
+}
+
+.el-picker-panel .el-date-table td.today .el-date-table-cell__text,
+.el-date-table td.today .el-date-table-cell__text {
+  color: #667eea;
+  font-weight: 600;
+}
+
+.el-picker-panel .el-date-table td.current .el-date-table-cell__text,
+.el-date-table td.current .el-date-table-cell__text {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: #fff !important;
+}
+
+.el-picker-panel .el-date-table td.disabled .el-date-table-cell__text,
+.el-date-table td.disabled .el-date-table-cell__text {
+  color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.el-picker-panel .el-date-table td.in-range .el-date-table-cell__text,
+.el-date-table td.in-range .el-date-table-cell__text {
+  background: rgba(102, 126, 234, 0.2);
+}
+
+.el-picker-panel .el-date-table td.prev-month .el-date-table-cell__text,
+.el-picker-panel .el-date-table td.next-month .el-date-table-cell__text,
+.el-date-table td.prev-month .el-date-table-cell__text,
+.el-date-table td.next-month .el-date-table-cell__text {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+/* 月份选择面板 */
+.el-picker-panel .el-month-table td .cell,
+.el-month-table td .cell {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.el-picker-panel .el-month-table td:hover .cell,
+.el-month-table td:hover .cell {
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.15);
+}
+
+.el-picker-panel .el-month-table td.today .cell,
+.el-month-table td.today .cell {
+  color: #667eea;
+}
+
+.el-picker-panel .el-month-table td.current .cell,
+.el-month-table td.current .cell {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: #fff !important;
+}
+
+/* 年份选择面板 */
+.el-picker-panel .el-year-table td .cell,
+.el-year-table td .cell {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.el-picker-panel .el-year-table td:hover .cell,
+.el-year-table td:hover .cell {
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.15);
+}
+
+.el-picker-panel .el-year-table td.current .cell,
+.el-year-table td.current .cell {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: #fff !important;
+}
+
+/* el-popper 通用样式 */
+.el-popper.is-light {
+  background: rgba(30, 30, 50, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+.el-popper.is-pure {
+  background: rgba(30, 30, 50, 0.95) !important;
+}
+
+/* 时间选择器面板 */
+.el-time-panel {
+  background: rgba(30, 30, 50, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+.el-time-panel__content {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.el-time-spinner__item {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.el-time-spinner__item:hover,
+.el-time-spinner__item.active:not(.disabled) {
+  color: #667eea !important;
+}
+
+.el-time-panel__btn {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.el-time-panel__btn.confirm {
+  color: #667eea !important;
+}
+
+/* 自动补全下拉面板 */
+.el-autocomplete-suggestion {
+  background: rgba(30, 30, 50, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+.el-autocomplete-suggestion li {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.el-autocomplete-suggestion li:hover,
+.el-autocomplete-suggestion li.highlighted {
+  background: rgba(102, 126, 234, 0.2) !important;
+}
+
+/* ========== Element Plus 输入组件深色主题 ========== */
+
+/* el-select 选择器输入框 */
+.el-select .el-input__wrapper,
+.el-select .el-input__inner {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: none !important;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.el-select .el-input__wrapper:hover {
+  border-color: rgba(102, 126, 234, 0.5) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.el-select .el-input__wrapper.is-focus,
+.el-select .el-input__wrapper:focus-within {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
+}
+
+.el-select .el-input__inner {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.el-select .el-input__suffix,
+.el-select .el-input__suffix-inner,
+.el-select .el-select__caret {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.el-select .el-input__suffix:hover,
+.el-select .el-select__caret:hover {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.el-select .el-input__placeholder {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* el-date-picker 下拉面板样式保留在上方 el-picker-panel 部分 */
+
+.el-date-editor .el-input__placeholder {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* el-input-number 数字输入框 */
+.el-input-number {
+  background: transparent !important;
+}
+
+.el-input-number .el-input__wrapper {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: none !important;
+  border-radius: 6px;
+}
+
+.el-input-number .el-input__wrapper:hover {
+  border-color: rgba(102, 126, 234, 0.5) !important;
+}
+
+.el-input-number .el-input__wrapper.is-focus {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
+}
+
+.el-input-number .el-input__inner {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.el-input-number__decrease,
+.el-input-number__increase {
+  background: transparent !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.el-input-number__decrease:hover,
+.el-input-number__increase:hover {
+  color: #667eea !important;
+}
+
+/* el-input 通用输入框 */
+.el-input .el-input__wrapper {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: none !important;
+  border-radius: 6px;
+}
+
+.el-input .el-input__wrapper:hover {
+  border-color: rgba(102, 126, 234, 0.5) !important;
+}
+
+.el-input .el-input__wrapper.is-focus,
+.el-input .el-input__wrapper:focus-within {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
+}
+
+.el-input .el-input__inner {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.el-input .el-input__inner::placeholder {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.el-input .el-input__prefix,
+.el-input .el-input__suffix {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+/* el-textarea 文本域 */
+.el-textarea .el-textarea__inner {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: none !important;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.el-textarea .el-textarea__inner:hover {
+  border-color: rgba(102, 126, 234, 0.5) !important;
+}
+
+.el-textarea .el-textarea__inner:focus {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
+}
+
+.el-textarea .el-textarea__inner::placeholder {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* el-button 按钮基础样式 */
+.el-button {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.el-button:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  color: #fff !important;
+}
+
+.el-button--primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border-color: #667eea !important;
+  color: #fff !important;
+}
+
+.el-button--primary:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+  border-color: #764ba2 !important;
+}
+
+/* el-dialog 对话框 */
+.el-dialog {
+  background: rgba(30, 30, 50, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 12px !important;
+}
+
+.el-dialog__header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.el-dialog__title {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.el-dialog__headerbtn .el-dialog__close {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.el-dialog__headerbtn:hover .el-dialog__close {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.el-dialog__body {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.el-dialog__footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* el-form 表单 */
+.el-form-item__label {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* el-radio-button 单选按钮组 */
+.el-radio-button__inner {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.el-radio-button__original-radio:checked + .el-radio-button__inner {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  border-color: #667eea !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+
+.el-radio-button:first-child .el-radio-button__inner {
+  border-left-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+.el-radio-button__inner:hover {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* el-input 字数统计 */
+/* el-input 字数统计 */
+.el-input__count,
+.el-input__count-inner {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.el-textarea .el-input__count {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.el-input .el-input__count {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.el-input__suffix-inner .el-input__count,
+.el-input__suffix-inner .el-input__count-inner {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.el-input__wrapper .el-input__count,
+.el-input__wrapper .el-input__count-inner {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.el-textarea__inner ~ .el-input__count,
+.el-textarea__inner ~ .el-input__count-inner {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* el-popconfirm 确认弹窗 */
+.el-popconfirm__main {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.el-popper.is-dark {
+  background: rgba(30, 30, 50, 0.98) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+/* el-message-box 消息弹窗 */
+.el-message-box {
+  background: rgba(30, 30, 50, 0.98) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+.el-message-box__title {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.el-message-box__content {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.el-message-box__headerbtn .el-message-box__close {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.el-message-box__headerbtn:hover .el-message-box__close {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* el-dropdown-menu 下拉菜单 */
+.el-dropdown-menu {
+  background: rgba(30, 30, 50, 0.98) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+.el-dropdown-menu__item {
+  color: rgba(255, 255, 255, 0.85) !important;
+  background: transparent !important;
+}
+
+.el-dropdown-menu__item:hover,
+.el-dropdown-menu__item:focus,
+.el-dropdown-menu__item.is-focused {
+  background: rgba(102, 126, 234, 0.2) !important;
+  color: #fff !important;
+}
+
+.el-dropdown-menu__item:active {
+  background: rgba(102, 126, 234, 0.3) !important;
+  color: #fff !important;
+}
+
+/* el-tag 标签 */
+.el-tag {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.el-tag.el-tag--primary {
+  background: rgba(102, 126, 234, 0.2) !important;
+  border-color: rgba(102, 126, 234, 0.3) !important;
+  color: #667eea !important;
+}
+
+.el-tag.el-tag--danger {
+  background: rgba(245, 108, 108, 0.2) !important;
+  border-color: rgba(245, 108, 108, 0.3) !important;
+  color: #f56c6c !important;
+}
+
+.el-tag.el-tag--warning {
+  background: rgba(230, 162, 60, 0.2) !important;
+  border-color: rgba(230, 162, 60, 0.3) !important;
+  color: #e6a23c !important;
+}
+
+.el-tag.el-tag--success {
+  background: rgba(103, 194, 58, 0.2) !important;
+  border-color: rgba(103, 194, 58, 0.3) !important;
+  color: #67c23a !important;
+}
+
+/* el-empty 空状态 */
+.el-empty__description {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* 日期/时间选择器浮层：视口正中央，内容过高时可纵向滚动（含触控与滚轮） */
+.el-picker__popper.el-popper {
+  position: fixed !important;
+  left: 50% !important;
+  top: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+  max-height: min(92dvh, 92vh) !important;
+  max-width: min(96vw, 96vw) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.el-picker__popper.el-popper .el-popper__arrow {
+  display: none !important;
+}
+
+.el-popper.lunar-date-picker-popover {
+  position: fixed !important;
+  left: 50% !important;
+  top: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
+  max-height: min(92dvh, 92vh) !important;
+  max-width: min(96vw, 96vw) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.el-popper.lunar-date-picker-popover .el-popper__arrow {
+  display: none !important;
+}
