@@ -155,6 +155,25 @@
             <span class="nav-label">笔记</span>
           </div>
 
+          <!-- 数据管理 -->
+          <div
+              v-if="isAdmin"
+              class="nav-item"
+              :class="{ active: currentPage === 'data' }"
+              @click="currentPage = 'data'"
+          >
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="currentColor" opacity="0.8"/>
+                <polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <polyline points="10 9 9 9 8 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span class="nav-label">数据管理</span>
+          </div>
+
           <!-- 关于 -->
           <div
               class="nav-item"
@@ -212,6 +231,7 @@
           <NoteList v-else-if="currentPage === 'notes'" @fullscreen-change="handleNotesFullscreen" />
           <SettingsPage v-else-if="currentPage === 'settings'" />
           <ProfilePage v-else-if="currentPage === 'profile'" @logout="handleLogout" />
+          <DataManagement v-else-if="currentPage === 'data'" />
           <AboutPage v-else-if="currentPage === 'about'" />
         </div>
       </main>
@@ -231,6 +251,7 @@ import ProfilePage from './components/ProfilePage.vue'
 import NoteList from './components/NoteList.vue'
 import SettingsPage from './components/SettingsPage.vue'
 import AboutPage from './components/AboutPage.vue'
+import DataManagement from './components/DataManagement.vue'
 import { initCourseAutoRecord } from './composables/useCourseAutoRecord'
 import { useTaskStore } from './stores/taskStore'
 import { useMissionStore } from './stores/missionStore'
@@ -260,7 +281,9 @@ const checkOrientation = () => {
 }
 // 检测是否为移动端（通过 UA 或屏幕宽度）
 const isMobile = () => {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768
+  // 暂时返回 false，禁用横屏检测
+  return false
+  // return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768
 }
 // 初始化横屏检测
 const initOrientationCheck = () => {
@@ -279,6 +302,11 @@ const dataInitialized = ref(false)
 // 用户头像文字
 const avatarText = computed(() => {
   return (authStore.nickname || 'U').charAt(0).toUpperCase()
+})
+
+// 是否为管理员
+const isAdmin = computed(() => {
+  return authStore.user?.role === 'admin'
 })
 
 // 认证成功处理
@@ -381,12 +409,12 @@ const preloadCourseData = async () => {
 
 // 从 Redis 恢复页面状态
 const PAGE_KEY = 'earth-survival-current-page'
-const currentPage = ref<'footprint' | 'focus' | 'mission' | 'countdown' | 'course' | 'notes' | 'settings' | 'profile' | 'about'>('footprint')
+const currentPage = ref<'footprint' | 'focus' | 'mission' | 'countdown' | 'course' | 'notes' | 'settings' | 'profile' | 'data' | 'about'>('footprint')
 
 // 初始化页面状态
 const initPageState = async () => {
   const savedPage = await getData<string>(PAGE_KEY)
-  if (savedPage && ['footprint', 'focus', 'mission', 'countdown', 'course', 'notes', 'settings', 'profile', 'about'].includes(savedPage)) {
+  if (savedPage && ['footprint', 'focus', 'mission', 'countdown', 'course', 'notes', 'settings', 'profile', 'data', 'about'].includes(savedPage)) {
     currentPage.value = savedPage as any
   }
 }

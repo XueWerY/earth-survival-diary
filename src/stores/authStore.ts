@@ -5,6 +5,7 @@ import * as api from '../lib/api'
 export interface User {
     id: string
     email: string
+    role?: string
     user_metadata?: {
         nickname?: string
     }

@@ -543,3 +543,60 @@ export async function changePassword(oldPassword: string, newPassword: string): 
         body: JSON.stringify({ oldPassword, newPassword })
     })
 }
+
+// ============ 管理员管理 API ============
+
+export interface SystemUser {
+    id: string
+    email: string
+    nickname: string
+    role: string
+    createdAt: string
+}
+
+export async function getUsers(): Promise<{ users: SystemUser[] }> {
+    return request('/admin/users')
+}
+
+export async function updateUserRole(userId: string, role: 'admin' | 'user'): Promise<{ success: boolean; user: SystemUser }> {
+    return request(`/admin/users/${userId}/role`, {
+        method: 'PUT',
+        body: JSON.stringify({ role })
+    })
+}
+
+// ============ 文件管理 API ============
+
+export interface FileInfo {
+    path: string
+    size: number
+    mtime: string
+    birthtime: string
+}
+
+export async function getFiles(): Promise<{ files: FileInfo[] }> {
+    return request('/admin/files')
+}
+
+export async function readFile(filePath: string): Promise<{ content: string }> {
+    return request(`/admin/files/${filePath}`)
+}
+
+export async function writeFile(filePath: string, content: string): Promise<{ success: boolean }> {
+    return request(`/admin/files/${filePath}`, {
+        method: 'PUT',
+        body: JSON.stringify({ content })
+    })
+}
+
+export async function deleteFile(filePath: string): Promise<{ success: boolean }> {
+    return request(`/admin/files/${filePath}`, {
+        method: 'DELETE'
+    })
+}
+
+export async function backupFiles(): Promise<{ success: boolean; backupFile: string }> {
+    return request('/admin/files/backup', {
+        method: 'POST'
+    })
+}

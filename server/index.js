@@ -273,6 +273,15 @@ function authMiddleware(req, res, next) {
 
   req.userId = userId
   req.userEmail = userEntry.email
+  req.userRole = userEntry.role || 'user'
+  next()
+}
+
+// 管理员权限中间件
+function adminMiddleware(req, res, next) {
+  if (!req.userRole || req.userRole !== 'admin') {
+    return res.status(403).json({ error: '权限不足，需要管理员权限' })
+  }
   next()
 }
 
@@ -305,7 +314,8 @@ app.post('/api/auth/signup', (req, res) => {
       email: email,
       passwordHash: hashPassword(password),
       nickname: nickname || email.split('@')[0],
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      role: 'user' // 默认角色为普通用户
     }
 
     users[email] = userEntry
@@ -485,17 +495,75 @@ app.post('/api/auth/change-password', authMiddleware, (req, res) => {
 app.get('/api/auth/user', authMiddleware, (req, res) => {
   try {
     const userData = loadUserData(req.userId)
+    const users = loadUsersIndex()
+    const userEntry = Object.values(users).find(u => u.id === req.userId)
     res.json({
       user: {
         id: req.userId,
         email: req.userEmail,
         nickname: userData.profile?.nickname || req.userEmail.split('@')[0],
+        role: userEntry?.role || 'user',
         createdAt: userData.profile?.createdAt
       }
     })
   } catch (error) {
     console.error('Get user error:', error)
     res.status(500).json({ error: '获取用户信息失败' })
+  }
+})
+
+// ============ 管理员管理 API ============
+
+// 获取所有用户列表（管理员专用）
+app.get('/api/admin/users', authMiddleware, adminMiddleware, (req, res) => {
+  try {
+    const users = loadUsersIndex()
+    const userList = Object.values(users).map(user => ({
+      id: user.id,
+      email: user.email,
+      nickname: user.nickname,
+      role: user.role || 'user',
+      createdAt: user.createdAt
+    }))
+    res.json({ users: userList })
+  } catch (error) {
+    console.error('Get users error:', error)
+    res.status(500).json({ error: '获取用户列表失败' })
+  }
+})
+
+// 提升用户为管理员
+app.put('/api/admin/users/:userId/role', authMiddleware, adminMiddleware, (req, res) => {
+  try {
+    const { userId } = req.params
+    const { role } = req.body
+
+    if (!role || !['admin', 'user'].includes(role)) {
+      return res.status(400).json({ error: '无效的角色' })
+    }
+
+    const users = loadUsersIndex()
+    const userEntry = Object.values(users).find(u => u.id === userId)
+
+    if (!userEntry) {
+      return res.status(404).json({ error: '用户不存在' })
+    }
+
+    // 更新角色
+    userEntry.role = role
+    saveUsersIndex(users)
+
+    res.json({
+      success: true, user: {
+        id: userEntry.id,
+        email: userEntry.email,
+        nickname: userEntry.nickname,
+        role: userEntry.role
+      }
+    })
+  } catch (error) {
+    console.error('Update user role error:', error)
+    res.status(500).json({ error: '更新用户角色失败' })
   }
 })
 
@@ -1104,8 +1172,8 @@ app.get('/api/notes', authMiddleware, (req, res) => {
     if (search) {
       const searchLower = search.toLowerCase()
       notes = notes.filter(n =>
-          n.title.toLowerCase().includes(searchLower) ||
-          (n.content && n.content.toLowerCase().includes(searchLower))
+        n.title.toLowerCase().includes(searchLower) ||
+        (n.content && n.content.toLowerCase().includes(searchLower))
       )
     }
 
@@ -1464,6 +1532,132 @@ app.get('/api/version', (req, res) => {
   } catch (err) {
     console.error('Failed to read package.json:', err)
     res.status(500).json({ error: 'Failed to read package.json' })
+  }
+})
+
+// ============ 文件管理 API ============
+
+// 获取文件列表
+app.get('/api/admin/files', authMiddleware, adminMiddleware, (req, res) => {
+  try {
+    const files = []
+
+    function traverse(dir, relativePath = '') {
+      const items = fs.readdirSync(dir)
+      for (const item of items) {
+        const fullPath = path.join(dir, item)
+        const stats = fs.statSync(fullPath)
+        const itemPath = path.join(relativePath, item)
+
+        if (stats.isDirectory()) {
+          traverse(fullPath, itemPath)
+        } else {
+          files.push({
+            path: itemPath,
+            size: stats.size,
+            mtime: stats.mtime.toISOString(),
+            birthtime: stats.birthtime.toISOString()
+          })
+        }
+      }
+    }
+
+    traverse(DATA_DIR)
+    res.json({ files })
+  } catch (error) {
+    console.error('Get files error:', error)
+    res.status(500).json({ error: '获取文件列表失败' })
+  }
+})
+
+// 读取文件内容
+app.get('/api/admin/files/:filePath*', authMiddleware, adminMiddleware, (req, res) => {
+  try {
+    const filePath = path.join(DATA_DIR, req.params.filePath, ...(req.params[0] ? req.params[0].split('/') : []))
+
+    // 安全检查：确保文件在 DATA_DIR 内
+    if (!filePath.startsWith(DATA_DIR)) {
+      return res.status(403).json({ error: '访问受限' })
+    }
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: '文件不存在' })
+    }
+
+    const content = fs.readFileSync(filePath, 'utf-8')
+    res.json({ content })
+  } catch (error) {
+    console.error('Read file error:', error)
+    res.status(500).json({ error: '读取文件失败' })
+  }
+})
+
+// 写入文件内容
+app.put('/api/admin/files/:filePath*', authMiddleware, adminMiddleware, (req, res) => {
+  try {
+    const filePath = path.join(DATA_DIR, req.params.filePath, ...(req.params[0] ? req.params[0].split('/') : []))
+    const { content } = req.body
+
+    // 安全检查：确保文件在 DATA_DIR 内
+    if (!filePath.startsWith(DATA_DIR)) {
+      return res.status(403).json({ error: '访问受限' })
+    }
+
+    // 确保目录存在
+    const dir = path.dirname(filePath)
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true })
+    }
+
+    fs.writeFileSync(filePath, content, 'utf-8')
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Write file error:', error)
+    res.status(500).json({ error: '写入文件失败' })
+  }
+})
+
+// 删除文件
+app.delete('/api/admin/files/:filePath*', authMiddleware, adminMiddleware, (req, res) => {
+  try {
+    const filePath = path.join(DATA_DIR, req.params.filePath, ...(req.params[0] ? req.params[0].split('/') : []))
+
+    // 安全检查：确保文件在 DATA_DIR 内
+    if (!filePath.startsWith(DATA_DIR)) {
+      return res.status(403).json({ error: '访问受限' })
+    }
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: '文件不存在' })
+    }
+
+    fs.unlinkSync(filePath)
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Delete file error:', error)
+    res.status(500).json({ error: '删除文件失败' })
+  }
+})
+
+// 备份文件
+app.post('/api/admin/files/backup', authMiddleware, adminMiddleware, (req, res) => {
+  try {
+    const backupDir = path.join(DATA_DIR, 'backups')
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true })
+    }
+
+    const backupFileName = `backup_${Date.now()}.zip`
+    const backupPath = path.join(backupDir, backupFileName)
+
+    // 这里简化处理，实际项目中可以使用 zip 库进行压缩
+    // 这里仅创建一个空备份文件作为示例
+    fs.writeFileSync(backupPath, JSON.stringify({ timestamp: Date.now() }), 'utf-8')
+
+    res.json({ success: true, backupFile: backupFileName })
+  } catch (error) {
+    console.error('Backup files error:', error)
+    res.status(500).json({ error: '备份文件失败' })
   }
 })
 
