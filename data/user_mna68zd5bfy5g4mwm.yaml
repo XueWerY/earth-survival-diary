@@ -1,0 +1,2987 @@
+profile:
+  id: mna68zd5bfy5g4mwm
+  nickname: 予莉一场月辉
+  createdAt: 2026-03-28T10:12:42.379Z
+  avatarKey: mna68zd5bfy5g4mwm_1775114060808.jpg
+tasks:
+  - id: mnqzyzlbpfhl6e
+    name: 上《高等钢结构》课
+    date: 2026-04-09
+    startTime: 08:00
+    endTime: 09:40
+    duration: 0
+    completed: false
+    notes: 教室：A512
+    category: null
+    created_at: 2026-04-09T04:49:03.407Z
+  - id: mnq60gal0gsgx0
+    name: 玩《原神》
+    date: 2026-04-08
+    startTime: 21:25
+    endTime: 22:50
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-08T14:50:23.229Z
+  - id: mnq2v3vcq94t9f
+    name: 玩《鸣潮》
+    date: 2026-04-08
+    startTime: 20:53
+    endTime: 21:22
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-08T13:22:15.000Z
+  - id: mnq1q9f7pkkc1j
+    name: 上《土木工程仿真技术》课
+    date: 2026-04-08
+    startTime: 19:00
+    endTime: 20:40
+    duration: 0
+    completed: false
+    notes: 教室：土木楼2楼智慧教室
+    category: null
+    created_at: 2026-04-08T12:50:29.299Z
+  - id: mnpzhhlfv45byf
+    name: 上《新时代中国特色社会主义理论与实践》课
+    date: 2026-04-08
+    startTime: 16:30
+    endTime: 18:10
+    duration: 0
+    completed: false
+    notes: 教室：明德楼阶梯102
+    category: null
+    created_at: 2026-04-08T11:47:40.755Z
+  - id: mnps22o20l95ul
+    name: 上《《习近平谈治国理政》研读（第二学期）》课
+    date: 2026-04-08
+    startTime: 14:30
+    endTime: 16:10
+    duration: 0
+    completed: false
+    notes: 教室：A103
+    category: null
+    created_at: 2026-04-08T08:19:44.258Z
+  - id: mnpnqsy7lvajq5
+    name: 玩《王者荣耀》
+    date: 2026-04-08
+    startTime: 13:40
+    endTime: 14:18
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-08T06:18:59.983Z
+  - id: mnpmblpbgt1ujl
+    name: 开发《地球 Online 生存日记》
+    date: 2026-04-08
+    startTime: 12:51
+    endTime: 13:39
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-08T05:39:11.135Z
+  - id: mnp0yy1y77i0fz
+    name: 玩《鸣潮》
+    date: 2026-04-08
+    startTime: 03:29
+    endTime: 03:41
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-07T19:41:28.678Z
+  - id: mnp0j4gcpgmv4s
+    name: 玩《崩坏：星穹铁道》
+    date: 2026-04-08
+    startTime: 02:55
+    endTime: 03:29
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-07T19:29:10.476Z
+  - id: mnoy60n3uyw7cf
+    name: 玩《王者荣耀》
+    date: 2026-04-08
+    startTime: 00:00
+    endTime: 02:22
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-07T18:22:59.775Z
+  - id: mnoy582z9jsqxc
+    name: 玩《王者荣耀》
+    date: 2026-04-07
+    startTime: 23:37
+    endTime: 23:59
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-07T18:22:22.763Z
+  - id: mnos96q2rhn8tl
+    name: 玩《原神》
+    date: 2026-04-07
+    startTime: 21:52
+    endTime: 23:37
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-07T15:37:29.930Z
+  - id: mnoo9cglfkpncv
+    name: 玩《王者荣耀》
+    date: 2026-04-07
+    startTime: 19:57
+    endTime: 21:45
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-07T13:45:38.901Z
+  - id: mnoj6c14cf73qm
+    name: 学习《遗传算法-理论、应用与软件实现》
+    date: 2026-04-07
+    startTime: 17:25
+    endTime: 19:23
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-07T11:23:20.296Z
+  - id: mnodexdnc7gy6t
+    name: 上《乒乓球》课
+    date: 2026-04-07
+    startTime: 14:30
+    endTime: 16:10
+    duration: 0
+    completed: false
+    notes: 教室：体育场
+    category: null
+    created_at: 2026-04-07T08:42:03.515Z
+  - id: mno55a0w3tazdx
+    name: 玩《王者荣耀》
+    date: 2026-04-07
+    startTime: 12:10
+    endTime: 12:50
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-07T04:50:36.416Z
+  - id: mno3ojwrb2m9hj
+    name: 上《高等混凝土结构》课
+    date: 2026-04-07
+    startTime: 10:00
+    endTime: 11:40
+    duration: 0
+    completed: false
+    notes: 教室：明德楼201
+    category: null
+    created_at: 2026-04-07T04:09:36.459Z
+  - id: mnnalo04e25mbm
+    name: 玩《王者荣耀》
+    date: 2026-04-06
+    startTime: 20:49
+    endTime: 22:35
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-06T14:35:32.932Z
+  - id: mnn3sn58a0vd8x
+    name: 玩《王者荣耀》
+    date: 2026-04-06
+    startTime: 17:44
+    endTime: 19:24
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-06T11:25:01.100Z
+  - id: mnmzocpo16sv0d
+    name: 玩《鸣潮》
+    date: 2026-04-06
+    startTime: 17:17
+    endTime: 17:29
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-06T09:29:42.492Z
+  - id: mnmz8phr1yz18b
+    name: 玩《崩坏：星穹铁道》
+    date: 2026-04-06
+    startTime: 17:03
+    endTime: 17:17
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-06T09:17:32.559Z
+  - id: mnmyogl7szs3z8
+    name: 玩《原神》
+    date: 2026-04-06
+    startTime: 16:29
+    endTime: 17:01
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-06T09:01:47.899Z
+  - id: mnmxfd9uos87wy
+    name: 玩《王者荣耀》
+    date: 2026-04-06
+    startTime: 13:25
+    endTime: 15:15
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-06T08:26:44.082Z
+  - id: mnmxeyeo7xgzcn
+    name: 玩《王者荣耀》
+    date: 2026-04-06
+    startTime: 00:20
+    endTime: 03:10
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-06T08:26:24.816Z
+  - id: mnmxdjxk2kehx7
+    name: 玩《原神》
+    date: 2026-04-05
+    startTime: 15:00
+    endTime: 15:25
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-06T08:25:19.400Z
+  - id: mnmxd6nng4tsba
+    name: 玩《王者荣耀》
+    date: 2026-04-05
+    startTime: 00:00
+    endTime: 00:30
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-06T08:25:02.195Z
+  - id: mnmxcr8m59218i
+    name: 玩《王者荣耀》
+    date: 2026-04-04
+    startTime: 23:15
+    endTime: 23:59
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-06T08:24:42.214Z
+  - id: mnkdki3cl85k73
+    name: 玩《鸣潮》
+    date: 2026-04-04
+    startTime: 21:20
+    endTime: 21:30
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-04T13:35:18.936Z
+  - id: mnkdk47apr9648
+    name: 玩《崩坏：星穹铁道》
+    date: 2026-04-04
+    startTime: 21:15
+    endTime: 21:20
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-04T13:35:00.934Z
+  - id: mnkdjnzm6p0z9h
+    name: 玩《原神》
+    date: 2026-04-04
+    startTime: 21:10
+    endTime: 21:15
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-04T13:34:39.922Z
+  - id: mnkdj70d0pczyo
+    name: 玩《王者荣耀》
+    date: 2026-04-04
+    startTime: 20:00
+    endTime: 20:45
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-04T13:34:17.917Z
+  - id: mnka7c20sd71ab
+    name: 开发《地球 Online 生存日记》
+    date: 2026-04-04
+    startTime: 19:10
+    endTime: 19:55
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-04T12:01:05.736Z
+  - id: mnka6xfaasf78b
+    name: 开发《地球 Online 生存日记》
+    date: 2026-04-04
+    startTime: 16:55
+    endTime: 18:30
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-04T12:00:46.774Z
+  - id: mnka6flee4or22
+    name: 玩《王者荣耀》
+    date: 2026-04-04
+    startTime: 13:40
+    endTime: 15:20
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-04T12:00:23.666Z
+  - id: mnka5qyph497f4
+    name: 玩《鸣潮》
+    date: 2026-04-04
+    startTime: 02:05
+    endTime: 02:30
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-04T11:59:51.745Z
+  - id: mnka53l9e77lfw
+    name: 玩《崩坏：星穹铁道》
+    date: 2026-04-04
+    startTime: 01:55
+    endTime: 02:05
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-04T11:59:21.453Z
+  - id: mnka4bgg0ukq5n
+    name: 玩《原神》
+    date: 2026-04-04
+    startTime: 01:40
+    endTime: 01:55
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-04T11:58:44.992Z
+  - id: mnka3x5ikf3dsc
+    name: 玩《王者荣耀》
+    date: 2026-04-04
+    startTime: 00:00
+    endTime: 01:30
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-04T11:58:26.454Z
+  - id: mnka3eigrvg8aq
+    name: 玩《王者荣耀》
+    date: 2026-04-03
+    startTime: 23:30
+    endTime: 23:59
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-04T11:58:02.296Z
+  - id: mnka2y5z6xat1a
+    name: 玩《原神》
+    date: 2026-04-03
+    startTime: 21:35
+    endTime: 23:00
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-04T11:57:41.111Z
+  - id: mnka2dmfc4defk
+    name: 玩《原神》
+    date: 2026-04-03
+    startTime: 19:10
+    endTime: 20:15
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-04T11:57:14.487Z
+  - id: mnka1tmp9yyr17
+    name: 玩《王者荣耀》
+    date: 2026-04-03
+    startTime: 17:05
+    endTime: 18:30
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-04T11:56:48.577Z
+  - id: mniekqgqmyv2hj
+    name: 玩《王者荣耀》
+    date: 2026-04-03
+    startTime: 11:30
+    endTime: 12:15
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-03T04:27:57.050Z
+  - id: mniekbh9czyejr
+    name: 玩《王者荣耀》
+    date: 2026-04-03
+    startTime: 02:20
+    endTime: 03:30
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-03T04:27:37.629Z
+  - id: mnhs77tbyje0cb
+    name: 开发《地球 Online 生存日记》
+    date: 2026-04-03
+    startTime: 00:00
+    endTime: 02:00
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-02T18:01:34.799Z
+  - id: mnhs6hhqqom7s6
+    name: 开发《地球 Online 生存日记》
+    date: 2026-04-02
+    startTime: 23:50
+    endTime: 23:59
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-02T18:01:00.686Z
+  - id: mnhn2opntgec4h
+    name: 开发《地球 Online 生存日记》
+    date: 2026-04-02
+    startTime: 20:00
+    endTime: 23:35
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-02T15:38:05.339Z
+  - id: mnhf27vm9x6g4p
+    name: 开发《地球 Online 生存日记》
+    date: 2026-04-02
+    startTime: 14:55
+    endTime: 19:50
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-02T11:53:46.594Z
+  - id: mnhf1nz5aevgvk
+    name: 开发《地球 Online 生存日记》
+    date: 2026-04-02
+    startTime: 11:25
+    endTime: 14:15
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-02T11:53:20.801Z
+  - id: mngwz7g0c8x0uj
+    name: 玩《王者荣耀》
+    date: 2026-04-02
+    startTime: 09:50
+    endTime: 11:15
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-02T03:27:32.976Z
+  - id: mngwymrzyfhjx4
+    name: 玩《王者荣耀》
+    date: 2026-04-02
+    startTime: 00:00
+    endTime: 00:20
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-02T03:27:06.191Z
+  - id: mngwxc2w4g0mov
+    name: 玩《王者荣耀》
+    date: 2026-04-01
+    startTime: 23:10
+    endTime: 23:59
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-02T03:26:05.672Z
+  - id: mngww9craiktzn
+    name: 上《高等钢结构》课
+    date: 2026-04-02
+    startTime: 08:00
+    endTime: 09:40
+    duration: 0
+    completed: false
+    notes: 教室：A512
+    category: null
+    created_at: 2026-04-02T03:25:15.483Z
+  - id: mng6fwfs6vcmqw
+    name: 玩《鸣潮》
+    date: 2026-04-01
+    startTime: 22:30
+    endTime: 23:00
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-01T15:04:42.232Z
+  - id: mng6fk6pp6h73u
+    name: 玩《崩坏：星穹铁道》
+    date: 2026-04-01
+    startTime: 22:20
+    endTime: 22:30
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-01T15:04:26.353Z
+  - id: mng6f1icfa6olp
+    name: 玩《原神》
+    date: 2026-04-01
+    startTime: 22:10
+    endTime: 22:20
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-01T15:04:02.148Z
+  - id: mng6enqqpjumwa
+    name: 玩《王者荣耀》
+    date: 2026-04-01
+    startTime: 20:40
+    endTime: 22:00
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-01T15:03:44.306Z
+  - id: mng4llyd8ucz8j
+    name: 上《土木工程仿真技术》课
+    date: 2026-04-01
+    startTime: 19:00
+    endTime: 20:40
+    duration: 0
+    completed: false
+    notes: 教室：土木楼2楼智慧教室
+    category: null
+    created_at: 2026-04-01T14:13:09.349Z
+  - id: mng4llsi2vles3
+    name: 上《新时代中国特色社会主义理论与实践》课
+    date: 2026-04-01
+    startTime: 16:30
+    endTime: 18:10
+    duration: 0
+    completed: false
+    notes: 教室：明德楼阶梯102
+    category: null
+    created_at: 2026-04-01T14:13:09.138Z
+  - id: mnfrrv9jayofvd
+    name: 玩《王者荣耀》
+    date: 2026-04-01
+    startTime: 12:50
+    endTime: 14:30
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-01T08:14:06.343Z
+  - id: mnfrqy96lp1dfd
+    name: 上《《习近平谈治国理政》研读（第二学期）》课
+    date: 2026-04-01
+    startTime: 14:30
+    endTime: 16:10
+    duration: 0
+    completed: false
+    notes: 教室：A103
+    category: null
+    created_at: 2026-04-01T08:13:23.562Z
+  - id: mnev191g43rcdy
+    name: 玩《崩坏：星穹铁道》
+    date: 2026-04-01
+    startTime: 00:00
+    endTime: 01:00
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-31T16:57:36.772Z
+  - id: mnesvcf7aein2z
+    name: 玩《原神》
+    date: 2026-03-31
+    startTime: 23:40
+    endTime: 23:59
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-31T15:57:01.987Z
+  - id: mnes5xa7b9jdy8
+    name: 玩《原神》
+    date: 2026-03-31
+    startTime: 21:35
+    endTime: 23:25
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-31T15:37:15.967Z
+  - id: mnes57m764w9w2
+    name: 玩《鸣潮》
+    date: 2026-03-31
+    startTime: 23:25
+    endTime: 23:35
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-31T15:36:42.703Z
+  - id: mnemx8sci6f1aa
+    name: 写《土木工程仿真技术》作业
+    date: 2026-03-31
+    startTime: 20:10
+    endTime: 21:10
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-31T13:10:32.892Z
+  - id: mnemw2w8x5x80r
+    name: 开发《地球 Online 生存日记》
+    date: 2026-03-31
+    startTime: 16:30
+    endTime: 19:50
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-31T13:09:38.600Z
+  - id: mnecmevvev3p75
+    name: 上《乒乓球》课
+    date: 2026-03-31
+    startTime: 14:30
+    endTime: 16:10
+    duration: 0
+    completed: false
+    notes: 教室：体育场
+    category: null
+    created_at: 2026-03-31T08:22:11.419Z
+  - id: mnecmeubngc6du
+    name: 上《高等混凝土结构》课
+    date: 2026-03-31
+    startTime: 10:00
+    endTime: 11:40
+    duration: 0
+    completed: false
+    notes: 教室：明德楼201
+    category: null
+    created_at: 2026-03-31T08:22:11.363Z
+  - id: mndz7gdcthfkll
+    name: 玩《王者荣耀》
+    date: 2026-03-31
+    startTime: 03:10
+    endTime: 05:45
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-31T02:06:38.496Z
+  - id: mndinqm9icezj6
+    name: 玩《崩坏：星穹铁道》
+    date: 2026-03-31
+    startTime: 01:50
+    endTime: 02:15
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-30T18:23:24.801Z
+  - id: mndhghxh1xd25m
+    name: 玩《原神》
+    date: 2026-03-31
+    startTime: 00:10
+    endTime: 01:10
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-30T17:49:47.333Z
+  - id: mndhfeece9owet
+    name: 玩《鸣潮》
+    date: 2026-03-31
+    startTime: 01:10
+    endTime: 01:50
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-30T17:48:56.101Z
+  - id: mndc1l5ll97o3w
+    name: 玩《王者荣耀》
+    date: 2026-03-30
+    startTime: 22:30
+    endTime: 23:10
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-30T15:18:13.593Z
+  - id: mndc0qpb38pwzz
+    name: 玩《王者荣耀》
+    date: 2026-03-30
+    startTime: 20:50
+    endTime: 21:50
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-30T15:17:34.127Z
+  - id: mnd6r5vhdfx9qz
+    name: 上《结构试验与数据处理》课
+    date: 2026-03-30
+    startTime: 19:00
+    endTime: 20:40
+    duration: 0
+    completed: false
+    notes: 教室：明德楼201
+    category: null
+    created_at: 2026-03-30T12:50:09.149Z
+  - id: mnd19iwgh1pfws
+    name: 开发《地球 Online 生存日记》
+    date: 2026-03-30
+    startTime: 17:30
+    endTime: 18:15
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-30T10:16:28.144Z
+  - id: mnczij4ehi27zr
+    name: 学习《遗传算法-理论、应用与软件实现》
+    date: 2026-03-30
+    startTime: 15:30
+    endTime: 17:30
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-30T09:27:29.102Z
+  - id: mncvetaafp42nk
+    name: 玩《王者荣耀》
+    date: 2026-03-30
+    startTime: 12:20
+    endTime: 15:20
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-30T07:32:37.186Z
+  - id: mncojeva0ataic
+    name: 学习《遗传算法-理论、应用与软件实现》
+    date: 2026-03-30
+    startTime: 10:20
+    endTime: 12:20
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-30T04:20:14.470Z
+  - id: mncjxrruhns2kv
+    name: 玩《王者荣耀》
+    date: 2026-03-30
+    startTime: 00:45
+    endTime: 04:20
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-30T02:11:26.298Z
+  - id: mnbyzmram3grfx
+    name: 玩《鸣潮》
+    date: 2026-03-30
+    startTime: 00:10
+    endTime: 00:25
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-29T16:25:01.174Z
+  - id: mnbylbck9jh4pq
+    name: 玩《崩坏：星穹铁道》
+    date: 2026-03-30
+    startTime: 00:05
+    endTime: 00:10
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-29T16:13:53.204Z
+  - id: mnbykyv8ojozvd
+    name: 玩《原神》
+    date: 2026-03-30
+    startTime: 00:00
+    endTime: 00:05
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-29T16:13:37.028Z
+  - id: mnbxh77spzbbgl
+    name: 玩《王者荣耀》
+    date: 2026-03-29
+    startTime: 15:25
+    endTime: 17:55
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-29T15:42:41.608Z
+  - id: mnajjnwpbkdqww
+    name: 玩《原神》
+    date: 2026-03-28
+    startTime: 23:05
+    endTime: 00:00
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-28T16:24:55.753Z
+  - id: mnajifispft4ar
+    name: 玩《崩坏：星穹铁道》
+    date: 2026-03-29
+    startTime: 00:00
+    endTime: 00:10
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-28T16:23:58.228Z
+  - id: mnajhjeoimv5gr
+    name: 玩《鸣潮》
+    date: 2026-03-29
+    startTime: 00:10
+    endTime: 00:20
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-28T16:23:16.608Z
+  - id: mna849ig5nu7xr
+    name: 开发《地球 Online 生存日记》
+    date: 2026-03-28
+    startTime: 15:35
+    endTime: 19:15
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-03-28T11:05:01.480Z
+  - name: 学习《遗传算法-理论、应用与软件实现》
+    date: 2026-03-23
+    startTime: 12:50
+    endTime: 14:10
+    id: "1774246336946"
+    duration: 80
+    completed: false
+    notes: 目前进度：1.4
+  - name: 开发《地球 Online 生存日记》
+    date: 2026-03-23
+    startTime: 14:40
+    endTime: 15:25
+    notes: ""
+    id: "1774250848758"
+    duration: 45
+    completed: false
+  - name: 学习《遗传算法-理论、应用与软件实现》
+    date: 2026-03-23
+    startTime: 17:30
+    endTime: 17:55
+    notes: 目前进度：2.4
+    id: "1774259884191"
+    duration: 25
+    completed: false
+  - id: course-1774200913857-2026-03-23
+    name: 上《结构试验与数据处理》课
+    startTime: 19:00
+    endTime: 20:40
+    date: 2026-03-23
+    completed: true
+    duration: 100
+    notes: 教室：明德楼201
+  - id: course-1774201017324-2026-03-24
+    name: 上《高等混凝土结构》课
+    startTime: 10:00
+    endTime: 11:40
+    date: 2026-03-24
+    completed: true
+    duration: 100
+    notes: 教室：明德楼201
+  - name: 开发《地球 Online 生存日记》
+    date: 2026-03-23
+    startTime: 21:00
+    endTime: 23:59
+    notes: ""
+    id: "1774324605164"
+    duration: 179
+    completed: false
+  - name: 开发《地球 Online 生存日记》
+    date: 2026-03-24
+    startTime: 00:00
+    endTime: 02:30
+    notes: ""
+    id: "1774324677158"
+    duration: 150
+    completed: false
+  - name: 开发《地球 Online 生存日记》
+    date: 2026-03-24
+    startTime: 12:25
+    endTime: 13:25
+    notes: ""
+    id: "1774330007847"
+    duration: 60
+    completed: false
+  - id: course-1774201071469-2026-03-24
+    name: 上《乒乓球》课
+    startTime: 14:30
+    endTime: 16:10
+    date: 2026-03-24
+    completed: true
+    duration: 100
+    notes: 教室：体育场
+  - name: 开发《地球 Online 生存日记》
+    date: 2026-03-24
+    startTime: 16:25
+    endTime: 18:00
+    notes: ""
+    id: "1774353030864"
+    duration: 95
+    completed: false
+  - name: 开发《地球 Online 生存日记》
+    date: 2026-03-24
+    startTime: 19:50
+    endTime: 20:35
+    notes: ""
+    id: "1774355864168"
+    duration: 45
+    completed: false
+  - name: 玩《原神》
+    date: 2026-03-24
+    startTime: 23:30
+    endTime: 23:59
+    notes: ""
+    id: "1774373820522"
+    duration: 29
+    completed: false
+  - name: 玩《原神》
+    date: 2026-03-25
+    startTime: 00:00
+    endTime: 01:35
+    notes: ""
+    id: "1774373926397"
+    duration: 95
+    completed: false
+  - name: 玩《崩坏：星穹铁道》
+    date: 2026-03-25
+    startTime: 01:40
+    endTime: 01:50
+    notes: ""
+    id: "1774414227840"
+    duration: 10
+    completed: false
+  - name: 玩《鸣潮》
+    date: 2026-03-25
+    startTime: 01:50
+    endTime: 02:20
+    notes: ""
+    id: "1774414255463"
+    duration: 30
+    completed: false
+  - id: course-1774204312193-2026-03-25
+    name: 上《《习近平谈治国理政》研读（第二学期）》课
+    startTime: 14:30
+    endTime: 16:10
+    date: 2026-03-25
+    completed: true
+    duration: 100
+    notes: 教室：A103
+  - id: course-1774204406963-2026-03-25
+    name: 上《新时代中国特色社会主义理论与实践》课
+    startTime: 16:30
+    endTime: 18:10
+    date: 2026-03-25
+    completed: true
+    duration: 100
+    notes: 教室：明德楼阶梯102
+  - name: 玩《崩坏：星穹铁道》
+    date: 2026-03-25
+    startTime: 13:25
+    endTime: 14:15
+    notes: ""
+    id: "1774434351348"
+    duration: 50
+    completed: false
+  - name: 玩《王者荣耀》
+    date: 2026-03-25
+    startTime: 18:10
+    endTime: 18:45
+    notes: ""
+    id: "1774435538394"
+    duration: 35
+    completed: false
+  - id: course-1774204468117-2026-03-25
+    name: 上《土木工程仿真技术》课
+    startTime: 19:00
+    endTime: 20:40
+    date: 2026-03-25
+    completed: true
+    duration: 100
+    notes: 教室：土木楼2楼智慧教室
+  - name: 玩《王者荣耀》
+    date: 2026-03-25
+    startTime: 20:40
+    endTime: 21:40
+    notes: ""
+    id: "1774446110994"
+    duration: 60
+    completed: false
+  - name: 玩《王者荣耀》
+    date: 2026-03-25
+    startTime: 21:50
+    endTime: 23:25
+    notes: ""
+    id: "1774452606537"
+    duration: 95
+    completed: false
+  - name: 玩《原神》
+    date: 2026-03-25
+    startTime: 23:30
+    endTime: 23:55
+    notes: ""
+    id: "1774500417938"
+    duration: 25
+    completed: false
+  - name: 玩《崩坏：星穹铁道》
+    date: 2026-03-26
+    startTime: 00:00
+    endTime: 00:45
+    notes: ""
+    id: "1774500519069"
+    duration: 45
+    completed: false
+  - name: 玩《鸣潮》
+    date: 2026-03-26
+    startTime: 00:45
+    endTime: 00:55
+    notes: ""
+    id: "1774500570669"
+    duration: 10
+    completed: false
+  - name: 玩《王者荣耀》
+    date: 2026-03-26
+    startTime: 01:00
+    endTime: 04:15
+    notes: ""
+    id: "1774500625252"
+    duration: 195
+    completed: false
+  - name: 玩《洛克王国：世界》
+    date: 2026-03-26
+    startTime: 13:10
+    endTime: 13:50
+    notes: ""
+    id: "1774504423387"
+    duration: 40
+    completed: false
+  - name: 玩《王者荣耀》
+    date: 2026-03-26
+    startTime: 13:55
+    endTime: 14:45
+    notes: ""
+    id: "1774507491593"
+    duration: 50
+    completed: false
+  - name: 开发《地球 Online 生存日记》
+    date: 2026-03-26
+    startTime: 17:25
+    endTime: 17:45
+    notes: ""
+    id: "1774520586111"
+    duration: 20
+    completed: false
+  - name: 学习《遗传算法-理论、应用与软件实现》
+    date: 2026-03-26
+    startTime: 19:00
+    endTime: 20:10
+    notes: ""
+    id: "1774527236063"
+    duration: 70
+    completed: false
+  - name: 玩《王者荣耀》
+    date: 2026-03-26
+    startTime: 20:10
+    endTime: 20:55
+    notes: ""
+    id: "1774529932593"
+    duration: 45
+    completed: false
+  - name: 学习《遗传算法-理论、应用与软件实现》
+    date: 2026-03-26
+    startTime: 21:00
+    endTime: 21:45
+    notes: ""
+    id: "1774532765825"
+    duration: 45
+    completed: false
+  - name: 玩《鸣潮》
+    date: 2026-03-26
+    startTime: 22:55
+    endTime: 23:05
+    notes: ""
+    id: "1774537705176"
+    duration: 10
+    completed: false
+  - name: 玩《崩坏：星穹铁道》
+    date: 2026-03-26
+    startTime: 22:50
+    endTime: 22:55
+    notes: ""
+    id: "1774537759312"
+    duration: 5
+    completed: false
+  - name: 玩《原神》
+    date: 2026-03-26
+    startTime: 22:20
+    endTime: 22:50
+    notes: ""
+    id: "1774537809395"
+    duration: 30
+    completed: false
+  - name: 玩《王者荣耀》
+    date: 2026-03-26
+    startTime: 23:05
+    endTime: 23:59
+    notes: ""
+    id: "1774594407405"
+    duration: 54
+    completed: false
+  - name: 玩《王者荣耀》
+    date: 2026-03-27
+    startTime: 00:00
+    endTime: 03:10
+    notes: ""
+    id: "1774594472453"
+    duration: 190
+    completed: false
+  - name: 玩《鸣潮》
+    date: 2026-03-27
+    startTime: 03:10
+    endTime: 04:00
+    notes: ""
+    id: "1774594531887"
+    duration: 50
+    completed: false
+  - name: 玩《王者荣耀》
+    date: 2026-03-27
+    startTime: 13:00
+    endTime: 14:40
+    notes: ""
+    id: "1774594590828"
+    duration: 100
+    completed: false
+  - name: 写《结构试验与数据处理》作业
+    date: 2026-03-27
+    startTime: 15:10
+    endTime: 15:25
+    notes: ""
+    id: "1774596515953"
+    duration: 15
+    completed: false
+  - name: 开发《地球 Online 生存日记》
+    date: 2026-03-27
+    startTime: 15:30
+    endTime: 17:50
+    notes: ""
+    id: "1774605037457"
+    duration: 140
+    completed: false
+  - name: 玩《王者荣耀》
+    date: 2026-03-27
+    startTime: 19:40
+    endTime: 21:05
+    notes: ""
+    id: "1774617361267"
+    duration: 85
+    completed: false
+  - name: 开发《地球 Online 生存日记》
+    date: 2026-03-27
+    startTime: 21:15
+    endTime: 21:50
+    notes: ""
+    id: "1774619527099"
+    duration: 35
+    completed: false
+  - name: 玩《王者荣耀》
+    date: 2026-03-27
+    startTime: 22:35
+    endTime: 23:50
+    notes: ""
+    id: "1774672067312"
+    duration: 75
+    completed: false
+  - name: 玩《王者荣耀》
+    date: 2026-03-28
+    startTime: 00:00
+    endTime: 00:15
+    notes: ""
+    id: "1774672128642"
+    duration: 15
+    completed: false
+  - name: 玩《王者荣耀》
+    date: 2026-03-28
+    startTime: 01:00
+    endTime: 04:55
+    notes: ""
+    id: "1774672160923"
+    duration: 235
+    completed: false
+  - name: 玩《王者荣耀》
+    date: 2026-03-28
+    startTime: 13:00
+    endTime: 15:30
+    notes: ""
+    id: "1774683228813"
+    duration: 150
+    completed: false
+missionLists:
+  - id: "1774181937872"
+    name: 生活
+    icon: "#fa709a"
+    color: "#667eea"
+    groups:
+      - id: 1774181937872-default
+        name: 默认分组
+        color: "#667eea"
+        order: 0
+    order: 0
+    created_at: 2026-03-22T12:18:57.872Z
+  - id: "1774181929663"
+    name: 学习
+    icon: "#f093fb"
+    color: "#f093fb"
+    groups:
+      - id: 1774181929663-default
+        name: 默认分组
+        color: "#f093fb"
+        order: 0
+    order: 1
+    created_at: 2026-03-22T12:18:49.663Z
+  - id: "1774181915591"
+    name: 游戏
+    icon: "#4facfe"
+    color: "#4facfe"
+    groups:
+      - id: "1774189798882"
+        name: 原神
+        color: "#667eea"
+        order: 1
+      - id: "1774195527382"
+        name: 星铁
+        color: "#f093fb"
+        order: 2
+      - id: "1774195890160"
+        name: 鸣潮
+        color: "#4facfe"
+        order: 3
+    order: 2
+    created_at: 2026-03-22T12:18:35.591Z
+  - id: "1774249899612"
+    name: 工作
+    icon: "#43e97b"
+    color: "#43e97b"
+    groups:
+      - id: 1774249899612-default
+        name: 默认分组
+        color: "#43e97b"
+        order: 0
+    order: 3
+    created_at: 2026-03-23T07:11:39.612Z
+missions:
+  - id: "1774184486012"
+    list_id: "1774181937872"
+    group_id: 1774181937872-default
+    name: 存钱
+    date: ""
+    start_time: ""
+    end_time: ""
+    repeat_strategy: none
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: high
+    checklist: []
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: 已攒1273
+    created_at: 2026-03-22T13:01:26.012Z
+    updated_at: 2026-04-09T04:49:34.064Z
+    description: 已攒1273
+  - id: "1774187586692"
+    list_id: "1774181937872"
+    group_id: 1774181937872-default
+    name: 支付宝记账
+    date: 2026-04-09
+    start_time: 21:25
+    end_time: null
+    repeat_strategy: daily
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 5
+    priority: none
+    checklist: []
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-22T13:53:06.692Z
+    updated_at: 2026-04-08T14:55:45.489Z
+    current_count: 6
+  - id: "1774188220237"
+    list_id: "1774181937872"
+    group_id: 1774181937872-default
+    name: 值日
+    date: 2026-04-10
+    start_time: 20:50
+    end_time: ""
+    repeat_strategy: custom_days
+    repeat_custom_days: 3
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 1
+    priority: none
+    checklist: []
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: 值日人：楠
+    created_at: 2026-03-22T14:03:40.237Z
+    updated_at: 2026-04-07T19:41:20.378Z
+    description: 值日人：楠
+    current_count: 2
+  - id: "1774189297961"
+    list_id: "1774181937872"
+    group_id: 1774181937872-default
+    name: 洗澡或洗头
+    date: 2026-04-11
+    start_time: 21:10
+    end_time: ""
+    repeat_strategy: custom_days
+    repeat_custom_days: 3
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 1
+    priority: none
+    checklist: []
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-22T14:21:37.961Z
+    updated_at: 2026-04-08T16:08:17.234Z
+    current_count: 2
+    description: ""
+  - id: "1774189440948"
+    list_id: "1774181937872"
+    group_id: 1774181937872-default
+    name: 电脑和桌面清理
+    date: 2026-04-11
+    start_time: 21:25
+    end_time: ""
+    repeat_strategy: weekly
+    repeat_custom_days: 3
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 1
+    priority: none
+    checklist: []
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-22T14:24:00.948Z
+    updated_at: 2026-04-04T13:04:04.292Z
+    description: ""
+    current_count: 2
+  - id: "1774189591031"
+    list_id: "1774181937872"
+    group_id: 1774181937872-default
+    name: 还京东白条
+    date: 2026-04-15
+    start_time: 20:45
+    end_time: ""
+    repeat_strategy: monthly
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist: []
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-22T14:26:31.031Z
+    updated_at: 2026-03-22T14:26:59.416Z
+  - id: "1774189644593"
+    list_id: "1774181937872"
+    group_id: 1774181937872-default
+    name: 给苹果手机换电池
+    date: ""
+    start_time: ""
+    end_time: ""
+    repeat_strategy: none
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist: []
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-22T14:27:24.593Z
+    updated_at: 2026-03-22T14:27:24.593Z
+  - id: "1774189713659"
+    list_id: "1774249899612"
+    group_id: 1774249899612-default
+    name: 《我的恋爱脑男友就是游戏本身》第一卷每一章再优化一下
+    date: ""
+    start_time: ""
+    end_time: ""
+    repeat_strategy: none
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist: []
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-22T14:28:33.659Z
+    updated_at: 2026-03-23T07:20:19.812Z
+  - id: "1774190140086"
+    list_id: "1774181915591"
+    group_id: "1774189798882"
+    name: 3关千星奇域
+    date: 2026-04-09
+    start_time: 04:00
+    end_time: ""
+    repeat_strategy: weekdays
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 4
+    priority: none
+    checklist: []
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-22T14:35:40.086Z
+    updated_at: 2026-04-08T12:10:09.627Z
+    current_count: 5
+    description: ""
+  - id: "1774190228305"
+    list_id: "1774181915591"
+    group_id: "1774189798882"
+    name: 周常
+    date: 2026-04-13
+    start_time: 04:00
+    end_time: ""
+    repeat_strategy: weekly
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 1
+    priority: none
+    checklist:
+      - id: "1774190194372"
+        text: 参量质变仪
+        completed: false
+      - id: "1774190200780"
+        text: 爱可菲制作食物
+        completed: false
+      - id: "1774190206236"
+        text: 征讨领域（赝月12 待解68 碑碣 79 零落119 异界97 肇始85 净琉82 梦想82 鸣神83 伏龙82 进入81 深入81 北风82）
+        completed: false
+      - id: "1774190213349"
+        text: 尘歌壶管理
+        completed: false
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-22T14:37:08.305Z
+    updated_at: 2026-04-07T13:59:27.030Z
+    description: ""
+    current_count: 2
+  - id: "1774190338827"
+    list_id: "1774181915591"
+    group_id: "1774189798882"
+    name: 星辰兑换
+    date: 2026-05-01
+    start_time: 04:00
+    end_time: ""
+    repeat_strategy: monthly
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist: []
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-22T14:38:58.827Z
+    updated_at: 2026-04-06T08:40:10.178Z
+    current_count: 1
+    description: ""
+  - id: "1774190853953"
+    list_id: "1774181915591"
+    group_id: "1774189798882"
+    name: 幻想真境剧诗
+    date: 2026-05-01
+    start_time: 04:00
+    end_time: ""
+    repeat_strategy: monthly
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist: []
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-22T14:47:33.953Z
+    updated_at: 2026-04-06T08:40:19.509Z
+    current_count: 1
+    description: ""
+  - id: "1774190900217"
+    list_id: "1774181915591"
+    group_id: "1774189798882"
+    name: 深境螺旋
+    date: 2026-04-16
+    start_time: 04:00
+    end_time: ""
+    repeat_strategy: monthly
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist: []
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-22T14:48:20.217Z
+    updated_at: 2026-04-06T08:39:58.425Z
+    description: ""
+  - id: "1774195589930"
+    list_id: "1774181915591"
+    group_id: "1774195527382"
+    name: 日常
+    date: 2026-04-09
+    start_time: 21:10
+    end_time: ""
+    repeat_strategy: daily
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 5
+    priority: none
+    checklist:
+      - id: "1774195620167"
+        text: 委托
+        completed: false
+      - id: "1774195629688"
+        text: 开拓力
+        completed: false
+      - id: "1774195634040"
+        text: 每日实训
+        completed: false
+      - id: "1774195638568"
+        text: 无名勋礼
+        completed: false
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: Archer遗器养成
+    created_at: 2026-03-22T16:06:29.930Z
+    updated_at: 2026-04-08T12:32:22.638Z
+    current_count: 6
+  - id: "1774195715949"
+    list_id: "1774181915591"
+    group_id: "1774195527382"
+    name: 周常
+    date: 2026-04-14
+    start_time: 21:11
+    end_time: ""
+    repeat_strategy: weekly
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 1
+    priority: none
+    checklist:
+      - id: "1774195697385"
+        text: 差分宇宙或货币战争
+        completed: false
+      - id: "1774195699049"
+        text: 历战余响
+        completed: false
+      - id: "1774195704474"
+        text: 分解遗器
+        completed: false
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-22T16:08:35.949Z
+    updated_at: 2026-04-07T19:29:02.090Z
+    current_count: 2
+  - id: "1774195769414"
+    list_id: "1774181915591"
+    group_id: "1774195527382"
+    name: 月常
+    date: 2026-05-01
+    start_time: 21:12
+    end_time: ""
+    repeat_strategy: monthly
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist:
+      - id: "1774195753651"
+        text: 合成2个自塑尘脂
+        completed: false
+      - id: "1774195759395"
+        text: 余烬兑换
+        completed: false
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-22T16:09:29.414Z
+    updated_at: 2026-04-01T14:24:49.134Z
+    current_count: 1
+  - id: "1774195808056"
+    list_id: "1774181915591"
+    group_id: "1774195527382"
+    name: 肝地图
+    date: ""
+    start_time: ""
+    end_time: ""
+    repeat_strategy: none
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist: []
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: 目前跟到了你的影月月攻略视频的二维市（2）
+    created_at: 2026-03-22T16:10:08.056Z
+    updated_at: 2026-03-22T16:10:08.056Z
+  - id: "1774195967148"
+    list_id: "1774181915591"
+    group_id: "1774195890160"
+    name: 日常
+    date: 2026-04-09
+    start_time: 21:20
+    end_time: ""
+    repeat_strategy: daily
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 5
+    priority: none
+    checklist:
+      - id: "1774195921520"
+        text: 清空结晶波片
+        completed: false
+      - id: "1774195931056"
+        text: 活跃度
+        completed: false
+      - id: "1774195940912"
+        text: 3次强化吸收
+        completed: false
+      - id: "1774195947120"
+        text: 先约电台
+        completed: false
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: 守岸人声骸养成
+    created_at: 2026-03-22T16:12:47.148Z
+    updated_at: 2026-04-08T13:22:02.551Z
+    current_count: 6
+    description: 守岸人声骸养成
+  - id: "1774195988237"
+    list_id: "1774181915591"
+    group_id: "1774195890160"
+    name: 周常
+    date: 2026-04-15
+    start_time: 21:21
+    end_time: ""
+    repeat_strategy: weekly
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 1
+    priority: none
+    checklist:
+      - id: "1774196005634"
+        text: 千道门扉的异想
+        completed: false
+      - id: "1774196011281"
+        text: 战歌重奏
+        completed: false
+      - id: "1774196016788"
+        text: 定向融合
+        completed: false
+      - id: "1774196022434"
+        text: 角色声骸养成
+        completed: false
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-22T16:13:08.237Z
+    updated_at: 2026-04-08T13:21:25.275Z
+    current_count: 2
+  - id: "1774196086854"
+    list_id: "1774181915591"
+    group_id: "1774195890160"
+    name: 沿着节拍启航
+    date: 2026-04-29
+    start_time: null
+    end_time: 04:00
+    repeat_strategy: none
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist: []
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-22T16:14:46.854Z
+    updated_at: 2026-03-22T16:14:46.854Z
+  - id: "1774246952747"
+    list_id: "1774181937872"
+    group_id: 1774181937872-default
+    name: 扣子签到领积分
+    date: 2026-04-09
+    start_time: 08:00
+    end_time: ""
+    repeat_strategy: daily
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 4
+    priority: none
+    checklist: []
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-23T06:22:32.747Z
+    updated_at: 2026-04-08T14:55:41.858Z
+    current_count: 5
+  - id: "1774416611894"
+    list_id: "1774181915591"
+    group_id: "1774195527382"
+    name: 新开拓任务
+    date: ""
+    start_time: ""
+    end_time: ""
+    repeat_strategy: none
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: high
+    checklist: []
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-25T05:30:11.894Z
+    updated_at: 2026-03-25T05:30:11.894Z
+  - id: "1774416820235"
+    list_id: "1774181915591"
+    group_id: "1774195527382"
+    name: 异相仲裁
+    date: 2026-04-22
+    start_time: ""
+    end_time: 04:00
+    repeat_strategy: none
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: high
+    checklist: []
+    completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-25T05:33:40.235Z
+    updated_at: 2026-03-25T05:33:40.235Z
+  - id: mnaf5ek4e2spt5
+    list_id: "1774249899612"
+    name: 开发《地球 Online 生存日记》
+    description: ""
+    target_count: 1
+    current_count: 0
+    completed: false
+    group_id: 1774249899612-default
+    date: ""
+    start_time: ""
+    end_time: ""
+    repeat_strategy: none
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: high
+    checklist:
+      - id: "1775312197932"
+        text: 当清单没有分组时，添加不了任务，给清单设置一个默认分组，无法删除。
+        completed: false
+      - id: "1775312629863"
+        text: 设置模块关于笔记模块的描述修改一下
+        completed: false
+      - id: "1775312775243"
+        text: 笔记模块添加分类去除图标
+        completed: false
+      - id: "1775312874661"
+        text: 笔记新建分类文本和图标居中显示
+        completed: false
+      - id: "1775313086346"
+        text: 笔记模块添加分类选择颜色的界面样式适配应用主题
+        completed: false
+      - id: "1775313333584"
+        text: 关于模块添加项目地址，开源此项目
+        completed: false
+      - id: "1775464636796"
+        text: 结束重复按指定日期结束没有生效
+        completed: false
+      - id: "1775552965303"
+        text: 笔记模块代码的背景换一下颜色，段落自动首行缩进两字符，编辑器工具栏支持文本居中对齐
+        completed: false
+      - id: "1775553236050"
+        text: 大纲区域的背景颜色换一下
+        completed: false
+      - id: "1775556753607"
+        text: 笔记模块中文字符和英文字符或者数字之间自动空格
+        completed: false
+      - id: "1775559124637"
+        text: 笔记模块支持列表嵌套，删除快捷键绑定
+        completed: false
+      - id: "1775560675215"
+        text: 笔记模块支持编辑纯mkdown格式的文件，不要预览
+        completed: false
+      - id: "1775560718356"
+        text: 笔记模块点击列表时会取消所有已经有的列表
+        completed: false
+      - id: "1775586189002"
+        text: 专注模块，如果计时结束记录的足迹跨日期了，则前一日的时间记录到23点59，第二日0点开始记录
+        completed: false
+      - id: "1775623930187"
+        text: 数据管理模块需要优化
+        completed: false
+      - id: "1775648894766"
+        text: 添加或编辑任务时选择日期可以填入多少天多少小时后
+        completed: false
+      - id: "1775655553641"
+        text: 开发原神抽卡分析应用
+        completed: false
+      - id: "1775658607179"
+        text: 专注模块，当计时超过1小时后显示为多少小时多少分钟
+        completed: false
+      - id: "1775658854473"
+        text: 专注模块可以暂停计时
+        completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-28T14:21:51.988Z
+    updated_at: 2026-04-08T14:34:32.359Z
+  - id: mnai5lm7vpe3yn
+    list_id: "1774181915591"
+    name: 日常
+    description: |-
+      莉奈娅养成
+      叶洛亚圣遗物养成
+    target_count: 1
+    current_count: 1
+    completed: false
+    group_id: "1774189798882"
+    date: 2026-04-09
+    start_time: 04:00
+    end_time: ""
+    repeat_strategy: daily
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist:
+      - id: "1774712639739"
+        text: 原粹树脂
+        completed: false
+      - id: "1774712649478"
+        text: 每日委托
+        completed: false
+      - id: "1774712662483"
+        text: 探索派遣
+        completed: false
+      - id: "1774712691222"
+        text: 纪行
+        completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: |-
+      莉奈娅养成
+      叶洛亚圣遗物养成
+    created_at: 2026-03-28T15:45:59.983Z
+    updated_at: 2026-04-08T12:21:13.881Z
+  - id: mneqkbvuo13wax
+    list_id: "1774249899612"
+    name: 萌新还要做的任务
+    description: ""
+    target_count: 1
+    current_count: 0
+    completed: false
+    group_id: 1774249899612-default
+    date: ""
+    start_time: ""
+    end_time: ""
+    repeat_strategy: none
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist:
+      - id: "1774968773912"
+        text: 月之四一条龙P12
+        completed: false
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-03-31T14:52:28.842Z
+    updated_at: 2026-04-07T14:53:05.488Z
+  - id: mnj7cse7ltgx0s
+    list_id: "1774181915591"
+    name: 1 局七圣召唤
+    description: ""
+    target_count: 1
+    current_count: 1
+    completed: false
+    group_id: "1774189798882"
+    date: 2026-04-09
+    start_time: 04:00
+    end_time: ""
+    repeat_strategy: weekdays
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist: []
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-04-03T17:53:35.167Z
+    updated_at: 2026-04-08T12:26:51.605Z
+  - id: mnmzmln0cv35tv
+    list_id: "1774181915591"
+    name: 超高效！餐能中心补完计划！
+    description: null
+    target_count: 1
+    current_count: 0
+    completed: false
+    group_id: "1774195890160"
+    date: 2026-04-19
+    start_time: ""
+    end_time: ""
+    repeat_strategy: none
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist: []
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-04-06T09:28:20.748Z
+    updated_at: 2026-04-06T09:28:20.748Z
+  - id: mnmzn58yqwvgta
+    list_id: "1774181915591"
+    name: 拉海洛方块
+    description: null
+    target_count: 1
+    current_count: 0
+    completed: false
+    group_id: "1774195890160"
+    date: 2026-04-12
+    start_time: ""
+    end_time: ""
+    repeat_strategy: none
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist: []
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-04-06T09:28:46.162Z
+    updated_at: 2026-04-06T09:28:46.162Z
+  - id: mnmzo1vrjxqzu6
+    list_id: "1774181915591"
+    name: 诸星密语
+    description: null
+    target_count: 1
+    current_count: 0
+    completed: false
+    group_id: "1774195890160"
+    date: ""
+    start_time: ""
+    end_time: ""
+    repeat_strategy: none
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist: []
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-04-06T09:29:28.455Z
+    updated_at: 2026-04-06T09:29:28.455Z
+  - id: mnpzo533cv0u32
+    list_id: "1774181915591"
+    name: 千风凝滞之隙
+    description: null
+    target_count: 1
+    current_count: 0
+    completed: false
+    group_id: "1774189798882"
+    date: 2026-06-29
+    start_time: ""
+    end_time: ""
+    repeat_strategy: none
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist: []
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-04-08T11:52:51.135Z
+    updated_at: 2026-04-08T11:52:51.135Z
+  - id: mnpzq51g6dtc26
+    list_id: "1774181915591"
+    name: 启喻鸟之章
+    description: null
+    target_count: 1
+    current_count: 0
+    completed: false
+    group_id: "1774189798882"
+    date: 2026-04-27
+    start_time: ""
+    end_time: ""
+    repeat_strategy: none
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist: []
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-04-08T11:54:24.388Z
+    updated_at: 2026-04-08T11:54:24.388Z
+  - id: mnq8tseudewmxf
+    list_id: "1774181937872"
+    name: WorkBuddy 签到
+    description: null
+    target_count: 1
+    current_count: 0
+    completed: false
+    group_id: 1774181937872-default
+    date: 2026-04-09
+    start_time: 08:00
+    end_time: ""
+    repeat_strategy: daily
+    repeat_custom_days: 1
+    repeat_end_strategy: never
+    repeat_end_date: ""
+    repeat_count: 1
+    repeat_completed_count: 0
+    priority: none
+    checklist: []
+    completed_start_time: ""
+    completed_end_time: ""
+    notes: ""
+    created_at: 2026-04-08T16:09:11.190Z
+    updated_at: 2026-04-08T16:09:11.190Z
+kvStore:
+  earth-survival-current-page: mission
+  earth-survival-courses:
+    - id: "1774200913857"
+      name: 结构试验与数据处理
+      dayOfWeek: 1
+      startTime: 19:00
+      endTime: 20:40
+      location: 明德楼201
+      teacher: ""
+      color: "#3b82f6"
+      weeks:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 7
+        - 9
+        - 11
+        - 12
+        - 13
+        - 14
+      note: ""
+      createdAt: 2026-03-22T17:35:13.857Z
+      updatedAt: 2026-03-22T17:35:13.857Z
+    - id: "1774201017324"
+      name: 高等混凝土结构
+      dayOfWeek: 2
+      startTime: 10:00
+      endTime: 11:40
+      location: 明德楼201
+      teacher: ""
+      color: "#10b981"
+      weeks:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+        - 9
+        - 10
+        - 11
+        - 12
+        - 13
+        - 14
+        - 15
+        - 16
+      note: ""
+      createdAt: 2026-03-22T17:36:57.324Z
+      updatedAt: 2026-03-22T17:36:57.324Z
+    - id: "1774201071469"
+      name: 乒乓球
+      dayOfWeek: 2
+      startTime: 14:30
+      endTime: 16:10
+      location: 体育场
+      teacher: ""
+      color: "#f59e0b"
+      weeks:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+      note: ""
+      createdAt: 2026-03-22T17:37:51.469Z
+      updatedAt: 2026-03-22T17:37:51.469Z
+    - id: "1774204312193"
+      name: 《习近平谈治国理政》研读（第二学期）
+      dayOfWeek: 3
+      startTime: 14:30
+      endTime: 16:10
+      location: A103
+      teacher: ""
+      color: "#ef4444"
+      weeks:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+      note: ""
+      createdAt: 2026-03-22T18:31:52.193Z
+      updatedAt: 2026-03-22T18:31:52.193Z
+    - id: "1774204406963"
+      name: 新时代中国特色社会主义理论与实践
+      dayOfWeek: 3
+      startTime: 16:30
+      endTime: 18:10
+      location: 明德楼阶梯102
+      teacher: ""
+      color: "#8b5cf6"
+      weeks:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+        - 9
+        - 10
+        - 11
+        - 12
+        - 13
+        - 14
+        - 15
+        - 16
+      note: ""
+      createdAt: 2026-03-22T18:33:26.963Z
+      updatedAt: 2026-03-22T18:33:26.963Z
+    - id: "1774204468117"
+      name: 土木工程仿真技术
+      dayOfWeek: 3
+      startTime: 19:00
+      endTime: 20:40
+      location: 土木楼2楼智慧教室
+      teacher: ""
+      color: "#ec4899"
+      weeks:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+        - 9
+        - 10
+        - 11
+        - 12
+      note: ""
+      createdAt: 2026-03-22T18:34:28.117Z
+      updatedAt: 2026-03-22T18:34:28.117Z
+    - id: "1774204560959"
+      name: 高等钢结构
+      dayOfWeek: 4
+      startTime: 08:00
+      endTime: 09:40
+      location: A512
+      teacher: ""
+      color: "#06b6d4"
+      weeks:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+        - 9
+        - 10
+        - 11
+        - 12
+        - 13
+        - 14
+        - 15
+        - 16
+      note: ""
+      createdAt: 2026-03-22T18:36:00.959Z
+      updatedAt: 2026-03-22T18:36:00.959Z
+  earth-survival-semester:
+    startDate: 2026-03-02
+  earth-survival-recorded-courses:
+    - 1774200913857-2026-03-23
+    - 1774201017324-2026-03-24
+    - 1774201071469-2026-03-24
+    - 1774204312193-2026-03-25
+    - 1774204406963-2026-03-25
+    - 1774204468117-2026-03-25
+    - 1774204560959-2026-03-26
+    - 1774200913857-2026-03-30
+    - 1774201017324-2026-03-31
+    - 1774201071469-2026-03-31
+    - 1774204312193-2026-04-01
+    - 1774204406963-2026-04-01
+    - 1774204468117-2026-04-01
+    - 1774204560959-2026-04-02
+    - 1774201017324-2026-04-07
+    - 1774201071469-2026-04-07
+    - 1774204312193-2026-04-08
+    - 1774204406963-2026-04-08
+    - 1774204468117-2026-04-08
+    - 1774204560959-2026-04-09
+  earth-survival-date-state: 2026-04-02
+  earth-survival-mission-state:
+    currentListId: "1774181937872"
+  earth-survival-milestones:
+    - id: system-usage-days
+      name: 已使用地球 Online 生存日记
+      targetDate: 2026-03-28
+      category: anniversary
+      description: 记录你在这个宇宙中的旅程
+      pinned: true
+      isSystem: true
+      createdAt: 2026-04-02T08:17:10.249Z
+      updatedAt: 2026-04-04T09:27:51.254Z
+    - id: "1774198786133"
+      name: 崩坏：星穹铁道4.1版本
+      targetDate: 2026-03-25
+      category: entertainment
+      description: ""
+      pinned: false
+      isSystem: false
+      createdAt: 2026-03-22T16:59:46.133Z
+      updatedAt: 2026-04-02T08:43:20.934Z
+    - id: "1774199024283"
+      name: 原神6.5版本
+      targetDate: 2026-04-08
+      category: entertainment
+      description: ""
+      pinned: false
+      isSystem: false
+      createdAt: 2026-03-22T17:03:44.283Z
+      updatedAt: 2026-04-02T08:43:03.329Z
+    - id: "1774199415494"
+      name: 鸣潮3.3版本
+      targetDate: 2026-04-30
+      category: entertainment
+      description: ""
+      pinned: false
+      isSystem: false
+      createdAt: 2026-03-22T17:10:15.494Z
+      updatedAt: 2026-04-02T08:43:12.014Z
+    - id: "1774199455822"
+      name: 暑假
+      targetDate: 2026-07-18
+      category: life
+      description: ""
+      pinned: false
+      isSystem: false
+      createdAt: 2026-03-22T17:10:55.822Z
+      updatedAt: 2026-03-22T17:10:55.822Z
+    - id: "1774249233997"
+      name: 英语六级笔试
+      targetDate: 2026-06-13
+      category: study
+      description: ""
+      pinned: false
+      isSystem: false
+      createdAt: 2026-03-23T07:00:33.998Z
+      updatedAt: 2026-03-23T07:00:33.998Z
+    - id: "1774249408939"
+      name: 妈妈生日
+      targetDate: 2026-05-08
+      category: birthday
+      description: ""
+      pinned: false
+      isSystem: false
+      createdAt: 2026-03-23T07:03:28.939Z
+      updatedAt: 2026-03-23T07:03:28.939Z
+  earth-survival-focus-settings:
+    pomodoroDuration: 60
+  earth-survival-focus-timer-state: null
+  earth-survival-focus-records:
+    - name: 玩原神
+      notes: 16点30分开始的
+      type: stopwatch
+      duration: 32
+      targetDuration: 0
+      startTime: 16:29
+      endTime: 17:01
+      date: 2026-04-06
+      completed: true
+      id: "1775466106997"
+      createdAt: 2026-04-06T09:01:46.997Z
+    - name: 玩《崩坏：星穹铁道》
+      notes: ""
+      type: stopwatch
+      duration: 14
+      targetDuration: 0
+      startTime: 17:03
+      endTime: 17:17
+      date: 2026-04-06
+      completed: true
+      id: "1775467051538"
+      createdAt: 2026-04-06T09:17:31.538Z
+    - name: 玩《鸣潮》
+      notes: ""
+      type: stopwatch
+      duration: 11
+      targetDuration: 0
+      startTime: 17:17
+      endTime: 17:29
+      date: 2026-04-06
+      completed: true
+      id: "1775467781578"
+      createdAt: 2026-04-06T09:29:41.578Z
+    - name: 玩《王者荣耀》
+      notes: ""
+      type: stopwatch
+      duration: 106
+      targetDuration: 0
+      startTime: 20:49
+      endTime: 22:35
+      date: 2026-04-06
+      completed: true
+      id: "1775486131921"
+      createdAt: 2026-04-06T14:35:31.921Z
+    - name: 玩《王者荣耀》
+      notes: ""
+      type: stopwatch
+      duration: 40
+      targetDuration: 0
+      startTime: 12:10
+      endTime: 12:50
+      date: 2026-04-07
+      completed: true
+      id: "1775537432543"
+      createdAt: 2026-04-07T04:50:32.543Z
+    - name: 学习《遗传算法-理论、应用与软件实现》
+      notes: ""
+      type: stopwatch
+      duration: 117
+      targetDuration: 0
+      startTime: 17:25
+      endTime: 19:23
+      date: 2026-04-07
+      completed: true
+      id: "1775560999872"
+      createdAt: 2026-04-07T11:23:19.872Z
+    - name: 玩《王者荣耀》
+      notes: ""
+      type: stopwatch
+      duration: 107
+      targetDuration: 0
+      startTime: 19:57
+      endTime: 21:45
+      date: 2026-04-07
+      completed: true
+      id: "1775569538337"
+      createdAt: 2026-04-07T13:45:38.337Z
+    - name: 玩《原神》
+      notes: ""
+      type: stopwatch
+      duration: 104
+      targetDuration: 0
+      startTime: 21:52
+      endTime: 23:37
+      date: 2026-04-07
+      completed: true
+      id: "1775576249775"
+      createdAt: 2026-04-07T15:37:29.775Z
+    - name: 玩《王者荣耀》
+      notes: ""
+      type: stopwatch
+      duration: 164
+      targetDuration: 0
+      startTime: 23:37
+      endTime: 02:22
+      date: 2026-04-07
+      completed: true
+      id: "1775586142289"
+      createdAt: 2026-04-07T18:22:22.289Z
+    - name: 玩《崩坏：星穹铁道》
+      notes: ""
+      type: stopwatch
+      duration: 33
+      targetDuration: 0
+      startTime: 02:55
+      endTime: 03:29
+      date: 2026-04-08
+      completed: true
+      id: "1775590149974"
+      createdAt: 2026-04-07T19:29:09.974Z
+    - name: 玩《鸣潮》
+      notes: ""
+      type: stopwatch
+      duration: 11
+      targetDuration: 0
+      startTime: 03:29
+      endTime: 03:41
+      date: 2026-04-08
+      completed: true
+      id: "1775590887931"
+      createdAt: 2026-04-07T19:41:27.931Z
+    - name: 开发《地球 Online 生存日记》
+      notes: ""
+      type: stopwatch
+      duration: 47
+      targetDuration: 0
+      startTime: 12:51
+      endTime: 13:39
+      date: 2026-04-08
+      completed: true
+      id: "1775626750958"
+      createdAt: 2026-04-08T05:39:10.958Z
+    - name: 玩《王者荣耀》
+      notes: ""
+      type: stopwatch
+      duration: 38
+      targetDuration: 0
+      startTime: 13:40
+      endTime: 14:18
+      date: 2026-04-08
+      completed: true
+      id: "1775629139406"
+      createdAt: 2026-04-08T06:18:59.406Z
+    - name: 玩《鸣潮》
+      notes: ""
+      type: stopwatch
+      duration: 29
+      targetDuration: 0
+      startTime: 20:53
+      endTime: 21:22
+      date: 2026-04-08
+      completed: true
+      id: "1775654534829"
+      createdAt: 2026-04-08T13:22:14.829Z
+    - name: 玩《原神》
+      notes: ""
+      type: stopwatch
+      duration: 84
+      targetDuration: 0
+      startTime: 21:25
+      endTime: 22:50
+      date: 2026-04-08
+      completed: true
+      id: "1775659822739"
+      createdAt: 2026-04-08T14:50:22.739Z
+  earth-survival-countdown-state:
+    currentCategory: entertainment
+  profile_extra:
+    birthday: ""
+    phone: "17773253287"
+    avatar: 😊
+    avatarKey: mna68zd5bfy5g4mwm_1775114060808.jpg
+  earth-survival-countdown-categories:
+    - value: birthday
+      label: 生日
+      icon: 🎂
+      color: "#f472b6"
+    - value: anniversary
+      label: 纪念日
+      icon: 💕
+      color: "#ec4899"
+    - value: holiday
+      label: 节日
+      icon: 🎉
+      color: "#a855f7"
+    - value: travel
+      label: 旅行
+      icon: ✈️
+      color: "#06b6d4"
+    - value: entertainment
+      label: 娱乐
+      icon: 🎮
+      color: "#8b5cf6"
+    - value: work
+      label: 工作
+      icon: 💼
+      color: "#3b82f6"
+    - value: study
+      label: 学习
+      icon: 📚
+      color: "#10b981"
+    - value: life
+      label: 生活
+      icon: 🌟
+      color: "#f59e0b"
+  moba-records:
+    - date: 2026-04-01
+      time: 13:21
+      duration: 13
+      result: win
+      myScore: 15
+      enemyScore: 0
+      myHero: 蔡文姬
+      myPosition: 1
+      gameMode: 排位赛
+      notes: ""
+      myTeam:
+        - name: ""
+          hero: 蔡文姬
+          kills: 1
+          deaths: 3
+          assists: 11
+          isSelf: true
+        - name: ""
+          hero: 蒙恬
+          kills: 2
+          deaths: 5
+          assists: 6
+          isSelf: false
+        - name: ""
+          hero: 貂蝉
+          kills: 6
+          deaths: 3
+          assists: 4
+          isSelf: false
+        - name: ""
+          hero: 李元芳
+          kills: 7
+          deaths: 1
+          assists: 3
+          isSelf: false
+        - name: ""
+          hero: 吕布
+          kills: 1
+          deaths: 2
+          assists: 3
+          isSelf: false
+      enemyTeam:
+        - name: ""
+          hero: 吕布
+          kills: 1
+          deaths: 0
+          assists: 0
+          isSelf: false
+        - name: ""
+          hero: 老夫子
+          kills: 1
+          deaths: 1
+          assists: 0
+          isSelf: false
+        - name: ""
+          hero: 夏洛特
+          kills: 1
+          deaths: 2
+          assists: 3
+          isSelf: false
+        - name: ""
+          hero: 关羽
+          kills: 2
+          deaths: 0
+          assists: 0
+          isSelf: false
+        - name: ""
+          hero: 老夫子
+          kills: 0
+          deaths: 0
+          assists: 0
+          isSelf: false
+      id: "1775303538050"
+      createdAt: 2026-04-04T11:52:18.050Z
+  earth-survival-focus-favorites:
+    - name: 玩《王者荣耀》
+      notes: ""
+      type: stopwatch
+      targetDuration: 25
+      id: "1775486138263"
+      createdAt: 2026-04-06T14:35:38.263Z
+    - name: 学习《遗传算法-理论、应用与软件实现》
+      notes: ""
+      type: stopwatch
+      targetDuration: 25
+      id: "1775561002351"
+      createdAt: 2026-04-07T11:23:22.351Z
+    - name: 玩《崩坏：星穹铁道》
+      notes: ""
+      type: stopwatch
+      targetDuration: 25
+      id: "1775590152199"
+      createdAt: 2026-04-07T19:29:12.199Z
+    - name: 玩《鸣潮》
+      notes: ""
+      type: stopwatch
+      targetDuration: 25
+      id: "1775590890831"
+      createdAt: 2026-04-07T19:41:30.831Z
+    - name: 开发《地球 Online 生存日记》
+      notes: ""
+      type: stopwatch
+      targetDuration: 25
+      id: "1775626753478"
+      createdAt: 2026-04-08T05:39:13.478Z
+    - name: 玩《原神》
+      notes: ""
+      type: stopwatch
+      targetDuration: 25
+      id: "1775659824948"
+      createdAt: 2026-04-08T14:50:24.948Z
+notes:
+  - id: mnq35titplj4uh
+    category_id: mnd0xortkg679q
+    title: 跨设备复制粘贴
+    content: |
+      https://webstatic.mihoyo.com/hk4e/event/e20190909gacha-v3/index.html?win_mode=fullscreen&no_joypad_close=1&authkey_ver=1&sign_type=2&auth_appid=webview_gacha&init_type=301&gacha_id=2cffac571e756ab12f7ba561098283655319ba1d&timestamp=1775605669&lang=zh-cn&device_type=pc&game_version=CNRELWin6.5.0_R43669882_S43760280_D43721974&region=cn_gf01&authkey=7%2fD8x9HWhlI9%2bS70nn1DVQ%2bRlWy%2f%2blQfC8H%2bjeV%2f%2fdOMsFuUEI56hTlzrTPnIrUZluBwoQeE2Q%2bA1JB55WIy8AgOVlNHBwyRH0vbmjfPJv0DR%2bnJTFp9p41XtHg9Ww6PHlhH2RH0BVmoX7PH5OKKenaWmK5zOoJ5VJvtpBcCU5id%2bS6W94qcuU18QApZ19Ikl1sE4B8n3N4VQbe%2b1ynxV%2f3jLMaOYu9p0WVswtyyxnSwhGfXDtEa2qTeIZ7g0XM5Knb8G2htKVhEvfAlTPQyDSyNReVU%2fTGhiz8djvDSolerBKUNRwW7od2xLVgEGj%2bejJlaWkdOyYD%2fFeTjyrcJc9CIrl9GcEJl2BtojP65gxbytAGEJvt5RFpf7%2fmXIihIGkN7nQZ24Q1bd5hOE67st3wvvUS5EtabeVqq2%2b%2bdxDRUpbgV9AMW%2f%2b6InJMI%2fW84x4AGKm3NX8thQU6XFgWf6K1WAxXAo264L0IhFIOPo81GzF2EsWOSwo%2f9KLiNvbXN8cJAB1ye42eX67Bz1TZJg9jHUrCsjMot65tFOw9Z%2bnjNlDfhLT6SqqwpMhrtThfxuxPD3aGbuBjAPqg5cBVBa6VLuE422W9imZGZKOE6OJtKg15gkADj%2fU39a4OMtEwHlhjNys7HxwZQvClyGpzzxgag3oHy9ahFctomLa53XHTdZHEMwsCsAQnSNqfIj492rfovgryTmeTpOcimLjWwYlNuY3heZp6VgWap1BUIK9rf%2fVXpJEORpU8C4Ca%2f2F2JytkH%2f9GMVzaivIqmvY2CCTXLh%2fl6opsA7QCD5w3bk2rkrkMQo1D4IOEFFGQnux697xn7V%2bdeRCN1h61iv05jxwtahEe081297Hqp0c1lMhwS35oFt1Hp7o4E3PWqZ3GRlb81FQ1WPLOsPsLa4voHfMbqHhaDh%2bQMRsfEaGpcOws7dtBoFQVtZInbHivd2yeJK4eByT9CUdPqofkqccKZAS5EHCTBHttV5wLn64SeWYkYLUHu8z5c3lrLFL2%2bJtnBcxnjytnR9jlO8YJ1wJeQf0HyJL85ENcUllh1gk0i%2f2Y6hgCHLCT8PA3FQs2kO8arzkOTNkw33Br66Z%2fRzMNMFH0jJwRggn7Pw8YRieLQa9Pk0kI6FOeGOSJVVnIYEcb2jW5wa8UNyTRfXicpA0gvvmdt6%2bpWy6lvclQYvubOrh%2fKqooMbEEjNsA6BdRXpEAxMJ%2fhZVqllebBRDSxK0KsBP5dpToQ7Qnqo4%2fT6D5zcZpKOBdoTbsRANAVAvCTVhZAQvxgVeAhqiieOu4Urb066PJE1tpeFxUFPZYwWXkdPUKTfZuhcVCwBLLWxPm8sX8Tr0QYYxpCvLDg7RR3X3Nlew%3d%3d&game_biz=hk4e_cn#/log
+    tags: []
+    created_at: 2026-04-08T13:30:34.805Z
+    updated_at: 2026-04-08T13:34:43.554Z
+  - id: mnd0xscoa5f1tf
+    category_id: mnd0xortkg679q
+    title: 《遗传算法-理论、应用与软件实现》
+    content: >
+      ### 2.5 算法设计与实现
+
+
+      基本遗传算法（Simple Genetic Algorithm，SGA）可定义为一个 8 元组：
+
+
+      $$
+
+      SGA = (С, E, Р_0, M,Ф, Г,Ψ, Т) \tag{2.5.1}
+
+      $$
+
+
+      式中各符号含义如下：
+
+
+      * $C$ —— 个体的编码方法，SGA 使用固定长度二进制符号串的编码方法
+
+      * $E$ —— 个体的适应度评价函数
+
+      * $ P_0$ —— 初始群体
+
+      * $M$ —— 群体大小，一般取 20\~100
+
+      * $Ф$ —— 选择算子，SGA 使用比例选择算子
+
+      * $L$ —— 交叉算子，SGA 使用单点交叉算子
+
+      * $Ψ$ —— 变异算子，SGA 使用基本位变异算子
+
+      * $T$ —— 算法终止条件，一般终止进化代数为 100\~500
+
+
+      #### 2.5.1 问题的表示
+
+
+      对于一个实际的待优化问题，首先需要将其表示为适合于遗传算法操作的形式。这里以二进制编码为例进行说明。
+
+
+      **二进制编码的基本步骤**
+
+
+      二进制编码将实际优化问题的参数转换为遗传算法可操作的二进制字符串，具体包括以下三个步骤：
+
+
+      1. **确定待寻优参数**：根据具体问题明确需要优化的所有参数。
+
+      2. 对每个参数确定它的变化范围，并用一个二进制数来表示。若参数 **a** 的变化范围为 $[a_{min},a_{max}]$，用 **m**
+      位二进制数 **b** 来表示，则二者之间满足线性映射关系：
+
+         $$
+         a = a_{\text{min}} + \frac{b}{2^m - 1}(a_{\text{max}} - a_{\text{min}}) \tag{2.5.2}
+         $$
+
+         此时参数范围的确定应覆盖全部的寻优空间，字长 **m** 的确定应在满足精度要求情况下尽量取小值，以减小遗传算法计算的复杂性。
+      3. **多参数串接**：将所有表示参数的二进制数串接起来组成一个长的二进制字串。该字串的每一位只有 0 或 1 两种取值，即为遗传算法的操作对象。
+
+
+      **二进制 - 实参数线性映射公式 (2.5.2) 详解**
+
+
+      公式 (2.5.2) 实现了**二进制数到实际参数值的线性映射**，将遗传算法中的二进制字符串（基因型）对应到实际优化问题中的连续参数（表现型）。
+
+
+      1. **公式设计的核心考虑**
+
+         **建立端点对应关系**：
+
+         假设用一个 $m$ 位的二进制数 $b$（$b$ 是从 0 到 $ 2^m−1$ 的整数）来表示参数 $a$，则：
+
+         当 $b=0$ 时，$a=a_{min}$
+
+         当 $b=2^m−1$ 时，$a=a_{max}$
+
+         当 $b$ 取中间值时，$a$ 按比例落在 $[a_{min},a_{max}]$ 之间
+
+         **线性插值原理：**
+
+         公式本质是一个线性插值过程：
+
+         $$
+         a = a_{\text{min}} + \frac{b}{2^m - 1} (a_{\text{max}} - a_{\text{min}})
+         $$
+
+         其中系数 $\frac{b}{2^m - 1}$ 将 $b$ 从整数范围 $[0, 2^m-1]$ 映射到实数范围 $[0, 1]$，再乘以区间长度 $(a_{\text{max}} - a_{\text{min}})$，加上起点 $a_{\text{min}}$，得到实际参数值。
+
+         **均匀分割搜索空间：**
+
+         这种方式将区间 $[a_{\text{min}}, a_{\text{max}}]$ 均匀地分成了 $ 2^m - 1$ 个小段。每个二进制数对应一个离散的、均匀分布的参数值，保证了搜索的均匀性。
+
+         **便于遗传操作：**
+
+         该公式提供了一种标准的方法将二进制串解码为实际问题的解，从而能够计算适应度，支持后续的选择、交叉、变异等遗传操作。
+      2. **简单举例**
+
+         假设 $a_{\text{min}} = 0$，$a_{\text{max}} = 100$，用 $m = 3$ 位二进制（取值范围 0~7）：
+
+         $b = 0$（二进制 000）→ $a = 0$
+
+         $b = 7$（二进制 111）→ $a = 100$
+
+         $b = 4$（二进制 100）→ $a = 0 + \frac{4}{7} \times 100 \approx 57.14$
+
+         这样，任意一个 3 位二进制串都能解码为一个在 $[0,100]$ 内的具体数值，且覆盖了整个区间。
+      3. **分母为 $ 2^m−1$ 的原因**
+
+         在二进制编码中，一个 $m$ 位的二进制数 $b$ 的每一位只能是 0 或 1，因此它能表示的所有可能取值正好是 $ 2^m$ 个不同的组合。这些组合按二进制数值从小到大排列，对应的整数范围就是 $ 0,1,2,…,2^m−1$。所以 $b$ 是取自区间 $[0,2^m−1]$ 的整数。公式 (2.5.2) 中分母为 $ 2^m−1 $，正是为了将这个整数范围归一化到 $[0,1]$ 区间，再线性映射到实际的参数范围 $[a_{min},a_{max}]$。
+
+      **多参数二进制串接的必要性**
+
+
+      将所有表示参数的二进制数串接成一个长的二进制字符串，是遗传算法实现中的关键设计，主要有以下四个原因：
+
+
+      1. **将多参数问题统一为单一染色体**
+         实际优化问题通常包含多个参数（如 $a_1,a_2,...,a_n$）。遗传算法的操作对象是**染色体**（即一个完整的个体）。串接后，每个个体用一个二进制串表示，包含了所有参数的信息，使多参数问题在形式上与单参数问题统一起来。
+      2. **支持遗传算子的统一操作**
+
+         遗传算法的核心是**交叉**和**变异**等算子，它们需要在一个**完整的染色体**上进行操作：
+
+         **交叉**：在两个父代个体的二进制串上选取一个或多个交叉点，交换部分片段。串接后的长串允许交叉发生在任意位置，从而可能产生参数之间新的组合。
+
+         **变异**：对串中的某一位进行翻转（0 变 1，1 变 0）。串接后，所有参数的编码位都平等地接受变异，无需为每个参数单独设计变异操作。
+      3. **保证个体的完整性与遗传的统一性**
+
+         在遗传算法中，一个个体对应一个完整的解。串接使得每个解都由一个统一的二进制串表示，便于种群管理、适应度评价、选择、复制等操作。如果不串接而分别处理每个参数，算法流程会变得复杂，且难以保证各个参数之间的协同进化。
+      4. **便于编码与解码**
+
+         串接后的长串仍然可以用公式 (2.5.2) 的思想进行分段解码：事先约定好每个参数占用的位数和顺序，解码时按段截取，分别转换成对应的参数值。这种设计清晰、实现简单。
+      5. 多参数串接举例
+
+
+      假设一个优化问题有 2 个参数：
+
+
+      - 参数 $x$ 用 4 位二进制表示
+
+      - 参数 $y$ 用 3 位二进制表示
+
+
+      串接后的染色体是一个 7 位的二进制串，例如：`1011 010`。
+
+
+      - 前 4 位 `1011` 解码为 $x$
+
+      - 后 3 位 `010` 解码为 $y$
+
+
+      在交叉时，可能在第 5 位处切割，从而将父代 1 的 $x$ 部分与父代 2 的 $y$
+      部分组合起来，生成新个体。如果不串接，就很难实现这种跨参数的组合。
+    tags: []
+    created_at: 2026-03-30T10:07:20.520Z
+    updated_at: 2026-04-07T11:19:42.969Z
+noteCategories:
+  - id: mnd0xortkg679q
+    name: 学习笔记
+    icon: 📝
+    color: "#667eea"
+    created_at: 2026-03-30T10:07:15.881Z
+settings:
+  shortcuts:
+    inlineMath: Ctrl+M
+    blockMath: Alt+M
+    save: Ctrl+S
+  course:
+    semesterStartDate: 2026-03-02
+    totalWeeks: 20

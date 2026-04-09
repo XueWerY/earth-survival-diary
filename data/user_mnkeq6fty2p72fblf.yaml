@@ -1,0 +1,52 @@
+profile:
+  id: mnkeq6fty2p72fblf
+  nickname: 耿耿星河欲曙天
+  createdAt: 2026-04-04T14:07:43.389Z
+tasks:
+  - id: mnkeu54ypintlk
+    name: "1"
+    date: 2026-04-04
+    startTime: 22:10
+    endTime: 22:10
+    duration: 0
+    completed: false
+    notes: null
+    category: null
+    created_at: 2026-04-04T14:10:48.322Z
+missionLists:
+  - id: mnkeq81kvmac6k
+    name: 我的任务
+    icon: 📋
+    created_at: 2026-04-04T14:07:45.464Z
+missions: []
+kvStore:
+  earth-survival-current-page: countdown
+  earth-survival-focus-timer-state: null
+  earth-survival-focus-records:
+    - name: "1"
+      notes: ""
+      type: stopwatch
+      duration: 0
+      targetDuration: 0
+      startTime: 22:10
+      endTime: 22:10
+      date: 2026-04-04
+      completed: true
+      id: "1775311848511"
+      createdAt: 2026-04-04T14:10:48.511Z
+  earth-survival-mission-state:
+    currentListId: mnkeq81kvmac6k
+  earth-survival-countdown-state:
+    currentCategory: anniversary
+  earth-survival-milestones:
+    - id: system-usage-days
+      name: 已使用地球 Online 生存日记
+      targetDate: 2026-04-04
+      category: anniversary
+      description: 记录你在这个宇宙中的旅程
+      pinned: true
+      isSystem: true
+      createdAt: 2026-04-04T14:07:43.386Z
+      updatedAt: 2026-04-04T14:12:08.416Z
+noteCategories: []
+notes: []
