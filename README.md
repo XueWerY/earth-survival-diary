@@ -2,6 +2,8 @@
 
 一个帮助记录生活足迹、管理任务清单、专注时间的个人效率应用。
 
+项目地址：[https://gitee.com/firefly3/earth-survival-diary](https://gitee.com/firefly3/earth-survival-diary)
+
 ## 功能特性
 
 ### 👣 足迹记录
