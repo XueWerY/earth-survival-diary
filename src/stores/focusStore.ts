@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import dayjs from 'dayjs'
-import { getData, setData } from '../services/storageService'
+import { getData, setData, getSystemStateField, setSystemStateField } from '../services/storageService'
 
 // 专注记录
 export interface FocusRecord {
@@ -41,12 +41,12 @@ export interface TimerState {
     startTimestamp: number // 开始时间戳（毫秒）
     targetDuration: number // 目标时长（分钟），番茄钟用
     elapsedSeconds: number // 已计时秒数（用于备份）
+    isPaused: boolean // 是否处于暂停状态
 }
 
-const RECORDS_KEY = 'earth-survival-focus-records'
-const FAVORITES_KEY = 'earth-survival-focus-favorites'
+const RECORDS_KEY = 'focus:records'
+const FAVORITES_KEY = 'focus:favorites'
 const SETTINGS_KEY = 'earth-survival-focus-settings'
-const TIMER_STATE_KEY = 'earth-survival-focus-timer-state'
 
 export const useFocusStore = defineStore('focus', () => {
     const records = ref<FocusRecord[]>([])
@@ -64,7 +64,7 @@ export const useFocusStore = defineStore('focus', () => {
             getData<FocusRecord[]>(RECORDS_KEY),
             getData<FavoriteFocus[]>(FAVORITES_KEY),
             getData<FocusSettings>(SETTINGS_KEY),
-            getData<TimerState>(TIMER_STATE_KEY)
+            getSystemStateField('focusTimer')
         ])
         if (savedRecords) records.value = savedRecords
         if (savedFavorites) favorites.value = savedFavorites
@@ -89,13 +89,13 @@ export const useFocusStore = defineStore('focus', () => {
     // 保存计时状态
     const saveTimerState = async (state: TimerState | null) => {
         timerState.value = state
-        await setData(TIMER_STATE_KEY, state)
+        await setSystemStateField('focusTimer', state)
     }
 
     // 清除计时状态
     const clearTimerState = async () => {
         timerState.value = null
-        await setData(TIMER_STATE_KEY, null)
+        await setSystemStateField('focusTimer', null)
     }
 
     // 添加专注记录
@@ -121,6 +121,12 @@ export const useFocusStore = defineStore('focus', () => {
 
     // 添加常用专注
     const addFavorite = async (favorite: Omit<FavoriteFocus, 'id' | 'createdAt'>) => {
+        // 检查是否存在相同名称和类型的常用专注
+        const exists = favorites.value.some(f => f.name === favorite.name && f.type === favorite.type)
+        if (exists) {
+            return null
+        }
+
         const newFavorite: FavoriteFocus = {
             ...favorite,
             id: Date.now().toString(),

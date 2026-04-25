@@ -3,6 +3,7 @@
       v-model="dialogVisible"
       :title="isEdit ? '编辑倒数日' : '添加倒数日'"
       width="500px"
+      class="countdown-form-dialog"
       @close="resetForm"
   >
     <el-form :model="form" :rules="rules" ref="formRef" label-width="80px">
@@ -260,5 +261,21 @@ const handleSubmit = async () => {
 :deep(.el-input__count-inner) {
   background: transparent !important;
   color: rgba(255, 255, 255, 0.4) !important;
+}
+</style>
+
+<style>
+.countdown-form-dialog .el-dialog {
+  width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (max-width: 500px) {
+  .countdown-form-dialog .el-dialog {
+    width: 100vw;
+    margin-left: 0;
+    margin-right: 0;
+  }
 }
 </style>

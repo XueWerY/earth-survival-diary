@@ -2,7 +2,7 @@
   <el-dialog
       v-model="dialogVisible"
       :title="isEdit ? '编辑清单' : '创建清单'"
-      width="400px"
+      :width="dialogWidth"
       @close="resetForm"
   >
     <el-form :model="form" :rules="rules" ref="formRef" label-width="70px">
@@ -39,7 +39,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useMissionStore, DEFAULT_LIST_COLORS, type MissionList } from '../stores/missionStore'
 
@@ -59,6 +59,14 @@ const dialogVisible = computed({
   get: () => props.visible,
   set: (value) => emit('update:visible', value)
 })
+
+const screenWidth = ref(window.innerWidth)
+const dialogWidth = computed(() => screenWidth.value < 600 ? '100%' : '400px')
+
+const updateScreenWidth = () => { screenWidth.value = window.innerWidth }
+
+onMounted(() => { window.addEventListener('resize', updateScreenWidth) })
+onUnmounted(() => { window.removeEventListener('resize', updateScreenWidth) })
 
 const formRef = ref<FormInstance>()
 

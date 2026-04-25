@@ -1,5 +1,7 @@
 // 统一数据存储服务 - 支持用户隔离的 YAML 后端存储
 
+import { logger } from '../lib/logger'
+
 const API_BASE = '/api'
 
 // 缓存层，减少 API 调用
@@ -194,4 +196,50 @@ export function clearCache(key?: string) {
 // 预加载数据
 export function preloadData(key: string, data: any) {
   cache.set(key, data)
+}
+
+// ============ 统一的 SystemState 管理 ============
+
+export interface SystemState {
+  date?: Record<string, any>
+  countdown?: Record<string, any>
+  list?: Record<string, any>
+  focusTimer?: Record<string, any> | null
+  currentPage?: string
+  statsActiveTab?: string
+  session?: { token: string }
+}
+
+const SYSTEM_STATE_KEY = 'system:state'
+
+// 获取完整系统状态
+async function loadSystemState(): Promise<SystemState> {
+  const state = await getData<SystemState>(SYSTEM_STATE_KEY)
+  return state || {}
+}
+
+// 保存完整系统状态
+async function saveSystemState(state: SystemState): Promise<boolean> {
+  cache.set(SYSTEM_STATE_KEY, state)
+  return setData(SYSTEM_STATE_KEY, state)
+}
+
+// 获取系统状态的某个字段
+export async function getSystemStateField<K extends keyof SystemState>(field: K): Promise<SystemState[K]> {
+  const state = await loadSystemState()
+  return state[field]
+}
+
+// 设置系统状态的某个字段
+export async function setSystemStateField<K extends keyof SystemState>(field: K, value: SystemState[K]): Promise<boolean> {
+  const state = await loadSystemState()
+  state[field] = value
+  return saveSystemState(state)
+}
+
+// 删除系统状态的某个字段
+export async function deleteSystemStateField<K extends keyof SystemState>(field: K): Promise<boolean> {
+  const state = await loadSystemState()
+  delete state[field]
+  return saveSystemState(state)
 }

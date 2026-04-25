@@ -4,11 +4,6 @@ import * as api from '../lib/api'
 
 // 扩展用户设置接口
 export interface ExtendedUserSettings {
-    shortcuts: {
-        inlineMath: string
-        blockMath: string
-        save: string
-    }
     // 专注模块设置
     focus: {
         pomodoroDuration: number // 番茄时长（分钟）
@@ -22,11 +17,6 @@ export interface ExtendedUserSettings {
 
 // 默认设置
 export const defaultSettings: ExtendedUserSettings = {
-    shortcuts: {
-        inlineMath: 'Ctrl+M',
-        blockMath: 'Ctrl+Shift+M',
-        save: 'Ctrl+S'
-    },
     focus: {
         pomodoroDuration: 25
     },
@@ -51,11 +41,7 @@ export const useSettingsStore = defineStore('settings', () => {
             const result = await api.getSettings()
             settings.value = {
                 ...defaultSettings,
-                ...result.settings,
-                shortcuts: {
-                    ...defaultSettings.shortcuts,
-                    ...result.settings.shortcuts
-                }
+                ...result.settings
             }
             isLoaded.value = true
         } catch (error) {
@@ -79,17 +65,6 @@ export const useSettingsStore = defineStore('settings', () => {
             console.error('Failed to update settings:', error)
             return false
         }
-    }
-
-    // 更新快捷键
-    const updateShortcut = async (key: keyof api.UserSettings['shortcuts'], value: string) => {
-        const newSettings = {
-            shortcuts: {
-                ...settings.value.shortcuts,
-                [key]: value
-            }
-        }
-        return updateSettings(newSettings)
     }
 
     // 更新专注设置
@@ -129,7 +104,6 @@ export const useSettingsStore = defineStore('settings', () => {
         isLoading,
         loadSettings,
         updateSettings,
-        updateShortcut,
         updateFocusSettings,
         updateCourseSettings,
         resetSettings,

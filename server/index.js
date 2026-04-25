@@ -6,9 +6,10 @@ import yaml from 'yaml'
 import crypto from 'crypto'
 import { createServer } from 'http'
 import { WebSocketServer, WebSocket } from 'ws'
+import Redis from 'ioredis'
 
 const app = express()
-const PORT = process.env.DEPLOY_RUN_PORT || process.env.PORT || 5000
+const PORT = process.env.DEPLOY_RUN_PORT || process.env.PORT || 3001
 
 // 创建 HTTP 服务器
 const server = createServer(app)
@@ -117,48 +118,124 @@ function notifyKickedOut(userId) {
 
 // 数据目录
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data')
-const USERS_FILE = path.join(DATA_DIR, 'users.yaml')
 const LEGACY_DATA_FILE = path.join(DATA_DIR, 'app-data.yaml')
-
-// 头像目录（本地存储）
-const AVATARS_DIR = path.join(process.cwd(), 'public', 'avatars')
 
 // 确保目录存在
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true })
 }
-if (!fs.existsSync(AVATARS_DIR)) {
-  fs.mkdirSync(AVATARS_DIR, { recursive: true })
+
+// ============ Redis 配置 ============
+
+const redis = new Redis({
+  host: process.env.REDIS_HOST || 'localhost',
+  port: parseInt(process.env.REDIS_PORT || '6379'),
+  password: process.env.REDIS_PASSWORD || null,
+  db: parseInt(process.env.REDIS_DB || '0'),
+  retryStrategy(times) {
+    if (times > 3) return null
+    return Math.min(times * 100, 3000)
+  }
+})
+
+redis.on('error', (err) => {
+  console.error('Redis error:', err.message)
+  writeServerLog('error', 'Redis error', { message: err.message })
+})
+
+redis.on('ready', () => {
+  console.log('Redis connected successfully')
+})
+
+// ============ Redis 键名工具函数 ============
+
+const keys = {
+  userIndex: (email) => `user:index:${email}`,
+  userProfile: (userId) => `user:${userId}:profile`,
+  userTasks: (userId) => `user:${userId}:footprint:records`,
+  userMissionLists: (userId) => `user:${userId}:list:lists`,
+  userMissions: (userId) => `user:${userId}:list:tasks`,
+  userSettings: (userId) => `user:${userId}:settings`,
+  userKV: (userId, key) => `user:${userId}:${key}`,
+  userSystemState: (userId) => `user:${userId}:system:state`
+}
+
+async function getUserSystemState(userId) {
+  const data = await redis.get(keys.userSystemState(userId))
+  return data ? JSON.parse(data) : {}
+}
+
+async function setUserSystemState(userId, state) {
+  await redis.set(keys.userSystemState(userId), JSON.stringify(state))
+}
+
+async function getUserSession(userId) {
+  const state = await getUserSystemState(userId)
+  return state.session || null
+}
+
+async function setUserSession(userId, token) {
+  const state = await getUserSystemState(userId)
+  state.session = { token }
+  await setUserSystemState(userId, state)
+}
+
+async function deleteUserSession(userId) {
+  const state = await getUserSystemState(userId)
+  delete state.session
+  await setUserSystemState(userId, state)
+}
+
+// 确保 Redis 键存在
+async function ensureUserKeys(userId) {
+  const profile = await redis.get(keys.userProfile(userId))
+  if (!profile) {
+    await redis.set(keys.userProfile(userId), JSON.stringify({}))
+  }
 }
 
 // ============ 用户管理 ============
 
-// 加载用户索引
-function loadUsersIndex() {
-  try {
-    if (fs.existsSync(USERS_FILE)) {
-      const content = fs.readFileSync(USERS_FILE, 'utf-8')
-      return yaml.parse(content) || {}
-    }
-    return {}
-  } catch (err) {
-    console.error('Failed to load users index:', err.message)
-    return {}
+// 获取用户索引
+async function getUserIndex(email) {
+  const data = await redis.hgetall(keys.userIndex(email))
+  if (!data || !data.id) return null
+  return {
+    id: data.id,
+    email: data.email,
+    passwordHash: data.passwordHash,
+    nickname: data.nickname,
+    createdAt: data.createdAt
   }
 }
 
 // 保存用户索引
-function saveUsersIndex(users) {
-  try {
-    const content = yaml.stringify(users)
-    fs.writeFileSync(USERS_FILE, content, 'utf-8')
-  } catch (err) {
-    console.error('Failed to save users index:', err.message)
-  }
+async function setUserIndex(email, user) {
+  await redis.hmset(keys.userIndex(email), {
+    id: user.id,
+    email: user.email || email,
+    passwordHash: user.passwordHash || '',
+    nickname: user.nickname || email.split('@')[0],
+    createdAt: user.createdAt || new Date().toISOString()
+  })
 }
 
-// 活跃会话管理（单点登录）
-const activeSessions = new Map() // userId -> { token, loginTime }
+// 删除用户索引
+async function deleteUserIndex(email) {
+  await redis.del(keys.userIndex(email))
+}
+
+// 获取所有用户邮箱
+async function getAllUserEmails() {
+  const keys = await redis.keys('user:index:*')
+  return keys.map(k => k.replace('user:index:', ''))
+}
+
+// 检查邮箱是否存在
+async function emailExists(email) {
+  const user = await getUserIndex(email)
+  return !!user
+}
 
 // 密码哈希
 function hashPassword(password) {
@@ -170,7 +247,7 @@ function generateUserId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9)
 }
 
-// 生成 token (简单实现)
+// 生成 token
 function generateToken(userId) {
   const payload = `${userId}:${Date.now()}:${Math.random().toString(36).substr(2)}`
   return Buffer.from(payload).toString('base64')
@@ -187,49 +264,75 @@ function verifyToken(token) {
   }
 }
 
-// 获取用户数据文件路径
-function getUserDataFile(userId) {
-  return path.join(DATA_DIR, `user_${userId}.yaml`)
+// 获取用户 Profile
+async function getUserProfile(userId) {
+  const data = await redis.get(keys.userProfile(userId))
+  return data ? JSON.parse(data) : {}
 }
 
-// 加载用户数据
-function loadUserData(userId) {
-  const filePath = getUserDataFile(userId)
-  try {
-    if (fs.existsSync(filePath)) {
-      const content = fs.readFileSync(filePath, 'utf-8')
-      return yaml.parse(content) || {}
-    }
-    return {}
-  } catch (err) {
-    console.error(`Failed to load user data for ${userId}:`, err.message)
-    return {}
-  }
+// 保存用户 Profile
+async function setUserProfile(userId, profile) {
+  await redis.set(keys.userProfile(userId), JSON.stringify(profile))
 }
 
-// 保存用户数据
-function saveUserData(userId, data) {
-  const filePath = getUserDataFile(userId)
-  try {
-    const content = yaml.stringify(data)
-    fs.writeFileSync(filePath, content, 'utf-8')
-  } catch (err) {
-    console.error(`Failed to save user data for ${userId}:`, err.message)
-  }
+// 获取任务列表
+async function getUserTasks(userId) {
+  const data = await redis.get(keys.userTasks(userId))
+  return data ? JSON.parse(data) : []
 }
 
-// 初始化用户数据结构
-function initUserData(userId, nickname) {
-  return {
-    profile: {
-      id: userId,
-      nickname: nickname,
-      createdAt: new Date().toISOString()
-    },
-    tasks: [],
-    missionLists: [],
-    missions: []
-  }
+// 保存任务列表
+async function setUserTasks(userId, tasks) {
+  await redis.set(keys.userTasks(userId), JSON.stringify(tasks))
+}
+
+// 获取使命列表
+async function getUserMissionLists(userId) {
+  const data = await redis.get(keys.userMissionLists(userId))
+  return data ? JSON.parse(data) : []
+}
+
+// 保存使命列表
+async function setUserMissionLists(userId, lists) {
+  await redis.set(keys.userMissionLists(userId), JSON.stringify(lists))
+}
+
+// 获取使命数据
+async function getUserMissions(userId) {
+  const data = await redis.get(keys.userMissions(userId))
+  return data ? JSON.parse(data) : []
+}
+
+// 保存使命数据
+async function setUserMissions(userId, missions) {
+  await redis.set(keys.userMissions(userId), JSON.stringify(missions))
+}
+
+// 获取用户设置
+async function getUserSettings(userId) {
+  const data = await redis.get(keys.userSettings(userId))
+  return data ? JSON.parse(data) : {}
+}
+
+// 保存用户设置
+async function setUserSettings(userId, settings) {
+  await redis.set(keys.userSettings(userId), JSON.stringify(settings))
+}
+
+// 获取 KV 数据
+async function getUserKV(userId, key) {
+  const data = await redis.get(keys.userKV(userId, key))
+  return data ? JSON.parse(data) : null
+}
+
+// 设置 KV 数据
+async function setUserKV(userId, key, value) {
+  await redis.set(keys.userKV(userId, key), JSON.stringify(value))
+}
+
+// 删除 KV 数据
+async function deleteUserKV(userId, key) {
+  await redis.del(keys.userKV(userId, key))
 }
 
 // ============ 中间件 ============
@@ -242,7 +345,7 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }))
 
 // 认证中间件
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: '未登录' })
@@ -256,39 +359,40 @@ function authMiddleware(req, res, next) {
   }
 
   // 检查单点登录：是否是当前活跃会话
-  const activeSession = activeSessions.get(userId)
-  if (!activeSession) {
-    // 服务器重启后 activeSessions 会清空，此时如果 token 有效，自动恢复会话
-    activeSessions.set(userId, { token, loginTime: Date.now() })
-  } else if (activeSession.token !== token) {
-    return res.status(401).json({ error: '账号已在其他设备登录，请重新登录', kicked: true })
+  const session = await getUserSession(userId)
+  if (!session) {
+    // 服务器重启后自动恢复会话
+    await setUserSession(userId, token)
+  } else {
+    if (session.token !== token) {
+      return res.status(401).json({ error: '账号已在其他设备登录，请重新登录', kicked: true })
+    }
   }
 
   // 检查用户是否存在
-  const users = loadUsersIndex()
-  const userEntry = Object.values(users).find(u => u.id === userId)
+  const userEmails = await getAllUserEmails()
+  let userEntry = null
+  for (const email of userEmails) {
+    const user = await getUserIndex(email)
+    if (user && user.id === userId) {
+      userEntry = user
+      break
+    }
+  }
+
   if (!userEntry) {
     return res.status(401).json({ error: '用户不存在' })
   }
 
   req.userId = userId
   req.userEmail = userEntry.email
-  req.userRole = userEntry.role || 'user'
-  next()
-}
-
-// 管理员权限中间件
-function adminMiddleware(req, res, next) {
-  if (!req.userRole || req.userRole !== 'admin') {
-    return res.status(403).json({ error: '权限不足，需要管理员权限' })
-  }
   next()
 }
 
 // ============ 认证 API ============
 
 // 注册
-app.post('/api/auth/signup', (req, res) => {
+app.post('/api/auth/signup', async (req, res) => {
   try {
     const { email, password, nickname } = req.body
 
@@ -300,10 +404,8 @@ app.post('/api/auth/signup', (req, res) => {
       return res.status(400).json({ error: '密码长度至少6位' })
     }
 
-    const users = loadUsersIndex()
-
     // 检查邮箱是否已存在
-    if (users[email]) {
+    if (await emailExists(email)) {
       return res.status(400).json({ error: '该邮箱已被注册' })
     }
 
@@ -314,22 +416,23 @@ app.post('/api/auth/signup', (req, res) => {
       email: email,
       passwordHash: hashPassword(password),
       nickname: nickname || email.split('@')[0],
-      createdAt: new Date().toISOString(),
-      role: 'user' // 默认角色为普通用户
+      createdAt: new Date().toISOString()
     }
 
-    users[email] = userEntry
-    saveUsersIndex(users)
+    await setUserIndex(email, userEntry)
 
     // 初始化用户数据
-    const userData = initUserData(userId, userEntry.nickname)
-    saveUserData(userId, userData)
+    await setUserProfile(userId, {
+      id: userId,
+      nickname: userEntry.nickname,
+      createdAt: userEntry.createdAt
+    })
 
     // 生成 token
     const token = generateToken(userId)
 
     // 注册会话（单点登录）
-    activeSessions.set(userId, { token, loginTime: Date.now() })
+    await setUserSession(userId, token)
 
     console.log(`用户注册成功: ${email}`)
 
@@ -351,7 +454,7 @@ app.post('/api/auth/signup', (req, res) => {
 })
 
 // 登录
-app.post('/api/auth/signin', (req, res) => {
+app.post('/api/auth/signin', async (req, res) => {
   try {
     const { email, password } = req.body
 
@@ -359,8 +462,7 @@ app.post('/api/auth/signin', (req, res) => {
       return res.status(400).json({ error: '邮箱和密码必填' })
     }
 
-    const users = loadUsersIndex()
-    const userEntry = users[email]
+    const userEntry = await getUserIndex(email)
 
     if (!userEntry) {
       return res.status(400).json({ error: '该邮箱未注册' })
@@ -374,13 +476,12 @@ app.post('/api/auth/signin', (req, res) => {
     const token = generateToken(userEntry.id)
 
     // 注册会话（单点登录，踢掉之前的会话）
-    const prevSession = activeSessions.get(userEntry.id)
+    const prevSession = await getUserSession(userEntry.id)
     if (prevSession) {
-      // 先通知被踢出的用户
       notifyKickedOut(userEntry.id)
       console.log(`用户 ${email} 的前一会话已被踢出`)
     }
-    activeSessions.set(userEntry.id, { token, loginTime: Date.now() })
+    await setUserSession(userEntry.id, token)
 
     console.log(`用户登录成功: ${email}`)
 
@@ -402,21 +503,21 @@ app.post('/api/auth/signin', (req, res) => {
 })
 
 // 登出
-app.post('/api/auth/signout', (req, res) => {
+app.post('/api/auth/signout', async (req, res) => {
   // 清除会话
   const authHeader = req.headers.authorization
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7)
     const userId = verifyToken(token)
     if (userId) {
-      activeSessions.delete(userId)
+      await deleteUserSession(userId)
     }
   }
   res.json({ success: true })
 })
 
 // 修改邮箱
-app.post('/api/auth/change-email', authMiddleware, (req, res) => {
+app.post('/api/auth/change-email', authMiddleware, async (req, res) => {
   try {
     const { newEmail, password } = req.body
 
@@ -424,27 +525,24 @@ app.post('/api/auth/change-email', authMiddleware, (req, res) => {
       return res.status(400).json({ error: '新邮箱和密码必填' })
     }
 
-    const users = loadUsersIndex()
-
     // 检查新邮箱是否已被使用
-    if (users[newEmail]) {
+    if (await emailExists(newEmail)) {
       return res.status(400).json({ error: '该邮箱已被其他账号使用' })
     }
 
     // 验证当前密码
-    const currentUser = Object.values(users).find(u => u.id === req.userId)
+    const currentUser = await getUserIndex(req.userEmail)
     if (!currentUser || currentUser.passwordHash !== hashPassword(password)) {
       return res.status(400).json({ error: '密码错误' })
     }
 
     // 更新邮箱
     const oldEmail = req.userEmail
-    users[newEmail] = {
+    await setUserIndex(newEmail, {
       ...currentUser,
       email: newEmail
-    }
-    delete users[oldEmail]
-    saveUsersIndex(users)
+    })
+    await deleteUserIndex(oldEmail)
 
     // 更新 req.userEmail
     req.userEmail = newEmail
@@ -459,7 +557,7 @@ app.post('/api/auth/change-email', authMiddleware, (req, res) => {
 })
 
 // 修改密码
-app.post('/api/auth/change-password', authMiddleware, (req, res) => {
+app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body
 
@@ -471,8 +569,7 @@ app.post('/api/auth/change-password', authMiddleware, (req, res) => {
       return res.status(400).json({ error: '新密码至少6位' })
     }
 
-    const users = loadUsersIndex()
-    const currentUser = Object.values(users).find(u => u.id === req.userId)
+    const currentUser = await getUserIndex(req.userEmail)
 
     if (!currentUser || currentUser.passwordHash !== hashPassword(oldPassword)) {
       return res.status(400).json({ error: '当前密码错误' })
@@ -480,7 +577,7 @@ app.post('/api/auth/change-password', authMiddleware, (req, res) => {
 
     // 更新密码
     currentUser.passwordHash = hashPassword(newPassword)
-    saveUsersIndex(users)
+    await setUserIndex(req.userEmail, currentUser)
 
     console.log(`用户修改密码: ${req.userEmail}`)
 
@@ -492,18 +589,16 @@ app.post('/api/auth/change-password', authMiddleware, (req, res) => {
 })
 
 // 获取当前用户
-app.get('/api/auth/user', authMiddleware, (req, res) => {
+app.get('/api/auth/user', authMiddleware, async (req, res) => {
   try {
-    const userData = loadUserData(req.userId)
-    const users = loadUsersIndex()
-    const userEntry = Object.values(users).find(u => u.id === req.userId)
+    const profile = await getUserProfile(req.userId)
+    const currentUser = await getUserIndex(req.userEmail)
     res.json({
       user: {
         id: req.userId,
         email: req.userEmail,
-        nickname: userData.profile?.nickname || req.userEmail.split('@')[0],
-        role: userEntry?.role || 'user',
-        createdAt: userData.profile?.createdAt
+        nickname: profile?.nickname || req.userEmail.split('@')[0],
+        createdAt: profile?.createdAt
       }
     })
   } catch (error) {
@@ -512,63 +607,8 @@ app.get('/api/auth/user', authMiddleware, (req, res) => {
   }
 })
 
-// ============ 管理员管理 API ============
-
-// 获取所有用户列表（管理员专用）
-app.get('/api/admin/users', authMiddleware, adminMiddleware, (req, res) => {
-  try {
-    const users = loadUsersIndex()
-    const userList = Object.values(users).map(user => ({
-      id: user.id,
-      email: user.email,
-      nickname: user.nickname,
-      role: user.role || 'user',
-      createdAt: user.createdAt
-    }))
-    res.json({ users: userList })
-  } catch (error) {
-    console.error('Get users error:', error)
-    res.status(500).json({ error: '获取用户列表失败' })
-  }
-})
-
-// 提升用户为管理员
-app.put('/api/admin/users/:userId/role', authMiddleware, adminMiddleware, (req, res) => {
-  try {
-    const { userId } = req.params
-    const { role } = req.body
-
-    if (!role || !['admin', 'user'].includes(role)) {
-      return res.status(400).json({ error: '无效的角色' })
-    }
-
-    const users = loadUsersIndex()
-    const userEntry = Object.values(users).find(u => u.id === userId)
-
-    if (!userEntry) {
-      return res.status(404).json({ error: '用户不存在' })
-    }
-
-    // 更新角色
-    userEntry.role = role
-    saveUsersIndex(users)
-
-    res.json({
-      success: true, user: {
-        id: userEntry.id,
-        email: userEntry.email,
-        nickname: userEntry.nickname,
-        role: userEntry.role
-      }
-    })
-  } catch (error) {
-    console.error('Update user role error:', error)
-    res.status(500).json({ error: '更新用户角色失败' })
-  }
-})
-
-// 检查会话状态（用于客户端轮询检测是否被踢出）
-app.post('/api/auth/check-session', (req, res) => {
+// ============ 检查会话状态（用于客户端轮询检测是否被踢出） ============
+app.post('/api/auth/check-session', async (req, res) => {
   const authHeader = req.headers.authorization
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.json({ valid: false, kicked: false })
@@ -582,14 +622,14 @@ app.post('/api/auth/check-session', (req, res) => {
   }
 
   // 检查是否是当前活跃会话
-  const activeSession = activeSessions.get(userId)
-  if (!activeSession) {
+  const session = await getUserSession(userId)
+  if (!session) {
     // 服务器重启后自动恢复会话
-    activeSessions.set(userId, { token, loginTime: Date.now() })
+    await setUserSession(userId, token)
     return res.json({ valid: true, kicked: false })
   }
 
-  if (activeSession.token !== token) {
+  if (session.token !== token) {
     return res.json({ valid: false, kicked: true })
   }
 
@@ -599,14 +639,16 @@ app.post('/api/auth/check-session', (req, res) => {
 // ============ 用户配置 API ============
 
 // 获取用户配置
-app.get('/api/profile', authMiddleware, (req, res) => {
+app.get('/api/profile', authMiddleware, async (req, res) => {
   try {
-    const userData = loadUserData(req.userId)
+    const profile = await getUserProfile(req.userId)
     res.json({
       profile: {
         id: req.userId,
-        nickname: userData.profile?.nickname || req.userEmail.split('@')[0],
-        createdAt: userData.profile?.createdAt
+        nickname: profile?.nickname || req.userEmail.split('@')[0],
+        birthday: profile?.birthday || '',
+        phone: profile?.phone || '',
+        createdAt: profile?.createdAt
       }
     })
   } catch (error) {
@@ -616,27 +658,32 @@ app.get('/api/profile', authMiddleware, (req, res) => {
 })
 
 // 更新用户配置
-app.put('/api/profile', authMiddleware, (req, res) => {
+app.put('/api/profile', authMiddleware, async (req, res) => {
   try {
-    const { nickname } = req.body
+    const { nickname, birthday, phone } = req.body
 
-    const userData = loadUserData(req.userId)
-    userData.profile = userData.profile || {}
-    userData.profile.nickname = nickname
-    saveUserData(req.userId, userData)
+    const profile = await getUserProfile(req.userId)
+    if (nickname !== undefined) profile.nickname = nickname
+    if (birthday !== undefined) profile.birthday = birthday
+    if (phone !== undefined) profile.phone = phone
+    await setUserProfile(req.userId, profile)
 
     // 同时更新用户索引中的昵称
-    const users = loadUsersIndex()
-    if (users[req.userEmail]) {
-      users[req.userEmail].nickname = nickname
-      saveUsersIndex(users)
+    if (nickname !== undefined) {
+      const currentUser = await getUserIndex(req.userEmail)
+      if (currentUser) {
+        currentUser.nickname = nickname
+        await setUserIndex(req.userEmail, currentUser)
+      }
     }
 
     res.json({
       profile: {
         id: req.userId,
-        nickname: nickname,
-        createdAt: userData.profile.createdAt
+        nickname: profile.nickname || req.userEmail.split('@')[0],
+        birthday: profile.birthday || '',
+        phone: profile.phone || '',
+        createdAt: profile.createdAt
       }
     })
   } catch (error) {
@@ -648,10 +695,9 @@ app.put('/api/profile', authMiddleware, (req, res) => {
 // ============ 任务 API ============
 
 // 获取任务列表
-app.get('/api/tasks', authMiddleware, (req, res) => {
+app.get('/api/tasks', authMiddleware, async (req, res) => {
   try {
-    const userData = loadUserData(req.userId)
-    const tasks = userData.tasks || []
+    const tasks = await getUserTasks(req.userId)
     res.json({ tasks })
   } catch (error) {
     console.error('Get tasks error:', error)
@@ -660,12 +706,11 @@ app.get('/api/tasks', authMiddleware, (req, res) => {
 })
 
 // 添加任务
-app.post('/api/tasks', authMiddleware, (req, res) => {
+app.post('/api/tasks', authMiddleware, async (req, res) => {
   try {
     const { name, date, startTime, endTime, notes, category } = req.body
 
-    const userData = loadUserData(req.userId)
-    userData.tasks = userData.tasks || []
+    const tasks = await getUserTasks(req.userId)
 
     const newTask = {
       id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6),
@@ -680,8 +725,8 @@ app.post('/api/tasks', authMiddleware, (req, res) => {
       created_at: new Date().toISOString()
     }
 
-    userData.tasks.unshift(newTask)
-    saveUserData(req.userId, userData)
+    tasks.unshift(newTask)
+    await setUserTasks(req.userId, tasks)
 
     res.json({ task: newTask })
   } catch (error) {
@@ -691,20 +736,19 @@ app.post('/api/tasks', authMiddleware, (req, res) => {
 })
 
 // 更新任务
-app.put('/api/tasks/:id', authMiddleware, (req, res) => {
+app.put('/api/tasks/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params
     const updates = req.body
 
-    const userData = loadUserData(req.userId)
-    userData.tasks = userData.tasks || []
+    const tasks = await getUserTasks(req.userId)
 
-    const taskIndex = userData.tasks.findIndex(t => t.id === id)
+    const taskIndex = tasks.findIndex(t => t.id === id)
     if (taskIndex === -1) {
       return res.status(404).json({ error: '任务不存在' })
     }
 
-    const task = userData.tasks[taskIndex]
+    const task = tasks[taskIndex]
 
     if (updates.name !== undefined) task.name = updates.name
     if (updates.date !== undefined) task.date = updates.date
@@ -714,7 +758,7 @@ app.put('/api/tasks/:id', authMiddleware, (req, res) => {
     if (updates.category !== undefined) task.category = updates.category || null
     if (updates.completed !== undefined) task.completed = updates.completed
 
-    saveUserData(req.userId, userData)
+    await setUserTasks(req.userId, tasks)
     res.json({ task })
   } catch (error) {
     console.error('Update task error:', error)
@@ -723,17 +767,16 @@ app.put('/api/tasks/:id', authMiddleware, (req, res) => {
 })
 
 // 删除任务
-app.delete('/api/tasks/:id', authMiddleware, (req, res) => {
+app.delete('/api/tasks/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params
 
-    const userData = loadUserData(req.userId)
-    userData.tasks = userData.tasks || []
+    const tasks = await getUserTasks(req.userId)
 
-    const taskIndex = userData.tasks.findIndex(t => t.id === id)
+    const taskIndex = tasks.findIndex(t => t.id === id)
     if (taskIndex !== -1) {
-      userData.tasks.splice(taskIndex, 1)
-      saveUserData(req.userId, userData)
+      tasks.splice(taskIndex, 1)
+      await setUserTasks(req.userId, tasks)
     }
 
     res.json({ success: true })
@@ -746,10 +789,20 @@ app.delete('/api/tasks/:id', authMiddleware, (req, res) => {
 // ============ 使命列表 API ============
 
 // 获取使命列表
-app.get('/api/mission-lists', authMiddleware, (req, res) => {
+app.get('/api/mission-lists', authMiddleware, async (req, res) => {
   try {
-    const userData = loadUserData(req.userId)
-    const lists = userData.missionLists || []
+    let lists = await getUserMissionLists(req.userId)
+    lists = lists.map(list => {
+      if (!list.groups || list.groups.length === 0) {
+        list.groups = [{
+          id: `${list.id}-default`,
+          name: '默认分组',
+          color: '#667eea',
+          order: 0
+        }]
+      }
+      return list
+    }).sort((a, b) => (a.order || 0) - (b.order || 0))
     res.json({ lists })
   } catch (error) {
     console.error('Get mission lists error:', error)
@@ -758,22 +811,29 @@ app.get('/api/mission-lists', authMiddleware, (req, res) => {
 })
 
 // 添加使命列表
-app.post('/api/mission-lists', authMiddleware, (req, res) => {
+app.post('/api/mission-lists', authMiddleware, async (req, res) => {
   try {
     const { name, icon } = req.body
 
-    const userData = loadUserData(req.userId)
-    userData.missionLists = userData.missionLists || []
+    const lists = await getUserMissionLists(req.userId)
 
+    const listId = Date.now().toString(36) + Math.random().toString(36).substr(2, 6)
+    const groupId = Date.now().toString()
     const newList = {
-      id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6),
+      id: listId,
       name,
       icon: icon || '📋',
+      groups: [{
+        id: groupId,
+        name: '默认分组',
+        color: '#667eea',
+        order: 0
+      }],
       created_at: new Date().toISOString()
     }
 
-    userData.missionLists.push(newList)
-    saveUserData(req.userId, userData)
+    lists.push(newList)
+    await setUserMissionLists(req.userId, lists)
 
     res.json({ list: newList })
   } catch (error) {
@@ -782,25 +842,48 @@ app.post('/api/mission-lists', authMiddleware, (req, res) => {
   }
 })
 
+// 批量更新使命列表顺序
+app.put('/api/mission-lists/reorder', authMiddleware, async (req, res) => {
+  try {
+    const { orders } = req.body
+
+    const lists = await getUserMissionLists(req.userId)
+
+    orders.forEach(({ id, order }) => {
+      const listIndex = lists.findIndex(l => l.id === id)
+      if (listIndex !== -1) {
+        lists[listIndex].order = order
+      }
+    })
+
+    lists.sort((a, b) => a.order - b.order)
+    await setUserMissionLists(req.userId, lists)
+    res.json({ lists })
+  } catch (error) {
+    console.error('Reorder mission lists error:', error)
+    res.status(500).json({ error: '更新使命列表顺序失败' })
+  }
+})
+
 // 更新使命列表
-app.put('/api/mission-lists/:id', authMiddleware, (req, res) => {
+app.put('/api/mission-lists/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params
-    const { name, icon } = req.body
+    const { name, icon, order } = req.body
 
-    const userData = loadUserData(req.userId)
-    userData.missionLists = userData.missionLists || []
+    const lists = await getUserMissionLists(req.userId)
 
-    const listIndex = userData.missionLists.findIndex(l => l.id === id)
+    const listIndex = lists.findIndex(l => l.id === id)
     if (listIndex === -1) {
       return res.status(404).json({ error: '使命列表不存在' })
     }
 
-    if (name !== undefined) userData.missionLists[listIndex].name = name
-    if (icon !== undefined) userData.missionLists[listIndex].icon = icon
+    if (name !== undefined) lists[listIndex].name = name
+    if (icon !== undefined) lists[listIndex].icon = icon
+    if (order !== undefined) lists[listIndex].order = order
 
-    saveUserData(req.userId, userData)
-    res.json({ list: userData.missionLists[listIndex] })
+    await setUserMissionLists(req.userId, lists)
+    res.json({ list: lists[listIndex] })
   } catch (error) {
     console.error('Update mission list error:', error)
     res.status(500).json({ error: '更新使命列表失败' })
@@ -808,19 +891,18 @@ app.put('/api/mission-lists/:id', authMiddleware, (req, res) => {
 })
 
 // 删除使命列表
-app.delete('/api/mission-lists/:id', authMiddleware, (req, res) => {
+app.delete('/api/mission-lists/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params
 
-    const userData = loadUserData(req.userId)
-    userData.missionLists = userData.missionLists || []
-    userData.missions = userData.missions || []
+    const lists = await getUserMissionLists(req.userId)
+    const missions = await getUserMissions(req.userId)
 
-    // 删除列表及其下的使命
-    userData.missionLists = userData.missionLists.filter(l => l.id !== id)
-    userData.missions = userData.missions.filter(m => m.list_id !== id)
+    const newLists = lists.filter(l => l.id !== id)
+    const newMissions = missions.filter(m => m.list_id !== id)
 
-    saveUserData(req.userId, userData)
+    await setUserMissionLists(req.userId, newLists)
+    await setUserMissions(req.userId, newMissions)
     res.json({ success: true })
   } catch (error) {
     console.error('Delete mission list error:', error)
@@ -828,14 +910,162 @@ app.delete('/api/mission-lists/:id', authMiddleware, (req, res) => {
   }
 })
 
+// 批量更新分组顺序
+app.put('/api/mission-lists/:listId/groups/reorder', authMiddleware, async (req, res) => {
+  try {
+    const { listId } = req.params
+    const { orders } = req.body
+
+    const lists = await getUserMissionLists(req.userId)
+
+    const listIndex = lists.findIndex(l => l.id === listId)
+    if (listIndex === -1) {
+      return res.status(404).json({ error: '使命列表不存在' })
+    }
+
+    const list = lists[listIndex]
+    list.groups = list.groups || []
+
+    orders.forEach(({ id, order }) => {
+      const groupIndex = list.groups.findIndex(g => g.id === id)
+      if (groupIndex !== -1) {
+        list.groups[groupIndex].order = order
+      }
+    })
+
+    list.groups.sort((a, b) => a.order - b.order)
+    await setUserMissionLists(req.userId, lists)
+    res.json({ groups: list.groups })
+  } catch (error) {
+    console.error('Reorder groups error:', error)
+    res.status(500).json({ error: '更新分组顺序失败' })
+  }
+})
+
+// 添加分组到使命列表
+app.post('/api/mission-lists/:listId/groups', authMiddleware, async (req, res) => {
+  try {
+    const { listId } = req.params
+    const { name, color, order } = req.body
+
+    const lists = await getUserMissionLists(req.userId)
+
+    const listIndex = lists.findIndex(l => l.id === listId)
+    if (listIndex === -1) {
+      return res.status(404).json({ error: '使命列表不存在' })
+    }
+
+    const list = lists[listIndex]
+    list.groups = list.groups || []
+
+    const newGroup = {
+      id: Date.now().toString(),
+      name: name || '新分组',
+      color: color || '#667eea',
+      order: order !== undefined ? order : list.groups.length
+    }
+
+    list.groups.push(newGroup)
+    await setUserMissionLists(req.userId, lists)
+    res.json({ group: newGroup })
+  } catch (error) {
+    console.error('Add mission group error:', error)
+    res.status(500).json({ error: '添加分组失败' })
+  }
+})
+
+// 更新使命列表中的分组
+app.put('/api/mission-lists/:listId/groups/:groupId', authMiddleware, async (req, res) => {
+  try {
+    const { listId, groupId } = req.params
+    const { name, color, order } = req.body
+
+    const lists = await getUserMissionLists(req.userId)
+
+    const listIndex = lists.findIndex(l => l.id === listId)
+    if (listIndex === -1) {
+      return res.status(404).json({ error: '使命列表不存在' })
+    }
+
+    const list = lists[listIndex]
+    list.groups = list.groups || []
+
+    let groupIndex = list.groups.findIndex(g => g.id === groupId)
+    if (groupIndex === -1) {
+      const newGroup = {
+        id: groupId,
+        name: name || '默认分组',
+        color: color || '#667eea',
+        order: order !== undefined ? order : list.groups.length
+      }
+      list.groups.push(newGroup)
+      await setUserMissionLists(req.userId, lists)
+      return res.json({ group: newGroup })
+    }
+
+    if (name !== undefined) list.groups[groupIndex].name = name
+    if (color !== undefined) list.groups[groupIndex].color = color
+    if (order !== undefined) list.groups[groupIndex].order = order
+
+    await setUserMissionLists(req.userId, lists)
+    res.json({ group: list.groups[groupIndex] })
+  } catch (error) {
+    console.error('Update mission group error:', error)
+    res.status(500).json({ error: '更新分组失败' })
+  }
+})
+
+// 删除使命列表中的分组
+app.delete('/api/mission-lists/:listId/groups/:groupId', authMiddleware, async (req, res) => {
+  try {
+    const { listId, groupId } = req.params
+
+    const lists = await getUserMissionLists(req.userId)
+
+    const listIndex = lists.findIndex(l => l.id === listId)
+    if (listIndex === -1) {
+      return res.status(404).json({ error: '使命列表不存在' })
+    }
+
+    const list = lists[listIndex]
+    list.groups = list.groups || []
+
+    if (list.groups.length <= 1) {
+      return res.status(400).json({ error: '至少需要保留一个分组' })
+    }
+
+    const groupIndex = list.groups.findIndex(g => g.id === groupId)
+    if (groupIndex === -1) {
+      return res.status(404).json({ error: '分组不存在' })
+    }
+
+    const defaultGroup = list.groups.find(g => g.id !== groupId)
+    if (defaultGroup) {
+      const missions = await getUserMissions(req.userId)
+      missions.forEach(m => {
+        if (m.list_id === listId && m.group_id === groupId) {
+          m.group_id = defaultGroup.id
+        }
+      })
+      await setUserMissions(req.userId, missions)
+    }
+
+    list.groups.splice(groupIndex, 1)
+    await setUserMissionLists(req.userId, lists)
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Delete mission group error:', error)
+    res.status(500).json({ error: '删除分组失败' })
+  }
+})
+
 // ============ 使命 API ============
 
 // 获取使命
-app.get('/api/missions', authMiddleware, (req, res) => {
+app.get('/api/missions', authMiddleware, async (req, res) => {
   try {
     const { listId } = req.query
-    const userData = loadUserData(req.userId)
-    let missions = userData.missions || []
+    let missions = await getUserMissions(req.userId)
 
     if (listId) {
       missions = missions.filter(m => m.list_id === listId)
@@ -849,12 +1079,11 @@ app.get('/api/missions', authMiddleware, (req, res) => {
 })
 
 // 添加使命
-app.post('/api/missions', authMiddleware, (req, res) => {
+app.post('/api/missions', authMiddleware, async (req, res) => {
   try {
     const data = req.body
 
-    const userData = loadUserData(req.userId)
-    userData.missions = userData.missions || []
+    const missions = await getUserMissions(req.userId)
 
     const newMission = {
       id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6),
@@ -883,8 +1112,8 @@ app.post('/api/missions', authMiddleware, (req, res) => {
       updated_at: new Date().toISOString()
     }
 
-    userData.missions.push(newMission)
-    saveUserData(req.userId, userData)
+    missions.push(newMission)
+    await setUserMissions(req.userId, missions)
 
     res.json({ mission: newMission })
   } catch (error) {
@@ -894,22 +1123,20 @@ app.post('/api/missions', authMiddleware, (req, res) => {
 })
 
 // 更新使命
-app.put('/api/missions/:id', authMiddleware, (req, res) => {
+app.put('/api/missions/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params
     const updates = req.body
 
-    const userData = loadUserData(req.userId)
-    userData.missions = userData.missions || []
+    const missions = await getUserMissions(req.userId)
 
-    const missionIndex = userData.missions.findIndex(m => m.id === id)
+    const missionIndex = missions.findIndex(m => m.id === id)
     if (missionIndex === -1) {
       return res.status(404).json({ error: '使命不存在' })
     }
 
-    const mission = userData.missions[missionIndex]
+    const mission = missions[missionIndex]
 
-    // 支持所有字段更新
     if (updates.name !== undefined) mission.name = updates.name
     if (updates.description !== undefined) mission.description = updates.description
     if (updates.targetCount !== undefined) mission.target_count = updates.targetCount
@@ -933,7 +1160,7 @@ app.put('/api/missions/:id', authMiddleware, (req, res) => {
 
     mission.updated_at = new Date().toISOString()
 
-    saveUserData(req.userId, userData)
+    await setUserMissions(req.userId, missions)
     res.json({ mission })
   } catch (error) {
     console.error('Update mission error:', error)
@@ -942,15 +1169,14 @@ app.put('/api/missions/:id', authMiddleware, (req, res) => {
 })
 
 // 删除使命
-app.delete('/api/missions/:id', authMiddleware, (req, res) => {
+app.delete('/api/missions/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params
 
-    const userData = loadUserData(req.userId)
-    userData.missions = userData.missions || []
+    const missions = await getUserMissions(req.userId)
 
-    userData.missions = userData.missions.filter(m => m.id !== id)
-    saveUserData(req.userId, userData)
+    const newMissions = missions.filter(m => m.id !== id)
+    await setUserMissions(req.userId, newMissions)
 
     res.json({ success: true })
   } catch (error) {
@@ -962,15 +1188,17 @@ app.delete('/api/missions/:id', authMiddleware, (req, res) => {
 // ============ 统计 API ============
 
 // 获取用户统计
-app.get('/api/stats', authMiddleware, (req, res) => {
+app.get('/api/stats', authMiddleware, async (req, res) => {
   try {
-    const userData = loadUserData(req.userId)
+    const lists = await getUserMissionLists(req.userId)
+    const missions = await getUserMissions(req.userId)
+    const tasks = await getUserTasks(req.userId)
 
     res.json({
       stats: {
-        listCount: (userData.missionLists || []).length,
-        missionCount: (userData.missions || []).length,
-        taskCount: (userData.tasks || []).length
+        listCount: lists.length,
+        missionCount: missions.length,
+        taskCount: tasks.length
       }
     })
   } catch (error) {
@@ -982,13 +1210,11 @@ app.get('/api/stats', authMiddleware, (req, res) => {
 // ============ 通用数据存储 API ============
 
 // 获取数据
-app.get('/api/data/:key', authMiddleware, (req, res) => {
+app.get('/api/data/:key', authMiddleware, async (req, res) => {
   try {
     const { key } = req.params
-    const userData = loadUserData(req.userId)
-    userData.kvStore = userData.kvStore || {}
-
-    res.json({ success: true, data: userData.kvStore[key] || null })
+    const data = await getUserKV(req.userId, key)
+    res.json({ success: true, data: data || null })
   } catch (error) {
     console.error('Get data error:', error)
     res.status(500).json({ success: false, error: '获取数据失败' })
@@ -996,16 +1222,12 @@ app.get('/api/data/:key', authMiddleware, (req, res) => {
 })
 
 // 设置数据
-app.post('/api/data/:key', authMiddleware, (req, res) => {
+app.post('/api/data/:key', authMiddleware, async (req, res) => {
   try {
     const { key } = req.params
     const { data } = req.body
 
-    const userData = loadUserData(req.userId)
-    userData.kvStore = userData.kvStore || {}
-    userData.kvStore[key] = data
-    saveUserData(req.userId, userData)
-
+    await setUserKV(req.userId, key, data)
     res.json({ success: true })
   } catch (error) {
     console.error('Set data error:', error)
@@ -1014,15 +1236,11 @@ app.post('/api/data/:key', authMiddleware, (req, res) => {
 })
 
 // 删除数据
-app.delete('/api/data/:key', authMiddleware, (req, res) => {
+app.delete('/api/data/:key', authMiddleware, async (req, res) => {
   try {
     const { key } = req.params
 
-    const userData = loadUserData(req.userId)
-    userData.kvStore = userData.kvStore || {}
-    delete userData.kvStore[key]
-    saveUserData(req.userId, userData)
-
+    await deleteUserKV(req.userId, key)
     res.json({ success: true })
   } catch (error) {
     console.error('Delete data error:', error)
@@ -1031,15 +1249,13 @@ app.delete('/api/data/:key', authMiddleware, (req, res) => {
 })
 
 // 批量获取数据
-app.post('/api/data/batch/get', authMiddleware, (req, res) => {
+app.post('/api/data/batch/get', authMiddleware, async (req, res) => {
   try {
     const { keys } = req.body
-    const userData = loadUserData(req.userId)
-    userData.kvStore = userData.kvStore || {}
 
     const results = {}
     for (const key of keys) {
-      results[key] = userData.kvStore[key] || null
+      results[key] = await getUserKV(req.userId, key)
     }
 
     res.json({ success: true, data: results })
@@ -1050,17 +1266,13 @@ app.post('/api/data/batch/get', authMiddleware, (req, res) => {
 })
 
 // 批量设置数据
-app.post('/api/data/batch/set', authMiddleware, (req, res) => {
+app.post('/api/data/batch/set', authMiddleware, async (req, res) => {
   try {
     const { items } = req.body
 
-    const userData = loadUserData(req.userId)
-    userData.kvStore = userData.kvStore || {}
-
     for (const { key, data } of items) {
-      userData.kvStore[key] = data
+      await setUserKV(req.userId, key, data)
     }
-    saveUserData(req.userId, userData)
 
     res.json({ success: true })
   } catch (error) {
@@ -1069,395 +1281,14 @@ app.post('/api/data/batch/set', authMiddleware, (req, res) => {
   }
 })
 
-// ============ 笔记分类 API ============
-
-// 获取笔记分类
-app.get('/api/note-categories', authMiddleware, (req, res) => {
-  try {
-    const userData = loadUserData(req.userId)
-    const categories = userData.noteCategories || []
-    res.json({ categories })
-  } catch (error) {
-    console.error('Get note categories error:', error)
-    res.status(500).json({ error: '获取笔记分类失败' })
-  }
-})
-
-// 添加笔记分类
-app.post('/api/note-categories', authMiddleware, (req, res) => {
-  try {
-    const { name, icon, color } = req.body
-
-    const userData = loadUserData(req.userId)
-    userData.noteCategories = userData.noteCategories || []
-
-    const newCategory = {
-      id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6),
-      name,
-      icon: icon || '📝',
-      color: color || '#667eea',
-      created_at: new Date().toISOString()
-    }
-
-    userData.noteCategories.push(newCategory)
-    saveUserData(req.userId, userData)
-
-    res.json({ category: newCategory })
-  } catch (error) {
-    console.error('Add note category error:', error)
-    res.status(500).json({ error: '添加笔记分类失败' })
-  }
-})
-
-// 更新笔记分类
-app.put('/api/note-categories/:id', authMiddleware, (req, res) => {
-  try {
-    const { id } = req.params
-    const { name, icon, color } = req.body
-
-    const userData = loadUserData(req.userId)
-    userData.noteCategories = userData.noteCategories || []
-
-    const categoryIndex = userData.noteCategories.findIndex(c => c.id === id)
-    if (categoryIndex === -1) {
-      return res.status(404).json({ error: '笔记分类不存在' })
-    }
-
-    if (name !== undefined) userData.noteCategories[categoryIndex].name = name
-    if (icon !== undefined) userData.noteCategories[categoryIndex].icon = icon
-    if (color !== undefined) userData.noteCategories[categoryIndex].color = color
-
-    saveUserData(req.userId, userData)
-    res.json({ category: userData.noteCategories[categoryIndex] })
-  } catch (error) {
-    console.error('Update note category error:', error)
-    res.status(500).json({ error: '更新笔记分类失败' })
-  }
-})
-
-// 删除笔记分类
-app.delete('/api/note-categories/:id', authMiddleware, (req, res) => {
-  try {
-    const { id } = req.params
-
-    const userData = loadUserData(req.userId)
-    userData.noteCategories = userData.noteCategories || []
-    userData.notes = userData.notes || []
-
-    // 删除分类及该分类下的所有笔记
-    userData.noteCategories = userData.noteCategories.filter(c => c.id !== id)
-    userData.notes = userData.notes.filter(n => n.category_id !== id)
-
-    saveUserData(req.userId, userData)
-    res.json({ success: true })
-  } catch (error) {
-    console.error('Delete note category error:', error)
-    res.status(500).json({ error: '删除笔记分类失败' })
-  }
-})
-
-// ============ 笔记 API ============
-
-// 获取笔记列表
-app.get('/api/notes', authMiddleware, (req, res) => {
-  try {
-    const { categoryId, search } = req.query
-    const userData = loadUserData(req.userId)
-    let notes = userData.notes || []
-
-    if (categoryId) {
-      notes = notes.filter(n => n.category_id === categoryId)
-    }
-
-    if (search) {
-      const searchLower = search.toLowerCase()
-      notes = notes.filter(n =>
-        n.title.toLowerCase().includes(searchLower) ||
-        (n.content && n.content.toLowerCase().includes(searchLower))
-      )
-    }
-
-    // 按更新时间倒序
-    notes.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-
-    res.json({ notes })
-  } catch (error) {
-    console.error('Get notes error:', error)
-    res.status(500).json({ error: '获取笔记失败' })
-  }
-})
-
-// 获取单个笔记
-app.get('/api/notes/:id', authMiddleware, (req, res) => {
-  try {
-    const { id } = req.params
-    const userData = loadUserData(req.userId)
-    const notes = userData.notes || []
-
-    const note = notes.find(n => n.id === id)
-    if (!note) {
-      return res.status(404).json({ error: '笔记不存在' })
-    }
-
-    res.json({ note })
-  } catch (error) {
-    console.error('Get note error:', error)
-    res.status(500).json({ error: '获取笔记失败' })
-  }
-})
-
-// 添加笔记
-app.post('/api/notes', authMiddleware, (req, res) => {
-  try {
-    const { categoryId, title, content, tags } = req.body
-
-    const userData = loadUserData(req.userId)
-    userData.notes = userData.notes || []
-
-    const now = new Date().toISOString()
-    const newNote = {
-      id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6),
-      category_id: categoryId || null,
-      title: title || '无标题',
-      content: content || '',
-      tags: tags || [],
-      created_at: now,
-      updated_at: now
-    }
-
-    userData.notes.unshift(newNote)
-    saveUserData(req.userId, userData)
-
-    res.json({ note: newNote })
-  } catch (error) {
-    console.error('Add note error:', error)
-    res.status(500).json({ error: '添加笔记失败' })
-  }
-})
-
-// 更新笔记
-app.put('/api/notes/:id', authMiddleware, (req, res) => {
-  try {
-    const { id } = req.params
-    const { categoryId, title, content, tags } = req.body
-
-    const userData = loadUserData(req.userId)
-    userData.notes = userData.notes || []
-
-    const noteIndex = userData.notes.findIndex(n => n.id === id)
-    if (noteIndex === -1) {
-      return res.status(404).json({ error: '笔记不存在' })
-    }
-
-    const note = userData.notes[noteIndex]
-
-    if (categoryId !== undefined) note.category_id = categoryId
-    if (title !== undefined) note.title = title
-    if (content !== undefined) note.content = content
-    if (tags !== undefined) note.tags = tags
-
-    note.updated_at = new Date().toISOString()
-
-    saveUserData(req.userId, userData)
-    res.json({ note })
-  } catch (error) {
-    console.error('Update note error:', error)
-    res.status(500).json({ error: '更新笔记失败' })
-  }
-})
-
-// 删除笔记
-app.delete('/api/notes/:id', authMiddleware, (req, res) => {
-  try {
-    const { id } = req.params
-
-    const userData = loadUserData(req.userId)
-    userData.notes = userData.notes || []
-
-    userData.notes = userData.notes.filter(n => n.id !== id)
-    saveUserData(req.userId, userData)
-
-    res.json({ success: true })
-  } catch (error) {
-    console.error('Delete note error:', error)
-    res.status(500).json({ error: '删除笔记失败' })
-  }
-})
-
 // ============ 设置 API ============
-
-// 默认设置
-const defaultSettings = {
-  shortcuts: {
-    inlineMath: 'Ctrl+M',
-    blockMath: 'Ctrl+Shift+M',
-    save: 'Ctrl+S'
-  }
-}
-
-// ============ 倒数日 API ============
-
-// 获取倒数日列表
-app.get('/api/countdowns', authMiddleware, (req, res) => {
-  try {
-    const userData = loadUserData(req.userId)
-    const countdowns = userData.countdowns || []
-    res.json({ countdowns })
-  } catch (error) {
-    console.error('Get countdowns error:', error)
-    res.status(500).json({ error: '获取倒数日失败' })
-  }
-})
-
-// 添加倒数日
-app.post('/api/countdowns', authMiddleware, (req, res) => {
-  try {
-    const { name, targetDate, icon, is_birthday, is_system } = req.body
-
-    const userData = loadUserData(req.userId)
-    userData.countdowns = userData.countdowns || []
-
-    const newCountdown = {
-      id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6),
-      name,
-      target_date: targetDate,
-      icon: icon || '📅',
-      is_birthday: is_birthday || false,
-      is_system: is_system || false,
-      created_at: new Date().toISOString()
-    }
-
-    userData.countdowns.push(newCountdown)
-    saveUserData(req.userId, userData)
-
-    res.json({ countdown: newCountdown })
-  } catch (error) {
-    console.error('Add countdown error:', error)
-    res.status(500).json({ error: '添加倒数日失败' })
-  }
-})
-
-// 更新倒数日
-app.put('/api/countdowns/:id', authMiddleware, (req, res) => {
-  try {
-    const { id } = req.params
-    const { name, targetDate, icon, is_birthday, is_system } = req.body
-
-    const userData = loadUserData(req.userId)
-    userData.countdowns = userData.countdowns || []
-
-    const countdownIndex = userData.countdowns.findIndex(c => c.id === id)
-    if (countdownIndex === -1) {
-      return res.status(404).json({ error: '倒数日不存在' })
-    }
-
-    if (name !== undefined) userData.countdowns[countdownIndex].name = name
-    if (targetDate !== undefined) userData.countdowns[countdownIndex].target_date = targetDate
-    if (icon !== undefined) userData.countdowns[countdownIndex].icon = icon
-    if (is_birthday !== undefined) userData.countdowns[countdownIndex].is_birthday = is_birthday
-    if (is_system !== undefined) userData.countdowns[countdownIndex].is_system = is_system
-
-    saveUserData(req.userId, userData)
-    res.json({ countdown: userData.countdowns[countdownIndex] })
-  } catch (error) {
-    console.error('Update countdown error:', error)
-    res.status(500).json({ error: '更新倒数日失败' })
-  }
-})
-
-// 删除倒数日（系统倒数日不可删除）
-app.delete('/api/countdowns/:id', authMiddleware, (req, res) => {
-  try {
-    const { id } = req.params
-
-    const userData = loadUserData(req.userId)
-    userData.countdowns = userData.countdowns || []
-
-    const countdown = userData.countdowns.find(c => c.id === id)
-    if (countdown?.is_system) {
-      return res.status(400).json({ error: '系统倒数日不可删除' })
-    }
-
-    userData.countdowns = userData.countdowns.filter(c => c.id !== id)
-    saveUserData(req.userId, userData)
-
-    res.json({ success: true })
-  } catch (error) {
-    console.error('Delete countdown error:', error)
-    res.status(500).json({ error: '删除倒数日失败' })
-  }
-})
-
-// ============ 头像上传 API ============
-
-// 上传头像
-app.post('/api/avatar/upload', authMiddleware, async (req, res) => {
-  try {
-    const { fileData, fileName } = req.body
-
-    if (!fileData) {
-      return res.status(400).json({ error: '缺少文件数据' })
-    }
-
-    // 将 base64 转为 Buffer
-    const buffer = Buffer.from(fileData, 'base64')
-
-    // 生成文件名
-    const ext = fileName.split('.').pop() || 'png'
-    const localFileName = `${req.userId}_${Date.now()}.${ext}`
-    const filePath = path.join(AVATARS_DIR, localFileName)
-
-    // 保存文件到本地
-    fs.writeFileSync(filePath, buffer)
-
-    // 生成访问 URL
-    const avatarUrl = `/avatars/${localFileName}`
-
-    // 保存 avatarKey 到用户数据
-    const userData = loadUserData(req.userId)
-    userData.profile = userData.profile || {}
-    userData.profile.avatarKey = localFileName
-    saveUserData(req.userId, userData)
-
-    res.json({
-      success: true,
-      avatarKey: localFileName,
-      avatarUrl
-    })
-  } catch (error) {
-    console.error('Upload avatar error:', error)
-    res.status(500).json({ error: '上传头像失败' })
-  }
-})
-
-// 获取头像 URL
-app.get('/api/avatar/url', authMiddleware, (req, res) => {
-  try {
-    const userData = loadUserData(req.userId)
-    const avatarKey = userData.profile?.avatarKey
-
-    if (!avatarKey) {
-      return res.json({ avatarUrl: null })
-    }
-
-    // 兼容旧的 local: 前缀格式
-    const fileName = avatarKey.startsWith('local:') ? avatarKey.replace('local:', '') : avatarKey
-    const avatarUrl = `/avatars/${fileName}`
-
-    res.json({ avatarUrl })
-  } catch (error) {
-    console.error('Get avatar URL error:', error)
-    res.status(500).json({ error: '获取头像失败' })
-  }
-})
 
 // ============ 设置 API ============
 
 // 获取用户设置
-app.get('/api/settings', authMiddleware, (req, res) => {
+app.get('/api/settings', authMiddleware, async (req, res) => {
   try {
-    const userData = loadUserData(req.userId)
-    const settings = userData.settings || defaultSettings
+    const settings = await getUserSettings(req.userId)
     res.json({ settings })
   } catch (error) {
     console.error('Get settings error:', error)
@@ -1466,28 +1297,212 @@ app.get('/api/settings', authMiddleware, (req, res) => {
 })
 
 // 更新用户设置
-app.put('/api/settings', authMiddleware, (req, res) => {
+app.put('/api/settings', authMiddleware, async (req, res) => {
   try {
-    const userData = loadUserData(req.userId)
+    const existingSettings = await getUserSettings(req.userId)
 
     // 合并设置
-    userData.settings = {
-      ...defaultSettings,
-      ...(userData.settings || {}),
-      ...req.body,
-      // 深度合并 shortcuts
-      shortcuts: {
-        ...defaultSettings.shortcuts,
-        ...((userData.settings || {}).shortcuts || {}),
-        ...(req.body.shortcuts || {})
-      }
+    const mergedSettings = {
+      ...existingSettings,
+      ...req.body
     }
 
-    saveUserData(req.userId, userData)
-    res.json({ settings: userData.settings })
+    await setUserSettings(req.userId, mergedSettings)
+    res.json({ settings: mergedSettings })
   } catch (error) {
     console.error('Update settings error:', error)
     res.status(500).json({ error: '更新设置失败' })
+  }
+})
+
+// ============ 日志 API ============
+
+// 日志级别枚举 (与前端保持一致)
+const LogLevel = {
+  TRACE: 0,
+  DEBUG: 1,
+  INFO: 2,
+  WARN: 3,
+  ERROR: 4
+}
+
+// 日志目录
+const LOGS_DIR = path.join(process.cwd(), 'logs')
+
+// 确保日志目录存在
+if (!fs.existsSync(LOGS_DIR)) {
+  fs.mkdirSync(LOGS_DIR, { recursive: true })
+}
+
+// 北京时间格式化工具
+function formatBeijingDate(date) {
+  return date.toLocaleString('sv-SE', { timeZone: 'Asia/Shanghai', dateStyle: 'short' })
+}
+
+function formatBeijingTimestamp(date) {
+  return date.toLocaleString('sv-SE', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    fractionalSecondDigits: 3,
+    hour12: false
+  }).replace(',', ':')
+}
+
+// 后端服务日志写入
+function writeServerLog(level, message, meta) {
+  const now = new Date()
+  const dateStr = formatBeijingDate(now)
+  const logFileName = `app-${dateStr}.log`
+  const logFilePath = path.join(LOGS_DIR, logFileName)
+  const timestamp = formatBeijingTimestamp(now)
+  let formatted = `[${timestamp}] [${level.toUpperCase()}] ${message}`
+  if (meta) formatted += ' ' + (typeof meta === 'object' ? JSON.stringify(meta) : meta)
+  fs.appendFileSync(logFilePath, formatted + '\n')
+}
+
+// 拦截 console.log，同时写入日志文件
+const _originalConsoleLog = console.log
+console.log = function(...args) {
+  _originalConsoleLog.apply(console, args)
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
+  if (msg && msg.trim()) {
+    writeServerLog('info', msg)
+  }
+}
+
+// 记录日志到 .log 文件
+app.post('/api/logs', authMiddleware, async (req, res) => {
+  try {
+    const { logs } = req.body
+    
+    if (!Array.isArray(logs) || logs.length === 0) {
+      return res.status(400).json({ success: false, error: '日志数据格式不正确' })
+    }
+    
+    // 按日期分组写入日志文件
+    const groupedLogs = {}
+    
+    logs.forEach(log => {
+      const logDate = new Date(log.timestamp)
+      const dateStr = formatBeijingDate(logDate)
+      if (!groupedLogs[dateStr]) {
+        groupedLogs[dateStr] = []
+      }
+      const levelNames = Object.keys(LogLevel).reduce((acc, key) => {
+        acc[LogLevel[key]] = key
+        return acc
+      }, {})
+      const levelName = levelNames[log.level] || 'UNKNOWN'
+      const bjTimestamp = formatBeijingTimestamp(logDate)
+      const formattedLog = `[${bjTimestamp}] [${levelName}] ${log.message}${log.meta ? ' ' + JSON.stringify(log.meta) : ''}${log.stack ? '\n' + log.stack : ''}`
+      groupedLogs[dateStr].push(formattedLog)
+    })
+    
+    // 写入各日期对应的日志文件
+    for (const [dateStr, entries] of Object.entries(groupedLogs)) {
+      const logFileName = `app-${dateStr}.log`
+      const logFilePath = path.join(LOGS_DIR, logFileName)
+      fs.appendFileSync(logFilePath, entries.join('\n') + '\n')
+    }
+    
+    res.json({ success: true, message: `已记录 ${logs.length} 条日志` })
+  } catch (error) {
+    console.error('Log write error:', error)
+    res.status(500).json({ success: false, error: '写入日志失败' })
+  }
+})
+
+// 获取最近的日志
+app.get('/api/logs', authMiddleware, async (req, res) => {
+  try {
+    const { limit = 100, level } = req.query
+    
+    // 获取最新的日志文件
+    const logFiles = fs.readdirSync(LOGS_DIR)
+      .filter(file => file.endsWith('.log'))
+      .sort()
+      .reverse()
+    
+    if (logFiles.length === 0) {
+      return res.json({ logs: [] })
+    }
+    
+    let logLines = []
+    for (const logFile of logFiles) {
+      const logFilePath = path.join(LOGS_DIR, logFile)
+      const content = fs.readFileSync(logFilePath, 'utf-8')
+      const lines = content.trim().split('\n').filter(line => line.trim() !== '')
+      logLines = [...logLines, ...lines]
+      
+      if (logLines.length >= limit) {
+        break
+      }
+    }
+    
+    // 解析日志行
+    const parsedLogs = logLines
+      .map(line => {
+        try {
+          // 解析日志格式: [timestamp] [LEVEL] message
+          const match = line.match(/^\[(.+?)\] \[(.+?)\] (.+)$/)
+          if (match) {
+            const [, timestamp, levelStr, messageWithMeta] = match
+            let message = messageWithMeta
+            let meta = null
+            
+            // 检查是否有元数据
+            const metaMatch = messageWithMeta.match(/^(.*?)\s+(\{.*\})$/)
+            if (metaMatch) {
+              message = metaMatch[1]
+              meta = JSON.parse(metaMatch[2])
+            }
+            
+            const levelNames = Object.keys(LogLevel).reduce((acc, key) => {
+              acc[key] = LogLevel[key]
+              return acc
+            }, {})
+            const levelValue = levelNames[levelStr]
+            
+            return {
+              timestamp: new Date(timestamp).toISOString(),
+              level: levelValue !== undefined ? levelValue : -1,
+              levelName: levelStr,
+              message: message,
+              meta: meta
+            }
+          }
+        } catch (e) {
+          // 如果解析失败，返回原始行
+          return {
+            timestamp: new Date().toISOString(),
+            level: -1,
+            levelName: 'PARSE_ERROR',
+            message: line,
+            meta: null
+          }
+        }
+      })
+      .filter(log => log && log.level !== -1) // 过滤无效日志
+      .filter(log => {
+        if (!level) return true
+        const levelNames = Object.keys(LogLevel).reduce((acc, key) => {
+          acc[key] = LogLevel[key]
+          return acc
+        }, {})
+        return log.level >= (levelNames[level.toUpperCase()] || -1)
+      }) // 按级别过滤
+      
+    // 返回最后 limit 条日志
+    const result = parsedLogs.slice(-limit)
+    
+    res.json({ 
+      logs: result,
+      total: result.length
+    })
+  } catch (error) {
+    console.error('Get logs error:', error)
+    res.status(500).json({ error: '获取日志失败' })
   }
 })
 
@@ -1496,7 +1511,7 @@ app.put('/api/settings', authMiddleware, (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    storage: 'yaml',
+    storage: 'redis',
     dataDir: DATA_DIR
   })
 })
@@ -1535,136 +1550,7 @@ app.get('/api/version', (req, res) => {
   }
 })
 
-// ============ 文件管理 API ============
-
-// 获取文件列表
-app.get('/api/admin/files', authMiddleware, adminMiddleware, (req, res) => {
-  try {
-    const files = []
-
-    function traverse(dir, relativePath = '') {
-      const items = fs.readdirSync(dir)
-      for (const item of items) {
-        const fullPath = path.join(dir, item)
-        const stats = fs.statSync(fullPath)
-        const itemPath = path.join(relativePath, item)
-
-        if (stats.isDirectory()) {
-          traverse(fullPath, itemPath)
-        } else {
-          files.push({
-            path: itemPath,
-            size: stats.size,
-            mtime: stats.mtime.toISOString(),
-            birthtime: stats.birthtime.toISOString()
-          })
-        }
-      }
-    }
-
-    traverse(DATA_DIR)
-    res.json({ files })
-  } catch (error) {
-    console.error('Get files error:', error)
-    res.status(500).json({ error: '获取文件列表失败' })
-  }
-})
-
-// 读取文件内容
-app.get('/api/admin/files/:filePath*', authMiddleware, adminMiddleware, (req, res) => {
-  try {
-    const filePath = path.join(DATA_DIR, req.params.filePath, ...(req.params[0] ? req.params[0].split('/') : []))
-
-    // 安全检查：确保文件在 DATA_DIR 内
-    if (!filePath.startsWith(DATA_DIR)) {
-      return res.status(403).json({ error: '访问受限' })
-    }
-
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: '文件不存在' })
-    }
-
-    const content = fs.readFileSync(filePath, 'utf-8')
-    res.json({ content })
-  } catch (error) {
-    console.error('Read file error:', error)
-    res.status(500).json({ error: '读取文件失败' })
-  }
-})
-
-// 写入文件内容
-app.put('/api/admin/files/:filePath*', authMiddleware, adminMiddleware, (req, res) => {
-  try {
-    const filePath = path.join(DATA_DIR, req.params.filePath, ...(req.params[0] ? req.params[0].split('/') : []))
-    const { content } = req.body
-
-    // 安全检查：确保文件在 DATA_DIR 内
-    if (!filePath.startsWith(DATA_DIR)) {
-      return res.status(403).json({ error: '访问受限' })
-    }
-
-    // 确保目录存在
-    const dir = path.dirname(filePath)
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true })
-    }
-
-    fs.writeFileSync(filePath, content, 'utf-8')
-    res.json({ success: true })
-  } catch (error) {
-    console.error('Write file error:', error)
-    res.status(500).json({ error: '写入文件失败' })
-  }
-})
-
-// 删除文件
-app.delete('/api/admin/files/:filePath*', authMiddleware, adminMiddleware, (req, res) => {
-  try {
-    const filePath = path.join(DATA_DIR, req.params.filePath, ...(req.params[0] ? req.params[0].split('/') : []))
-
-    // 安全检查：确保文件在 DATA_DIR 内
-    if (!filePath.startsWith(DATA_DIR)) {
-      return res.status(403).json({ error: '访问受限' })
-    }
-
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: '文件不存在' })
-    }
-
-    fs.unlinkSync(filePath)
-    res.json({ success: true })
-  } catch (error) {
-    console.error('Delete file error:', error)
-    res.status(500).json({ error: '删除文件失败' })
-  }
-})
-
-// 备份文件
-app.post('/api/admin/files/backup', authMiddleware, adminMiddleware, (req, res) => {
-  try {
-    const backupDir = path.join(DATA_DIR, 'backups')
-    if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir, { recursive: true })
-    }
-
-    const backupFileName = `backup_${Date.now()}.zip`
-    const backupPath = path.join(backupDir, backupFileName)
-
-    // 这里简化处理，实际项目中可以使用 zip 库进行压缩
-    // 这里仅创建一个空备份文件作为示例
-    fs.writeFileSync(backupPath, JSON.stringify({ timestamp: Date.now() }), 'utf-8')
-
-    res.json({ success: true, backupFile: backupFileName })
-  } catch (error) {
-    console.error('Backup files error:', error)
-    res.status(500).json({ error: '备份文件失败' })
-  }
-})
-
 // ============ 提供头像静态文件 ============
-
-// 头像静态文件服务
-app.use('/avatars', express.static(AVATARS_DIR))
 
 // ============ 提供前端静态文件（生产模式） ============
 
@@ -1687,6 +1573,6 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('')
   console.log('地球 Online 生存日记 已启动')
   console.log(`本地访问: http://localhost:${PORT}`)
-  console.log(`数据目录: ${DATA_DIR}`)
+  console.log(`数据存储: Redis`)
   console.log('')
 })

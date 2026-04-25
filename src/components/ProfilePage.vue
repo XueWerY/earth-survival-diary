@@ -1,32 +1,5 @@
 <template>
   <div class="profile-page">
-    <div class="profile-header">
-      <div class="avatar-section">
-        <div class="avatar-wrapper" @click="triggerAvatarUpload">
-          <div class="avatar" :style="avatarStyle">
-            <img v-if="avatarUrl" :src="avatarUrl" alt="头像" class="avatar-img" />
-            <span v-else class="avatar-placeholder">点击上传头像</span>
-          </div>
-          <div class="avatar-edit">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-              <circle cx="12" cy="13" r="4"></circle>
-            </svg>
-          </div>
-          <input
-              ref="avatarInput"
-              type="file"
-              accept="image/*"
-              style="display: none"
-              @change="handleAvatarChange"
-          />
-        </div>
-        <div class="user-info">
-          <h2 class="nickname">{{ authStore.nickname }}</h2>
-        </div>
-      </div>
-    </div>
-
     <div class="profile-content">
       <el-scrollbar>
         <div class="profile-section">
@@ -109,6 +82,74 @@
           </div>
         </div>
 
+        <div class="profile-section">
+          <h3 class="section-title">
+            <span class="title-icon">🍅</span>
+            专注设置
+          </h3>
+          <p class="section-desc">配置番茄钟的默认时长。</p>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">番茄时长</span>
+              <span class="setting-desc">每个番茄钟的默认工作时长（分钟）</span>
+            </div>
+            <div class="setting-control">
+              <el-input-number
+                  v-model="focusSettings.pomodoroDuration"
+                  :min="1"
+                  :max="120"
+                  :step="5"
+                  size="default"
+                  @change="handleFocusSettingChange"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="profile-section">
+          <h3 class="section-title">
+            <span class="title-icon">📚</span>
+            课程表设置
+          </h3>
+          <p class="section-desc">设置学期信息，用于计算当前周次。</p>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">开学日期</span>
+              <span class="setting-desc">学期第一周的周一日期</span>
+            </div>
+            <div class="setting-control">
+              <LunarDatePicker
+                  v-model="courseSettings.semesterStartDate"
+                  :show-lunar="true"
+                  @change="handleCourseSettingChange"
+              />
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">学期周数</span>
+              <span class="setting-desc">本学期总共有多少周</span>
+            </div>
+            <div class="setting-control">
+              <el-input-number
+                  v-model="courseSettings.totalWeeks"
+                  :min="1"
+                  :max="30"
+                  :step="1"
+                  size="default"
+                  @change="handleCourseWeeksChange"
+              />
+            </div>
+          </div>
+
+          <div class="setting-tip" v-if="courseSettings.semesterStartDate">
+            当前学期第 {{ currentWeekNumber }} 周 / 共 {{ courseSettings.totalWeeks }} 周
+          </div>
+        </div>
+
         <div class="profile-section danger-zone">
           <el-button type="danger" @click="handleLogout" :loading="loggingOut">
             退出登录
@@ -188,17 +229,19 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import dayjs from 'dayjs'
 import { useAuthStore } from '../stores/authStore'
+import { useSettingsStore } from '../stores/settingsStore'
 import * as api from '../lib/api'
 import LunarDatePicker from './LunarDatePicker.vue'
+import { logger } from '../lib/logger'
 
 const emit = defineEmits<{
   logout: []
 }>()
 
 const authStore = useAuthStore()
+const settingsStore = useSettingsStore()
 
 const formRef = ref<FormInstance>()
-const avatarInput = ref<HTMLInputElement>()
 const saving = ref(false)
 const loggingOut = ref(false)
 const showPhoneDialog = ref(false)
@@ -206,8 +249,6 @@ const showEmailDialog = ref(false)
 const showPasswordDialog = ref(false)
 const changingEmail = ref(false)
 const changingPassword = ref(false)
-const avatarUrl = ref('')
-const avatarKey = ref('')
 
 const form = reactive({
   nickname: authStore.profile?.nickname || '',
@@ -230,6 +271,23 @@ const passwordForm = reactive({
   confirmPassword: ''
 })
 
+const focusSettings = ref({
+  pomodoroDuration: 25
+})
+
+const courseSettings = ref({
+  semesterStartDate: '',
+  totalWeeks: 20
+})
+
+const currentWeekNumber = computed(() => {
+  if (!courseSettings.value.semesterStartDate) return 1
+  const startDate = dayjs(courseSettings.value.semesterStartDate)
+  const today = dayjs()
+  const diff = today.diff(startDate, 'week')
+  return Math.max(1, diff + 1)
+})
+
 const rules: FormRules = {
   nickname: [
     { required: true, message: '请输入昵称', trigger: 'blur' },
@@ -237,18 +295,8 @@ const rules: FormRules = {
   ]
 }
 
-const avatarStyle = computed(() => {
-  if (avatarUrl.value) {
-    return {}
-  }
-  return {
-    background: 'rgba(255, 255, 255, 0.1)'
-  }
-})
-
 // 格式化创建时间
 const formatCreatedAt = () => {
-  // 尝试从多个来源获取注册时间
   const createdAt = authStore.profile?.created_at || (authStore.user as any)?.createdAt || (authStore.user as any)?.created_at
   if (!createdAt) return '未知'
   return dayjs(createdAt).format('YYYY-MM-DD HH:mm')
@@ -263,77 +311,6 @@ const maskEmail = (email: string | undefined) => {
       ? name[0] + '***' + name[name.length - 1]
       : name[0] + '***'
   return `${maskedName}@${domain}`
-}
-
-// 触发头像上传
-const triggerAvatarUpload = () => {
-  avatarInput.value?.click()
-}
-
-// 处理头像选择
-const handleAvatarChange = async (event: Event) => {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file) return
-
-  // 验证文件类型
-  if (!file.type.startsWith('image/')) {
-    ElMessage.warning('请选择图片文件')
-    return
-  }
-
-  // 验证文件大小（最大 2MB）
-  if (file.size > 2 * 1024 * 1024) {
-    ElMessage.warning('图片大小不能超过 2MB')
-    return
-  }
-
-  try {
-    const loadingMsg = ElMessage({ message: '上传中...', type: 'info', duration: 0 })
-
-    // 读取文件为 base64
-    const reader = new FileReader()
-    reader.onload = async (e) => {
-      try {
-        const base64 = (e.target?.result as string)?.split(',')[1]
-
-        // 调用上传 API
-        const result = await api.uploadAvatar({
-          fileData: base64,
-          fileName: file.name,
-          contentType: file.type
-        })
-
-        avatarUrl.value = result.avatarUrl
-        avatarKey.value = result.avatarKey
-
-        // 更新 authStore 中的头像 URL
-        authStore.setAvatarUrl(result.avatarUrl)
-
-        // 更新本地存储的额外信息
-        const userData = await api.getData('profile_extra')
-        const extraData = {
-          ...(userData.data || {}),
-          avatarKey: result.avatarKey
-        }
-        await api.setData('profile_extra', extraData)
-
-        loadingMsg.close()
-        ElMessage.success('头像上传成功')
-      } catch (error) {
-        console.error('上传头像失败:', error)
-        loadingMsg.close()
-        ElMessage.error('上传头像失败')
-      }
-    }
-    reader.readAsDataURL(file)
-  } catch (error) {
-    console.error('读取文件失败:', error)
-    ElMessage.error('读取文件失败')
-  }
-
-  // 清空 input，允许重新选择相同文件
-  target.value = ''
 }
 
 const savePhone = async () => {
@@ -360,10 +337,10 @@ const changeEmail = async () => {
   changingEmail.value = true
   try {
     await api.changeEmail(emailForm.newEmail, emailForm.password)
-    // 更新本地用户信息
     if (authStore.user) {
       authStore.user.email = emailForm.newEmail
     }
+    logger.info('[我的] 修改账号', { oldEmail: authStore.user?.email, newEmail: emailForm.newEmail })
     showEmailDialog.value = false
     emailForm.newEmail = ''
     emailForm.password = ''
@@ -398,6 +375,7 @@ const changePassword = async () => {
   changingPassword.value = true
   try {
     await api.changePassword(passwordForm.oldPassword, passwordForm.newPassword)
+    logger.info('[我的] 修改密码')
     showPasswordDialog.value = false
     passwordForm.oldPassword = ''
     passwordForm.newPassword = ''
@@ -417,30 +395,22 @@ const handleSave = async () => {
 
   saving.value = true
   try {
-    // 更新基本信息
-    await authStore.updateProfile({ nickname: form.nickname })
+    const changed: string[] = []
+    if (form.nickname !== authStore.profile?.nickname) changed.push('nickname')
+    if (form.birthday !== authStore.profile?.birthday) changed.push('birthday')
+    if (form.phone !== authStore.profile?.phone) changed.push('phone')
 
-    // 保存额外信息到用户数据
-    const userData = await api.getData('profile_extra')
-    const extraData = {
-      ...(userData.data || {}),
-      birthday: form.birthday,
-      phone: form.phone,
-      avatarKey: avatarKey.value
-    }
-    await api.setData('profile_extra', extraData)
+    await api.updateProfile({ nickname: form.nickname, birthday: form.birthday, phone: form.phone })
 
-    // 更新本地 profile
     ;(authStore.profile as any) = {
       ...authStore.profile,
+      nickname: form.nickname,
       birthday: form.birthday,
-      phone: form.phone,
-      avatarKey: avatarKey.value
+      phone: form.phone
     }
 
-    // 如果生日变更，同步到倒数日模块
-    if (form.birthday) {
-      await syncBirthdayToCountdown(form.birthday)
+    if (changed.length > 0) {
+      logger.info('[我的] 修改个人资料', { fields: changed })
     }
 
     ElMessage.success('保存成功')
@@ -452,39 +422,6 @@ const handleSave = async () => {
   }
 }
 
-// 同步生日到倒数日模块
-const syncBirthdayToCountdown = async (birthday: string) => {
-  try {
-    // 检查是否已存在生日倒数日
-    const { countdowns } = await api.getCountdowns()
-    const birthdayCountdown = countdowns.find((c: any) => c.is_birthday)
-
-    const [, month, day] = birthday.split('-').map(Number)
-    const birthdayDate = `${new Date().getFullYear()}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-
-    if (birthdayCountdown) {
-      // 更新
-      await api.updateCountdown(birthdayCountdown.id, {
-        name: '我的生日',
-        targetDate: birthdayDate,
-        is_birthday: true,
-        is_system: true
-      })
-    } else {
-      // 创建
-      await api.addCountdown({
-        name: '我的生日',
-        targetDate: birthdayDate,
-        icon: '🎂',
-        is_birthday: true,
-        is_system: true
-      })
-    }
-  } catch (error) {
-    console.error('同步生日到倒数日失败:', error)
-  }
-}
-
 const handleLogout = async () => {
   try {
     await ElMessageBox.confirm('确定要退出登录吗？', '退出确认', {
@@ -492,45 +429,46 @@ const handleLogout = async () => {
     })
 
     loggingOut.value = true
+    logger.info('[我的] 退出登录')
     await authStore.signOut()
     emit('logout')
   } catch {
-    // 取消退出
   } finally {
     loggingOut.value = false
   }
 }
 
-// 加载额外信息和头像
 onMounted(async () => {
-  try {
-    // 加载额外信息
-    const { data } = await api.getData('profile_extra')
-    if (data) {
-      form.birthday = data.birthday || ''
-      form.phone = data.phone || ''
-      phoneForm.phone = data.phone || ''
-      avatarKey.value = data.avatarKey || ''
-    }
-
-    // 如果有 avatarKey，获取头像 URL
-    if (avatarKey.value) {
-      try {
-        const result = await api.getAvatarUrl()
-        avatarUrl.value = result.avatarUrl || ''
-      } catch (error) {
-        console.error('获取头像URL失败:', error)
-      }
-    }
-  } catch (error) {
-    console.error('加载额外信息失败:', error)
+  if (authStore.profile) {
+    form.birthday = authStore.profile.birthday || ''
+    form.phone = authStore.profile.phone || ''
+    phoneForm.phone = authStore.profile.phone || ''
   }
+
+  await settingsStore.loadSettings()
+  focusSettings.value.pomodoroDuration = settingsStore.settings.focus?.pomodoroDuration || 25
+  courseSettings.value.semesterStartDate = settingsStore.settings.course?.semesterStartDate || ''
+  courseSettings.value.totalWeeks = settingsStore.settings.course?.totalWeeks || 20
 })
 
-// 同步 nickname
 watch(() => authStore.profile?.nickname, (val) => {
   if (val) form.nickname = val
 }, { immediate: true })
+
+const handleFocusSettingChange = async (val: number) => {
+  await settingsStore.updateFocusSettings({ pomodoroDuration: val })
+  logger.info('[设置] 修改专注时长', { pomodoroDuration: val })
+}
+
+const handleCourseSettingChange = async (val: string) => {
+  await settingsStore.updateCourseSettings({ semesterStartDate: val })
+  logger.info('[设置] 修改开学日期', { semesterStartDate: val })
+}
+
+const handleCourseWeeksChange = async (val: number) => {
+  await settingsStore.updateCourseSettings({ totalWeeks: val })
+  logger.info('[设置] 修改学期周数', { totalWeeks: val })
+}
 </script>
 
 <style scoped>
@@ -539,92 +477,21 @@ watch(() => authStore.profile?.nickname, (val) => {
   display: flex;
   flex-direction: column;
   background: transparent;
-}
-
-.profile-header {
-  padding: 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.avatar-section {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.avatar-wrapper {
-  position: relative;
-  cursor: pointer;
-}
-
-.avatar {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  display: flex;
-  align-items: center;
   justify-content: center;
-  overflow: hidden;
-  transition: all 0.2s;
-}
-
-.avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.avatar-placeholder {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
-  text-align: center;
-  padding: 8px;
-}
-
-.avatar-wrapper:hover .avatar {
-  transform: scale(1.05);
-}
-
-.avatar-edit {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: rgba(102, 126, 234, 0.9);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.avatar-wrapper:hover .avatar-edit {
-  opacity: 1;
-}
-
-.avatar-edit svg {
-  width: 14px;
-  height: 14px;
-  color: white;
-}
-
-.user-info {
-  flex: 1;
-}
-
-.nickname {
-  font-size: 24px;
-  font-weight: 600;
-  color: white;
-  margin: 0;
 }
 
 .profile-content {
   flex: 1;
   overflow: hidden;
+  max-width: 800px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+@media (max-width: 840px) {
+  .profile-content {
+    max-width: none;
+  }
 }
 
 .profile-section {
@@ -636,6 +503,19 @@ watch(() => authStore.profile?.nickname, (val) => {
   font-size: 16px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.9);
+  margin: 0 0 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-icon {
+  font-size: 18px;
+}
+
+.section-desc {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
   margin: 0 0 20px 0;
 }
 
@@ -704,6 +584,51 @@ watch(() => authStore.profile?.nickname, (val) => {
 .security-value {
   font-size: 14px;
   color: rgba(255, 255, 255, 0.9);
+}
+
+/* 设置项 */
+.setting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  gap: 16px;
+}
+
+.setting-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.setting-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.setting-desc {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.setting-control {
+  flex-shrink: 0;
+}
+
+.setting-tip {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: rgba(102, 126, 234, 0.1);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 6px;
+  color: #667eea;
+  font-size: 13px;
 }
 
 .danger-zone {

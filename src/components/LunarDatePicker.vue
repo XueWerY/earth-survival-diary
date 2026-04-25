@@ -78,11 +78,6 @@
           </span>
         </div>
       </div>
-
-      <!-- 快捷操作 -->
-      <div class="picker-footer">
-        <button class="today-btn" @click="selectToday">今天</button>
-      </div>
     </div>
   </el-popover>
 </template>
@@ -217,16 +212,6 @@ const createDayCell = (year: number, month: number, day: number, currentMonth: b
 // 选择日期
 const selectDate = (day: any) => {
   emit('update:modelValue', day.date)
-  showPicker.value = false
-}
-
-// 选择今天
-const selectToday = () => {
-  const today = new Date()
-  const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-  emit('update:modelValue', dateStr)
-  currentYear.value = today.getFullYear()
-  currentMonth.value = today.getMonth() + 1
   showPicker.value = false
 }
 
@@ -457,27 +442,5 @@ watch(() => props.modelValue, (val) => {
 
 .lunar-day.festival {
   color: #f59e0b;
-}
-
-.picker-footer {
-  display: flex;
-  justify-content: center;
-  padding: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.today-btn {
-  padding: 8px 20px;
-  background: rgba(102, 126, 234, 0.2);
-  border: 1px solid rgba(102, 126, 234, 0.4);
-  border-radius: 6px;
-  color: white;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.today-btn:hover {
-  background: rgba(102, 126, 234, 0.3);
 }
 </style>

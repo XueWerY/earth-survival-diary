@@ -1,51 +1,36 @@
 <template>
   <div class="countdown-container">
-    <!-- 左侧边栏 -->
-    <div class="sidebar" :class="{ collapsed: sidebarCollapsed }">
-      <el-scrollbar class="sidebar-content">
-        <!-- 全部分类 -->
-        <div
-            class="category-item all"
-            :class="{ active: currentCategory === '' }"
-            @click="selectCategory('')"
-        >
-          <span class="category-icon">📋</span>
-          <span class="category-name" v-show="!sidebarCollapsed">全部</span>
-          <span class="category-count" v-show="!sidebarCollapsed">{{ milestones.length }}</span>
-          <template v-if="!sidebarCollapsed">
-            <span class="btn-placeholder"></span>
-            <span class="btn-placeholder"></span>
-          </template>
-        </div>
-
-        <div class="category-divider" v-show="!sidebarCollapsed"></div>
-
-        <!-- 分类列表 -->
-        <div
-            v-for="cat in categories"
-            :key="cat.value"
-            class="category-item"
-            :class="{ active: currentCategory === cat.value }"
-            @click="selectCategory(cat.value)"
-        >
-          <span class="category-icon">{{ cat.icon }}</span>
-          <span class="category-name" v-show="!sidebarCollapsed">{{ cat.label }}</span>
-          <span class="category-count" v-show="!sidebarCollapsed">{{ getCategoryCount(cat.value) }}</span>
-          <template v-if="!sidebarCollapsed">
-            <el-button
-                type="primary"
-                size="small"
-                :icon="Plus"
-                circle
-                class="add-btn"
-                @click.stop="handleAddMilestone(cat.value)"
-            />
+    <!-- 顶部区域分类导航区 -->
+    <div class="top-nav-area">
+      <div class="category-nav-scroll-wrapper" ref="categoryNavRef">
+        <div class="category-nav-inner">
+          <div
+              class="nav-item"
+              :class="{ active: currentCategory === '' }"
+              :ref="setCategoryNavItemRef"
+              @click="selectCategory('')"
+          >
+            <span class="nav-icon">📋</span>
+            <span class="nav-name">全部</span>
+            <span class="nav-count">{{ milestones.length }}</span>
+          </div>
+          <div
+              v-for="cat in categories"
+              :key="cat.value"
+              class="nav-item"
+              :class="{ active: currentCategory === cat.value }"
+              :ref="setCategoryNavItemRef"
+              @click="selectCategory(cat.value)"
+          >
+            <span class="nav-icon">{{ cat.icon }}</span>
+            <span class="nav-name">{{ cat.label }}</span>
+            <span class="nav-count">{{ getCategoryCount(cat.value) }}</span>
             <el-dropdown
                 trigger="click"
                 @command="(cmd: string) => handleCategoryCommand(cmd, cat.value)"
                 @click.stop
             >
-              <el-button type="info" size="small" text :icon="MoreFilled" class="more-btn" @click.stop />
+              <el-button type="info" size="small" text :icon="MoreFilled" class="nav-more" @click.stop />
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="edit">编辑分类</el-dropdown-item>
@@ -53,256 +38,313 @@
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
-          </template>
+          </div>
+          <div class="nav-item add-nav-item" :ref="setCategoryNavItemRef" @click="handleAddCategory">
+            <el-icon><Plus /></el-icon>
+            <span class="nav-name">添加分类</span>
+          </div>
         </div>
-
-        <!-- 添加分类按钮 -->
-        <div class="add-category-btn" v-show="!sidebarCollapsed" @click="handleAddCategory">
-          <el-icon><Plus /></el-icon>
-          <span>添加分类</span>
-        </div>
-      </el-scrollbar>
+      </div>
     </div>
 
-    <!-- 折叠按钮（放在侧边栏外面，确保折叠后仍可见） -->
-    <div class="sidebar-toggle" @click="toggleSidebar">
-      <el-icon v-if="sidebarCollapsed"><DArrowRight /></el-icon>
-      <el-icon v-else><DArrowLeft /></el-icon>
-    </div>
-
-    <!-- 右侧内容 -->
+    <!-- 主内容区 -->
     <div class="main-content">
-      <!-- 头部 -->
-      <div class="content-header">
-        <div class="header-left">
-          <span class="category-indicator" :style="{ background: getCategoryColor(currentCategory) }"></span>
-          <h2>{{ currentCategoryTitle }}</h2>
-          <span class="milestone-count">{{ filteredMilestones.length }} 个</span>
+      <div class="content-wrapper">
+      <template v-if="!isFormMode">
+        <!-- 头部 -->
+        <div class="content-header">
+          <div class="header-left">
+            <h2>{{ currentCategoryTitle }}</h2>
+            <span class="milestone-count">{{ filteredMilestones.length }} 个</span>
+          </div>
+          <el-button type="primary" size="small" @click="handleAddMilestone()">
+            <el-icon><Plus /></el-icon>
+            添加倒数日
+          </el-button>
         </div>
-      </div>
 
-      <!-- 主内容 -->
-      <div class="content-body">
-        <el-scrollbar>
-          <!-- 空状态 -->
-          <el-empty
-              v-if="milestones.length === 0"
-              description="暂无倒数日，点击左侧分类添加你的第一个重要时刻"
-              :image-size="120"
-          />
+        <!-- 主内容 -->
+        <div class="content-body">
+          <el-scrollbar>
+            <!-- 空状态 -->
+            <el-empty
+                v-if="milestones.length === 0"
+                description="暂无倒数日，点击左侧分类添加你的第一个重要时刻"
+                :image-size="120"
+            />
 
-          <!-- 筛选结果为空 -->
-          <el-empty
-              v-else-if="filteredMilestones.length === 0"
-              description="该分类下暂无倒数日"
-              :image-size="120"
-          />
+            <!-- 筛选结果为空 -->
+            <el-empty
+                v-else-if="filteredMilestones.length === 0"
+                description="该分类下暂无倒数日"
+                :image-size="120"
+            />
 
-          <template v-else>
-            <!-- 星标倒数日 -->
-            <div v-if="pinnedMilestones.length > 0" class="section pinned-section">
-              <div class="section-title">
-                <el-icon><Star /></el-icon>
-                <span>星标倒数日</span>
-              </div>
-              <div class="milestone-grid">
-                <div
-                    v-for="milestone in pinnedMilestones"
-                    :key="milestone.id"
-                    class="milestone-card pinned"
-                    :class="{ 'system-card': milestone.isSystem }"
-                    @click="!milestone.isSystem && handleEditMilestone(milestone)"
-                >
-                  <div class="card-header" @click.stop>
-                    <span class="category-badge" :style="{ background: getCategoryColor(milestone.category) }">
-                      {{ getCategoryIcon(milestone.category) }}
-                    </span>
-                    <el-dropdown v-if="!milestone.isSystem" trigger="click" @command="(cmd: string) => handleCommand(cmd, milestone)">
-                      <el-button type="info" size="small" text :icon="MoreFilled" @click.stop />
-                      <template #dropdown>
-                        <el-dropdown-menu>
-                          <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                          <el-dropdown-item command="unpin">取消星标</el-dropdown-item>
-                          <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                        </el-dropdown-menu>
-                      </template>
-                    </el-dropdown>
-                    <span v-else class="system-badge">系统</span>
-                  </div>
-
-                  <h3 class="milestone-name">{{ milestone.name }}</h3>
-
-                  <div class="milestone-date">
-                    <el-icon><Calendar /></el-icon>
-                    {{ formatDate(milestone.targetDate) }}
-                  </div>
-
-                  <div class="countdown-display" :class="getCountdownClass(milestone)">
-                    <span class="countdown-number">{{ getCountdownDays(milestone) }}</span>
-                    <span class="countdown-unit">{{ getCountdownUnit(milestone) }}</span>
-                  </div>
-
-                  <p v-if="milestone.description" class="milestone-desc">{{ milestone.description }}</p>
+            <template v-else>
+              <!-- 星标倒数日 -->
+              <div v-if="pinnedMilestones.length > 0" class="section pinned-section">
+                <div class="section-title">
+                  <el-icon><Star /></el-icon>
+                  <span>星标倒数日</span>
                 </div>
-              </div>
-            </div>
+                <div class="milestone-grid">
+                  <div
+                      v-for="milestone in pinnedMilestones"
+                      :key="milestone.id"
+                      class="milestone-card pinned"
+                      :class="{ 'system-card': milestone.isSystem }"
+                      @click="!milestone.isSystem && handleEditMilestone(milestone)"
+                  >
+                    <div class="card-header" @click.stop>
+                      <span class="category-badge">
+                        {{ getCategoryIcon(milestone.category) }}
+                      </span>
+                      <el-dropdown v-if="!milestone.isSystem" trigger="click" @command="(cmd: string) => handleCommand(cmd, milestone)">
+                        <el-button type="info" size="small" text :icon="MoreFilled" @click.stop />
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item command="edit">编辑</el-dropdown-item>
+                            <el-dropdown-item command="unpin">取消星标</el-dropdown-item>
+                            <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                      <span v-else class="system-badge">系统</span>
+                    </div>
 
-            <!-- 即将到来 -->
-            <div v-if="upcomingMilestones.length > 0" class="section upcoming-section">
-              <div class="section-title">
-                <el-icon><Clock /></el-icon>
-                <span>即将到来</span>
-              </div>
-              <div class="milestone-grid">
-                <div
-                    v-for="milestone in upcomingMilestones"
-                    :key="milestone.id"
-                    class="milestone-card"
-                    :class="{ 'urgent': isUrgent(milestone) }"
-                    @click="handleEditMilestone(milestone)"
-                >
-                  <div class="card-header" @click.stop>
-                    <span class="category-badge" :style="{ background: getCategoryColor(milestone.category) }">
-                      {{ getCategoryIcon(milestone.category) }}
-                    </span>
-                    <el-dropdown trigger="click" @command="(cmd: string) => handleCommand(cmd, milestone)">
-                      <el-button type="info" size="small" text :icon="MoreFilled" @click.stop />
-                      <template #dropdown>
-                        <el-dropdown-menu>
-                          <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                          <el-dropdown-item command="pin">设为星标</el-dropdown-item>
-                          <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                        </el-dropdown-menu>
-                      </template>
-                    </el-dropdown>
-                  </div>
+                    <h3 class="milestone-name">{{ milestone.name }}</h3>
 
-                  <h3 class="milestone-name">{{ milestone.name }}</h3>
+                    <div class="milestone-date">
+                      <el-icon><Calendar /></el-icon>
+                      {{ formatDate(milestone.targetDate) }}
+                    </div>
 
-                  <div class="milestone-date">
-                    <el-icon><Calendar /></el-icon>
-                    {{ formatDate(milestone.targetDate) }}
-                  </div>
+                    <div class="countdown-display" :class="getCountdownClass(milestone)">
+                      <span class="countdown-number">{{ getCountdownDays(milestone) }}</span>
+                      <span class="countdown-unit">{{ getCountdownUnit(milestone) }}</span>
+                    </div>
 
-                  <div class="countdown-display" :class="getCountdownClass(milestone)">
-                    <span class="countdown-number">{{ getCountdownDays(milestone) }}</span>
-                    <span class="countdown-unit">{{ getCountdownUnit(milestone) }}</span>
-                  </div>
-
-                  <p v-if="milestone.description" class="milestone-desc">{{ milestone.description }}</p>
-
-                  <div v-if="isUrgent(milestone)" class="urgent-badge">
-                    <el-icon><Warning /></el-icon>
-                    即将到来
+                    <p v-if="milestone.description" class="milestone-desc">{{ milestone.description }}</p>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <!-- 未来展望 -->
-            <div v-if="futureMilestones.length > 0" class="section future-section">
-              <div class="section-title">
-                <el-icon><Sunny /></el-icon>
-                <span>未来展望</span>
-              </div>
-              <div class="milestone-grid">
-                <div
-                    v-for="milestone in futureMilestones"
-                    :key="milestone.id"
-                    class="milestone-card"
-                    @click="handleEditMilestone(milestone)"
-                >
-                  <div class="card-header" @click.stop>
-                    <span class="category-badge" :style="{ background: getCategoryColor(milestone.category) }">
-                      {{ getCategoryIcon(milestone.category) }}
-                    </span>
-                    <el-dropdown trigger="click" @command="(cmd: string) => handleCommand(cmd, milestone)">
-                      <el-button type="info" size="small" text :icon="MoreFilled" @click.stop />
-                      <template #dropdown>
-                        <el-dropdown-menu>
-                          <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                          <el-dropdown-item command="pin">设为星标</el-dropdown-item>
-                          <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                        </el-dropdown-menu>
-                      </template>
-                    </el-dropdown>
+              <!-- 即将到来 -->
+              <div v-if="upcomingMilestones.length > 0" class="section upcoming-section">
+                <div class="section-title">
+                  <el-icon><Clock /></el-icon>
+                  <span>即将到来</span>
+                </div>
+                <div class="milestone-grid">
+                  <div
+                      v-for="milestone in upcomingMilestones"
+                      :key="milestone.id"
+                      class="milestone-card"
+                      :class="{ 'urgent': isUrgent(milestone) }"
+                      @click="handleEditMilestone(milestone)"
+                  >
+                    <div class="card-header" @click.stop>
+                      <span class="category-badge">
+                        {{ getCategoryIcon(milestone.category) }}
+                      </span>
+                      <el-dropdown trigger="click" @command="(cmd: string) => handleCommand(cmd, milestone)">
+                        <el-button type="info" size="small" text :icon="MoreFilled" @click.stop />
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item command="edit">编辑</el-dropdown-item>
+                            <el-dropdown-item command="pin">设为星标</el-dropdown-item>
+                            <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                    </div>
+
+                    <h3 class="milestone-name">{{ milestone.name }}</h3>
+
+                    <div class="milestone-date">
+                      <el-icon><Calendar /></el-icon>
+                      {{ formatDate(milestone.targetDate) }}
+                    </div>
+
+                    <div class="countdown-display" :class="getCountdownClass(milestone)">
+                      <span class="countdown-number">{{ getCountdownDays(milestone) }}</span>
+                      <span class="countdown-unit">{{ getCountdownUnit(milestone) }}</span>
+                    </div>
+
+                    <p v-if="milestone.description" class="milestone-desc">{{ milestone.description }}</p>
                   </div>
-
-                  <h3 class="milestone-name">{{ milestone.name }}</h3>
-
-                  <div class="milestone-date">
-                    <el-icon><Calendar /></el-icon>
-                    {{ formatDate(milestone.targetDate) }}
-                  </div>
-
-                  <div class="countdown-display" :class="getCountdownClass(milestone)">
-                    <span class="countdown-number">{{ getCountdownDays(milestone) }}</span>
-                    <span class="countdown-unit">{{ getCountdownUnit(milestone) }}</span>
-                  </div>
-
-                  <p v-if="milestone.description" class="milestone-desc">{{ milestone.description }}</p>
                 </div>
               </div>
-            </div>
 
-            <!-- 时光印记 -->
-            <div v-if="passedMilestones.length > 0" class="section passed-section">
-              <div class="section-title">
-                <el-icon><Timer /></el-icon>
-                <span>时光印记</span>
-              </div>
-              <div class="milestone-grid passed">
-                <div
-                    v-for="milestone in passedMilestones"
-                    :key="milestone.id"
-                    class="milestone-card passed"
-                    @click="handleEditMilestone(milestone)"
-                >
-                  <div class="card-header" @click.stop>
-                    <span class="category-badge" :style="{ background: getCategoryColor(milestone.category) }">
-                      {{ getCategoryIcon(milestone.category) }}
-                    </span>
-                    <el-dropdown trigger="click" @command="(cmd: string) => handleCommand(cmd, milestone)">
-                      <el-button type="info" size="small" text :icon="MoreFilled" @click.stop />
-                      <template #dropdown>
-                        <el-dropdown-menu>
-                          <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                          <el-dropdown-item command="pin">设为星标</el-dropdown-item>
-                          <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                        </el-dropdown-menu>
-                      </template>
-                    </el-dropdown>
+              <!-- 未来展望 -->
+              <div v-if="futureMilestones.length > 0" class="section future-section">
+                <div class="section-title">
+                  <el-icon><Sunny /></el-icon>
+                  <span>未来展望</span>
+                </div>
+                <div class="milestone-grid">
+                  <div
+                      v-for="milestone in futureMilestones"
+                      :key="milestone.id"
+                      class="milestone-card"
+                      @click="handleEditMilestone(milestone)"
+                  >
+                    <div class="card-header" @click.stop>
+                      <span class="category-badge">
+                        {{ getCategoryIcon(milestone.category) }}
+                      </span>
+                      <el-dropdown trigger="click" @command="(cmd: string) => handleCommand(cmd, milestone)">
+                        <el-button type="info" size="small" text :icon="MoreFilled" @click.stop />
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item command="edit">编辑</el-dropdown-item>
+                            <el-dropdown-item command="pin">设为星标</el-dropdown-item>
+                            <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                    </div>
+
+                    <h3 class="milestone-name">{{ milestone.name }}</h3>
+
+                    <div class="milestone-date">
+                      <el-icon><Calendar /></el-icon>
+                      {{ formatDate(milestone.targetDate) }}
+                    </div>
+
+                    <div class="countdown-display" :class="getCountdownClass(milestone)">
+                      <span class="countdown-number">{{ getCountdownDays(milestone) }}</span>
+                      <span class="countdown-unit">{{ getCountdownUnit(milestone) }}</span>
+                    </div>
+
+                    <p v-if="milestone.description" class="milestone-desc">{{ milestone.description }}</p>
                   </div>
-
-                  <h3 class="milestone-name">{{ milestone.name }}</h3>
-
-                  <div class="milestone-date">
-                    <el-icon><Calendar /></el-icon>
-                    {{ formatDate(milestone.targetDate) }}
-                  </div>
-
-                  <div class="countdown-display" :class="getCountdownClass(milestone)">
-                    <span class="countdown-number">{{ getCountdownDays(milestone) }}</span>
-                    <span class="countdown-unit">{{ getCountdownUnit(milestone) }}</span>
-                  </div>
-
-                  <p v-if="milestone.description" class="milestone-desc">{{ milestone.description }}</p>
                 </div>
               </div>
-            </div>
-          </template>
-        </el-scrollbar>
+
+              <!-- 时光印记 -->
+              <div v-if="passedMilestones.length > 0" class="section passed-section">
+                <div class="section-title">
+                  <el-icon><Timer /></el-icon>
+                  <span>时光印记</span>
+                </div>
+                <div class="milestone-grid passed">
+                  <div
+                      v-for="milestone in passedMilestones"
+                      :key="milestone.id"
+                      class="milestone-card passed"
+                      @click="handleEditMilestone(milestone)"
+                  >
+                    <div class="card-header" @click.stop>
+                      <span class="category-badge">
+                        {{ getCategoryIcon(milestone.category) }}
+                      </span>
+                      <el-dropdown trigger="click" @command="(cmd: string) => handleCommand(cmd, milestone)">
+                        <el-button type="info" size="small" text :icon="MoreFilled" @click.stop />
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item command="edit">编辑</el-dropdown-item>
+                            <el-dropdown-item command="pin">设为星标</el-dropdown-item>
+                            <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                    </div>
+
+                    <h3 class="milestone-name">{{ milestone.name }}</h3>
+
+                    <div class="milestone-date">
+                      <el-icon><Calendar /></el-icon>
+                      {{ formatDate(milestone.targetDate) }}
+                    </div>
+
+                    <div class="countdown-display" :class="getCountdownClass(milestone)">
+                      <span class="countdown-number">{{ getCountdownDays(milestone) }}</span>
+                      <span class="countdown-unit">{{ getCountdownUnit(milestone) }}</span>
+                    </div>
+
+                    <p v-if="milestone.description" class="milestone-desc">{{ milestone.description }}</p>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </el-scrollbar>
+        </div>
+      </template>
+
+      <template v-else>
+        <!-- 添加/编辑倒数日界面 -->
+        <div class="milestone-form-page">
+          <div class="form-page-header">
+            <h2 class="form-page-title">{{ editingMilestone ? '编辑倒数日' : '添加倒数日' }}</h2>
+          </div>
+          <div class="form-page-body">
+            <el-scrollbar>
+              <div class="form-container">
+                <el-form :model="milestoneForm" :rules="milestoneRules" ref="milestoneFormRef" label-width="80px" class="milestone-form">
+                  <el-form-item label="名称" prop="name">
+                    <el-input v-model="milestoneForm.name" placeholder="这个倒数日叫什么？" maxlength="50" show-word-limit />
+                  </el-form-item>
+
+                  <el-form-item label="类型" prop="countMode">
+                    <el-radio-group v-model="milestoneForm.countMode" class="count-mode-group">
+                      <el-radio value="countdown">倒数日</el-radio>
+                      <el-radio value="countup">正数日</el-radio>
+                    </el-radio-group>
+                    <p class="count-mode-hint">
+                      倒数日：距离目标日期还有多久；正数日：从所选日期起已过去多少天。
+                    </p>
+                  </el-form-item>
+
+                  <el-form-item :label="milestoneForm.countMode === 'countup' ? '起始日期' : '目标日期'" prop="targetDate">
+                    <LunarDatePicker
+                        v-model="milestoneForm.targetDate"
+                        :placeholder="milestoneForm.countMode === 'countup' ? '选择起始日期' : '选择目标日期'"
+                        full-width
+                    />
+                  </el-form-item>
+
+                  <el-form-item label="分类" prop="category">
+                    <el-select v-model="milestoneForm.category" placeholder="选择分类" style="width: 100%">
+                      <el-option
+                          v-for="cat in categories"
+                          :key="cat.value"
+                          :label="cat.label"
+                          :value="cat.value"
+                      >
+                        <span class="category-option">
+                          <span class="category-icon">{{ cat.icon }}</span>
+                          <span class="category-label">{{ cat.label }}</span>
+                        </span>
+                      </el-option>
+                    </el-select>
+                  </el-form-item>
+
+                  <el-form-item label="描述">
+                    <el-input
+                        v-model="milestoneForm.description"
+                        type="textarea"
+                        :rows="3"
+                        placeholder="添加一些备注（可选）"
+                        maxlength="200"
+                        show-word-limit
+                    />
+                  </el-form-item>
+
+                  <div class="form-actions">
+                    <el-button @click="isFormMode = false">取消</el-button>
+                    <el-button type="primary" @click="handleMilestoneFormSubmit">
+                      {{ editingMilestone ? '保存' : '添加' }}
+                    </el-button>
+                  </div>
+                </el-form>
+              </div>
+            </el-scrollbar>
+          </div>
+        </div>
+      </template>
       </div>
     </div>
-
-    <!-- 表单对话框 -->
-    <CountdownForm
-        v-model:visible="formVisible"
-        :milestone="editingMilestone"
-        :default-category="defaultCategory"
-        :categories="categories"
-        @submit="handleFormSubmit"
-    />
 
     <!-- 分类表单对话框 -->
     <el-dialog
@@ -310,6 +352,7 @@
         :title="editingCategory ? '编辑分类' : '添加分类'"
         width="400px"
         modal-class="category-dialog-overlay"
+        class="category-form-dialog"
     >
       <el-form :model="categoryForm" label-width="80px">
         <el-form-item label="分类名称">
@@ -328,18 +371,6 @@
             </div>
           </div>
         </el-form-item>
-        <el-form-item label="颜色">
-          <div class="color-picker">
-            <div
-                v-for="color in COLOR_OPTIONS"
-                :key="color"
-                class="color-option"
-                :class="{ active: categoryForm.color === color }"
-                :style="{ backgroundColor: color }"
-                @click="categoryForm.color = color"
-            />
-          </div>
-        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="categoryFormVisible = false">取消</el-button>
@@ -350,21 +381,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onActivated, watch, nextTick, onBeforeUpdate } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Calendar, Clock, Timer, Star, MoreFilled, Warning, Sunny, DArrowRight, DArrowLeft } from '@element-plus/icons-vue'
+import { Plus, Calendar, Clock, Timer, Star, MoreFilled, Warning, Sunny } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
-import CountdownForm from './CountdownForm.vue'
-import { getData, setData } from '../services/storageService'
+import LunarDatePicker from './LunarDatePicker.vue'
+import { getData, setData, getSystemStateField, setSystemStateField } from '../services/storageService'
+import { logger } from '../lib/logger'
 
-// 里程碑类型定义
 interface Milestone {
   id: string
   name: string
   targetDate: string
   category: string
   description: string
-  /** 倒数日：距目标日；正数日：从起始日起已过天数 */
   countMode?: 'countdown' | 'countup'
   pinned: boolean
   isSystem?: boolean
@@ -372,7 +402,6 @@ interface Milestone {
   updatedAt: string
 }
 
-// 分类类型定义
 interface Category {
   value: string
   label: string
@@ -381,12 +410,11 @@ interface Category {
   isCustom?: boolean
 }
 
-// 系统倒数日ID（「已使用地球 Online 生存日记」：账号注册日至今日的天数）
 const SYSTEM_MILESTONE_ID = 'system-usage-days'
+const BIRTHDAY_MILESTONE_ID = 'user-birthday'
 
 const isSystemUsageMilestone = (m: Milestone): boolean => m.id === SYSTEM_MILESTONE_ID
 
-/** 自然日从注册日（targetDate）到今日的天数，用于系统「已使用」卡片 */
 const getDaysSinceAccountRegistration = (milestone: Milestone): number => {
   const today = dayjs().startOf('day')
   const start = dayjs(milestone.targetDate).startOf('day')
@@ -395,7 +423,6 @@ const getDaysSinceAccountRegistration = (milestone: Milestone): number => {
   return n < 0 ? 0 : n
 }
 
-// 默认分类
 const DEFAULT_CATEGORIES: Category[] = [
   { value: 'birthday', label: '生日', icon: '🎂', color: '#f472b6' },
   { value: 'anniversary', label: '纪念日', icon: '💕', color: '#ec4899' },
@@ -407,96 +434,107 @@ const DEFAULT_CATEGORIES: Category[] = [
   { value: 'life', label: '生活', icon: '🌟', color: '#f59e0b' }
 ]
 
-// 图标选项
 const ICON_OPTIONS = ['🎂', '💕', '🎉', '✈️', '🎮', '💼', '📚', '🌟', '🎵', '🎬', '🏠', '❤️', '🎁', '🏆', '📅', '🎯']
 
-// 颜色选项
 const COLOR_OPTIONS = ['#f472b6', '#ec4899', '#a855f7', '#8b5cf6', '#06b6d4', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6b7280']
 
-// 本地存储键名
-const STORAGE_KEY = 'earth-survival-milestones'
+const STORAGE_KEY = 'milestones'
 const CATEGORY_KEY = 'earth-survival-countdown-categories'
-const STATE_KEY = 'earth-survival-countdown-state'
 
-// 数据
 const milestones = ref<Milestone[]>([])
 const categories = ref<Category[]>([...DEFAULT_CATEGORIES])
 const currentCategory = ref('')
 
-// 侧边栏折叠状态
-const sidebarCollapsed = ref(false)
+const categoryNavRef = ref<HTMLElement>()
+const categoryNavItemsRef = ref<HTMLElement[]>([])
 
-// 切换侧边栏折叠
-const toggleSidebar = () => {
-  sidebarCollapsed.value = !sidebarCollapsed.value
+const clearNavRefs = () => {
+  categoryNavItemsRef.value = []
 }
 
-// 表单相关
-const formVisible = ref(false)
-const editingMilestone = ref<Milestone | null>(null)
-const defaultCategory = ref('')
+const setCategoryNavItemRef = (el: any) => {
+  if (el) categoryNavItemsRef.value.push(el)
+}
 
-// 分类表单相关
-const categoryFormVisible = ref(false)
-const editingCategory = ref<string | null>(null)
-const categoryForm = ref({
-  label: '',
-  icon: '📌',
-  color: '#6b7280'
-})
+const scrollToCenter = (container: HTMLElement, target: HTMLElement) => {
+  if (!container || !target) return
+  const containerWidth = container.clientWidth
+  const containerRect = container.getBoundingClientRect()
+  const targetRect = target.getBoundingClientRect()
+  const targetCenterInContainer = targetRect.left - containerRect.left + container.scrollLeft + (targetRect.width / 2)
+  container.scrollTo({ left: Math.max(0, targetCenterInContainer - (containerWidth / 2)), behavior: 'smooth' })
+}
 
-// 判断是否是默认分类
+const scrollCategoryNavToActive = () => {
+  nextTick(() => {
+    const container = categoryNavRef.value as HTMLElement
+    if (!container) return
+    const activeItem = categoryNavItemsRef.value.find(item => item.classList.contains('active')) as HTMLElement || container.querySelector('.nav-item.active') as HTMLElement
+    if (activeItem) scrollToCenter(container, activeItem)
+  })
+}
+
+let isCategoryNavDragging = false
+let categoryNavDragStartX = 0
+let categoryNavDragScrollLeft = 0
+let isCategoryNavDragInitialized = false
+
+const initCategoryNavDrag = () => {
+  if (isCategoryNavDragInitialized) return
+  isCategoryNavDragInitialized = true
+  const el = categoryNavRef.value
+  if (!el) return
+  el.addEventListener('mousedown', (e: MouseEvent) => { if (e.button === 0) { isCategoryNavDragging = true; categoryNavDragStartX = e.pageX; categoryNavDragScrollLeft = el.scrollLeft; el.style.cursor = 'grabbing'; el.style.userSelect = 'none' } })
+  window.addEventListener('mousemove', (e: MouseEvent) => { if (!isCategoryNavDragging) return; e.preventDefault(); const walk = categoryNavDragStartX - e.pageX; el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, categoryNavDragScrollLeft + walk)) })
+  const endDrag = () => { if (!isCategoryNavDragging) return; isCategoryNavDragging = false; el.style.cursor = ''; el.style.userSelect = '' }
+  window.addEventListener('mouseup', endDrag); window.addEventListener('mouseleave', endDrag)
+  el.addEventListener('touchstart', (e: TouchEvent) => { categoryNavDragStartX = e.touches[0].pageX; categoryNavDragScrollLeft = el.scrollLeft }, { passive: true })
+  el.addEventListener('touchmove', (e: TouchEvent) => { const walk = categoryNavDragStartX - e.touches[0].pageX; el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, categoryNavDragScrollLeft + walk)) }, { passive: true })
+}
+
 const isDefaultCategory = (value: string): boolean => {
   return DEFAULT_CATEGORIES.some(c => c.value === value)
 }
 
-// 从存储恢复状态
 const initFilterState = async () => {
-  const parsedState = await getData<{ currentCategory?: string }>(STATE_KEY)
+  const parsedState = await getSystemStateField('countdown')
   if (parsedState) {
     currentCategory.value = parsedState.currentCategory || ''
   }
 }
 
-// 保存状态到存储
 watch(currentCategory, async () => {
   const state = { currentCategory: currentCategory.value }
-  await setData(STATE_KEY, state)
+  await setSystemStateField('countdown', state)
+  scrollCategoryNavToActive()
 })
 
-// 当前分类标题
 const currentCategoryTitle = computed(() => {
   if (!currentCategory.value) return '全部'
   const cat = categories.value.find(c => c.value === currentCategory.value)
   return cat?.label || '未知分类'
 })
 
-// 计算属性：过滤后的里程碑
 const filteredMilestones = computed(() => {
   let result = [...milestones.value]
 
-  // 分类过滤
   if (currentCategory.value) {
     result = result.filter(m => m.category === currentCategory.value)
   }
 
-  // 按日期排序
   result.sort((a, b) => new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime())
 
   return result
 })
 
-// 获取分类数量
 const getCategoryCount = (categoryValue: string): number => {
   return milestones.value.filter(m => m.category === categoryValue).length
 }
 
-// 置顶的里程碑
 const pinnedMilestones = computed(() => {
   return filteredMilestones.value.filter(m => m.pinned === true)
 })
 
-// 即将到来的里程碑
 const upcomingMilestones = computed(() => {
   return filteredMilestones.value.filter(m => {
     if (m.pinned === true) return false
@@ -505,7 +543,6 @@ const upcomingMilestones = computed(() => {
   })
 })
 
-// 未来的里程碑
 const futureMilestones = computed(() => {
   return filteredMilestones.value.filter(m => {
     if (m.pinned === true) return false
@@ -514,7 +551,6 @@ const futureMilestones = computed(() => {
   })
 })
 
-// 已过期的里程碑
 const passedMilestones = computed(() => {
   return filteredMilestones.value.filter(m => {
     if (m.pinned === true) return false
@@ -522,7 +558,6 @@ const passedMilestones = computed(() => {
   })
 })
 
-// 工具函数
 const getDaysDiff = (milestone: Milestone): number => {
   const today = dayjs().startOf('day')
   const target = dayjs(milestone.targetDate).startOf('day')
@@ -594,7 +629,6 @@ const getCategoryIcon = (categoryValue: string): string => {
   return cat?.icon || '📌'
 }
 
-// 数据持久化
 const saveData = async () => {
   await setData(STORAGE_KEY, milestones.value)
 }
@@ -605,13 +639,11 @@ const saveCategories = async () => {
 
 const loadData = async () => {
   try {
-    // 加载分类
     const savedCategories = await getData<Category[]>(CATEGORY_KEY)
     if (savedCategories && savedCategories.length > 0) {
       categories.value = savedCategories
     }
 
-    // 加载里程碑
     const saved = await getData<Milestone[]>(STORAGE_KEY)
     if (saved) {
       milestones.value = saved.map((m: Milestone) => ({
@@ -628,7 +660,6 @@ const loadData = async () => {
       }))
     }
 
-    // 账号注册时间（与资料页一致：profile 或 user 上的创建时间）
     const authStore = await import('../stores/authStore').then(m => m.useAuthStore())
     const userAny = authStore.user as { createdAt?: string; created_at?: string } | null | undefined
     const startDate =
@@ -638,7 +669,6 @@ const loadData = async () => {
         new Date().toISOString()
     const registrationDay = dayjs(startDate).format('YYYY-MM-DD')
 
-    // 确保系统倒数日存在：起始日为注册日，展示为注册日至今日的天数，归类「纪念日」
     const systemMilestoneIndex = milestones.value.findIndex(m => m.id === SYSTEM_MILESTONE_ID)
     if (systemMilestoneIndex === -1) {
       milestones.value.unshift({
@@ -668,31 +698,143 @@ const loadData = async () => {
         await saveData()
       }
     }
+
+    const birthday = (authStore.profile as any)?.birthday
+
+    const birthdayMilestoneIndex = milestones.value.findIndex(m => m.id === BIRTHDAY_MILESTONE_ID)
+    if (birthday && birthdayMilestoneIndex === -1) {
+      const [, month, day] = birthday.split('-').map(Number)
+      const birthdayDate = `${new Date().getFullYear()}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+      milestones.value.push({
+        id: BIRTHDAY_MILESTONE_ID,
+        name: '我的生日',
+        targetDate: birthdayDate,
+        category: 'birthday',
+        description: '',
+        pinned: true,
+        isSystem: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      })
+      await saveData()
+    } else if (!birthday && birthdayMilestoneIndex > -1) {
+      milestones.value.splice(birthdayMilestoneIndex, 1)
+      await saveData()
+    } else if (birthday && birthdayMilestoneIndex > -1) {
+      const [, month, day] = birthday.split('-').map(Number)
+      const birthdayDate = `${new Date().getFullYear()}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+      const existingMilestone = milestones.value[birthdayMilestoneIndex]
+      if (existingMilestone.targetDate !== birthdayDate) {
+        milestones.value[birthdayMilestoneIndex] = {
+          ...existingMilestone,
+          targetDate: birthdayDate,
+          updatedAt: new Date().toISOString()
+        }
+        await saveData()
+      }
+    }
   } catch (e) {
     console.error('Failed to load data:', e)
     milestones.value = []
   }
 }
 
-// 选择分类
 const selectCategory = (category: string) => {
+  logger.info('[倒数日] 切换分类', { category: category || '全部' })
   currentCategory.value = category
+  if (isFormMode.value) {
+    isFormMode.value = false
+  }
 }
 
-// 添加里程碑
-const handleAddMilestone = (category?: string) => {
+const isFormMode = ref(false)
+const editingMilestone = ref<Milestone | null>(null)
+const milestoneFormRef = ref()
+const milestoneForm = ref({
+  name: '',
+  targetDate: dayjs().format('YYYY-MM-DD'),
+  category: 'life',
+  description: '',
+  countMode: 'countdown' as 'countdown' | 'countup'
+})
+
+const milestoneRules = {
+  name: [
+    { required: true, message: '请输入倒数日名称', trigger: 'blur' },
+    { min: 1, max: 50, message: '名称长度在 1 到 50 个字符', trigger: 'blur' }
+  ],
+  targetDate: [
+    { required: true, message: '请选择目标日期', trigger: 'change' }
+  ],
+  category: [
+    { required: true, message: '请选择分类', trigger: 'change' }
+  ]
+}
+
+const openFormMode = () => {
+  isFormMode.value = true
+}
+
+const handleAddMilestone = () => {
   editingMilestone.value = null
-  defaultCategory.value = category || currentCategory.value || 'life'
-  formVisible.value = true
+  milestoneForm.value = {
+    name: '',
+    targetDate: dayjs().format('YYYY-MM-DD'),
+    category: currentCategory.value || 'life',
+    description: '',
+    countMode: 'countdown'
+  }
+  openFormMode()
 }
 
-// 编辑里程碑
 const handleEditMilestone = (milestone: Milestone) => {
   editingMilestone.value = { ...milestone }
-  formVisible.value = true
+  milestoneForm.value = {
+    name: milestone.name,
+    targetDate: milestone.targetDate,
+    category: milestone.category,
+    description: milestone.description,
+    countMode: milestone.countMode === 'countup' ? 'countup' : 'countdown'
+  }
+  openFormMode()
 }
 
-// 里程碑操作
+const handleMilestoneFormSubmit = async () => {
+  if (!milestoneFormRef.value) return
+  await milestoneFormRef.value.validate((valid: boolean) => {
+    if (!valid) return
+    if (editingMilestone.value) {
+      const index = milestones.value.findIndex(m => m.id === editingMilestone.value!.id)
+      if (index > -1) {
+        milestones.value[index] = {
+          ...milestones.value[index],
+          ...milestoneForm.value,
+          updatedAt: new Date().toISOString()
+        }
+        logger.info('[倒数日] 编辑倒数日', { id: editingMilestone.value.id, name: milestoneForm.value.name })
+        ElMessage.success('更新成功')
+      }
+    } else {
+      const newMilestone: Milestone = {
+        id: Date.now().toString(),
+        name: milestoneForm.value.name,
+        targetDate: milestoneForm.value.targetDate,
+        category: milestoneForm.value.category || 'life',
+        description: milestoneForm.value.description,
+        countMode: milestoneForm.value.countMode === 'countup' ? 'countup' : 'countdown',
+        pinned: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+      milestones.value.push(newMilestone)
+      logger.info('[倒数日] 添加倒数日', { name: milestoneForm.value.name })
+      ElMessage.success('添加成功')
+    }
+    saveData()
+    isFormMode.value = false
+  })
+}
+
 const handleCommand = (command: string, milestone: Milestone) => {
   const index = milestones.value.findIndex(m => m.id === milestone.id)
 
@@ -708,6 +850,7 @@ const handleCommand = (command: string, milestone: Milestone) => {
       if (index > -1) {
         milestones.value[index].pinned = true
         saveData()
+        logger.info('[倒数日] 设为星标', { id: milestone.id, name: milestone.name })
         ElMessage.success('已设为星标')
       }
       break
@@ -719,6 +862,7 @@ const handleCommand = (command: string, milestone: Milestone) => {
       if (index > -1) {
         milestones.value[index].pinned = false
         saveData()
+        logger.info('[倒数日] 取消星标', { id: milestone.id, name: milestone.name })
         ElMessage.success('已取消星标')
       }
       break
@@ -736,6 +880,7 @@ const handleCommand = (command: string, milestone: Milestone) => {
         if (deleteIndex > -1) {
           milestones.value.splice(deleteIndex, 1)
           saveData()
+          logger.info('[倒数日] 删除倒数日', { id: milestone.id, name: milestone.name })
           ElMessage.success('删除成功')
         }
       }).catch(() => {})
@@ -743,49 +888,15 @@ const handleCommand = (command: string, milestone: Milestone) => {
   }
 }
 
-// 表单提交
-const handleFormSubmit = (data: Partial<Milestone>) => {
-  if (editingMilestone.value) {
-    const index = milestones.value.findIndex(m => m.id === editingMilestone.value!.id)
-    if (index > -1) {
-      milestones.value[index] = {
-        ...milestones.value[index],
-        ...data,
-        updatedAt: new Date().toISOString()
-      }
-      ElMessage.success('更新成功')
-    }
-  } else {
-    const newMilestone: Milestone = {
-      id: Date.now().toString(),
-      name: data.name || '',
-      targetDate: data.targetDate || '',
-      category: data.category || 'life',
-      description: data.description || '',
-      countMode: data.countMode === 'countup' ? 'countup' : 'countdown',
-      pinned: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-    milestones.value.push(newMilestone)
-    ElMessage.success('添加成功')
-  }
-  saveData()
-  formVisible.value = false
-}
-
-// 添加分类
 const handleAddCategory = () => {
   editingCategory.value = null
   categoryForm.value = {
     label: '',
-    icon: '📌',
-    color: '#6b7280'
+    icon: '📌'
   }
   categoryFormVisible.value = true
 }
 
-// 分类操作
 const handleCategoryCommand = (command: string, categoryValue: string) => {
   if (command === 'edit') {
     const cat = categories.value.find(c => c.value === categoryValue)
@@ -793,13 +904,11 @@ const handleCategoryCommand = (command: string, categoryValue: string) => {
       editingCategory.value = categoryValue
       categoryForm.value = {
         label: cat.label,
-        icon: cat.icon,
-        color: cat.color
+        icon: cat.icon
       }
       categoryFormVisible.value = true
     }
   } else if (command === 'delete') {
-    // 检查是否有倒数日使用此分类
     const count = milestones.value.filter(m => m.category === categoryValue).length
     if (count > 0) {
       ElMessage.warning(`该分类下有 ${count} 个倒数日，请先删除或移动这些倒数日`)
@@ -814,6 +923,7 @@ const handleCategoryCommand = (command: string, categoryValue: string) => {
       if (index > -1) {
         categories.value.splice(index, 1)
         saveCategories()
+        logger.info('[倒数日] 删除分类', { value: categoryValue })
         ElMessage.success('删除成功')
         if (currentCategory.value === categoryValue) {
           currentCategory.value = ''
@@ -823,7 +933,13 @@ const handleCategoryCommand = (command: string, categoryValue: string) => {
   }
 }
 
-// 分类表单提交
+const categoryFormVisible = ref(false)
+const editingCategory = ref<string | null>(null)
+const categoryForm = ref({
+  label: '',
+  icon: '📌'
+})
+
 const handleCategoryFormSubmit = () => {
   if (!categoryForm.value.label.trim()) {
     ElMessage.warning('请输入分类名称')
@@ -837,29 +953,44 @@ const handleCategoryFormSubmit = () => {
         ...categories.value[index],
         label: categoryForm.value.label,
         icon: categoryForm.value.icon,
-        color: categoryForm.value.color
+        color: categories.value[index].color
       }
+      logger.info('[倒数日] 编辑分类', { value: editingCategory.value, label: categoryForm.value.label })
       ElMessage.success('分类已更新')
     }
   } else {
     const value = `custom-${Date.now()}`
+    const defaultColorIndex = categories.value.length % COLOR_OPTIONS.length
     categories.value.push({
       value,
       label: categoryForm.value.label,
       icon: categoryForm.value.icon,
-      color: categoryForm.value.color,
+      color: COLOR_OPTIONS[defaultColorIndex],
       isCustom: true
     })
+    logger.info('[倒数日] 添加分类', { label: categoryForm.value.label })
     ElMessage.success('分类已添加')
   }
   saveCategories()
   categoryFormVisible.value = false
 }
 
-// 初始化
 onMounted(async () => {
   await loadData()
   await initFilterState()
+  nextTick(() => {
+    initCategoryNavDrag()
+    scrollCategoryNavToActive()
+  })
+})
+
+onBeforeUpdate(() => clearNavRefs())
+
+onActivated(async () => {
+  await loadData()
+  nextTick(() => {
+    scrollCategoryNavToActive()
+  })
 })
 </script>
 
@@ -867,167 +998,138 @@ onMounted(async () => {
 .countdown-container {
   height: 100%;
   display: flex;
+  flex-direction: column;
   background: transparent;
   position: relative;
 }
 
-/* 左侧边栏 */
-.sidebar {
-  width: 280px;
-  display: flex;
-  flex-direction: column;
-  background: rgba(0, 0, 0, 0.2);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+.top-nav-area {
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
-  transition: width 0.3s ease;
-  position: relative;
 }
 
-.sidebar.collapsed {
-  width: 0;
-  border-right: none;
-  overflow: hidden;
+.category-nav-scroll-wrapper {
+  height: 56px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
 }
 
-.sidebar-content {
-  flex: 1;
-  padding: 12px 8px;
+.category-nav-scroll-wrapper::-webkit-scrollbar {
+  display: none;
 }
 
-/* 折叠按钮 */
-.sidebar-toggle {
-  position: absolute;
-  bottom: 16px;
-  left: 268px;
-  width: 24px;
-  height: 24px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 50%;
+.category-nav-inner {
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  z-index: 100;
-  transition: all 0.3s ease;
+  gap: 4px;
+  padding: 8px 16px;
+  white-space: nowrap;
+  width: max-content;
+  min-width: 100%;
+  height: 100%;
+  box-sizing: border-box;
 }
 
-.sidebar.collapsed + .sidebar-toggle {
-  left: 0;
-}
-
-.sidebar-toggle:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-.sidebar-toggle .el-icon {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.category-item {
+.nav-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 8px 14px;
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
-  margin-bottom: 4px;
+  transition: all 0.2s ease;
+  user-select: none;
+  position: relative;
+  height: 40px;
 }
 
-.category-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
-.category-item.active {
-  background: rgba(255, 255, 255, 0.1);
+.nav-item.active {
+  background: rgba(102, 126, 234, 0.2);
 }
 
-.category-icon {
+.nav-item.active .nav-name {
+  color: #fff;
+  font-weight: 500;
+}
+
+.nav-icon {
   font-size: 16px;
   width: 20px;
   text-align: center;
 }
 
-.category-name {
-  flex: 1;
+.nav-name {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
 }
 
-.category-count {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
+.nav-count {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
   min-width: 20px;
-  text-align: right;
+  text-align: center;
 }
 
-.add-btn {
+.nav-more {
   opacity: 0;
   transition: opacity 0.2s;
-  width: 24px !important;
-  height: 24px !important;
-}
-
-.category-item:hover .add-btn:not(:disabled) {
-  opacity: 1;
-}
-
-.btn-placeholder {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
 }
 
-.add-btn.hidden {
-  visibility: hidden;
-}
-
-.more-btn {
-  opacity: 0;
-  transition: opacity 0.2s;
-  width: 24px !important;
-  height: 24px !important;
-  padding: 0 !important;
-}
-
-.category-item:hover .more-btn:not(:disabled) {
+.nav-item:hover .nav-more {
   opacity: 1;
 }
 
-.category-divider {
-  height: 1px;
-  background: rgba(255, 255, 255, 0.08);
-  margin: 8px 0;
-}
-
-.add-category-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px 12px;
-  margin-top: 8px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
+.add-nav-item {
   color: rgba(255, 255, 255, 0.5);
-  transition: all 0.2s;
 }
 
-.add-category-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
+.add-nav-item:hover {
   color: rgba(255, 255, 255, 0.8);
 }
 
-/* 右侧内容 */
+.add-nav-item .nav-name {
+  color: rgba(255, 255, 255, 0.5);
+}
+
 .main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow: hidden;
+}
+
+.content-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+@media (max-width: 1240px) {
+  .content-wrapper {
+    max-width: none;
+  }
 }
 
 .content-header {
@@ -1039,16 +1141,20 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
+.content-body {
+  flex: 1;
+  overflow: hidden;
+}
+
+.section {
+  padding: 20px 24px;
+  box-sizing: border-box;
+}
+
 .header-left {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.category-indicator {
-  width: 4px;
-  height: 20px;
-  border-radius: 2px;
 }
 
 .header-left h2 {
@@ -1070,6 +1176,7 @@ onMounted(async () => {
 
 .section {
   padding: 20px 24px;
+  box-sizing: border-box;
 }
 
 .section-title {
@@ -1133,6 +1240,9 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   font-size: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
 }
 
 .milestone-name {
@@ -1218,21 +1328,6 @@ onMounted(async () => {
   overflow: hidden;
 }
 
-.urgent-badge {
-  position: absolute;
-  top: 12px;
-  right: 48px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  background: rgba(239, 68, 68, 0.15);
-  border-radius: 4px;
-  font-size: 12px;
-  color: #ef4444;
-}
-
-/* 分区样式 */
 .pinned-section {
   background: linear-gradient(180deg, rgba(251, 191, 36, 0.05) 0%, transparent 100%);
 }
@@ -1249,7 +1344,6 @@ onMounted(async () => {
   background: linear-gradient(180deg, rgba(107, 114, 128, 0.03) 0%, transparent 100%);
 }
 
-/* 系统倒数日样式 */
 .milestone-card.system-card {
   cursor: default;
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%);
@@ -1270,7 +1364,87 @@ onMounted(async () => {
   border-radius: 4px;
 }
 
-/* 图标选择器 */
+.milestone-form-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.form-page-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.form-page-title {
+  margin: 0;
+  font-size: 18px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.form-page-body {
+  flex: 1;
+  overflow: hidden;
+}
+
+.form-container {
+  max-width: 600px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.milestone-form :deep(.el-input__wrapper) {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+.milestone-form :deep(.el-input__inner) {
+  color: #fff;
+}
+
+.milestone-form :deep(.el-textarea__inner) {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+  color: #fff;
+}
+
+.count-mode-group {
+  width: 100%;
+}
+
+.count-mode-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.category-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.category-icon {
+  font-size: 16px;
+}
+
+.category-label {
+  flex: 1;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 24px;
+}
+
 .icon-picker {
   display: flex;
   flex-wrap: wrap;
@@ -1300,34 +1474,19 @@ onMounted(async () => {
   background: rgba(59, 130, 246, 0.1);
 }
 
-/* 颜色选择器 */
-.color-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.category-form-dialog :deep(.el-dialog) {
+  width: 400px;
 }
 
-.color-option {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: 2px solid transparent;
-}
-
-.color-option:hover {
-  transform: scale(1.1);
-}
-
-.color-option.active {
-  border-color: #fff;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3);
+@media (max-width: 440px) {
+  .category-form-dialog :deep(.el-dialog) {
+    width: calc(100vw - 32px);
+    margin: 16px auto;
+  }
 }
 </style>
 
 <style>
-/* 分类对话框暗色主题 */
 .category-dialog-overlay .el-dialog {
   background: rgba(30, 30, 50, 0.98) !important;
   border: 1px solid rgba(255, 255, 255, 0.1) !important;

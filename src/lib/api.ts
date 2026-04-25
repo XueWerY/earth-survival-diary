@@ -65,9 +65,9 @@ export interface AuthResponse {
     user: {
         id: string
         email: string
-        user_metadata?: {
-            nickname?: string
-        }
+        nickname?: string
+        role?: string
+        createdAt?: string
     } | null
     session: {
         access_token: string
@@ -121,7 +121,8 @@ export async function checkSession(): Promise<{ valid: boolean; kicked: boolean 
 export interface Profile {
     id: string
     nickname: string
-    avatar_url?: string
+    birthday?: string
+    phone?: string
     created_at?: string
     updated_at?: string
 }
@@ -130,10 +131,10 @@ export async function getProfile(): Promise<{ profile: Profile }> {
     return request('/profile')
 }
 
-export async function updateProfile(nickname: string): Promise<{ profile: Profile }> {
+export async function updateProfile(data: { nickname?: string; birthday?: string; phone?: string }): Promise<{ profile: Profile }> {
     return request('/profile', {
         method: 'PUT',
-        body: JSON.stringify({ nickname })
+        body: JSON.stringify(data)
     })
 }
 
@@ -221,6 +222,38 @@ export async function updateMissionList(id: string, data: { name?: string; icon?
 
 export async function deleteMissionList(id: string): Promise<{ success: boolean }> {
     return request(`/mission-lists/${id}`, { method: 'DELETE' })
+}
+
+export async function updateMissionGroup(listId: string, groupId: string, data: { name?: string; color?: string; order?: number }): Promise<{ group: MissionGroup }> {
+    return request(`/mission-lists/${listId}/groups/${groupId}`, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+    })
+}
+
+export async function addMissionGroup(listId: string, data: { name: string; color: string; order: number }): Promise<{ group: MissionGroup }> {
+    return request(`/mission-lists/${listId}/groups`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+    })
+}
+
+export async function deleteMissionGroup(listId: string, groupId: string): Promise<{ success: boolean }> {
+    return request(`/mission-lists/${listId}/groups/${groupId}`, { method: 'DELETE' })
+}
+
+export async function reorderMissionLists(orders: { id: string; order: number }[]): Promise<{ lists: MissionList[] }> {
+    return request('/mission-lists/reorder', {
+        method: 'PUT',
+        body: JSON.stringify({ orders })
+    })
+}
+
+export async function reorderGroups(listId: string, orders: { id: string; order: number }[]): Promise<{ groups: MissionGroup[] }> {
+    return request(`/mission-lists/${listId}/groups/reorder`, {
+        method: 'PUT',
+        body: JSON.stringify({ orders })
+    })
 }
 
 // ============ 使命 API ============
@@ -336,146 +369,11 @@ export async function getStats(): Promise<{ stats: Stats }> {
     return request('/stats')
 }
 
-// ============ 笔记分类 API ============
-
-export interface NoteCategory {
-    id: string
-    name: string
-    icon: string
-    color: string
-    created_at: string
-}
-
-export async function getNoteCategories(): Promise<{ categories: NoteCategory[] }> {
-    return request('/note-categories')
-}
-
-export async function addNoteCategory(data: { name: string; icon?: string; color?: string }): Promise<{ category: NoteCategory }> {
-    return request('/note-categories', {
-        method: 'POST',
-        body: JSON.stringify(data)
-    })
-}
-
-export async function updateNoteCategory(id: string, data: { name?: string; icon?: string; color?: string }): Promise<{ category: NoteCategory }> {
-    return request(`/note-categories/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(data)
-    })
-}
-
-export async function deleteNoteCategory(id: string): Promise<{ success: boolean }> {
-    return request(`/note-categories/${id}`, { method: 'DELETE' })
-}
-
-// ============ 笔记 API ============
-
-export interface Note {
-    id: string
-    category_id: string | null
-    title: string
-    content: string
-    tags: string[]
-    created_at: string
-    updated_at: string
-}
-
-export interface NoteFormData {
-    categoryId?: string | null
-    title?: string
-    content?: string
-    tags?: string[]
-}
-
-export async function getNotes(params?: { categoryId?: string; search?: string }): Promise<{ notes: Note[] }> {
-    const query = new URLSearchParams()
-    if (params?.categoryId) query.append('categoryId', params.categoryId)
-    if (params?.search) query.append('search', params.search)
-    const queryString = query.toString()
-    return request(`/notes${queryString ? `?${queryString}` : ''}`)
-}
-
-export async function getNote(id: string): Promise<{ note: Note }> {
-    return request(`/notes/${id}`)
-}
-
-export async function addNote(data: NoteFormData): Promise<{ note: Note }> {
-    return request('/notes', {
-        method: 'POST',
-        body: JSON.stringify(data)
-    })
-}
-
-export async function updateNote(id: string, data: NoteFormData): Promise<{ note: Note }> {
-    return request(`/notes/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(data)
-    })
-}
-
-export async function deleteNote(id: string): Promise<{ success: boolean }> {
-    return request(`/notes/${id}`, { method: 'DELETE' })
-}
-
-// ============ 倒数日 API ============
-
-export interface Countdown {
-    id: string
-    name: string
-    target_date: string
-    icon?: string
-    is_birthday?: boolean
-    is_system?: boolean
-    created_at: string
-}
-
-export interface CountdownFormData {
-    name: string
-    targetDate: string
-    icon?: string
-    is_birthday?: boolean
-    is_system?: boolean
-}
-
-export async function getCountdowns(): Promise<{ countdowns: Countdown[] }> {
-    return request('/countdowns')
-}
-
-export async function addCountdown(data: CountdownFormData): Promise<{ countdown: Countdown }> {
-    return request('/countdowns', {
-        method: 'POST',
-        body: JSON.stringify(data)
-    })
-}
-
-export async function updateCountdown(id: string, data: Partial<CountdownFormData>): Promise<{ countdown: Countdown }> {
-    return request(`/countdowns/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(data)
-    })
-}
-
-export async function deleteCountdown(id: string): Promise<{ success: boolean }> {
-    return request(`/countdowns/${id}`, { method: 'DELETE' })
-}
-
 // ============ 设置 API ============
 
-export interface UserSettings {
-    shortcuts: {
-        inlineMath: string
-        blockMath: string
-        save: string
-    }
-}
+export interface UserSettings {}
 
-export const defaultSettings: UserSettings = {
-    shortcuts: {
-        inlineMath: 'Ctrl+M',
-        blockMath: 'Ctrl+Shift+M',
-        save: 'Ctrl+S'
-    }
-}
+export const defaultSettings: UserSettings = {}
 
 export async function getSettings(): Promise<{ settings: UserSettings }> {
     return request('/settings')
@@ -505,29 +403,6 @@ export async function deleteData(key: string): Promise<{ success: boolean }> {
     return request(`/data/${key}`, { method: 'DELETE' })
 }
 
-// ============ 头像上传 API ============
-
-export interface UploadAvatarParams {
-    fileData: string // base64 encoded
-    fileName: string
-    contentType: string
-}
-
-export async function uploadAvatar(params: UploadAvatarParams): Promise<{
-    success: boolean
-    avatarKey: string
-    avatarUrl: string
-}> {
-    return request('/avatar/upload', {
-        method: 'POST',
-        body: JSON.stringify(params)
-    })
-}
-
-export async function getAvatarUrl(): Promise<{ avatarUrl: string | null }> {
-    return request('/avatar/url')
-}
-
 // ============ 账号安全 API ============
 
 export async function changeEmail(newEmail: string, password: string): Promise<{ success: boolean }> {
@@ -541,62 +416,5 @@ export async function changePassword(oldPassword: string, newPassword: string): 
     return request('/auth/change-password', {
         method: 'POST',
         body: JSON.stringify({ oldPassword, newPassword })
-    })
-}
-
-// ============ 管理员管理 API ============
-
-export interface SystemUser {
-    id: string
-    email: string
-    nickname: string
-    role: string
-    createdAt: string
-}
-
-export async function getUsers(): Promise<{ users: SystemUser[] }> {
-    return request('/admin/users')
-}
-
-export async function updateUserRole(userId: string, role: 'admin' | 'user'): Promise<{ success: boolean; user: SystemUser }> {
-    return request(`/admin/users/${userId}/role`, {
-        method: 'PUT',
-        body: JSON.stringify({ role })
-    })
-}
-
-// ============ 文件管理 API ============
-
-export interface FileInfo {
-    path: string
-    size: number
-    mtime: string
-    birthtime: string
-}
-
-export async function getFiles(): Promise<{ files: FileInfo[] }> {
-    return request('/admin/files')
-}
-
-export async function readFile(filePath: string): Promise<{ content: string }> {
-    return request(`/admin/files/${filePath}`)
-}
-
-export async function writeFile(filePath: string, content: string): Promise<{ success: boolean }> {
-    return request(`/admin/files/${filePath}`, {
-        method: 'PUT',
-        body: JSON.stringify({ content })
-    })
-}
-
-export async function deleteFile(filePath: string): Promise<{ success: boolean }> {
-    return request(`/admin/files/${filePath}`, {
-        method: 'DELETE'
-    })
-}
-
-export async function backupFiles(): Promise<{ success: boolean; backupFile: string }> {
-    return request('/admin/files/backup', {
-        method: 'POST'
     })
 }

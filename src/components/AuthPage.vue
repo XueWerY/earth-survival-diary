@@ -100,6 +100,7 @@ import { ElMessage } from 'element-plus'
 import { Message, Lock, User } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useAuthStore } from '../stores/authStore'
+import { logger } from '../lib/logger'
 
 const emit = defineEmits<{
   success: []
@@ -157,9 +158,11 @@ const handleSubmit = async () => {
   try {
     if (mode.value === 'login') {
       await authStore.signIn(form.email, form.password)
+      logger.info('[Auth] 用户登录成功', { email: form.email })
       ElMessage.success('登录成功')
     } else {
       await authStore.signUp(form.email, form.password, form.nickname || undefined)
+      logger.info('[Auth] 用户注册成功', { email: form.email })
       ElMessage.success('注册成功')
     }
     emit('success')

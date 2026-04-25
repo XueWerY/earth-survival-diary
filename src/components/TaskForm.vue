@@ -13,6 +13,7 @@
             placeholder="今天做了什么？"
             clearable
             style="width: 100%"
+            @select="handleNameSelect"
         />
       </el-form-item>
       <el-form-item label="日期" prop="date">
@@ -24,20 +25,22 @@
       </el-form-item>
       <el-form-item label="开始时间" prop="startTime">
         <el-time-picker
-            v-model="form.startTime"
-            placeholder="开始时间"
-            format="HH:mm"
-            value-format="HH:mm"
-            style="width: 100%"
+          v-model="form.startTime"
+          placeholder="开始时间"
+          format="HH:mm"
+          value-format="HH:mm"
+          clearable
+          style="width: 100%"
         />
       </el-form-item>
       <el-form-item label="结束时间" prop="endTime">
         <el-time-picker
-            v-model="form.endTime"
-            placeholder="结束时间"
-            format="HH:mm"
-            value-format="HH:mm"
-            style="width: 100%"
+          v-model="form.endTime"
+          placeholder="结束时间"
+          format="HH:mm"
+          value-format="HH:mm"
+          clearable
+          style="width: 100%"
         />
       </el-form-item>
       <el-form-item label="备注" prop="notes">
@@ -72,6 +75,7 @@ import LunarDatePicker from './LunarDatePicker.vue'
 const props = defineProps<{
   visible: boolean
   task?: Task | null
+  defaultDate?: string
 }>()
 
 const emit = defineEmits<{
@@ -93,6 +97,14 @@ const querySearch = (queryString: string, cb: (results: { value: string }[]) => 
           .map((name: string) => ({ value: name }))
       : historyNames.value.map((name: string) => ({ value: name }))
   cb(results)
+}
+
+// 选择历史记录后触发表单验证
+const handleNameSelect = (item: { value: string }) => {
+  form.name = item.value
+  if (formRef.value) {
+    formRef.value.validateField('name')
+  }
 }
 
 const dialogVisible = ref(false)
@@ -133,7 +145,7 @@ watch(() => props.visible, (val) => {
     form.notes = props.task.notes || ''
   } else {
     isEdit.value = false
-    form.date = dayjs().format('YYYY-MM-DD')
+    form.date = props.defaultDate || dayjs().format('YYYY-MM-DD')
   }
 })
 
@@ -266,21 +278,7 @@ const handleSubmit = async () => {
   color: rgba(255, 255, 255, 0.4);
 }
 
-/* 输入框数字样式 */
-:deep(.el-input-number) {
-  background: rgba(255, 255, 255, 0.05);
-}
 
-:deep(.el-input-number .el-input__wrapper) {
-  background: transparent !important;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-:deep(.el-input-number .el-input__inner) {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-/* 时间选择器样式 */
 :deep(.el-time-editor .el-input__wrapper) {
   background: rgba(255, 255, 255, 0.05) !important;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -334,4 +332,61 @@ const handleSubmit = async () => {
   background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
   border-color: #764ba2;
 }
+
+:deep(.el-time-panel) {
+  background: rgba(30, 30, 50, 0.98) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+:deep(.el-time-spinner__item) {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+:deep(.el-time-spinner__item:hover:not(.disabled):not(.active)) {
+  background: rgba(102, 126, 234, 0.15) !important;
+}
+
+:deep(.el-time-spinner__item.active:not(.disabled)) {
+  color: #667eea !important;
+  font-weight: bold;
+  background: transparent !important;
+}
+
+:deep(.el-time-spinner__list:hover) {
+  background: transparent !important;
+}
+
+:deep(.el-time-spinner) {
+  background: transparent !important;
+}
+
+:deep(.el-time-spinner__item.is-active) {
+  color: #667eea !important;
+  font-weight: bold;
+  background: transparent !important;
+}
+
+:deep(.el-time-panel__footer) {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(30, 30, 50, 0.98) !important;
+}
+
+:deep(.el-time-panel__btn) {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+:deep(.el-time-panel__btn.confirm) {
+  color: #667eea !important;
+}
+
+:deep(.el-time-panel__content) {
+  background: transparent !important;
+}
+
+:deep(.el-time-range-spinner) {
+  background: transparent !important;
+}
+
 </style>

@@ -68,76 +68,6 @@
             当前学期第 {{ currentWeekNumber }} 周 / 共 {{ courseSettings.totalWeeks }} 周
           </div>
         </div>
-
-        <!-- 快捷键设置 -->
-        <div class="settings-section">
-          <h3 class="section-title">
-            <span class="title-icon">⌨️</span>
-            星际笔记快捷键
-          </h3>
-          <p class="section-desc">自定义星际笔记编辑器的快捷键，点击输入框后按下新的组合键即可换绑。</p>
-
-          <div class="shortcut-list">
-            <div class="shortcut-item">
-              <div class="shortcut-info">
-                <span class="shortcut-label">行内公式</span>
-                <span class="shortcut-desc">将选中文本或插入行内公式</span>
-              </div>
-              <div class="shortcut-input-wrapper">
-                <input
-                    type="text"
-                    class="shortcut-input"
-                    :value="settingsStore.settings.shortcuts.inlineMath"
-                    readonly
-                    @keydown="handleShortcutInput($event, 'inlineMath')"
-                    placeholder="点击后按下组合键"
-                />
-              </div>
-            </div>
-
-            <div class="shortcut-item">
-              <div class="shortcut-info">
-                <span class="shortcut-label">块级公式</span>
-                <span class="shortcut-desc">将选中文本或插入块级公式</span>
-              </div>
-              <div class="shortcut-input-wrapper">
-                <input
-                    type="text"
-                    class="shortcut-input"
-                    :value="settingsStore.settings.shortcuts.blockMath"
-                    readonly
-                    @keydown="handleShortcutInput($event, 'blockMath')"
-                    placeholder="点击后按下组合键"
-                />
-              </div>
-            </div>
-
-            <div class="shortcut-item">
-              <div class="shortcut-info">
-                <span class="shortcut-label">保存笔记</span>
-                <span class="shortcut-desc">保存当前编辑的笔记</span>
-              </div>
-              <div class="shortcut-input-wrapper">
-                <input
-                    type="text"
-                    class="shortcut-input"
-                    :value="settingsStore.settings.shortcuts.save"
-                    readonly
-                    @keydown="handleShortcutInput($event, 'save')"
-                    placeholder="点击后按下组合键"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div class="shortcut-conflict-warning" v-if="conflictMsg">
-            ⚠️ {{ conflictMsg }}
-          </div>
-
-          <div class="shortcut-actions">
-            <el-button @click="handleReset">恢复默认</el-button>
-          </div>
-        </div>
       </el-scrollbar>
     </div>
   </div>
@@ -145,13 +75,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
 import { useSettingsStore } from '../stores/settingsStore'
 import LunarDatePicker from './LunarDatePicker.vue'
 import dayjs from 'dayjs'
 
 const settingsStore = useSettingsStore()
-const conflictMsg = ref('')
 
 // 本地设置状态（用于实时编辑）
 const focusSettings = ref({
@@ -194,79 +122,6 @@ watch(() => courseSettings.value.semesterStartDate, async (val) => {
 watch(() => courseSettings.value.totalWeeks, async (val) => {
   await settingsStore.updateCourseSettings({ totalWeeks: val })
 })
-
-// 检测快捷键冲突
-const checkConflict = (shortcut: string, excludeKey?: string): string | null => {
-  const shortcuts: Record<string, string> = {}
-  if (excludeKey !== 'inlineMath') {
-    shortcuts[settingsStore.settings.shortcuts.inlineMath] = '行内公式'
-  }
-  if (excludeKey !== 'blockMath') {
-    shortcuts[settingsStore.settings.shortcuts.blockMath] = '块级公式'
-  }
-  if (excludeKey !== 'save') {
-    shortcuts[settingsStore.settings.shortcuts.save] = '保存笔记'
-  }
-  return shortcuts[shortcut] || null
-}
-
-// 处理快捷键输入
-const handleShortcutInput = async (e: KeyboardEvent, key: 'inlineMath' | 'blockMath' | 'save') => {
-  e.preventDefault()
-  e.stopPropagation()
-
-  // 忽略单独的修饰键
-  if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
-    return
-  }
-
-  // 构建快捷键字符串
-  const parts: string[] = []
-  if (e.ctrlKey || e.metaKey) parts.push('Ctrl')
-  if (e.shiftKey) parts.push('Shift')
-  if (e.altKey) parts.push('Alt')
-  if (e.key && e.key !== ' ') parts.push(e.key.toUpperCase())
-
-  if (parts.length < 2) {
-    conflictMsg.value = '请使用组合键（如 Ctrl+M）'
-    return
-  }
-
-  const newShortcut = parts.join('+')
-
-  // 检测冲突
-  const conflict = checkConflict(newShortcut, key)
-  if (conflict) {
-    conflictMsg.value = `${newShortcut} 已被 "${conflict}" 占用，请使用其他组合键`
-    return
-  }
-
-  // 清除冲突提示
-  conflictMsg.value = ''
-
-  // 保存到服务器
-  const success = await settingsStore.updateShortcut(key, newShortcut)
-  if (success) {
-    ElMessage.success(`快捷键已更改为 ${newShortcut}`)
-  } else {
-    ElMessage.error('保存失败，请重试')
-  }
-}
-
-// 恢复默认
-const handleReset = async () => {
-  try {
-    await settingsStore.resetSettings()
-    // 重置本地状态
-    focusSettings.value.pomodoroDuration = 25
-    courseSettings.value.semesterStartDate = ''
-    courseSettings.value.totalWeeks = 20
-    conflictMsg.value = ''
-    ElMessage.success('已恢复默认设置')
-  } catch {
-    ElMessage.error('恢复默认设置失败')
-  }
-}
 </script>
 
 <style scoped>
@@ -351,84 +206,5 @@ const handleReset = async () => {
   border-radius: 6px;
   color: #667eea;
   font-size: 13px;
-}
-
-/* 快捷键列表 */
-.shortcut-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.shortcut-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  gap: 16px;
-}
-
-.shortcut-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.shortcut-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #fff;
-}
-
-.shortcut-desc {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.shortcut-input-wrapper {
-  flex-shrink: 0;
-}
-
-.shortcut-input {
-  width: 140px;
-  padding: 8px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  font-size: 13px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  cursor: pointer;
-  text-align: center;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
-  transition: all 0.2s;
-}
-
-.shortcut-input:hover {
-  border-color: rgba(102, 126, 234, 0.5);
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.shortcut-input:focus {
-  outline: none;
-  border-color: #667eea;
-  background: rgba(102, 126, 234, 0.1);
-}
-
-.shortcut-conflict-warning {
-  margin-top: 16px;
-  padding: 12px 16px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 6px;
-  color: #f87171;
-  font-size: 13px;
-}
-
-.shortcut-actions {
-  margin-top: 20px;
 }
 </style>

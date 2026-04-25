@@ -20,7 +20,7 @@ interface Course {
 }
 
 // 本地存储键名
-const RECORDED_COURSES_KEY = 'earth-survival-recorded-courses'
+const RECORDED_COURSES_KEY = 'course:recorded-courses'
 
 // 已记录的课程ID集合
 const recordedCourses = ref<Set<string>>(new Set())
@@ -100,35 +100,19 @@ export async function checkAndRecordFinishedCourses(
     // 生成唯一标识
     const recordKey = `${course.id}-${today}`
 
-    // 检查是否已记录（通过本地记录）
+    // 检查是否已记录
     if (recordedCourses.value.has(recordKey)) continue
-
-    // 检查已记录的任务中是否有相同课程名的事件
-    const courseEventName = `上《${course.name}》课`
-    const existingTask = taskStore.tasks.find(t =>
-        t.date === today && t.name === courseEventName
-    )
-    if (existingTask) {
-      // 已存在同名事件，标记为已记录但不重复添加
-      recordedCourses.value.add(recordKey)
-      continue
-    }
-
-    // 构建备注
-    const noteParts: string[] = []
-    if (course.teacher) noteParts.push(`老师：${course.teacher}`)
-    if (course.location) noteParts.push(`教室：${course.location}`)
 
     // 记录足迹
     await taskStore.addCompletedTask({
       id: `course-${recordKey}`,
-      name: courseEventName,
+      name: '上课',
       startTime: course.startTime,
       endTime: course.endTime,
       date: today,
       completed: true,
       duration: 0,
-      notes: noteParts.join('，')
+      notes: undefined
     })
 
     // 标记为已记录
@@ -159,7 +143,7 @@ export async function initCourseAutoRecord(
   initialized = true
 
   await loadRecordedCourses()
-  await checkAndRecordFinishedCourses(courses, semesterStartDate, true)
+  await checkAndRecordFinishedCourses(courses, semesterStartDate, false)
 }
 
 // 重置初始化状态（用于测试）

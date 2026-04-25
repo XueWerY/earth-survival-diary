@@ -23,10 +23,6 @@
               <el-radio-button value="pomodoro">番茄钟</el-radio-button>
               <el-radio-button value="stopwatch">正计时</el-radio-button>
             </el-radio-group>
-            <el-button @click="showStats = true" class="stats-btn">
-              <el-icon><DataLine /></el-icon>
-              统计
-            </el-button>
           </div>
 
           <!-- 专注名称输入 -->
@@ -94,7 +90,7 @@
         <!-- 计时中状态 -->
         <div v-else class="timing-view">
           <!-- 计时器圆环 -->
-          <div class="timer-ring active" :class="{ 'stopwatch-mode': focusType === 'stopwatch' }">
+          <div class="timer-ring" :class="{ 'stopwatch-mode': focusType === 'stopwatch' }">
             <svg viewBox="0 0 200 200" class="timer-svg">
               <circle cx="100" cy="100" r="90" class="timer-bg" />
               <circle
@@ -119,112 +115,9 @@
 
           <!-- 操作按钮 -->
           <div class="action-buttons">
-            <el-button size="large" @click="cancelFocus">
-              <el-icon><Close /></el-icon>
-              取消
-            </el-button>
-            <el-button type="primary" size="large" @click="completeFocus">
-              <el-icon><Check /></el-icon>
-              完成
-            </el-button>
+            <el-button size="large" class="text-only-btn" @click="cancelFocus">取消</el-button>
+            <el-button type="primary" size="large" class="text-only-btn" @click="completeFocus">完成</el-button>
           </div>
-        </div>
-      </el-scrollbar>
-    </div>
-
-    <!-- 统计全屏展示 -->
-    <div v-if="showStats" class="stats-fullscreen">
-      <div class="stats-header">
-        <div class="stats-header-left">
-          <h2>专注统计</h2>
-        </div>
-        <div class="stats-header-right">
-          <el-radio-group v-model="statsRange" size="default" @change="handleRangeChange">
-            <el-radio-button value="day">日</el-radio-button>
-            <el-radio-button value="week">周</el-radio-button>
-            <el-radio-button value="month">月</el-radio-button>
-            <el-radio-button value="year">年</el-radio-button>
-          </el-radio-group>
-          <!-- 日模式使用农历日期选择器 -->
-          <LunarDatePicker
-              v-if="statsRange === 'day'"
-              v-model="selectedDayDate"
-              placeholder="选择日期"
-          />
-          <!-- 周/月/年模式使用 el-date-picker -->
-          <el-date-picker
-              v-else
-              v-model="selectedDate"
-              :type="datePickerType"
-              :placeholder="datePickerPlaceholder"
-              :clearable="false"
-              size="default"
-              :format="datePickerFormat"
-              :value-format="datePickerValueFormat"
-          />
-          <el-button @click="showStats = false" circle :icon="Close" />
-        </div>
-      </div>
-
-      <el-scrollbar class="stats-body">
-        <!-- 概览 -->
-        <div class="stats-overview">
-          <div class="stat-card">
-            <div class="stat-value">{{ rangeFocusCount }}</div>
-            <div class="stat-label">专注次数</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ formatDuration(rangeFocusDuration) }}</div>
-            <div class="stat-label">专注时长</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ avgFocusDuration }}</div>
-            <div class="stat-label">平均时长</div>
-          </div>
-        </div>
-
-        <!-- 趋势图 -->
-        <div class="trend-chart">
-          <div class="chart-title">{{ getTrendTitle() }}</div>
-          <div class="chart-bars" :style="{ height: getChartHeight() }">
-            <div
-                v-for="(stat, index) in trendData"
-                :key="index"
-                class="chart-bar-item"
-            >
-              <div class="bar-wrapper">
-                <div
-                    class="bar"
-                    :style="{ height: getBarHeight(stat.duration) + '%' }"
-                >
-                  <span class="bar-value" v-if="stat.duration > 0">{{ formatBarValue(stat.duration) }}</span>
-                </div>
-              </div>
-              <div class="bar-label">{{ stat.label }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 专注事项排行 -->
-        <div class="focus-ranking" v-if="rangeStatsByName.length > 0">
-          <div class="ranking-title">专注事项排行</div>
-          <div class="ranking-list">
-            <div
-                v-for="(item, index) in rangeStatsByName.slice(0, 10)"
-                :key="item.name"
-                class="ranking-item"
-            >
-              <span class="ranking-num">{{ index + 1 }}</span>
-              <span class="ranking-name">{{ item.name }}</span>
-              <span class="ranking-count">{{ item.count }}次</span>
-              <span class="ranking-duration">{{ formatDuration(item.duration) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 无数据提示 -->
-        <div v-if="rangeFocusCount === 0" class="no-data">
-          <el-empty description="该时间段暂无专注记录" :image-size="120" />
         </div>
       </el-scrollbar>
     </div>
@@ -246,14 +139,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { VideoPlay, Close, Check, DataLine, Star, Delete } from '@element-plus/icons-vue'
+import { VideoPlay, Star, Delete } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { useFocusStore, type FavoriteFocus, type TimerState as StoredTimerState } from '../stores/focusStore'
 import { useTaskStore } from '../stores/taskStore'
 import { useSettingsStore } from '../stores/settingsStore'
-import LunarDatePicker from './LunarDatePicker.vue'
+import { logger } from '../lib/logger'
 
 const emit = defineEmits<{
   (e: 'fullscreen-change', fullscreen: boolean): void
@@ -282,297 +175,8 @@ let timerInterval: ReturnType<typeof setInterval> | null = null
 const startTimestamp = ref<number>(0) // 使用时间戳而不是 Date 对象
 const lastUpdateTime = ref<number>(0) // 上次更新时间戳
 
-// 设置（从全局设置读取）
-const showStats = ref(false)
-type StatsRange = 'day' | 'week' | 'month' | 'year'
-const statsRange = ref<StatsRange>('day')
-const selectedDate = ref<Date>(new Date())
-// 日模式下的字符串日期（用于 LunarDatePicker）
-const selectedDayDate = ref<string>(dayjs().format('YYYY-MM-DD'))
-
 // 番茄时长（本地可变，初始值从全局设置读取）
 const localPomodoroDuration = ref(settingsStore.settings.focus?.pomodoroDuration || 25)
-
-// 监听统计全屏状态变化
-watch(showStats, (val) => {
-  emit('fullscreen-change', val)
-})
-
-// 同步 selectedDayDate 和 selectedDate
-watch(selectedDayDate, (newVal) => {
-  if (newVal) {
-    selectedDate.value = dayjs(newVal).toDate()
-  }
-})
-
-watch(selectedDate, (newVal) => {
-  selectedDayDate.value = dayjs(newVal).format('YYYY-MM-DD')
-})
-
-// 日期选择器配置
-const datePickerType = computed(() => {
-  switch (statsRange.value) {
-    case 'day':
-      return 'date'
-    case 'week':
-      return 'week'
-    case 'month':
-      return 'month'
-    case 'year':
-      return 'year'
-    default:
-      return 'date'
-  }
-})
-
-const datePickerPlaceholder = computed(() => {
-  switch (statsRange.value) {
-    case 'day':
-      return '选择日期'
-    case 'week':
-      return '选择周'
-    case 'month':
-      return '选择月份'
-    case 'year':
-      return '选择年份'
-    default:
-      return '选择日期'
-  }
-})
-
-const datePickerFormat = computed(() => {
-  switch (statsRange.value) {
-    case 'day':
-      return 'YYYY-MM-DD'
-    case 'week':
-      return 'YYYY年 第ww周'
-    case 'month':
-      return 'YYYY年MM月'
-    case 'year':
-      return 'YYYY年'
-    default:
-      return 'YYYY-MM-DD'
-  }
-})
-
-const datePickerValueFormat = computed(() => {
-  switch (statsRange.value) {
-    case 'day':
-      return 'YYYY-MM-DD'
-    case 'week':
-      return 'YYYY-MM-DD'
-    case 'month':
-      return 'YYYY-MM'
-    case 'year':
-      return 'YYYY'
-    default:
-      return 'YYYY-MM-DD'
-  }
-})
-
-// 处理范围变化
-const handleRangeChange = () => {
-  // 切换范围时重置为当前时间
-  selectedDate.value = new Date()
-}
-
-// 统计数据计算
-const rangeStartDate = computed(() => {
-  const dateValue = selectedDate.value
-  let date: dayjs.Dayjs
-
-  switch (statsRange.value) {
-    case 'day':
-      date = dayjs(dateValue)
-      return date.format('YYYY-MM-DD')
-    case 'week':
-      // 周选择器返回的是该周的某一天
-      date = dayjs(dateValue)
-      return date.startOf('week').format('YYYY-MM-DD')
-    case 'month':
-      // 月选择器返回 YYYY-MM 格式
-      date = dayjs(dateValue)
-      return date.startOf('month').format('YYYY-MM-DD')
-    case 'year':
-      // 年选择器返回 YYYY 格式
-      date = dayjs(dateValue)
-      return date.startOf('year').format('YYYY-MM-DD')
-    default:
-      date = dayjs(dateValue)
-      return date.format('YYYY-MM-DD')
-  }
-})
-
-const rangeEndDate = computed(() => {
-  const dateValue = selectedDate.value
-  let date: dayjs.Dayjs
-
-  switch (statsRange.value) {
-    case 'day':
-      date = dayjs(dateValue)
-      return date.format('YYYY-MM-DD')
-    case 'week':
-      date = dayjs(dateValue)
-      return date.endOf('week').format('YYYY-MM-DD')
-    case 'month':
-      date = dayjs(dateValue)
-      return date.endOf('month').format('YYYY-MM-DD')
-    case 'year':
-      date = dayjs(dateValue)
-      return date.endOf('year').format('YYYY-MM-DD')
-    default:
-      date = dayjs(dateValue)
-      return date.format('YYYY-MM-DD')
-  }
-})
-
-const rangeFocusCount = computed(() => {
-  return focusStore.getCountByRange(rangeStartDate.value, rangeEndDate.value)
-})
-
-const rangeFocusDuration = computed(() => {
-  return focusStore.getDurationByRange(rangeStartDate.value, rangeEndDate.value)
-})
-
-const avgFocusDuration = computed(() => {
-  if (rangeFocusCount.value === 0) return '0分钟'
-  const avg = Math.round(rangeFocusDuration.value / rangeFocusCount.value)
-  return formatDuration(avg)
-})
-
-// 趋势数据 - 根据不同范围返回不同格式的数据
-interface TrendDataItem {
-  label: string
-  duration: number
-  count: number
-}
-
-const trendData = computed((): TrendDataItem[] => {
-  switch (statsRange.value) {
-    case 'day': {
-      // 按小时统计
-      const date = dayjs(selectedDate.value).format('YYYY-MM-DD')
-      const hourlyStats = focusStore.getHourlyStatsByDate(date)
-      // 只显示有数据的小时，或者显示6:00-24:00
-      const activeHours = hourlyStats.filter(s => s.duration > 0)
-      if (activeHours.length > 0) {
-        // 找出最早和最晚的活跃小时
-        const minHour = Math.min(...activeHours.map(s => s.hour))
-        const maxHour = Math.max(...activeHours.map(s => s.hour))
-        return hourlyStats
-            .filter(s => s.hour >= Math.max(0, minHour - 1) && s.hour <= Math.min(23, maxHour + 1))
-            .map(s => ({
-              label: `${s.hour.toString().padStart(2, '0')}:00`,
-              duration: s.duration,
-              count: s.count
-            }))
-      }
-      // 如果没有数据，显示6:00-22:00
-      return hourlyStats
-          .filter(s => s.hour >= 6 && s.hour <= 22)
-          .map(s => ({
-            label: `${s.hour.toString().padStart(2, '0')}:00`,
-            duration: s.duration,
-            count: s.count
-          }))
-    }
-    case 'week': {
-      const dailyStats = focusStore.getDailyStatsByRange(rangeStartDate.value, rangeEndDate.value)
-      return dailyStats.map(s => ({
-        label: dayjs(s.date).format('ddd'),
-        duration: s.duration,
-        count: s.count
-      }))
-    }
-    case 'month': {
-      const dailyStats = focusStore.getDailyStatsByRange(rangeStartDate.value, rangeEndDate.value)
-      // 按周分组显示
-      const weeks: TrendDataItem[] = []
-      const start = dayjs(rangeStartDate.value)
-      const end = dayjs(rangeEndDate.value)
-      let current = start
-      let weekIndex = 1
-      while (current.isBefore(end) || current.isSame(end, 'day')) {
-        const weekEnd = current.add(6, 'day').isAfter(end) ? end : current.add(6, 'day')
-        const weekStats = dailyStats.filter(s => {
-          const d = dayjs(s.date)
-          return (d.isAfter(current) || d.isSame(current, 'day')) &&
-              (d.isBefore(weekEnd) || d.isSame(weekEnd, 'day'))
-        })
-        weeks.push({
-          label: `第${weekIndex}周`,
-          duration: weekStats.reduce((sum, s) => sum + s.duration, 0),
-          count: weekStats.reduce((sum, s) => sum + s.count, 0)
-        })
-        current = weekEnd.add(1, 'day')
-        weekIndex++
-      }
-      return weeks
-    }
-    case 'year': {
-      const year = dayjs(selectedDate.value).year()
-      const monthlyStats = focusStore.getMonthlyStatsByYear(year)
-      return monthlyStats.map(s => ({
-        label: `${s.month + 1}月`,
-        duration: s.duration,
-        count: s.count
-      }))
-    }
-    default:
-      return []
-  }
-})
-
-const rangeStatsByName = computed(() => {
-  return focusStore.getStatsByNameByRange(rangeStartDate.value, rangeEndDate.value)
-})
-
-// 获取趋势标题
-const getTrendTitle = () => {
-  switch (statsRange.value) {
-    case 'day':
-      return '今日专注分布'
-    case 'week':
-      return '本周专注趋势'
-    case 'month':
-      return '本月专注趋势'
-    case 'year':
-      return '本年专注趋势'
-    default:
-      return '专注趋势'
-  }
-}
-
-// 获取图表高度
-const getChartHeight = () => {
-  switch (statsRange.value) {
-    case 'day':
-      return '120px'
-    case 'week':
-      return '150px'
-    case 'month':
-      return '200px'
-    case 'year':
-      return '250px'
-    default:
-      return '150px'
-  }
-}
-
-// 格式化柱状图值
-const formatBarValue = (duration: number) => {
-  if (statsRange.value === 'day') {
-    return `${duration}m`
-  }
-  const hours = Math.round(duration / 60)
-  return hours > 0 ? `${hours}h` : `${duration}m`
-}
-
-// 获取柱状图高度
-const getBarHeight = (duration: number) => {
-  const maxDuration = Math.max(...trendData.value.map(s => s.duration), 1)
-  return (duration / maxDuration) * 100
-}
 
 // 保存常用
 const showSaveFavorite = ref(false)
@@ -592,9 +196,25 @@ const displayTime = computed(() => {
     }
   } else {
     const seconds = focusType.value === 'pomodoro' ? remainingSeconds.value : elapsedSeconds.value
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+    const totalSeconds = Math.abs(seconds)
+
+    // 计算天、小时、分钟、秒
+    const days = Math.floor(totalSeconds / 86400)
+    const hours = Math.floor((totalSeconds % 86400) / 3600)
+    const mins = Math.floor((totalSeconds % 3600) / 60)
+    const secs = totalSeconds % 60
+
+    // 动态时间格式
+    if (days > 0 || totalSeconds >= 86400) {
+      // >= 24小时：dd:hh:mm:ss
+      return `${days.toString().padStart(2, '0')}:${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+    } else if (hours > 0 || totalSeconds >= 3600) {
+      // >= 60分钟但 < 24小时：hh:mm:ss
+      return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+    } else {
+      // < 60分钟：mm:ss
+      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+    }
   }
 })
 
@@ -611,16 +231,6 @@ const progressOffset = computed(() => {
   }
 })
 
-// 格式化时长
-const formatDuration = (minutes: number) => {
-  if (minutes < 60) {
-    return `${minutes}分钟`
-  }
-  const hours = Math.floor(minutes / 60)
-  const mins = minutes % 60
-  return mins > 0 ? `${hours}小时${mins}分钟` : `${hours}小时`
-}
-
 // 选择常用专注
 const selectFavorite = (fav: FavoriteFocus) => {
   focusName.value = fav.name
@@ -634,6 +244,7 @@ const selectFavorite = (fav: FavoriteFocus) => {
 // 删除常用专注
 const deleteFavorite = async (id: string) => {
   await focusStore.deleteFavorite(id)
+  logger.info('[专注] 删除常用专注', { id })
   ElMessage.success('已删除')
 }
 
@@ -644,8 +255,10 @@ const startFocus = async () => {
     return
   }
 
+  logger.info('[专注] 开始专注', { name: focusName.value, type: focusType.value })
+
   timerState.value = 'running'
-  startTimestamp.value = Date.now() // 使用毫秒时间戳
+  startTimestamp.value = Date.now()
   lastUpdateTime.value = Date.now()
 
   // 保存计时状态到 store
@@ -655,7 +268,8 @@ const startFocus = async () => {
     type: focusType.value,
     targetDuration: focusType.value === 'pomodoro' ? localPomodoroDuration.value : 0,
     startTimestamp: startTimestamp.value,
-    elapsedSeconds: 0
+    elapsedSeconds: 0,
+    isPaused: false
   }
   await focusStore.saveTimerState(state)
 
@@ -711,9 +325,11 @@ const cancelFocus = async () => {
     clearInterval(timerInterval)
     timerInterval = null
   }
+  logger.info('[专注] 取消专注', { name: focusName.value })
   timerState.value = 'idle'
   remainingSeconds.value = 0
   elapsedSeconds.value = 0
+  pausedElapsedSeconds.value = 0
   startTimestamp.value = 0
   lastUpdateTime.value = 0
 
@@ -733,36 +349,100 @@ const completeFocus = async () => {
   if (!startTimestamp.value) return
 
   const endTime = Date.now()
-  const duration = Math.floor(elapsedSeconds.value / 60) // 分钟
+  const totalDuration = Math.floor(elapsedSeconds.value / 60) // 总分钟数
   const startTime = dayjs(startTimestamp.value)
-  const date = startTime.format('YYYY-MM-DD')
+  const endTimeObj = dayjs(endTime)
+  const startDate = startTime.format('YYYY-MM-DD')
+  const endDate = endTimeObj.format('YYYY-MM-DD')
   const startTimeStr = startTime.format('HH:mm')
-  const endTimeStr = dayjs(endTime).format('HH:mm')
+  const endTimeStr = endTimeObj.format('HH:mm')
 
-  // 保存专注记录
-  await focusStore.addRecord({
-    name: focusName.value,
-    notes: focusNotes.value,
-    type: focusType.value,
-    duration,
-    targetDuration: focusType.value === 'pomodoro' ? localPomodoroDuration.value : 0,
-    startTime: startTimeStr,
-    endTime: endTimeStr,
-    date,
-    completed: focusType.value === 'pomodoro' ? remainingSeconds.value === 0 : true
-  })
+  // 检查是否跨日（开始日期和结束日期不同）
+  const isCrossDay = startDate !== endDate
 
-  // 调用记录足迹功能
-  await taskStore.addCompletedTask({
-    id: `focus-${Date.now()}`,
-    name: focusName.value,
-    startTime: startTimeStr,
-    endTime: endTimeStr,
-    date,
-    completed: true,
-    duration,
-    notes: focusNotes.value || undefined
-  })
+  if (isCrossDay) {
+    // 跨日分割处理
+    const splitRecords: Array<{ date: string; startTime: string; endTime: string; duration: number }> = []
+
+    // 计算需要分割的天数
+    const daysDiff = endTimeObj.startOf('day').diff(startTime.startOf('day'), 'day')
+    let currentDate = startTime.clone().startOf('day')
+
+    // 分割每一天的记录
+    for (let i = 0; i <= daysDiff; i++) {
+      const nextDayStart = currentDate.clone().add(1, 'day')
+
+      // 计算当天实际计时区间
+      const segmentStart = i === 0 ? startTime : currentDate
+      const segmentEnd = i === daysDiff ? endTimeObj : nextDayStart
+
+      // 计算当天时长（分钟），精确计算
+      const segmentDuration = Math.floor(segmentEnd.diff(segmentStart, 'minute'))
+
+      if (segmentDuration > 0) {
+        splitRecords.push({
+          date: currentDate.format('YYYY-MM-DD'),
+          startTime: i === 0 ? startTimeStr : '00:00',
+          // 中间日显示23:59，但实际duration计算到午夜
+          endTime: i === daysDiff ? endTimeStr : '23:59',
+          duration: segmentDuration
+        })
+      }
+
+      currentDate = nextDayStart
+    }
+
+    // 保存分割的专注记录
+    for (const record of splitRecords) {
+      await focusStore.addRecord({
+        name: focusName.value,
+        notes: focusNotes.value,
+        type: focusType.value,
+        duration: record.duration,
+        targetDuration: focusType.value === 'pomodoro' ? localPomodoroDuration.value : 0,
+        startTime: record.startTime,
+        endTime: record.endTime,
+        date: record.date,
+        completed: focusType.value === 'pomodoro' ? remainingSeconds.value === 0 : true
+      })
+    }
+
+    // 保存分割的足迹任务
+    const splitTasks = splitRecords.map((record) => ({
+      name: focusName.value,
+      startTime: record.startTime,
+      endTime: record.endTime,
+      date: record.date,
+      duration: record.duration,
+      notes: focusNotes.value || undefined
+    }))
+    await taskStore.addSplitTasks(splitTasks)
+  } else {
+    // 同一天内，正常保存
+    await focusStore.addRecord({
+      name: focusName.value,
+      notes: focusNotes.value,
+      type: focusType.value,
+      duration: totalDuration,
+      targetDuration: focusType.value === 'pomodoro' ? localPomodoroDuration.value : 0,
+      startTime: startTimeStr,
+      endTime: endTimeStr,
+      date: startDate,
+      completed: focusType.value === 'pomodoro' ? remainingSeconds.value === 0 : true
+    })
+
+    // 调用记录足迹功能
+    await taskStore.addCompletedTask({
+      id: `focus-${Date.now()}`,
+      name: focusName.value,
+      startTime: startTimeStr,
+      endTime: endTimeStr,
+      date: startDate,
+      completed: true,
+      duration: totalDuration,
+      notes: focusNotes.value || undefined
+    })
+  }
 
   // 保存最后完成的专注信息
   lastCompletedFocus.value = {
@@ -782,17 +462,25 @@ const completeFocus = async () => {
   // 清除 store 中的计时状态
   await focusStore.clearTimerState()
 
+  logger.info('[专注] 完成专注', { name: focusName.value, duration: totalDuration })
   ElMessage.success('专注完成！')
 
-  // 显示保存常用对话框
-  showSaveFavorite.value = true
+  // 检查是否已存在相同名称和类型的常用专注
+  const alreadyExists = focusStore.favorites.some(f =>
+    f.name === focusName.value && f.type === focusType.value
+  )
+
+  if (!alreadyExists) {
+    // 显示保存常用对话框
+    showSaveFavorite.value = true
+  }
 }
 
 // 保存为常用
 const saveAsFavorite = async () => {
   if (!lastCompletedFocus.value) return
 
-  await focusStore.addFavorite({
+  const result = await focusStore.addFavorite({
     name: lastCompletedFocus.value.name,
     notes: lastCompletedFocus.value.notes,
     type: lastCompletedFocus.value.type,
@@ -801,7 +489,13 @@ const saveAsFavorite = async () => {
 
   showSaveFavorite.value = false
   lastCompletedFocus.value = null
-  ElMessage.success('已保存为常用专注')
+
+  if (result) {
+    logger.info('[专注] 添加常用专注', { name: lastCompletedFocus.value.name })
+    ElMessage.success('已保存为常用专注')
+  } else {
+    ElMessage.info('该专注已在常用列表中')
+  }
 }
 
 // 初始化
@@ -820,32 +514,29 @@ onMounted(async () => {
       localPomodoroDuration.value = savedState.targetDuration
     }
 
-    // 使用时间戳计算已经过去的时间
-    const now = Date.now()
-    const elapsedSinceStart = Math.floor((now - savedState.startTimestamp) / 1000)
+    // 计算已经过去的时间（包含暂停前已计时的时间）
+    const elapsedSinceStart = Math.floor((Date.now() - savedState.startTimestamp) / 1000)
+    const totalElapsed = Math.max(elapsedSinceStart, savedState.elapsedSeconds || 0)
 
-    startTimestamp.value = savedState.startTimestamp
-    lastUpdateTime.value = now
+    startTimestamp.value = Date.now() - (totalElapsed * 1000)
+    lastUpdateTime.value = Date.now()
     timerState.value = 'running'
 
     if (savedState.type === 'pomodoro') {
-      // 番茄钟模式：计算剩余时间
       const totalSeconds = savedState.targetDuration * 60
-      const remaining = totalSeconds - elapsedSinceStart
+      const remaining = totalSeconds - totalElapsed
 
       if (remaining > 0) {
         remainingSeconds.value = remaining
-        elapsedSeconds.value = elapsedSinceStart
+        elapsedSeconds.value = totalElapsed
         startCountdown()
       } else {
-        // 时间已经到了，自动完成
         elapsedSeconds.value = totalSeconds
         remainingSeconds.value = 0
         await completeFocus()
       }
     } else {
-      // 正计时模式：继续计时
-      elapsedSeconds.value = elapsedSinceStart
+      elapsedSeconds.value = totalElapsed
       startStopwatch()
     }
   }
@@ -893,7 +584,8 @@ onUnmounted(async () => {
       type: focusType.value,
       targetDuration: focusType.value === 'pomodoro' ? localPomodoroDuration.value : 0,
       startTimestamp: startTimestamp.value,
-      elapsedSeconds: elapsedSeconds.value
+      elapsedSeconds: elapsedSeconds.value,
+      isPaused: false
     }
     await focusStore.saveTimerState(state)
   }
@@ -924,8 +616,8 @@ onUnmounted(async () => {
 /* 计时器圆环 */
 .timer-ring {
   position: relative;
-  width: 240px;
-  height: 240px;
+  width: 320px;
+  height: 320px;
   margin-bottom: 32px;
 }
 
@@ -977,11 +669,13 @@ onUnmounted(async () => {
 }
 
 .timer-time {
-  font-size: 42px;
+  font-size: 36px;
   font-weight: 700;
   color: #fff;
   font-family: 'SF Mono', 'Monaco', monospace;
   display: block;
+  letter-spacing: 2px;
+  line-height: 1.2;
 }
 
 .timer-label {
@@ -998,18 +692,6 @@ onUnmounted(async () => {
   align-items: center;
   justify-content: center;
   gap: 12px;
-}
-
-.mode-switch .stats-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.mode-switch .stats-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.9);
 }
 
 .mode-switch :deep(.el-radio-button__inner) {
@@ -1172,197 +854,10 @@ onUnmounted(async () => {
   font-size: 15px;
 }
 
-/* 统计对话框样式 */
-.stats-content {
-  padding: 8px 0;
-}
-
-.stats-overview {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 32px;
-}
-
-.stat-card {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.1) 100%);
-  border: 1px solid rgba(102, 126, 234, 0.2);
-  border-radius: 12px;
-  padding: 20px;
-  text-align: center;
-}
-
-.stat-value {
-  font-size: 24px;
-  font-weight: 700;
-  color: #667eea;
-}
-
-.stat-label {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.6);
-  margin-top: 8px;
-}
-
-/* 图表 */
-.trend-chart {
-  margin-bottom: 32px;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.05) 100%);
-  border: 1px solid rgba(102, 126, 234, 0.15);
-  border-radius: 16px;
-  padding: 24px;
-}
-
-.chart-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.chart-title::before {
-  content: '';
-  width: 4px;
-  height: 16px;
-  background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
-  border-radius: 2px;
-}
-
-.chart-bars {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  height: 120px;
-  padding: 0 8px 24px;
-  position: relative;
-}
-
-.chart-bars::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-}
-
-.chart-bar-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 0;
-}
-
-.bar-wrapper {
-  width: 100%;
-  max-width: 40px;
-  height: 100px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.bar {
-  width: 100%;
-  max-width: 28px;
-  min-height: 4px;
-  background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
-  border-radius: 6px 6px 2px 2px;
-  transition: all 0.3s ease;
-  position: relative;
-  box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
-}
-
-.bar:hover {
-  box-shadow: 0 0 30px rgba(102, 126, 234, 0.5);
-  filter: brightness(1.1);
-}
-
-.bar-value {
-  position: absolute;
-  top: -24px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 11px;
-  font-weight: 600;
-  color: #667eea;
-  white-space: nowrap;
-  background: rgba(15, 15, 30, 0.9);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.bar-label {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.5);
-  margin-top: 8px;
-  white-space: nowrap;
-}
-
-/* 排行 */
-.focus-ranking {
-  margin-top: 24px;
-}
-
-.ranking-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
-  margin-bottom: 16px;
-}
-
-.ranking-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.ranking-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-}
-
-.ranking-num {
-  width: 24px;
-  height: 24px;
+.text-only-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 50%;
-}
-
-.ranking-name {
-  flex: 1;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.9);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ranking-count {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.ranking-duration {
-  font-size: 13px;
-  color: #667eea;
-  font-weight: 500;
 }
 
 /* 对话框深色主题 */
@@ -1480,86 +975,5 @@ onUnmounted(async () => {
   background: rgba(239, 68, 68, 0.25);
   border-color: rgba(239, 68, 68, 0.5);
   color: #fca5a5;
-}
-
-/* 统计全屏展示 */
-.stats-fullscreen {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 9999;
-  background: linear-gradient(135deg, rgba(15, 15, 30, 0.98) 0%, rgba(25, 25, 50, 0.98) 100%);
-  display: flex;
-  flex-direction: column;
-  backdrop-filter: blur(10px);
-}
-
-.stats-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 32px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  flex-shrink: 0;
-}
-
-.stats-header-left h2 {
-  margin: 0;
-  font-size: 22px;
-  color: #fff;
-  font-weight: 600;
-}
-
-.stats-header-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.stats-header-right :deep(.el-radio-button__inner) {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.stats-header-right :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-color: #667eea;
-  color: #fff;
-}
-
-.stats-body {
-  flex: 1;
-  padding: 24px 32px;
-  overflow-y: auto;
-}
-
-.stats-overview {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-  margin-bottom: 32px;
-  max-width: 800px;
-}
-
-.trend-chart {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  padding: 24px;
-  margin-bottom: 24px;
-}
-
-.focus-ranking {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  padding: 24px;
-}
-
-.no-data {
-  padding: 60px 0;
 }
 </style>

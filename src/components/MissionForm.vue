@@ -1,258 +1,130 @@
 <template>
-  <el-dialog
-      v-model="dialogVisible"
-      :title="isEdit ? '编辑任务' : '添加任务'"
-      width="600px"
-      @close="resetForm"
-  >
-    <el-form :model="form" :rules="rules" ref="formRef" label-width="100px">
-      <!-- 任务名称 -->
+  <div class="mission-form-container">
+    <el-form :model="form" :rules="rules" ref="formRef" label-width="100px" class="form-body">
       <el-form-item label="任务名称" prop="name">
         <el-input v-model="form.name" placeholder="你的任务是什么？" />
       </el-form-item>
 
-      <!-- 所属分组 -->
-      <el-form-item label="所属分组" prop="groupId">
-        <el-select v-model="form.groupId" placeholder="选择分组" style="width: 100%">
-          <el-option
-              v-for="group in availableGroups"
-              :key="group.id"
-              :label="group.name"
-              :value="group.id"
-          >
-            <span class="group-option">
-              <span class="group-color" :style="{ background: group.color }"></span>
-              {{ group.name }}
-            </span>
+      <el-form-item label="所属清单" prop="listId">
+        <el-select v-model="form.listId" placeholder="选择清单" style="width: 100%" @change="handleListChange">
+          <el-option v-for="list in allLists" :key="list.id" :label="list.name" :value="list.id">
+            <span class="list-option"><span class="list-color-option" :style="{ background: list.color }"></span>{{ list.name }}</span>
           </el-option>
         </el-select>
       </el-form-item>
 
-      <!-- 日期和时间 -->
-      <el-form-item label="日期">
-        <LunarDatePicker
-            v-model="form.date"
-            placeholder="选择日期"
-            full-width
-        />
+      <el-form-item label="所属分组" prop="groupId">
+        <el-select v-model="form.groupId" placeholder="选择分组" style="width: 100%">
+          <el-option v-for="group in availableGroups" :key="group.id" :label="group.name" :value="group.id">
+            <span class="group-option"><span class="group-color" :style="{ background: group.color }"></span>{{ group.name }}</span>
+          </el-option>
+        </el-select>
       </el-form-item>
 
-      <el-form-item label="时间">
-        <div class="time-range">
-          <el-time-picker
-              v-model="form.startTime"
-              placeholder="开始时间（可选）"
-              format="HH:mm"
-              value-format="HH:mm"
-              :disabled-hours="() => form.endTime ? getDisabledHours(form.endTime) : []"
-              :disabled-minutes="() => form.endTime ? getDisabledMinutes(form.endTime, form.startTime) : []"
-              clearable
-          />
-          <span class="time-separator">至</span>
-          <el-time-picker
-              v-model="form.endTime"
-              placeholder="结束时间（可选）"
-              format="HH:mm"
-              value-format="HH:mm"
-              :disabled-hours="() => form.startTime ? getDisabledHours(form.startTime, false) : []"
-              :disabled-minutes="() => form.startTime ? getDisabledMinutes(form.startTime, form.endTime, false) : []"
-              clearable
-          />
-        </div>
+      <el-form-item label="结束日期">
+        <LunarDatePicker v-model="form.date" placeholder="选择日期" full-width />
       </el-form-item>
 
-      <!-- 优先级 -->
+      <el-form-item label="结束时间">
+        <el-time-picker v-model="form.endTime" placeholder="选择结束时间" format="HH:mm" value-format="HH:mm" clearable style="width: 100%" />
+      </el-form-item>
+ 
       <el-form-item label="优先级" prop="priority">
-        <el-radio-group v-model="form.priority">
-          <el-radio-button
-              v-for="p in PRIORITIES"
-              :key="p.value"
-              :value="p.value"
-          >
-            {{ p.label }}
-          </el-radio-button>
-        </el-radio-group>
+        <el-select v-model="form.priority" placeholder="选择优先级" style="width: 100%">
+          <el-option v-for="p in PRIORITIES" :key="p.value" :label="p.label" :value="p.value" />
+        </el-select>
       </el-form-item>
 
-      <!-- 重复策略 -->
       <el-form-item label="重复">
         <div class="repeat-strategy-row">
           <el-select v-model="form.repeatStrategy" placeholder="选择重复策略" style="flex: 1">
-            <el-option
-                v-for="s in REPEAT_STRATEGIES"
-                :key="s.value"
-                :label="s.label"
-                :value="s.value"
-            />
+            <el-option v-for="s in REPEAT_STRATEGIES" :key="s.value" :label="s.label" :value="s.value" />
           </el-select>
           <template v-if="form.repeatStrategy === 'custom_days'">
             <span class="custom-days-label">每隔</span>
-            <el-input-number
-                v-model="form.repeatCustomDays"
-                :min="1"
-                :max="365"
-                controls-position="right"
-                style="width: 100px"
-            />
+            <el-input-number v-model="form.repeatCustomDays" :min="1" :max="365" controls-position="right" style="width: 100px" />
             <span class="custom-days-label">天</span>
           </template>
         </div>
       </el-form-item>
 
-      <!-- 结束重复策略（仅当重复策略不为"不重复"时显示） -->
       <el-form-item v-if="form.repeatStrategy !== 'none'" label="结束重复">
         <div class="repeat-end">
           <el-select v-model="form.repeatEndStrategy" style="width: 150px">
-            <el-option
-                v-for="s in REPEAT_END_STRATEGIES"
-                :key="s.value"
-                :label="s.label"
-                :value="s.value"
-            />
+            <el-option v-for="s in REPEAT_END_STRATEGIES" :key="s.value" :label="s.label" :value="s.value" />
           </el-select>
-
-          <LunarDatePicker
-              v-if="form.repeatEndStrategy === 'date'"
-              v-model="form.repeatEndDate"
-              placeholder="选择结束日期"
-          />
-
-          <el-input-number
-              v-if="form.repeatEndStrategy === 'count'"
-              v-model="form.repeatCount"
-              :min="1"
-              :max="999"
-              controls-position="right"
-              style="width: 120px"
-          />
+          <LunarDatePicker v-if="form.repeatEndStrategy === 'date'" v-model="form.repeatEndDate" placeholder="选择结束日期" fullWidth />
+          <el-input-number v-if="form.repeatEndStrategy === 'count'" v-model="form.repeatCount" :min="1" :max="999" controls-position="right" style="width: 120px" />
           <span v-if="form.repeatEndStrategy === 'count'" class="count-suffix">次</span>
         </div>
       </el-form-item>
 
-      <!-- 检查事项 -->
       <el-form-item label="检查事项">
         <div class="checklist">
-          <div
-              v-for="item in form.checklist"
-              :key="item.id"
-              class="checklist-item"
-          >
-            <el-input
-                v-model="item.text"
-                placeholder="检查事项"
-                size="small"
-            />
-            <el-button
-                type="danger"
-                :icon="Delete"
-                circle
-                size="small"
-                @click="removeChecklistItem(item.id)"
-            />
+          <div v-for="(item, index) in form.checklist" :key="item.id" class="checklist-item">
+            <el-input v-model="item.text" placeholder="检查事项" size="small" />
+            <el-dropdown trigger="click" @command="(cmd: string) => handleChecklistCommand(cmd, index, item.id)">
+              <el-button class="more-btn" size="small">⋯</el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="up" :disabled="index === 0">上移</el-dropdown-item>
+                  <el-dropdown-item command="down" :disabled="index === form.checklist.length - 1">下移</el-dropdown-item>
+                  <el-dropdown-item command="delete" class="delete-item">删除</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
-          <el-button
-              type="primary"
-              text
-              :icon="Plus"
-              @click="addChecklistItem"
-          >
-            添加检查事项
-          </el-button>
+          <el-button type="primary" text :icon="Plus" @click="addChecklistItem">添加检查事项</el-button>
         </div>
       </el-form-item>
 
-      <!-- 备注 -->
       <el-form-item label="备注">
-        <el-input
-            v-model="form.notes"
-            type="textarea"
-            placeholder="添加备注..."
-            :rows="3"
-        />
+        <el-input v-model="form.notes" type="textarea" placeholder="添加备注..." :rows="3" />
+      </el-form-item>
+
+      <el-form-item>
+        <div class="form-footer">
+          <el-button @click="$emit('cancel')">取消</el-button>
+          <el-button type="primary" @click="handleSubmit">{{ isEdit ? '保存' : '添加' }}</el-button>
+        </div>
       </el-form-item>
     </el-form>
-
-    <template #footer>
-      <el-button @click="dialogVisible = false">取消</el-button>
-      <el-button type="primary" @click="handleSubmit">
-        {{ isEdit ? '保存' : '添加' }}
-      </el-button>
-    </template>
-  </el-dialog>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { Plus, Delete } from '@element-plus/icons-vue'
+import { Plus } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useMissionStore, PRIORITIES, REPEAT_STRATEGIES, REPEAT_END_STRATEGIES, type Mission, type ChecklistItem, type RepeatStrategy, type RepeatEndStrategy, type Priority } from '../stores/missionStore'
 import LunarDatePicker from './LunarDatePicker.vue'
 
-const props = defineProps<{
-  visible: boolean
-  mission?: Mission | null
-  listId?: string
-  groupId?: string
-}>()
-
-const emit = defineEmits<{
-  (e: 'update:visible', value: boolean): void
-  (e: 'submit'): void
-}>()
+const props = defineProps<{ mission?: Mission | null; listId?: string; groupId?: string }>()
+const emit = defineEmits<{ (e: 'submit'): void; (e: 'cancel'): void }>()
 
 const missionStore = useMissionStore()
+const formRef = ref<FormInstance>()
+const isEdit = computed(() => !!props.mission)
+const allLists = computed(() => missionStore.lists)
 
-const dialogVisible = computed({
-  get: () => props.visible,
-  set: (value) => emit('update:visible', value)
+const currentSelectedListId = computed(() => {
+  return props.mission?.listId || props.listId || ''
 })
 
-const formRef = ref<FormInstance>()
-
-const isEdit = computed(() => !!props.mission)
-
-// 获取当前清单内的分组列表
 const availableGroups = computed(() => {
-  // 编辑时优先使用使命的 listId，否则使用传入的 listId
-  const listId = props.mission?.listId || props.listId
-  if (!listId) return []
-  const list = missionStore.lists.find(l => l.id === listId)
-  return list?.groups || []
+  const lid = currentSelectedListId.value; if (!lid) return []; const l = missionStore.lists.find(x => x.id === lid); return l?.groups || []
 })
 
 interface FormData {
-  name: string
-  groupId: string
-  date: string
-  startTime: string
-  endTime: string
-  repeatStrategy: string
-  repeatCustomDays: number
-  repeatEndStrategy: string
-  repeatEndDate: string
-  repeatCount: number
-  priority: string
-  checklist: ChecklistItem[]
-  notes: string
+  name: string; listId: string; groupId: string; date: string; endTime: string;
+  repeatStrategy: string; repeatCustomDays: number; repeatEndStrategy: string;
+  repeatEndDate: string; repeatCount: number; priority: string;
+  checklist: ChecklistItem[]; notes: string
 }
 
 const getDefaultForm = (): FormData => {
   const groups = availableGroups.value
-  return {
-    name: '',
-    groupId: props.groupId || groups[0]?.id || '',
-    date: '',
-    startTime: '',
-    endTime: '',
-    repeatStrategy: 'none',
-    repeatCustomDays: 1,
-    repeatEndStrategy: 'never',
-    repeatEndDate: '',
-    repeatCount: 1,
-    priority: 'none',
-    checklist: [],
-    notes: ''
-  }
+  return { name: '', listId: props.listId || (allLists.value.length > 0 ? allLists.value[0].id : ''), groupId: props.groupId || groups[0]?.id || '', date: '', endTime: '', repeatStrategy: 'none', repeatCustomDays: 1, repeatEndStrategy: 'never', repeatEndDate: '', repeatCount: 1, priority: 'none', checklist: [], notes: '' }
 }
 
 const form = ref<FormData>(getDefaultForm())
@@ -263,289 +135,131 @@ const rules: FormRules = {
   priority: [{ required: true, message: '请选择优先级', trigger: 'change' }]
 }
 
-// 获取禁用的小时（用于时间范围限制）
-const getDisabledHours = (compareTime: string, isStart: boolean = true) => {
-  const hours: number[] = []
-  if (!compareTime) return hours
-
-  const compareHour = parseInt(compareTime.split(':')[0])
-
-  if (isStart) {
-    // 开始时间：禁用大于比较时间的小时
-    for (let i = compareHour + 1; i < 24; i++) {
-      hours.push(i)
-    }
-  } else {
-    // 结束时间：禁用小于比较时间的小时
-    for (let i = 0; i < compareHour; i++) {
-      hours.push(i)
-    }
+watch(() => props.mission, (nm) => {
+  if (nm) { 
+    form.value = { name: nm.name, listId: nm.listId, groupId: nm.groupId, date: nm.date, endTime: nm.endTime || '', repeatStrategy: nm.repeatStrategy, repeatCustomDays: nm.repeatCustomDays || 1, repeatEndStrategy: nm.repeatEndStrategy, repeatEndDate: nm.repeatEndDate, repeatCount: nm.repeatCount, priority: nm.priority, checklist: nm.checklist.map(i => ({ ...i })), notes: nm.notes }
   }
-
-  return hours
-}
-
-// 获取禁用的分钟（用于时间范围限制）
-const getDisabledMinutes = (compareTime: string, currentTime: string, isStart: boolean = true) => {
-  const minutes: number[] = []
-  if (!compareTime || !currentTime) return minutes
-
-  const compareHour = parseInt(compareTime.split(':')[0])
-  const currentHour = parseInt(currentTime.split(':')[0])
-
-  // 只有当小时相同时才需要禁用分钟
-  if (isStart) {
-    // 开始时间：当小时相同时，禁用大于比较时间的分钟
-    if (currentHour === compareHour) {
-      const compareMinute = parseInt(compareTime.split(':')[1])
-      for (let i = compareMinute; i < 60; i++) {
-        minutes.push(i)
-      }
-    }
-  } else {
-    // 结束时间：当小时相同时，禁用小于比较时间的分钟
-    if (currentHour === compareHour) {
-      const compareMinute = parseInt(compareTime.split(':')[1])
-      for (let i = 0; i <= compareMinute; i++) {
-        minutes.push(i)
-      }
-    }
-  }
-
-  return minutes
-}
-
-// 监听 mission 变化，填充表单
-watch(() => props.mission, (newMission) => {
-  if (newMission) {
-    form.value = {
-      name: newMission.name,
-      groupId: newMission.groupId,
-      date: newMission.date,
-      startTime: newMission.startTime,
-      endTime: newMission.endTime,
-      repeatStrategy: newMission.repeatStrategy,
-      repeatCustomDays: newMission.repeatCustomDays || 1,
-      repeatEndStrategy: newMission.repeatEndStrategy,
-      repeatEndDate: newMission.repeatEndDate,
-      repeatCount: newMission.repeatCount,
-      priority: newMission.priority,
-      checklist: newMission.checklist.map(item => ({ ...item })),
-      notes: newMission.notes
-    }
-  } else {
-    // 当 mission 为 null 时，重置表单为默认值
-    const groups = availableGroups.value
-    form.value = {
-      name: '',
-      groupId: props.groupId || groups[0]?.id || '',
-      date: '',
-      startTime: '',
-      endTime: '',
-      repeatStrategy: 'none',
-      repeatCustomDays: 1,
-      repeatEndStrategy: 'never',
-      repeatEndDate: '',
-      repeatCount: 1,
-      priority: 'none',
-      checklist: [],
-      notes: ''
-    }
-  }
-}, { immediate: true, flush: 'sync' })
-
-// 监听分组变化，设置默认分组
-watch(() => props.groupId, (newGroupId) => {
-  if (newGroupId && !props.mission) {
-    form.value.groupId = newGroupId
-  }
+  else { form.value = getDefaultForm() }
 }, { immediate: true })
 
-// 添加检查事项
-const addChecklistItem = () => {
-  form.value.checklist.push({
-    id: Date.now().toString(),
-    text: '',
-    completed: false
-  })
+watch(() => props.groupId, (ng) => { if (ng && !props.mission) form.value.groupId = ng }, { immediate: true })
+
+const handleListChange = () => { const g = availableGroups.value; form.value.groupId = g.length > 0 ? g[0].id : '' }
+
+const addChecklistItem = () => { form.value.checklist.push({ id: Date.now().toString(), text: '', completed: false }) }
+const removeChecklistItem = (id: string) => { form.value.checklist = form.value.checklist.filter(i => i.id !== id) }
+
+const moveChecklistItemUp = (idx: number) => { if (idx === 0) return; const a = form.value.checklist; [a[idx], a[idx-1]] = [a[idx-1], a[idx]]; form.value.checklist = [...a] }
+const moveChecklistItemDown = (idx: number) => { const a = form.value.checklist; if (idx >= a.length - 1) return; [a[idx], a[idx+1]] = [a[idx+1], a[idx]]; form.value.checklist = [...a] }
+
+const handleChecklistCommand = (cmd: string, idx: number, itemId: string) => {
+  if (cmd === 'up') moveChecklistItemUp(idx)
+  else if (cmd === 'down') moveChecklistItemDown(idx)
+  else if (cmd === 'delete') removeChecklistItem(itemId)
 }
 
-// 移除检查事项
-const removeChecklistItem = (id: string) => {
-  form.value.checklist = form.value.checklist.filter(item => item.id !== id)
-}
-
-// 提交表单
 const handleSubmit = async () => {
   if (!formRef.value) return
-
   await formRef.value.validate((valid) => {
     if (valid) {
-      // 编辑时优先使用使命的 listId，否则使用传入的 listId
-      const listId = props.mission?.listId || props.listId
-      if (!listId) return
-
-      const missionData = {
-        name: form.value.name,
-        listId: listId,
-        groupId: form.value.groupId,
-        date: form.value.date,
-        startTime: form.value.startTime,
-        endTime: form.value.endTime,
-        repeatStrategy: form.value.repeatStrategy as RepeatStrategy,
-        repeatCustomDays: form.value.repeatCustomDays,
-        repeatEndStrategy: form.value.repeatEndStrategy as RepeatEndStrategy,
-        repeatEndDate: form.value.repeatEndDate,
-        repeatCount: form.value.repeatCount,
-        priority: form.value.priority as Priority,
-        checklist: form.value.checklist.filter(item => item.text.trim()),
-        completed: false,
-        completedStartTime: '',
-        completedEndTime: '',
-        notes: form.value.notes
-      }
-
-      if (isEdit.value && props.mission) {
-        missionStore.updateMission(props.mission.id, missionData)
-      } else {
-        missionStore.addMission(missionData)
-      }
-
+      const listId = form.value.listId; if (!listId) return
+      const md = { name: form.value.name, listId, groupId: form.value.groupId, date: form.value.date, startTime: '', endTime: form.value.endTime || '', repeatStrategy: form.value.repeatStrategy as RepeatStrategy, repeatCustomDays: form.value.repeatCustomDays, repeatEndStrategy: form.value.repeatEndStrategy as RepeatEndStrategy, repeatEndDate: form.value.repeatEndDate, repeatCount: form.value.repeatCount, priority: form.value.priority as Priority, checklist: form.value.checklist.filter(i => i.text.trim()), completed: false, completedStartTime: '', completedEndTime: '', notes: form.value.notes }
+      if (isEdit.value && props.mission) missionStore.updateMission(props.mission.id, md); else missionStore.addMission(md)
       emit('submit')
-      dialogVisible.value = false
     }
   })
-}
-
-// 重置表单
-const resetForm = () => {
-  // 只有在新建模式下才重置表单
-  // 编辑模式下，watch 会根据 props.mission 变化自动处理
-  if (!props.mission) {
-    form.value = getDefaultForm()
-  }
-  // 清除表单验证状态
-  formRef.value?.clearValidate()
 }
 </script>
 
 <style scoped>
-.time-range {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.time-separator {
-  color: #909399;
-  flex-shrink: 0;
-}
-
-.repeat-end {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.date-input-group {
-  display: flex;
-  align-items: center;
-}
-
-.date-input {
-  width: 70px;
-}
-
-.date-input.small {
-  width: 50px;
-}
-
-.date-sep {
-  margin: 0 4px;
-  color: rgba(0, 0, 0, 0.4);
-}
-
-.repeat-strategy-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-
-.custom-days-label {
-  color: #606266;
-  white-space: nowrap;
-}
-
-.count-suffix {
-  color: #909399;
-}
-
-.checklist {
-  width: 100%;
-}
-
-.checklist-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.checklist-item .el-input {
-  flex: 1;
-}
-
-.group-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.group-color {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
-
-:deep(.el-radio-button__inner) {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.7);
-}
-
-:deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-color: #667eea;
-  color: #fff;
-}
-
-:deep(.el-input__wrapper),
-:deep(.el-select__wrapper),
-:deep(.el-textarea__inner) {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: none;
-}
-
-:deep(.el-input__inner),
-:deep(.el-textarea__inner) {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-:deep(.el-input__inner::placeholder),
-:deep(.el-textarea__inner::placeholder) {
-  color: rgba(255, 255, 255, 0.4);
-}
-
-:deep(.el-form-item__label) {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-:deep(.el-input__count),
-:deep(.el-input__count-inner) {
+.mission-form-container { max-width: 600px; width: 100%; margin: 0 auto; }
+.form-body { padding: 0 8px; }
+.form-footer { display: flex; justify-content: flex-end; gap: 12px; width: 100%; }
+.repeat-end { display: flex; align-items: center; gap: 12px; }
+.repeat-strategy-row { display: flex; align-items: center; gap: 8px; width: 100%; }
+.custom-days-label { color: #606266; white-space: nowrap; }
+.count-suffix { color: #909399; }
+.checklist { width: 100%; }
+.checklist-item { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.checklist-item .el-input { flex: 1; }
+.more-btn {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
   background: transparent !important;
-  color: rgba(255, 255, 255, 0.4) !important;
+  border: none;
+  color: rgba(255,255,255,0.7);
+  font-size: 18px;
+  font-weight: bold;
 }
+.more-btn:hover { background: rgba(255,255,255,0.08) !important; }
+.delete-item { color: #ef4444 !important; }
+
+:deep(.el-time-panel) {
+  background: rgba(30, 30, 50, 0.98) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+:deep(.el-time-spinner__item) {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+:deep(.el-time-spinner__item:hover:not(.disabled):not(.active)) {
+  background: rgba(102, 126, 234, 0.15) !important;
+}
+
+:deep(.el-time-spinner__item.active:not(.disabled)) {
+  color: #667eea !important;
+  font-weight: bold;
+  background: transparent !important;
+}
+
+:deep(.el-time-spinner__list:hover) {
+  background: transparent !important;
+}
+
+:deep(.el-time-spinner) {
+  background: transparent !important;
+}
+
+:deep(.el-time-spinner__item.is-active) {
+  color: #667eea !important;
+  font-weight: bold;
+  background: transparent !important;
+}
+
+:deep(.el-time-panel__footer) {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(30, 30, 50, 0.98) !important;
+}
+
+:deep(.el-time-panel__btn) {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+:deep(.el-time-panel__btn.confirm) {
+  color: #667eea !important;
+}
+
+:deep(.el-time-panel__content) {
+  background: transparent !important;
+}
+
+:deep(.el-time-range-spinner) {
+  background: transparent !important;
+}
+.group-option { display: flex; align-items: center; gap: 8px; }
+.group-color { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+.list-option { display: flex; align-items: center; gap: 8px; }
+.list-color-option { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+
+:deep(.el-radio-button__inner) { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); color: rgba(255,255,255,0.7); }
+:deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { background: linear-gradient(135deg,#667eea,#764ba2); border-color: #667eea; color: #fff; }
+:deep(.el-input__wrapper), :deep(.el-select__wrapper), :deep(.el-textarea__inner) { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); box-shadow: none; }
+:deep(.el-input__inner), :deep(.el-textarea__inner) { color: rgba(255,255,255,0.9); }
+:deep(.el-input__inner::placeholder), :deep(.el-textarea__inner::placeholder) { color: rgba(255,255,255,0.4); }
+:deep(.el-form-item__label) { color: rgba(255,255,255,0.7); }
+:deep(.el-input__count), :deep(.el-input__count-inner) { background: transparent !important; color: rgba(255,255,255,0.4) !important; }
 </style>

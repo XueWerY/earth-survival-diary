@@ -2,19 +2,19 @@
   <div class="footprint-container">
     <div class="footprint-header">
       <h2>{{ pageTitle }}</h2>
-      <div class="header-actions">
-        <!-- 日期选择 -->
-        <LunarDatePicker
-            v-model="selectedDateValue"
-            placeholder="选择日期"
-        />
+    </div>
+    <div class="header-actions">
+      <!-- 日期选择 -->
+      <LunarDatePicker
+          v-model="selectedDateValue"
+          placeholder="选择日期"
+      />
 
-        <!-- 统计按钮 -->
-        <el-button @click="showStats = true">
-          <el-icon><DataLine /></el-icon>
-          统计
-        </el-button>
-      </div>
+      <!-- 记录足迹按钮 -->
+      <el-button type="primary" @click="handleAddTask">
+        <el-icon><Plus /></el-icon>
+        记录足迹
+      </el-button>
     </div>
 
     <div class="footprint-content">
@@ -40,21 +40,12 @@
                 <p class="diary-intro">{{ diaryIntro }}</p>
                 <p class="diary-mood">{{ diaryMood }}</p>
               </div>
-              <div class="diary-header-actions">
-                <el-button type="primary" size="small" @click="handleAddTask" class="add-btn-small">
-                  <el-icon><Plus /></el-icon>
-                  记录足迹
-                </el-button>
-                <el-button type="primary" size="small" text @click="copyDiary" class="copy-btn">
-                  复制
-                </el-button>
-              </div>
             </div>
 
             <div class="diary-content">
               <!-- 时段记录 -->
               <div v-if="morningTasks.length > 0" class="diary-period">
-                <p class="period-title">{{ morningTitle }}</p>
+                <p class="period-title">上午</p>
                 <div class="period-items">
                   <div v-for="task in morningTasks" :key="task.id" class="period-item">
                     <div class="item-row">
@@ -92,7 +83,7 @@
               </div>
 
               <div v-if="afternoonTasks.length > 0" class="diary-period">
-                <p class="period-title">{{ afternoonTitle }}</p>
+                <p class="period-title">下午</p>
                 <div class="period-items">
                   <div v-for="task in afternoonTasks" :key="task.id" class="period-item">
                     <div class="item-row">
@@ -130,7 +121,7 @@
               </div>
 
               <div v-if="eveningTasks.length > 0" class="diary-period">
-                <p class="period-title">{{ eveningTitle }}</p>
+                <p class="period-title">晚上</p>
                 <div class="period-items">
                   <div v-for="task in eveningTasks" :key="task.id" class="period-item">
                     <div class="item-row">
@@ -182,130 +173,10 @@
       </el-scrollbar>
     </div>
 
-    <!-- 统计全屏展示 -->
-    <div v-if="showStats" class="stats-fullscreen">
-      <div class="stats-header">
-        <div class="stats-header-left">
-          <h2>足迹统计</h2>
-        </div>
-        <div class="stats-header-right">
-          <el-radio-group v-model="statsRange" size="default">
-            <el-radio-button value="day">日</el-radio-button>
-            <el-radio-button value="week">周</el-radio-button>
-            <el-radio-button value="month">月</el-radio-button>
-            <el-radio-button value="year">年</el-radio-button>
-          </el-radio-group>
-          <!-- 日模式使用农历日期选择器 -->
-          <LunarDatePicker
-              v-if="statsRange === 'day'"
-              v-model="statsDayDate"
-              placeholder="选择日期"
-          />
-          <!-- 周/月/年模式使用 el-date-picker -->
-          <el-date-picker
-              v-else
-              v-model="statsDate"
-              :type="statsDatePickerType"
-              :placeholder="statsDatePickerPlaceholder"
-              :clearable="false"
-              size="default"
-              :format="statsDateFormat"
-              :value-format="statsDateValueFormat"
-          />
-          <el-button @click="showStats = false" circle :icon="Close" />
-        </div>
-      </div>
-
-      <el-scrollbar class="stats-body">
-        <!-- 概览 -->
-        <div class="stats-overview">
-          <div class="stat-card">
-            <div class="stat-value">{{ statsTaskCount }}</div>
-            <div class="stat-label">足迹数量</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ formatDuration(statsTotalDuration) }}</div>
-            <div class="stat-label">总时长</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">{{ statsAvgDuration }}</div>
-            <div class="stat-label">平均时长</div>
-          </div>
-        </div>
-
-        <!-- 趋势图 -->
-        <div class="trend-chart">
-          <div class="chart-title">{{ statsTrendTitle }}</div>
-          <div class="chart-bars" :style="{ height: statsChartHeight }">
-            <div
-                v-for="(stat, index) in statsTrendData"
-                :key="index"
-                class="chart-bar-item"
-            >
-              <div class="bar-wrapper">
-                <div
-                    class="bar"
-                    :style="{ height: getStatsBarHeight(stat.duration) + '%' }"
-                >
-                  <span class="bar-value" v-if="stat.duration > 0">{{ formatStatsBarValue(stat.duration) }}</span>
-                </div>
-              </div>
-              <div class="bar-label">{{ stat.label }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 事项分布饼图 -->
-        <div v-if="statsTaskCount > 0" class="trend-chart">
-          <div class="chart-title">事项分布</div>
-          <div class="pie-chart-container">
-            <svg viewBox="0 0 100 100" class="pie-chart">
-              <circle cx="50" cy="50" r="40" fill="rgba(255,255,255,0.05)" />
-              <template v-for="(segment, index) in statsPieSegments" :key="index">
-                <path
-                    :d="segment.path"
-                    :fill="segment.color"
-                    class="pie-segment"
-                />
-              </template>
-            </svg>
-            <div class="chart-legend">
-              <div class="legend-item" v-for="(item, index) in statsTaskRanking" :key="item.name">
-                <span class="legend-color" :style="{ background: getStatsTaskColor(index) }"></span>
-                <span class="legend-text">{{ item.name }}</span>
-                <span class="legend-value">{{ formatDuration(item.duration) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 事项排行 -->
-        <div class="focus-ranking" v-if="statsTaskRanking.length > 0">
-          <div class="ranking-title">事项排行</div>
-          <div class="ranking-list">
-            <div
-                v-for="(item, index) in statsTaskRanking.slice(0, 10)"
-                :key="item.name"
-                class="ranking-item"
-            >
-              <span class="ranking-num">{{ index + 1 }}</span>
-              <span class="ranking-name">{{ item.name }}</span>
-              <span class="ranking-count">{{ item.count }}次</span>
-              <span class="ranking-duration">{{ formatDuration(item.duration) }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 无数据提示 -->
-        <div v-if="statsTaskCount === 0" class="no-data">
-          <el-empty description="该时间段暂无足迹记录" :image-size="120" />
-        </div>
-      </el-scrollbar>
-    </div>
-
     <TaskForm
         v-model:visible="formVisible"
         :task="editingTask"
+        :defaultDate="selectedDate"
         @submit="handleFormSubmit"
     />
   </div>
@@ -314,13 +185,14 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Edit, Delete, DataLine, Close } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import 'dayjs/locale/zh-cn'
 import { useTaskStore, type Task } from '../stores/taskStore'
 import TaskForm from './TaskForm.vue'
 import LunarDatePicker from './LunarDatePicker.vue'
+import { logger } from '../lib/logger'
 
 dayjs.extend(isoWeek)
 dayjs.locale('zh-cn')
@@ -333,6 +205,10 @@ const taskStore = useTaskStore()
 
 // 选中的日期（默认今天）
 const selectedDateValue = ref(dayjs().format('YYYY-MM-DD'))
+
+watch(selectedDateValue, (newDate) => {
+  logger.info('[足迹] 切换日期', { date: newDate })
+})
 
 // 计算日期范围（单日模式）
 const dateRange = computed(() => {
@@ -414,29 +290,6 @@ const totalDuration = computed(() => {
     return sum + (task.duration || 0)
   }, 0)
 })
-
-// 生成饼图扇形路径
-const generatePiePath = (startAngle: number, endAngle: number): string => {
-  const cx = 50, cy = 50, r = 40
-
-  // 特殊处理：完整的圆（360度）
-  if (endAngle - startAngle >= 360) {
-    // 使用两个半圆弧绘制完整圆
-    return `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx} ${cy + r} A ${r} ${r} 0 1 1 ${cx} ${cy - r} Z`
-  }
-
-  const startRad = (startAngle - 90) * Math.PI / 180
-  const endRad = (endAngle - 90) * Math.PI / 180
-
-  const x1 = cx + r * Math.cos(startRad)
-  const y1 = cy + r * Math.sin(startRad)
-  const x2 = cx + r * Math.cos(endRad)
-  const y2 = cy + r * Math.sin(endRad)
-
-  const largeArc = endAngle - startAngle > 180 ? 1 : 0
-
-  return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`
-}
 
 // 日记开篇
 const diaryIntro = computed(() => {
@@ -568,6 +421,7 @@ const generateTaskDescription = (task: Task) => {
     '听音乐|音乐': '沉浸在音乐的世界里',
     '聊天|聚会|朋友': '与朋友相聚，时光美好',
     '约会|见面': '珍惜每一次相遇',
+    '上课|课堂|听课': '汲取知识，充实自我',
   }
 
   for (const [pattern, desc] of Object.entries(keywordDescriptions)) {
@@ -587,314 +441,6 @@ const formatDuration = (minutes: number) => {
   return `${mins}min`
 }
 
-// ========== 统计功能 ==========
-const showStats = ref(false)
-const statsRange = ref<'day' | 'week' | 'month' | 'year'>('day')
-const statsDate = ref<Date>(new Date())
-// 日模式下的字符串日期（用于 LunarDatePicker）
-const statsDayDate = ref<string>(dayjs().format('YYYY-MM-DD'))
-
-// 监听统计全屏状态变化，通知父组件
-watch(showStats, (newVal) => {
-  emit('fullscreen-change', newVal)
-})
-
-// 同步 statsDayDate 和 statsDate
-watch(statsDayDate, (newVal) => {
-  if (newVal) {
-    statsDate.value = dayjs(newVal).toDate()
-  }
-})
-
-watch(statsDate, (newVal) => {
-  statsDayDate.value = dayjs(newVal).format('YYYY-MM-DD')
-})
-
-// 统计日期选择器类型
-const statsDatePickerType = computed(() => {
-  switch (statsRange.value) {
-    case 'day': return 'date'
-    case 'week': return 'week'
-    case 'month': return 'month'
-    case 'year': return 'year'
-    default: return 'date'
-  }
-})
-
-const statsDatePickerPlaceholder = computed(() => {
-  switch (statsRange.value) {
-    case 'day': return '选择日期'
-    case 'week': return '选择周'
-    case 'month': return '选择月份'
-    case 'year': return '选择年份'
-    default: return '选择日期'
-  }
-})
-
-const statsDateFormat = computed(() => {
-  switch (statsRange.value) {
-    case 'day': return 'YYYY-MM-DD'
-    case 'week': return 'YYYY [第] ww [周]'
-    case 'month': return 'YYYY-MM'
-    case 'year': return 'YYYY'
-    default: return 'YYYY-MM-DD'
-  }
-})
-
-const statsDateValueFormat = computed(() => {
-  switch (statsRange.value) {
-    case 'day': return 'YYYY-MM-DD'
-    case 'week': return 'YYYY-MM-DD'
-    case 'month': return 'YYYY-MM'
-    case 'year': return 'YYYY'
-    default: return 'YYYY-MM-DD'
-  }
-})
-
-// 统计日期范围
-const statsDateRange = computed(() => {
-  const date = dayjs(statsDate.value)
-  switch (statsRange.value) {
-    case 'day':
-      return { start: date.format('YYYY-MM-DD'), end: date.format('YYYY-MM-DD') }
-    case 'week':
-      return {
-        start: date.startOf('isoWeek').format('YYYY-MM-DD'),
-        end: date.endOf('isoWeek').format('YYYY-MM-DD')
-      }
-    case 'month':
-      return {
-        start: date.startOf('month').format('YYYY-MM-DD'),
-        end: date.endOf('month').format('YYYY-MM-DD')
-      }
-    case 'year':
-      return {
-        start: date.startOf('year').format('YYYY-MM-DD'),
-        end: date.endOf('year').format('YYYY-MM-DD')
-      }
-    default:
-      return { start: date.format('YYYY-MM-DD'), end: date.format('YYYY-MM-DD') }
-  }
-})
-
-// 统计数据
-const statsTasks = computed(() => {
-  const { start, end } = statsDateRange.value
-  return taskStore.tasks.filter(t => t.date >= start && t.date <= end)
-})
-
-const statsTaskCount = computed(() => statsTasks.value.length)
-
-const statsTotalDuration = computed(() => {
-  return statsTasks.value.reduce((sum, task) => {
-    if (task.startTime && task.endTime) {
-      const start = task.startTime.split(':').map(Number)
-      const end = task.endTime.split(':').map(Number)
-      return sum + (end[0] * 60 + end[1]) - (start[0] * 60 + start[1])
-    }
-    return sum + (task.duration || 0)
-  }, 0)
-})
-
-const statsAvgDuration = computed(() => {
-  if (statsTaskCount.value === 0) return '0分钟'
-  const avg = Math.round(statsTotalDuration.value / statsTaskCount.value)
-  return formatDuration(avg)
-})
-
-// 统计趋势标题
-const statsTrendTitle = computed(() => {
-  switch (statsRange.value) {
-    case 'day': return '时间分布'
-    case 'week': return '本周每日趋势'
-    case 'month': return '本月每周趋势'
-    case 'year': return '本年每月趋势'
-    default: return '时间趋势'
-  }
-})
-
-// 统计图表高度
-const statsChartHeight = computed(() => {
-  switch (statsRange.value) {
-    case 'day': return '160px'
-    case 'week': return '200px'
-    case 'month': return '200px'
-    case 'year': return '200px'
-    default: return '200px'
-  }
-})
-
-// 统计趋势数据
-const statsTrendData = computed(() => {
-  const { start, end } = statsDateRange.value
-  const startDate = dayjs(start)
-  const endDate = dayjs(end)
-  const data: { label: string; duration: number; count: number }[] = []
-
-  if (statsRange.value === 'day') {
-    // 按上午/下午/晚上分布
-    const periods = [
-      { label: '上午', startHour: 0, endHour: 12 },
-      { label: '下午', startHour: 12, endHour: 18 },
-      { label: '晚上', startHour: 18, endHour: 24 }
-    ]
-
-    periods.forEach(period => {
-      const periodTasks = statsTasks.value.filter(t => {
-        const taskHour = parseInt((t.startTime || '00:00').split(':')[0])
-        return taskHour >= period.startHour && taskHour < period.endHour
-      })
-      const duration = periodTasks.reduce((sum, t) => {
-        if (t.startTime && t.endTime) {
-          const s = t.startTime.split(':').map(Number)
-          const e = t.endTime.split(':').map(Number)
-          return sum + (e[0] * 60 + e[1]) - (s[0] * 60 + s[1])
-        }
-        return sum + (t.duration || 0)
-      }, 0)
-      data.push({
-        label: period.label,
-        duration,
-        count: periodTasks.length
-      })
-    })
-  } else if (statsRange.value === 'week') {
-    // 按天分布
-    for (let d = 0; d < 7; d++) {
-      const date = startDate.add(d, 'day')
-      const dateStr = date.format('YYYY-MM-DD')
-      const dayTasks = statsTasks.value.filter(t => t.date === dateStr)
-      const duration = dayTasks.reduce((sum, t) => {
-        if (t.startTime && t.endTime) {
-          const s = t.startTime.split(':').map(Number)
-          const e = t.endTime.split(':').map(Number)
-          return sum + (e[0] * 60 + e[1]) - (s[0] * 60 + s[1])
-        }
-        return sum + (t.duration || 0)
-      }, 0)
-      data.push({
-        label: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][d],
-        duration,
-        count: dayTasks.length
-      })
-    }
-  } else if (statsRange.value === 'month') {
-    // 按周分布
-    const weeksInMonth = Math.ceil(endDate.date() / 7)
-    for (let w = 1; w <= weeksInMonth && w <= 5; w++) {
-      const weekStart = startDate.add((w - 1) * 7, 'day')
-      const weekEnd = w === weeksInMonth ? endDate : startDate.add(w * 7 - 1, 'day')
-      const weekTasks = statsTasks.value.filter(t =>
-          t.date >= weekStart.format('YYYY-MM-DD') && t.date <= weekEnd.format('YYYY-MM-DD')
-      )
-      const duration = weekTasks.reduce((sum, t) => {
-        if (t.startTime && t.endTime) {
-          const s = t.startTime.split(':').map(Number)
-          const e = t.endTime.split(':').map(Number)
-          return sum + (e[0] * 60 + e[1]) - (s[0] * 60 + s[1])
-        }
-        return sum + (t.duration || 0)
-      }, 0)
-      data.push({
-        label: `第${w}周`,
-        duration,
-        count: weekTasks.length
-      })
-    }
-  } else if (statsRange.value === 'year') {
-    // 按月分布
-    for (let m = 0; m < 12; m++) {
-      const monthStart = startDate.month(m).startOf('month')
-      const monthEnd = startDate.month(m).endOf('month')
-      const monthTasks = statsTasks.value.filter(t =>
-          t.date >= monthStart.format('YYYY-MM-DD') && t.date <= monthEnd.format('YYYY-MM-DD')
-      )
-      const duration = monthTasks.reduce((sum, t) => {
-        if (t.startTime && t.endTime) {
-          const s = t.startTime.split(':').map(Number)
-          const e = t.endTime.split(':').map(Number)
-          return sum + (e[0] * 60 + e[1]) - (s[0] * 60 + s[1])
-        }
-        return sum + (t.duration || 0)
-      }, 0)
-      data.push({
-        label: `${m + 1}月`,
-        duration,
-        count: monthTasks.length
-      })
-    }
-  }
-
-  return data
-})
-
-// 统计事项排行
-const statsTaskRanking = computed(() => {
-  const taskStats: Record<string, { count: number; duration: number }> = {}
-  statsTasks.value.forEach(task => {
-    if (!taskStats[task.name]) {
-      taskStats[task.name] = { count: 0, duration: 0 }
-    }
-    taskStats[task.name].count++
-    if (task.startTime && task.endTime) {
-      const start = task.startTime.split(':').map(Number)
-      const end = task.endTime.split(':').map(Number)
-      taskStats[task.name].duration += (end[0] * 60 + end[1]) - (start[0] * 60 + start[1])
-    } else {
-      taskStats[task.name].duration += task.duration || 0
-    }
-  })
-
-  return Object.entries(taskStats)
-      .map(([name, stats]) => ({ name, ...stats }))
-      .sort((a, b) => b.duration - a.duration)
-})
-
-// 统计饼图扇形路径
-const statsPieSegments = computed((): { path: string; color: string }[] => {
-  const segments: { path: string; color: string }[] = []
-  const total = statsTotalDuration.value
-  if (total === 0) return segments
-
-  let currentAngle = 0
-  statsTaskRanking.value.forEach((item, index) => {
-    if (item.duration > 0) {
-      const angle = (item.duration / total) * 360
-      segments.push({
-        path: generatePiePath(currentAngle, currentAngle + angle),
-        color: getStatsTaskColor(index)
-      })
-      currentAngle += angle
-    }
-  })
-
-  return segments
-})
-
-// 获取统计任务颜色
-const getStatsTaskColor = (index: number): string => {
-  const colors = [
-    '#667eea', '#f093fb', '#4facfe', '#43e97b', '#fa709a',
-    '#fee140', '#a8edea', '#d299c2', '#fbbf24', '#f472b6',
-    '#67e8f9', '#a78bfa', '#34d399', '#fb7185', '#38bdf8'
-  ]
-  return colors[index % colors.length]
-}
-
-// 获取柱状图高度百分比
-const getStatsBarHeight = (duration: number): number => {
-  const maxDuration = Math.max(...statsTrendData.value.map(d => d.duration), 1)
-  return (duration / maxDuration) * 100
-}
-
-// 格式化柱状图值显示
-const formatStatsBarValue = (duration: number): string => {
-  if (duration < 60) return `${duration}分钟`
-  const hours = Math.floor(duration / 60)
-  const mins = duration % 60
-  return mins > 0 ? `${hours}h${mins}m` : `${hours}h`
-}
-
 // 操作
 const handleAddTask = () => {
   editingTask.value = null
@@ -908,10 +454,16 @@ const handleEditTask = (task: Task) => {
 
 const handleDeleteTask = (id: string) => {
   taskStore.deleteTask(id)
+  logger.info('[足迹] 删除足迹', { taskId: id })
   ElMessage.success('记录删除成功')
 }
 
-const handleFormSubmit = () => {
+const handleFormSubmit = (task: Task) => {
+  if (editingTask.value) {
+    logger.info('[足迹] 编辑足迹', { taskId: task.id, name: task.name })
+  } else {
+    logger.info('[足迹] 添加足迹', { name: task.name })
+  }
   editingTask.value = null
 }
 
@@ -967,12 +519,11 @@ const copyDiary = () => {
 
 .footprint-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   padding: 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
-  gap: 16px;
 }
 
 .footprint-header h2 {
@@ -981,7 +532,16 @@ const copyDiary = () => {
   font-weight: 600;
   color: #fff;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.header-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px 24px;
+  gap: 12px;
   flex-shrink: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .empty-state {
@@ -994,15 +554,6 @@ const copyDiary = () => {
 
 .empty-add-btn {
   margin-top: 16px;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  flex: 1;
-  justify-content: flex-end;
 }
 
 .date-input-wrapper {
@@ -1076,40 +627,22 @@ const copyDiary = () => {
 .diary-section {
   margin: 24px;
   padding: 24px;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .diary-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  justify-content: center;
+  align-items: center;
   margin-bottom: 20px;
   padding-bottom: 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .diary-header-left {
-  flex: 1;
-}
-
-.diary-header-actions {
+  text-align: center;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  margin-left: 16px;
-}
-
-.add-btn-small {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-  border: none !important;
-}
-
-.copy-btn {
-  flex-shrink: 0;
 }
 
 .diary-date-display {
@@ -1137,6 +670,7 @@ const copyDiary = () => {
 
 .diary-content {
   line-height: 1.8;
+  text-align: center;
 }
 
 /* 时段区域 */
@@ -1149,23 +683,26 @@ const copyDiary = () => {
   color: #fff;
   margin: 0 0 12px 0;
   font-size: 15px;
-  padding-left: 8px;
-  border-left: 3px solid rgba(102, 126, 234, 0.8);
+  text-align: center;
 }
 
 .period-items {
-  padding-left: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .period-item {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   padding: 10px 14px;
   margin: 8px 0;
   background: rgba(255, 255, 255, 0.04);
   border-radius: 10px;
   transition: all 0.2s ease;
+  width: 100%;
+  max-width: 600px;
 }
 
 .period-item:hover {
@@ -1233,6 +770,10 @@ const copyDiary = () => {
   margin-top: 24px;
   padding-top: 20px;
   border-top: 1px dashed rgba(255, 255, 255, 0.15);
+  width: 100%;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .summary-title {
@@ -1240,8 +781,7 @@ const copyDiary = () => {
   color: #fff;
   margin: 0 0 12px 0;
   font-size: 15px;
-  padding-left: 8px;
-  border-left: 3px solid rgba(167, 139, 250, 0.8);
+  text-align: center;
 }
 
 .summary-content {

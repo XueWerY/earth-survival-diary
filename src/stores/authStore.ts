@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import * as api from '../lib/api'
+import { logger } from '../lib/logger'
 
 export interface User {
     id: string
@@ -14,8 +15,6 @@ export interface User {
 export interface UserProfile {
     id: string
     nickname: string
-    avatar_url?: string
-    avatarUrl?: string // 头像 URL
     birthday?: string // 生日
     phone?: string // 手机号
     created_at?: string
@@ -25,9 +24,7 @@ export interface UserProfile {
 export const useAuthStore = defineStore('auth', () => {
     const user = ref<User | null>(null)
     const profile = ref<UserProfile | null>(null)
-    const avatarUrl = ref<string | null>(null) // 头像 URL
     const loading = ref(true)
-    const kickedOut = ref(false) // 是否被踢出
 
     // WebSocket 连接
     let ws: WebSocket | null = null
@@ -39,50 +36,46 @@ export const useAuthStore = defineStore('auth', () => {
 
     // 连接 WebSocket
     const connectWebSocket = () => {
-        console.log('[WebSocket] 尝试连接...', { ws: !!ws, kickedOut: kickedOut.value })
-        if (ws || kickedOut.value) {
-            console.log('[WebSocket] 跳过连接: 已有连接或已被踢出')
-            return
-        }
+        if (ws) return
 
         const token = api.getToken()
-        console.log('[WebSocket] Token:', token ? '存在' : '不存在')
         if (!token) {
-            console.log('[WebSocket] 跳过连接: 无 token')
+            logger.warn('[WebSocket] 跳过连接: 无 token')
             return
         }
 
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
         const wsUrl = `${protocol}//${location.host}/ws/session`
-        console.log('[WebSocket] 连接地址:', wsUrl)
+        logger.info('[WebSocket] 连接地址: ' + wsUrl)
 
         try {
             ws = new WebSocket(wsUrl)
-            console.log('[WebSocket] 创建连接实例')
+            logger.debug('[WebSocket] 创建连接实例')
 
             ws.onopen = () => {
-                console.log('[WebSocket] 连接已打开')
-                // 发送认证消息
+                logger.info('[WebSocket] 连接成功')
                 const authMsg = JSON.stringify({ type: 'auth', payload: { token } })
-                console.log('[WebSocket] 发送认证消息')
+                logger.info('[WebSocket] 发送认证消息')
                 ws?.send(authMsg)
-                // 启动心跳
                 wsHeartbeatTimer = setInterval(() => {
                     ws?.send(JSON.stringify({ type: 'ping', payload: null }))
                 }, 25000)
             }
 
+            let authPending = false
+
             ws.onmessage = (e) => {
-                console.log('[WebSocket] 收到消息:', e.data)
                 try {
                     const msg = JSON.parse(e.data)
-
-                    if (msg.type === 'pong') return
-
+                    if (msg.type === 'pong') {
+                        if (authPending) {
+                            logger.info('[WebSocket] 认证成功')
+                            authPending = false
+                        }
+                        return
+                    }
                     if (msg.type === 'kicked_out') {
-                        console.log('[WebSocket] 收到踢出通知!', msg)
-                        kickedOut.value = true
-                        disconnectWebSocket()
+                        logger.info('[WebSocket] 收到踢出通知', { message: msg.payload?.message })
                     }
                 } catch (err) {
                     console.error('[WebSocket] 消息解析错误:', err)
@@ -90,24 +83,26 @@ export const useAuthStore = defineStore('auth', () => {
             }
 
             ws.onclose = (e) => {
-                console.log('[WebSocket] 连接已关闭', { code: e.code, reason: e.reason })
                 ws = null
                 if (wsHeartbeatTimer) {
                     clearInterval(wsHeartbeatTimer)
                     wsHeartbeatTimer = null
                 }
-                // 如果不是被踢出，尝试重连
-                if (!kickedOut.value && user.value) {
-                    console.log('[WebSocket] 3秒后尝试重连...')
+                if (authPending) {
+                    logger.error('[WebSocket] 认证失败')
+                    authPending = false
+                }
+                logger.info('[WebSocket] 连接已关闭', { code: e.code, reason: e.reason })
+                if (user.value) {
                     wsReconnectTimer = setTimeout(connectWebSocket, 3000)
                 }
             }
 
             ws.onerror = (e) => {
-                console.error('[WebSocket] 连接错误:', e)
+                logger.error('[WebSocket] 连接失败', { error: e })
             }
         } catch (err) {
-            console.error('[WebSocket] 创建连接失败:', err)
+            logger.error('[WebSocket] 创建连接失败', { error: err })
         }
     }
 
@@ -131,22 +126,14 @@ export const useAuthStore = defineStore('auth', () => {
     // 初始化：检查当前会话
     const init = async () => {
         loading.value = true
-        kickedOut.value = false
         try {
             const { user: currentUser } = await api.getUser()
             if (currentUser) {
                 user.value = currentUser as User
                 await fetchProfile()
-                // 登录成功后连接 WebSocket
                 connectWebSocket()
             }
-        } catch (error: any) {
-            // 检查是否是被踢出
-            if (error?.response?.data?.kicked) {
-                kickedOut.value = true
-            }
-            // 未登录或 token 失效，清除本地状态
-            console.log('用户未登录或会话已过期')
+        } catch {
             api.setToken(null)
         } finally {
             loading.value = false
@@ -163,28 +150,12 @@ export const useAuthStore = defineStore('auth', () => {
         }
     }
 
-    // 获取头像 URL
-    const fetchAvatarUrl = async () => {
-        try {
-            const result = await api.getAvatarUrl()
-            avatarUrl.value = result.avatarUrl
-        } catch (error) {
-            console.error('获取头像URL失败:', error)
-            avatarUrl.value = null
-        }
-    }
-
-    // 设置头像 URL（本地更新）
-    const setAvatarUrl = (url: string | null) => {
-        avatarUrl.value = url
-    }
-
     // 更新用户配置
     const updateProfile = async (updates: { nickname?: string }) => {
         if (!user.value) return
 
         if (updates.nickname) {
-            const { profile: updatedProfile } = await api.updateProfile(updates.nickname)
+            const { profile: updatedProfile } = await api.updateProfile({ nickname: updates.nickname })
             profile.value = updatedProfile
         }
     }
@@ -200,6 +171,7 @@ export const useAuthStore = defineStore('auth', () => {
         if (result.user) {
             user.value = result.user as User
             await fetchProfile()
+            connectWebSocket()
         }
 
         return result
@@ -212,7 +184,6 @@ export const useAuthStore = defineStore('auth', () => {
         if (result.user) {
             user.value = result.user as User
             await fetchProfile()
-            // 登录成功后连接 WebSocket
             connectWebSocket()
         }
 
@@ -225,9 +196,7 @@ export const useAuthStore = defineStore('auth', () => {
         await api.signOut()
         user.value = null
         profile.value = null
-        avatarUrl.value = null
-        kickedOut.value = false
-        loading.value = false // 确保 loading 为 false
+        loading.value = false
     }
 
     // 只清除本地用户状态（不调用服务端 signOut）
@@ -237,13 +206,7 @@ export const useAuthStore = defineStore('auth', () => {
         api.setToken(null) // 只清除本地 token
         user.value = null
         profile.value = null
-        avatarUrl.value = null
         loading.value = false
-    }
-
-    // 重置被踢出状态
-    const resetKickedOut = () => {
-        kickedOut.value = false
     }
 
     // 获取访问令牌
@@ -254,15 +217,11 @@ export const useAuthStore = defineStore('auth', () => {
     return {
         user,
         profile,
-        avatarUrl,
         loading,
         isAuthenticated,
         nickname,
-        kickedOut,
         init,
         fetchProfile,
-        fetchAvatarUrl,
-        setAvatarUrl,
         updateProfile,
         signUp,
         signIn,
@@ -270,7 +229,6 @@ export const useAuthStore = defineStore('auth', () => {
         clearUser,
         getAccessToken,
         connectWebSocket,
-        disconnectWebSocket,
-        resetKickedOut
+        disconnectWebSocket
     }
 })

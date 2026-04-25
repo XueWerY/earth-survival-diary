@@ -1,8 +1,25 @@
 <template>
   <div class="about-page">
-    <el-scrollbar>
+    <div
+        class="toc-bar"
+        ref="tocBarRef"
+    >
+      <div class="toc-bar-inner">
+        <div
+            v-for="item in toc"
+            :key="item.id"
+            class="toc-item"
+            :class="{ active: activeToc === item.id }"
+            :ref="setTocItemRef"
+            @click="scrollToSection(item.id)"
+        >
+          {{ item.text }}
+        </div>
+      </div>
+    </div>
+
+    <el-scrollbar ref="scrollbarRef">
       <div class="about-container">
-        <!-- 英雄区域 -->
         <div class="hero-section">
           <div class="hero-bg">
             <div class="planet"></div>
@@ -23,7 +40,6 @@
           </div>
         </div>
 
-        <!-- README 内容 -->
         <div class="readme-section">
           <div v-if="loading" class="readme-loading">
             <div class="loading-spinner"></div>
@@ -33,7 +49,9 @@
             <p>加载失败</p>
             <el-button type="primary" size="small" @click="fetchData">重试</el-button>
           </div>
-          <div v-else class="readme-content" v-html="renderedHtml"></div>
+          <template v-else>
+            <div class="readme-content" ref="readmeContentRef" v-html="renderedHtml"></div>
+          </template>
         </div>
       </div>
     </el-scrollbar>
@@ -41,25 +59,99 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { marked } from 'marked'
+import { logger } from '../lib/logger'
 
 const loading = ref(true)
 const error = ref(false)
 const version = ref('v0.0.0')
 const renderedHtml = ref('')
+const toc = ref<{ id: string; text: string }[]>([])
+const activeToc = ref('')
+const scrollbarRef = ref()
+const readmeContentRef = ref<HTMLElement>()
+const tocBarRef = ref<HTMLElement>()
+const tocItemRefs = ref<HTMLElement[]>([])
 
 marked.setOptions({
   breaks: true,
   gfm: true
 })
 
+const clearTocRefs = () => { tocItemRefs.value = [] }
+const setTocItemRef = (el: any) => { if (el) tocItemRefs.value.push(el) }
+
+const scrollToCenter = (container: HTMLElement, target: HTMLElement) => {
+  const containerWidth = container.clientWidth
+  const containerRect = container.getBoundingClientRect()
+  const targetRect = target.getBoundingClientRect()
+  const targetCenterInContainer = targetRect.left - containerRect.left + container.scrollLeft + (targetRect.width / 2)
+  container.scrollTo({ left: Math.max(0, targetCenterInContainer - (containerWidth / 2)), behavior: 'smooth' })
+}
+
+const scrollToTocItem = () => {
+  nextTick(() => {
+    const container = tocBarRef.value as HTMLElement
+    if (!container) return
+    const activeItem = tocItemRefs.value.find(item => item.classList.contains('active')) as HTMLElement
+    if (activeItem) scrollToCenter(container, activeItem)
+  })
+}
+
+let isTocDragging = false
+let tocDragStartX = 0
+let tocDragScrollLeft = 0
+let isTocDragInit = false
+
+const initTocDrag = () => {
+  if (isTocDragInit) return
+  isTocDragInit = true
+  const el = tocBarRef.value
+  if (!el) return
+  el.addEventListener('mousedown', (e: MouseEvent) => { if (e.button === 0) { isTocDragging = true; tocDragStartX = e.pageX; tocDragScrollLeft = el.scrollLeft; el.style.cursor = 'grabbing'; el.style.userSelect = 'none' } })
+  window.addEventListener('mousemove', (e: MouseEvent) => { if (!isTocDragging) return; e.preventDefault(); const walk = tocDragStartX - e.pageX; el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, tocDragScrollLeft + walk)) })
+  const endDrag = () => { if (!isTocDragging) return; isTocDragging = false; el.style.cursor = ''; el.style.userSelect = '' }
+  window.addEventListener('mouseup', endDrag); window.addEventListener('mouseleave', endDrag)
+  el.addEventListener('touchstart', (e: TouchEvent) => { tocDragStartX = e.touches[0].pageX; tocDragScrollLeft = el.scrollLeft }, { passive: true })
+  el.addEventListener('touchmove', (e: TouchEvent) => { const walk = tocDragStartX - e.touches[0].pageX; el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, tocDragScrollLeft + walk)) }, { passive: true })
+}
+
+const buildToc = () => {
+  setTimeout(() => {
+    if (!readmeContentRef.value) return
+    const h2s = readmeContentRef.value.querySelectorAll('h2')
+    toc.value = []
+    clearTocRefs()
+    h2s.forEach((h2, i) => {
+      const id = `about-section-${i}`
+      h2.id = id
+      toc.value.push({ id, text: h2.textContent || '' })
+      nextTick(() => scrollToTocItem())
+    })
+    nextTick(() => initTocDrag())
+  }, 100)
+}
+
+const scrollToSection = (id: string) => {
+  logger.info('[关于] 切换导航项', { section: id })
+  const index = toc.value.findIndex(item => item.id === id)
+  activeToc.value = id
+  scrollToTocItem()
+  nextTick(() => {
+    const target = readmeContentRef.value?.querySelector(`#${CSS.escape(id)}`) as HTMLElement | null
+    const wrap = scrollbarRef.value?.$el?.querySelector('.el-scrollbar__wrap') as HTMLElement | null
+    if (target && wrap) {
+      wrap.scrollTo({ top: target.offsetTop - wrap.offsetTop - 16, behavior: 'smooth' })
+    }
+  })
+}
+
 const fetchData = async () => {
   loading.value = true
   error.value = false
 
   try {
-    // 并行获取版本和 README
     const [versionRes, readmeRes] = await Promise.all([
       fetch('/api/version'),
       fetch('/api/readme')
@@ -74,6 +166,7 @@ const fetchData = async () => {
 
     version.value = `v${versionData.version}`
     renderedHtml.value = await marked.parse(readmeText)
+    buildToc()
   } catch (err) {
     console.error('Failed to load data:', err)
     error.value = true
@@ -90,7 +183,7 @@ onMounted(() => {
 <style scoped>
 .about-page {
   height: 100%;
-  background: linear-gradient(180deg, #0a0a1a 0%, #1a1a2e 50%, #16213e 100%);
+  background: transparent;
   overflow: hidden;
   position: relative;
 }
@@ -103,6 +196,7 @@ onMounted(() => {
       radial-gradient(ellipse at 20% 20%, rgba(100, 150, 255, 0.08) 0%, transparent 50%),
       radial-gradient(ellipse at 80% 80%, rgba(150, 100, 255, 0.06) 0%, transparent 50%);
   pointer-events: none;
+  z-index: 1;
 }
 
 .about-container {
@@ -181,7 +275,7 @@ onMounted(() => {
 }
 
 .stars {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background-image:
       radial-gradient(1px 1px at 30px 40px, rgba(255, 255, 255, 0.8), transparent),
@@ -195,6 +289,8 @@ onMounted(() => {
       radial-gradient(1px 1px at 450px 150px, rgba(255, 255, 255, 0.4), transparent);
   background-size: 500px 200px;
   animation: starsTwinkle 5s ease-in-out infinite;
+  z-index: 0;
+  pointer-events: none;
 }
 
 @keyframes starsTwinkle {
@@ -290,6 +386,61 @@ onMounted(() => {
 /* README 内容样式 */
 .readme-section {
   margin-top: 10px;
+}
+
+/* 目录导航栏 */
+.toc-bar {
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.toc-bar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 16px;
+  white-space: nowrap;
+  width: max-content;
+  min-width: 100%;
+  height: 56px;
+  box-sizing: border-box;
+}
+
+.toc-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.toc-bar {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.toc-item {
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toc-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.toc-item.active {
+  background: rgba(100, 200, 255, 0.15);
+  border-color: rgba(100, 200, 255, 0.3);
+  color: rgba(100, 200, 255, 0.95);
 }
 
 .readme-content {

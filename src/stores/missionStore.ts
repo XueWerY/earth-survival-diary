@@ -123,7 +123,12 @@ export const useMissionStore = defineStore('mission', () => {
         id: db.id,
         name: db.name,
         color: db.icon || '#667eea',
-        groups: db.groups || [],
+        groups: (db.groups && db.groups.length > 0) ? db.groups : [{
+          id: `${db.id}-default`,
+          name: '默认分组',
+          color: DEFAULT_GROUP_COLORS[0],
+          order: 0
+        }],
         order: db.order || 0,
         createdAt: db.created_at
       }))
@@ -175,7 +180,12 @@ export const useMissionStore = defineStore('mission', () => {
         id: dbList.id,
         name: dbList.name,
         color: dbList.icon || icon,
-        groups: [],
+        groups: [{
+          id: `${dbList.id}-default`,
+          name: '默认分组',
+          color: DEFAULT_GROUP_COLORS[0],
+          order: 0
+        }],
         order: lists.value.length,
         createdAt: dbList.created_at
       }
@@ -218,13 +228,39 @@ export const useMissionStore = defineStore('mission', () => {
     }
   }
 
-  // 清单排序
-  const reorderLists = async (newOrder: string[]) => {
-    newOrder.forEach((id, index) => {
-      const list = lists.value.find(l => l.id === id)
-      if (list) list.order = index
-    })
-    lists.value.sort((a, b) => a.order - b.order)
+  // 上移清单
+  const moveListUp = async (id: string) => {
+    const index = lists.value.findIndex(l => l.id === id)
+    if (index <= 0) return
+
+    const prevItem = lists.value[index - 1]
+    lists.value[index - 1] = lists.value[index]
+    lists.value[index] = prevItem
+
+    try {
+      const orders = lists.value.map((l, i) => ({ id: l.id, order: i }))
+      lists.value.forEach((l, i) => l.order = i)
+      await api.reorderMissionLists(orders)
+    } catch (error) {
+      console.error('Failed to reorder lists:', error)
+    }
+  }
+
+  const moveListDown = async (id: string) => {
+    const index = lists.value.findIndex(l => l.id === id)
+    if (index < 0 || index >= lists.value.length - 1) return
+
+    const nextItem = lists.value[index + 1]
+    lists.value[index + 1] = lists.value[index]
+    lists.value[index] = nextItem
+
+    try {
+      const orders = lists.value.map((l, i) => ({ id: l.id, order: i }))
+      lists.value.forEach((l, i) => l.order = i)
+      await api.reorderMissionLists(orders)
+    } catch (error) {
+      console.error('Failed to reorder lists:', error)
+    }
   }
 
   // ========== 清单内分组操作 ==========
@@ -234,15 +270,26 @@ export const useMissionStore = defineStore('mission', () => {
     const list = lists.value.find(l => l.id === listId)
     if (!list) return null
 
-    const newGroup: MissionGroup = {
-      id: Date.now().toString(),
-      name,
-      color,
-      order: list.groups.length
-    }
+    try {
+      const { group: dbGroup } = await api.addMissionGroup(listId, {
+        name,
+        color,
+        order: list.groups.length
+      })
+      
+      const newGroup: MissionGroup = {
+        id: dbGroup.id,
+        name: dbGroup.name,
+        color: dbGroup.color,
+        order: dbGroup.order
+      }
 
-    list.groups.push(newGroup)
-    return newGroup
+      list.groups.push(newGroup)
+      return newGroup
+    } catch (error) {
+      console.error('Failed to add group:', error)
+      return null
+    }
   }
 
   // 更新清单内的分组
@@ -254,6 +301,50 @@ export const useMissionStore = defineStore('mission', () => {
     if (groupIndex === -1) return
 
     list.groups[groupIndex] = { ...list.groups[groupIndex], ...updates }
+
+    try {
+      await api.updateMissionGroup(listId, groupId, updates)
+    } catch (error) {
+      console.error('Failed to update group:', error)
+    }
+  }
+
+  // 上移分组
+  const moveGroupUp = async (listId: string, groupId: string) => {
+    const list = lists.value.find(l => l.id === listId)
+    if (!list) return
+    const index = list.groups.findIndex(g => g.id === groupId)
+    if (index <= 0) return
+    const temp = list.groups[index].order
+    list.groups[index].order = list.groups[index - 1].order
+    list.groups[index - 1].order = temp
+    list.groups.sort((a, b) => a.order - b.order)
+
+    try {
+      const orders = list.groups.map(g => ({ id: g.id, order: g.order }))
+      await api.reorderGroups(listId, orders)
+    } catch (error) {
+      console.error('Failed to reorder groups:', error)
+    }
+  }
+
+  // 下移分组
+  const moveGroupDown = async (listId: string, groupId: string) => {
+    const list = lists.value.find(l => l.id === listId)
+    if (!list) return
+    const index = list.groups.findIndex(g => g.id === groupId)
+    if (index < 0 || index >= list.groups.length - 1) return
+    const temp = list.groups[index].order
+    list.groups[index].order = list.groups[index + 1].order
+    list.groups[index + 1].order = temp
+    list.groups.sort((a, b) => a.order - b.order)
+
+    try {
+      const orders = list.groups.map(g => ({ id: g.id, order: g.order }))
+      await api.reorderGroups(listId, orders)
+    } catch (error) {
+      console.error('Failed to reorder groups:', error)
+    }
   }
 
   // 删除清单内的分组（任务移到默认分组）
@@ -261,15 +352,25 @@ export const useMissionStore = defineStore('mission', () => {
     const list = lists.value.find(l => l.id === listId)
     if (!list || list.groups.length <= 1) return
 
+    const defaultGroup = list.groups.find(g => g.id !== groupId)
+    
+    try {
+      await api.deleteMissionGroup(listId, groupId)
+    } catch (error) {
+      console.error('Failed to delete group:', error)
+      return
+    }
+
     list.groups = list.groups.filter(g => g.id !== groupId)
-    const defaultGroup = list.groups[0]
 
     // 更新使命的分组
-    missions.value.forEach(m => {
-      if (m.listId === listId && m.groupId === groupId) {
-        m.groupId = defaultGroup.id
-      }
-    })
+    if (defaultGroup) {
+      missions.value.forEach(m => {
+        if (m.listId === listId && m.groupId === groupId) {
+          m.groupId = defaultGroup.id
+        }
+      })
+    }
   }
 
   // 获取清单内的分组列表
@@ -304,6 +405,18 @@ export const useMissionStore = defineStore('mission', () => {
       default:
         return currentDate
     }
+  }
+
+  // 检查下一个重复日期是否超过结束日期
+  const isRepeatDateBeyondEndDate = (nextDate: string, repeatEndStrategy: RepeatEndStrategy, repeatEndDate: string, repeatCount: number, repeatCompletedCount: number): boolean => {
+    if (repeatEndStrategy === 'never') return false
+    if (repeatEndStrategy === 'date' && repeatEndDate) {
+      return dayjs(nextDate).isAfter(dayjs(repeatEndDate), 'day')
+    }
+    if (repeatEndStrategy === 'count' && repeatCount) {
+      return repeatCompletedCount + 1 >= repeatCount
+    }
+    return false
   }
 
   // 添加任务
@@ -437,14 +550,22 @@ export const useMissionStore = defineStore('mission', () => {
       // 重复性使命：完成一轮后自动进入下一轮
       mission.repeatCompletedCount++
       const baseDate = mission.date || dayjs().format('YYYY-MM-DD')
-      mission.date = getNextRepeatDate(baseDate, mission.repeatStrategy, mission.repeatCustomDays)
-      mission.checklist.forEach(item => item.completed = false)
-      await updateMission(id, {
-        completed: false,
-        repeatCompletedCount: mission.repeatCompletedCount,
-        checklist: mission.checklist,
-        date: mission.date
-      })
+      const nextDate = getNextRepeatDate(baseDate, mission.repeatStrategy, mission.repeatCustomDays)
+
+      // 检查是否超过结束日期或次数
+      if (isRepeatDateBeyondEndDate(nextDate, mission.repeatEndStrategy, mission.repeatEndDate, mission.repeatCount, mission.repeatCompletedCount)) {
+        // 超过结束条件，直接删除
+        await deleteMission(id)
+      } else {
+        mission.date = nextDate
+        mission.checklist.forEach(item => item.completed = false)
+        await updateMission(id, {
+          completed: false,
+          repeatCompletedCount: mission.repeatCompletedCount,
+          checklist: mission.checklist,
+          date: mission.date
+        })
+      }
     } else {
       // 非重复性使命：直接删除
       await deleteMission(id)
@@ -504,14 +625,22 @@ export const useMissionStore = defineStore('mission', () => {
       if (allCompleted) {
         mission.repeatCompletedCount++
         const baseDate = mission.date || dayjs().format('YYYY-MM-DD')
-        mission.date = getNextRepeatDate(baseDate, mission.repeatStrategy, mission.repeatCustomDays)
-        mission.checklist.forEach(c => c.completed = false)
-        await updateMission(missionId, {
-          completed: false,
-          repeatCompletedCount: mission.repeatCompletedCount,
-          checklist: mission.checklist,
-          date: mission.date
-        })
+        const nextDate = getNextRepeatDate(baseDate, mission.repeatStrategy, mission.repeatCustomDays)
+
+        // 检查是否超过结束日期或次数
+        if (isRepeatDateBeyondEndDate(nextDate, mission.repeatEndStrategy, mission.repeatEndDate, mission.repeatCount, mission.repeatCompletedCount)) {
+          // 超过结束条件，直接删除
+          await deleteMission(missionId)
+        } else {
+          mission.date = nextDate
+          mission.checklist.forEach(c => c.completed = false)
+          await updateMission(missionId, {
+            completed: false,
+            repeatCompletedCount: mission.repeatCompletedCount,
+            checklist: mission.checklist,
+            date: mission.date
+          })
+        }
       } else {
         await updateMission(missionId, { checklist: mission.checklist })
       }
@@ -597,10 +726,13 @@ export const useMissionStore = defineStore('mission', () => {
     addList,
     updateList,
     deleteList,
-    reorderLists,
+    moveListUp,
+    moveListDown,
     addGroupToList,
     updateGroupInList,
     deleteGroupFromList,
+    moveGroupUp,
+    moveGroupDown,
     getGroupsInList,
     addMission,
     updateMission,

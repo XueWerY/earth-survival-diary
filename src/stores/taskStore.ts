@@ -83,9 +83,28 @@ export const useTaskStore = defineStore('task', () => {
         notes: task.notes,
         category: task.category
       })
-      tasks.value.unshift({ ...dbToTask(dbTask), duration })
+      tasks.value.unshift({ ...dbToTask(dbTask), duration, completed: true })
     } catch (error) {
       console.error('Failed to add completed task:', error)
+    }
+  }
+
+  // 添加分割后的跨日任务（支持多条记录）
+  const addSplitTasks = async (splitTasks: Array<{ name: string; startTime: string; endTime: string; date: string; duration: number; notes?: string }>) => {
+    for (const task of splitTasks) {
+      try {
+        const { task: dbTask } = await api.addTask({
+          name: task.name,
+          date: task.date,
+          startTime: task.startTime,
+          endTime: task.endTime,
+          notes: task.notes,
+          category: 'focus'
+        })
+        tasks.value.unshift({ ...dbToTask(dbTask), duration: task.duration })
+      } catch (error) {
+        console.error('Failed to add split task:', error)
+      }
     }
   }
 
@@ -150,6 +169,7 @@ export const useTaskStore = defineStore('task', () => {
     loadTasks,
     addTask,
     addCompletedTask,
+    addSplitTasks,
     updateTask,
     deleteTask,
     toggleTask,

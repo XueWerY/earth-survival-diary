@@ -258,17 +258,45 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
 }
 
-.el-time-panel__content {
-  color: rgba(255, 255, 255, 0.85);
-}
-
 .el-time-spinner__item {
   color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.el-time-spinner__item:hover:not(.active):not(.disabled) {
+  background: rgba(102, 126, 234, 0.15) !important;
 }
 
 .el-time-spinner__item:hover,
 .el-time-spinner__item.active:not(.disabled) {
   color: #667eea !important;
+}
+
+.el-time-spinner__item.active:not(.disabled),
+.el-time-spinner__item.is-active:not(.disabled) {
+  background: transparent !important;
+  font-weight: bold;
+}
+
+.el-time-spinner {
+  background: transparent !important;
+}
+
+.el-time-spinner__list:hover {
+  background: transparent !important;
+}
+
+.el-time-range-spinner {
+  background: transparent !important;
+}
+
+.el-time-panel__content {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.el-time-panel__footer {
+  background: rgba(30, 30, 50, 0.98) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 .el-time-panel__btn {
