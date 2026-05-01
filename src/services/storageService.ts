@@ -4,25 +4,25 @@ import { logger } from '../lib/logger'
 
 const API_BASE = '/api'
 
-// 缓存层，减少 API 调用
 const cache = new Map<string, any>()
 const pendingRequests = new Map<string, Promise<any>>()
 
-// 获取认证 token
 function getAuthToken(): string | null {
   return localStorage.getItem('auth_token')
 }
 
-// 获取数据
-export async function getData<T>(key: string): Promise<T | null> {
-  // 先检查缓存
-  if (cache.has(key)) {
-    return cache.get(key) as T
+function cacheKey(type: string, key: string): string {
+  return `${type}/${key}`
+}
+
+export async function getData<T>(type: string, key: string): Promise<T | null> {
+  const ck = cacheKey(type, key)
+  if (cache.has(ck)) {
+    return cache.get(ck) as T
   }
 
-  // 检查是否有相同请求正在进行
-  if (pendingRequests.has(key)) {
-    return pendingRequests.get(key) as Promise<T | null>
+  if (pendingRequests.has(ck)) {
+    return pendingRequests.get(ck) as Promise<T | null>
   }
 
   const token = getAuthToken()
@@ -33,30 +33,29 @@ export async function getData<T>(key: string): Promise<T | null> {
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const promise = fetch(`${API_BASE}/data/${key}`, { headers })
+  const promise = fetch(`${API_BASE}/data/${type}/${key}`, { headers })
       .then(res => res.json())
       .then(result => {
-        pendingRequests.delete(key)
+        pendingRequests.delete(ck)
         if (result.success) {
-          cache.set(key, result.data)
+          cache.set(ck, result.data)
           return result.data as T | null
         }
         return null
       })
       .catch(err => {
-        pendingRequests.delete(key)
-        console.error(`Failed to get data for key ${key}:`, err)
+        pendingRequests.delete(ck)
+        console.error(`Failed to get data for ${type}/${key}:`, err)
         return null
       })
 
-  pendingRequests.set(key, promise)
+  pendingRequests.set(ck, promise)
   return promise
 }
 
-// 设置数据
-export async function setData<T>(key: string, data: T): Promise<boolean> {
-  // 更新缓存
-  cache.set(key, data)
+export async function setData<T>(type: string, key: string, data: T): Promise<boolean> {
+  const ck = cacheKey(type, key)
+  cache.set(ck, data)
 
   const token = getAuthToken()
   const headers: Record<string, string> = {
@@ -67,7 +66,7 @@ export async function setData<T>(key: string, data: T): Promise<boolean> {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/data/${key}`, {
+    const res = await fetch(`${API_BASE}/data/${type}/${key}`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ data })
@@ -75,14 +74,14 @@ export async function setData<T>(key: string, data: T): Promise<boolean> {
     const result = await res.json()
     return result.success
   } catch (err) {
-    console.error(`Failed to set data for key ${key}:`, err)
+    console.error(`Failed to set data for ${type}/${key}:`, err)
     return false
   }
 }
 
-// 删除数据
-export async function deleteData(key: string): Promise<boolean> {
-  cache.delete(key)
+export async function deleteData(type: string, key: string): Promise<boolean> {
+  const ck = cacheKey(type, key)
+  cache.delete(ck)
 
   const token = getAuthToken()
   const headers: Record<string, string> = {
@@ -93,109 +92,24 @@ export async function deleteData(key: string): Promise<boolean> {
   }
 
   try {
-    const res = await fetch(`${API_BASE}/data/${key}`, {
+    const res = await fetch(`${API_BASE}/data/${type}/${key}`, {
       method: 'DELETE',
       headers
     })
     const result = await res.json()
     return result.success
   } catch (err) {
-    console.error(`Failed to delete data for key ${key}:`, err)
+    console.error(`Failed to delete data for ${type}/${key}:`, err)
     return false
   }
 }
 
-// 批量获取数据
-export async function batchGetData<T>(keys: string[]): Promise<Record<string, T | null>> {
-  // 先从缓存获取
-  const results: Record<string, T | null> = {}
-  const missingKeys: string[] = []
-
-  for (const key of keys) {
-    if (cache.has(key)) {
-      results[key] = cache.get(key) as T
-    } else {
-      missingKeys.push(key)
-    }
-  }
-
-  if (missingKeys.length === 0) {
-    return results
-  }
-
-  const token = getAuthToken()
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
-  }
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-
-  try {
-    const res = await fetch(`${API_BASE}/data/batch/get`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ keys: missingKeys })
-    })
-    const result = await res.json()
-
-    if (result.success) {
-      for (const key of missingKeys) {
-        results[key] = result.data[key]
-        cache.set(key, result.data[key])
-      }
-    }
-  } catch (err) {
-    console.error('Failed to batch get data:', err)
-    for (const key of missingKeys) {
-      results[key] = null
-    }
-  }
-
-  return results
+export function clearCache() {
+  cache.clear()
 }
 
-// 批量设置数据
-export async function batchSetData(items: Array<{ key: string; data: any }>): Promise<boolean> {
-  // 更新缓存
-  for (const { key, data } of items) {
-    cache.set(key, data)
-  }
-
-  const token = getAuthToken()
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
-  }
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-
-  try {
-    const res = await fetch(`${API_BASE}/data/batch/set`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ items })
-    })
-    const result = await res.json()
-    return result.success
-  } catch (err) {
-    console.error('Failed to batch set data:', err)
-    return false
-  }
-}
-
-// 清除缓存
-export function clearCache(key?: string) {
-  if (key) {
-    cache.delete(key)
-  } else {
-    cache.clear()
-  }
-}
-
-// 预加载数据
-export function preloadData(key: string, data: any) {
-  cache.set(key, data)
+export function preloadData(type: string, key: string, data: any) {
+  cache.set(cacheKey(type, key), data)
 }
 
 // ============ 统一的 SystemState 管理 ============
@@ -210,34 +124,27 @@ export interface SystemState {
   session?: { token: string }
 }
 
-const SYSTEM_STATE_KEY = 'system:state'
-
-// 获取完整系统状态
 async function loadSystemState(): Promise<SystemState> {
-  const state = await getData<SystemState>(SYSTEM_STATE_KEY)
+  const state = await getData<SystemState>('system', 'state')
   return state || {}
 }
 
-// 保存完整系统状态
 async function saveSystemState(state: SystemState): Promise<boolean> {
-  cache.set(SYSTEM_STATE_KEY, state)
-  return setData(SYSTEM_STATE_KEY, state)
+  cache.set(cacheKey('system', 'state'), state)
+  return setData('system', 'state', state)
 }
 
-// 获取系统状态的某个字段
 export async function getSystemStateField<K extends keyof SystemState>(field: K): Promise<SystemState[K]> {
   const state = await loadSystemState()
   return state[field]
 }
 
-// 设置系统状态的某个字段
 export async function setSystemStateField<K extends keyof SystemState>(field: K, value: SystemState[K]): Promise<boolean> {
   const state = await loadSystemState()
   state[field] = value
   return saveSystemState(state)
 }
 
-// 删除系统状态的某个字段
 export async function deleteSystemStateField<K extends keyof SystemState>(field: K): Promise<boolean> {
   const state = await loadSystemState()
   delete state[field]

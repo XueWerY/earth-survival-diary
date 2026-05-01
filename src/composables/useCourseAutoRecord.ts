@@ -19,9 +19,6 @@ interface Course {
   updatedAt: string
 }
 
-// 本地存储键名
-const RECORDED_COURSES_KEY = 'course:recorded-courses'
-
 // 已记录的课程ID集合
 const recordedCourses = ref<Set<string>>(new Set())
 
@@ -31,7 +28,7 @@ let initialized = false
 // 加载已记录的课程ID
 export async function loadRecordedCourses() {
   try {
-    const saved = await getData<string[]>(RECORDED_COURSES_KEY)
+    const saved = await getData<string[]>('course', 'recorded-courses')
     if (saved) {
       recordedCourses.value = new Set(saved)
     }
@@ -42,7 +39,7 @@ export async function loadRecordedCourses() {
 
 // 保存已记录的课程ID
 export async function saveRecordedCourses() {
-  await setData(RECORDED_COURSES_KEY, [...recordedCourses.value])
+  await setData('course', 'recorded-courses', [...recordedCourses.value])
 }
 
 // 获取本周周一（每周从周一开始）

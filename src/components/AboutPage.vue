@@ -135,7 +135,6 @@ const buildToc = () => {
 
 const scrollToSection = (id: string) => {
   logger.info('[关于] 切换导航项', { section: id })
-  const index = toc.value.findIndex(item => item.id === id)
   activeToc.value = id
   scrollToTocItem()
   nextTick(() => {

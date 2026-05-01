@@ -63,12 +63,13 @@
 | 日期处理   | Day.js + lunar-javascript |
 | 图表     | ECharts                   |
 | 后端服务   | Express                   |
-| 数据存储   | Redis                     |
+| 数据存储   | 本地文件存储                  |
+| 桌面应用   | Electron                  |
 | 实时通信   | WebSocket                 |
 
 ## 数据存储
 
-所有数据存储在 Redis 数据库中，用户数据通过 userId 隔离。
+所有数据存储在本地 JSON 文件中（`data/` 目录），用户数据通过 userId 隔离。
 
 ### 用户数据内容
 
@@ -100,7 +101,7 @@
 │   │   ├── CourseSchedule.vue    # 课程表
 │   │   ├── StatisticsPage.vue    # 统计
 │   │   ├── FootprintStats.vue    # 足迹统计
-│   │   ├── ProfilePage.vue       # 个人中心
+│   │   ├── ProfilePage.vue       # 个人中心（含设置）
 │   │   ├── AboutPage.vue         # 关于
 │   │   ├── HistoryFootprint.vue  # 历史足迹
 │   │   └── LunarDatePicker.vue   # 农历日期选择器
@@ -119,9 +120,55 @@
 │   │   └── storageService.ts
 │   └── types/                # TypeScript 类型
 ├── server/
-│   └── index.js              # Express 服务器
+│   ├── index.js              # Express 服务器
+│   └── local-storage.js      # 本地存储适配器
+├── electron/
+│   └── main.cjs              # Electron 主进程
 ├── public/                   # 静态资源
+├── data/                     # 本地数据目录
 └── logs/                     # 日志目录
+```
+
+## 快速开始
+
+### 环境要求
+
+- Node.js >= 18
+- pnpm
+
+### 安装依赖
+
+```bash
+pnpm install
+```
+
+### Web 模式
+
+```bash
+# 开发模式（前端 + 后端）
+pnpm dev:all
+
+# 仅启动前端
+pnpm dev
+
+# 仅启动后端
+pnpm server
+
+# 构建生产版本
+pnpm build
+
+# 预览生产版本
+pnpm preview
+```
+
+### Electron 桌面应用
+
+```bash
+# 开发模式
+pnpm electron:dev
+
+# 打包 Windows 应用
+pnpm electron:build:win
 ```
 
 ## API 接口

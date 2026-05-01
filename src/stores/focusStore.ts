@@ -44,9 +44,7 @@ export interface TimerState {
     isPaused: boolean // 是否处于暂停状态
 }
 
-const RECORDS_KEY = 'focus:records'
-const FAVORITES_KEY = 'focus:favorites'
-const SETTINGS_KEY = 'earth-survival-focus-settings'
+// 状态
 
 export const useFocusStore = defineStore('focus', () => {
     const records = ref<FocusRecord[]>([])
@@ -61,9 +59,9 @@ export const useFocusStore = defineStore('focus', () => {
     const loadData = async () => {
         if (isLoaded.value) return
         const [savedRecords, savedFavorites, savedSettings, savedTimerState] = await Promise.all([
-            getData<FocusRecord[]>(RECORDS_KEY),
-            getData<FavoriteFocus[]>(FAVORITES_KEY),
-            getData<FocusSettings>(SETTINGS_KEY),
+            getData<FocusRecord[]>('focus', 'records'),
+            getData<FavoriteFocus[]>('focus', 'favorites'),
+            getData<FocusSettings>('focus', 'settings'),
             getSystemStateField('focusTimer')
         ])
         if (savedRecords) records.value = savedRecords
@@ -75,15 +73,15 @@ export const useFocusStore = defineStore('focus', () => {
 
     // 保存数据
     const saveRecords = async () => {
-        await setData(RECORDS_KEY, records.value)
+        await setData('focus', 'records', records.value)
     }
 
     const saveFavorites = async () => {
-        await setData(FAVORITES_KEY, favorites.value)
+        await setData('focus', 'favorites', favorites.value)
     }
 
     const saveSettings = async () => {
-        await setData(SETTINGS_KEY, settings.value)
+        await setData('focus', 'settings', settings.value)
     }
 
     // 保存计时状态

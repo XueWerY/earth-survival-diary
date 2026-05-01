@@ -246,7 +246,7 @@ const WEEKDAYS = [
   { value: 0, label: '周日' }
 ]
 
-const STORAGE_KEY = 'course:courses'
+const STORAGE_KEY = ['course', 'courses'] as const
 
 const courses = ref<Course[]>([])
 const selectedDay = ref(0)
@@ -543,12 +543,12 @@ async function handleDeleteCourse() {
 }
 
 async function saveData() {
-  await setData(STORAGE_KEY, courses.value)
+  await setData(STORAGE_KEY[0], STORAGE_KEY[1], courses.value)
 }
 
 async function loadData() {
   try {
-    const saved = await getData<Course[]>(STORAGE_KEY)
+    const saved = await getData<Course[]>(STORAGE_KEY[0], STORAGE_KEY[1])
     if (saved) {
       courses.value = saved.map(c => ({
         id: c.id || Date.now().toString(),

@@ -3,21 +3,28 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "server": "node server/index.js",
-    "build": "vue-tsc -b && vite build",
+    "build": "vite build",
     "preview": "vite preview --host",
     "dev:all": "concurrently -k \"npm:server\" \"npm:dev\"",
     "start": "node server/index.js",
     "tunnel": "npx localtunnel --port 5000",
-    "migrate": "node scripts/migrate-yaml-to-redis.js"
+    "electron:dev": "cross-env NODE_ENV=development concurrently -k -n \"vite,server,electron\" \"npm run dev\" \"npm run server\" \"cross-env NODE_ENV=development electron . --no-deprecation\"",
+    "electron:start": "cross-env NODE_ENV=development electron .",
+    "electron:build": "npm run build && node scripts/install-deps.cjs && node scripts/make-ico.cjs && electron-builder",
+    "electron:build:win": "npm run build && node scripts/install-deps.cjs && node scripts/make-ico.cjs && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --win && node scripts/cleanup-release.cjs"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
+    "cors": "^2.8.5",
     "dayjs": "^1.11.20",
     "echarts": "^6.0.0",
+    "electron-updater": "^6.8.3",
     "element-plus": "^2.13.6",
+    "express": "^4.18.2",
     "ioredis": "^5.10.1",
     "lunar-javascript": "^1.7.7",
     "marked": "^17.0.5",
@@ -33,12 +40,68 @@
     "@types/node": "^24.12.0",
     "@vitejs/plugin-vue": "^6.0.5",
     "@vue/tsconfig": "^0.9.0",
+    "asar": "^3.2.0",
     "cloudflared": "^0.7.1",
     "concurrently": "^8.2.2",
-    "cors": "^2.8.5",
-    "express": "^4.18.2",
+    "cross-env": "^10.1.0",
+    "electron": "^41.3.0",
+    "electron-builder": "^26.8.1",
+    "sharp": "^0.34.5",
     "typescript": "~5.9.3",
     "vite": "^8.0.1",
-    "vue-tsc": "^3.2.5"
+    "vue-tsc": "^3.2.5",
+    "wait-on": "^9.0.5"
+  },
+  "build": {
+    "appId": "com.earth-survival-diary.app",
+    "productName": "地球 Online 生存日记",
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "server/**/*",
+      "dist/**/*",
+      "README.md",
+      "!node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "build/icon.png"
+      },
+      {
+        "from": "electron/node_modules",
+        "to": "node_modules"
+      }
+    ],
+    "asarUnpack": [
+      "dist/**/*"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "requestedExecutionLevel": "requireAdministrator",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "publish": {
+      "provider": "generic",
+      "url": "https://gitee.com/firefly3/earth-survival-diary/raw/main/releases/"
+    }
   }
 }

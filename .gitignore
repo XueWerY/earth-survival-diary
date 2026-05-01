@@ -40,3 +40,5 @@ __screenshots__/
 /data/
 /public/avatars/
 /pnpm-lock.yaml
+
+/release/

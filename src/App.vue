@@ -1,5 +1,18 @@
 <template>
   <div class="app-container">
+    <!-- 更新通知 -->
+    <div v-if="updateStatus" class="update-notification" :class="'update-' + updateStatus.status">
+      <span class="update-text">
+        <template v-if="updateStatus.status === 'available'">发现新版本 {{ updateStatus.version }}，正在下载...</template>
+        <template v-else-if="updateStatus.status === 'downloading'">正在下载更新 {{ updateStatus.percent }}%
+          <div class="update-progress-bar"><div class="update-progress-fill" :style="{ width: updateStatus.percent + '%' }"></div></div>
+        </template>
+        <template v-else-if="updateStatus.status === 'downloaded'">更新已下载完成，重启后生效</template>
+        <template v-else-if="updateStatus.status === 'error'">更新失败: {{ updateStatus.message }}</template>
+      </span>
+      <button v-if="updateStatus.status === 'downloaded'" class="update-btn" @click="installUpdate">立即重启</button>
+    </div>
+
     <!-- 星空背景 - 始终存在但通过 CSS 控制显示 -->
     <canvas ref="starCanvas" class="star-canvas" :class="{ 'canvas-hidden': !showStarCanvas }"></canvas>
 
@@ -74,6 +87,16 @@
               <span class="nav-label">课程表</span>
             </div>
 
+            <!-- 笔记 -->
+            <div
+                class="nav-item"
+                :class="{ active: currentPage === 'notes' }"
+                :ref="setNavItemRef"
+                @click="switchPage('notes')"
+            >
+              <span class="nav-label">笔记</span>
+            </div>
+
             <!-- 统计 -->
             <div
                 class="nav-item"
@@ -117,6 +140,7 @@
           <MissionList v-else-if="currentPage === 'mission'" />
           <CountdownList v-else-if="currentPage === 'countdown'" />
           <CourseSchedule v-else-if="currentPage === 'course'" />
+          <NotesPage v-else-if="currentPage === 'notes'" />
           <StatisticsPage v-else-if="currentPage === 'statistics'" />
           <ProfilePage v-else-if="currentPage === 'profile'" @logout="handleLogout" />
           <AboutPage v-else-if="currentPage === 'about'" />
@@ -136,6 +160,7 @@ import FocusTimer from './components/FocusTimer.vue'
 import AuthPage from './components/AuthPage.vue'
 import ProfilePage from './components/ProfilePage.vue'
 import AboutPage from './components/AboutPage.vue'
+import NotesPage from './components/NotesPage.vue'
 import StatisticsPage from './components/StatisticsPage.vue'
 import { initCourseAutoRecord } from './composables/useCourseAutoRecord'
 import { useTaskStore } from './stores/taskStore'
@@ -143,7 +168,7 @@ import { useMissionStore } from './stores/missionStore'
 import { useAuthStore } from './stores/authStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useFocusStore } from './stores/focusStore'
-import { getData, setData, preloadData, clearCache, getSystemStateField, setSystemStateField } from './services/storageService'
+import { getData, preloadData, clearCache, getSystemStateField, setSystemStateField } from './services/storageService'
 import { logger } from './lib/logger'
 
 const taskStore = useTaskStore()
@@ -157,6 +182,11 @@ const navItems = ref<HTMLElement[]>([])
 const showLeftShadow = ref(false)
 const showRightShadow = ref(false)
 const isNavOverflow = ref(false)
+const updateStatus = ref<UpdateStatus | null>(null)
+
+function installUpdate() {
+  window.electronAPI.installUpdate()
+}
 
 const setNavItemRef = (el: any) => {
   if (el) {
@@ -315,11 +345,6 @@ const showStarCanvas = computed(() => {
 const dataInitialized = ref(false)
 const isInitializing = ref(false)
 
-// 是否为管理员
-const isAdmin = computed(() => {
-  return authStore.user && authStore.user.role === 'admin'
-})
-
 // 认证成功处理
 const handleAuthSuccess = async () => {
   logger.info('[App] 登录/注册成功，初始化数据')
@@ -346,13 +371,7 @@ const switchPage = (page: typeof currentPage.value) => {
   currentPage.value = page
 }
 
-// 数据存储键
-const COUNTDOWN_KEY = 'milestones'
-const COUNTDOWN_CATEGORY_KEY = 'earth-survival-countdown-categories'
-const COURSE_KEY = 'course:courses'
-const RECORDED_COURSE_KEY = 'course:recorded-courses'
-
-// 初始化所有数据
+// 从服务器恢复页面状态
 const initializeData = async () => {
   if (isInitializing.value) {
     logger.debug('[App] 初始化正在进行中，跳过重复调用')
@@ -367,7 +386,7 @@ const initializeData = async () => {
     // 从服务器恢复页面状态
     try {
       const savedPage = await getSystemStateField('currentPage')
-      if (savedPage && ['footprint', 'focus', 'mission', 'countdown', 'course', 'statistics', 'settings', 'profile', 'about'].includes(savedPage)) {
+      if (savedPage && ['footprint', 'focus', 'mission', 'countdown', 'course', 'notes', 'statistics', 'profile', 'about'].includes(savedPage)) {
         currentPage.value = savedPage as any
         logger.debug('[App] 恢复页面状态:', { page: savedPage })
       }
@@ -400,38 +419,25 @@ const initializeData = async () => {
 // 预加载倒数日数据
 const preloadCountdownData = async () => {
   const [milestones, categories] = await Promise.all([
-    getData(COUNTDOWN_KEY),
-    getData(COUNTDOWN_CATEGORY_KEY)
+    getData('countdown', 'countdowns'),
+    getData('countdown', 'categories')
   ])
-  if (milestones) preloadData(COUNTDOWN_KEY, milestones)
-  if (categories) preloadData(COUNTDOWN_CATEGORY_KEY, categories)
+  if (milestones) preloadData('countdown', 'countdowns', milestones)
+  if (categories) preloadData('countdown', 'categories', categories)
 }
 
 // 预加载课程表数据
 const preloadCourseData = async () => {
   const [courses, recordedCourses] = await Promise.all([
-    getData(COURSE_KEY),
-    getData(RECORDED_COURSE_KEY)
+    getData('course', 'courses'),
+    getData('course', 'recorded-courses')
   ])
-  if (courses) preloadData(COURSE_KEY, courses)
-  if (recordedCourses) preloadData(RECORDED_COURSE_KEY, recordedCourses)
+  if (courses) preloadData('course', 'courses', courses)
+  if (recordedCourses) preloadData('course', 'recorded-courses', recordedCourses)
 }
 
 // 从 Redis 恢复页面状态
-const currentPage = ref<'footprint' | 'focus' | 'mission' | 'countdown' | 'course' | 'statistics' | 'settings' | 'profile' | 'about'>('footprint')
-
-// 初始化页面状态（用于 handleAuthSuccess 早期恢复）
-const _initPageState = async () => {
-  try {
-    const savedPage = await getSystemStateField('currentPage')
-    if (savedPage && ['footprint', 'focus', 'mission', 'countdown', 'course', 'statistics', 'settings', 'profile', 'about'].includes(savedPage)) {
-      currentPage.value = savedPage as any
-      logger.debug('[App] 早期恢复页面状态:', { page: savedPage })
-    }
-  } catch {
-    currentPage.value = 'footprint'
-  }
-}
+const currentPage = ref<'footprint' | 'focus' | 'mission' | 'countdown' | 'course' | 'notes' | 'statistics' | 'profile' | 'about'>('footprint')
 
 // 监听认证状态变化，当用户登录成功时初始化数据
 watch(
@@ -450,9 +456,6 @@ watch(currentPage, async (newPage) => {
   await setSystemStateField('currentPage', newPage)
   scrollNavToCenter()
 })
-
-// 初始化课程自动记录（在 onMounted 中已有完整初始化）
-// initCourseAutoRecord() will be called in onMounted with proper args
 
 // 专注模块全屏状态
 const isFocusFullscreen = ref(false)
@@ -493,9 +496,7 @@ interface Meteor {
 // 初始化课程自动记录功能
 const initCourseAutoRecordFromStorage = async () => {
   try {
-    const COURSES_KEY = 'course:courses'
-
-    const savedCourses = await getData<any[]>(COURSES_KEY)
+    const savedCourses = await getData<any[]>('course', 'courses')
 
     if (savedCourses) {
       const settingsStore = useSettingsStore()
@@ -509,6 +510,10 @@ const initCourseAutoRecordFromStorage = async () => {
 }
 
 onMounted(async () => {
+
+  window.electronAPI?.onUpdateStatus((data) => {
+    updateStatus.value = data
+  })
 
   // 先初始化认证状态
   await authStore.init()
@@ -658,6 +663,56 @@ onUnmounted(() => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+/* 更新通知 */
+.update-notification {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-size: 14px;
+  color: #fff;
+}
+.update-available, .update-downloading {
+  background: rgba(59, 130, 246, 0.95);
+}
+.update-downloaded {
+  background: rgba(34, 197, 94, 0.95);
+}
+.update-error {
+  background: rgba(239, 68, 68, 0.95);
+}
+.update-progress-bar {
+  width: 200px;
+  height: 4px;
+  background: rgba(255,255,255,0.3);
+  border-radius: 2px;
+  margin-top: 6px;
+}
+.update-progress-fill {
+  height: 100%;
+  background: #fff;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+.update-btn {
+  padding: 4px 16px;
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+.update-btn:hover {
+  background: rgba(255,255,255,0.3);
 }
 
 /* 被踢出提示 */

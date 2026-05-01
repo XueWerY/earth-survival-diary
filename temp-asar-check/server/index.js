@@ -184,51 +184,46 @@ app.use(express.json({ limit: '10mb' }))
 
 // 认证中间件
 async function authMiddleware(req, res, next) {
-  try {
-    const authHeader = req.headers.authorization
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: '未登录' })
-    }
-
-    const token = authHeader.substring(7)
-    const userId = verifyToken(token)
-
-    if (!userId) {
-      return res.status(401).json({ error: '登录已过期，请重新登录' })
-    }
-
-    // 通过反向查找获取用户邮箱（必须在 session 操作之前，避免为不存在的用户创建目录）
-    const userEmails = getAllUserEmails()
-    let userEntry = null
-    for (const email of userEmails) {
-      const user = getUserIndexByEmail(email)
-      if (user && user.id === userId) {
-        userEntry = user
-        break
-      }
-    }
-
-    if (!userEntry) {
-      return res.status(401).json({ error: '用户不存在' })
-    }
-
-    // 检查是否是当前活跃会话
-    const session = await getUserSession(userId)
-    if (!session) {
-      await setUserSession(userId, token)
-    } else {
-      if (session.token !== token) {
-        return res.status(401).json({ error: '账号已在其他设备登录，请重新登录', kicked: true })
-      }
-    }
-
-    req.userId = userId
-    req.userEmail = userEntry.email
-    next()
-  } catch (e) {
-    console.error('Auth middleware error:', e)
-    res.status(500).json({ error: '认证服务异常' })
+  const authHeader = req.headers.authorization
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: '未登录' })
   }
+
+  const token = authHeader.substring(7)
+  const userId = verifyToken(token)
+
+  if (!userId) {
+    return res.status(401).json({ error: '登录已过期，请重新登录' })
+  }
+
+  // 检查是否是当前活跃会话
+  const session = await getUserSession(userId)
+  if (!session) {
+    await setUserSession(userId, token)
+  } else {
+    if (session.token !== token) {
+      return res.status(401).json({ error: '账号已在其他设备登录，请重新登录', kicked: true })
+    }
+  }
+
+  // 通过反向查找获取用户邮箱
+  const userEmails = getAllUserEmails()
+  let userEntry = null
+  for (const email of userEmails) {
+    const user = getUserIndexByEmail(email)
+    if (user && user.id === userId) {
+      userEntry = user
+      break
+    }
+  }
+
+  if (!userEntry) {
+    return res.status(401).json({ error: '用户不存在' })
+  }
+
+  req.userId = userId
+  req.userEmail = userEntry.email
+  next()
 }
 
 // ============ 认证 API ============
@@ -462,14 +457,6 @@ app.post('/api/auth/check-session', async (req, res) => {
   if (!userId) {
     return res.json({ valid: false, kicked: false })
   }
-
-  const userEmails = getAllUserEmails()
-  let userExists = false
-  for (const email of userEmails) {
-    const user = getUserIndexByEmail(email)
-    if (user && user.id === userId) { userExists = true; break }
-  }
-  if (!userExists) return res.json({ valid: false, kicked: false })
 
   // 检查是否是当前活跃会话
   const session = await getUserSession(userId)
@@ -1060,10 +1047,10 @@ app.get('/api/stats', authMiddleware, async (req, res) => {
 // ============ 通用数据存储 API ============
 
 // 获取数据
-app.get('/api/data/:type/:key', authMiddleware, async (req, res) => {
+app.get('/api/data/:key', authMiddleware, async (req, res) => {
   try {
-    const { type, key } = req.params
-    const data = await getUserKV(req.userId, type, key)
+    const { key } = req.params
+    const data = await getUserKV(req.userId, key)
     res.json({ success: true, data: data || null })
   } catch (error) {
     console.error('Get data error:', error)
@@ -1072,12 +1059,12 @@ app.get('/api/data/:type/:key', authMiddleware, async (req, res) => {
 })
 
 // 设置数据
-app.post('/api/data/:type/:key', authMiddleware, async (req, res) => {
+app.post('/api/data/:key', authMiddleware, async (req, res) => {
   try {
-    const { type, key } = req.params
+    const { key } = req.params
     const { data } = req.body
 
-    await setUserKV(req.userId, type, key, data)
+    await setUserKV(req.userId, key, data)
     res.json({ success: true })
   } catch (error) {
     console.error('Set data error:', error)
@@ -1086,15 +1073,48 @@ app.post('/api/data/:type/:key', authMiddleware, async (req, res) => {
 })
 
 // 删除数据
-app.delete('/api/data/:type/:key', authMiddleware, async (req, res) => {
+app.delete('/api/data/:key', authMiddleware, async (req, res) => {
   try {
-    const { type, key } = req.params
+    const { key } = req.params
 
-    await deleteUserKV(req.userId, type, key)
+    await deleteUserKV(req.userId, key)
     res.json({ success: true })
   } catch (error) {
     console.error('Delete data error:', error)
     res.status(500).json({ success: false, error: '删除数据失败' })
+  }
+})
+
+// 批量获取数据
+app.post('/api/data/batch/get', authMiddleware, async (req, res) => {
+  try {
+    const { keys } = req.body
+
+    const results = {}
+    for (const key of keys) {
+      results[key] = await getUserKV(req.userId, key)
+    }
+
+    res.json({ success: true, data: results })
+  } catch (error) {
+    console.error('Batch get error:', error)
+    res.status(500).json({ success: false, error: '批量获取失败' })
+  }
+})
+
+// 批量设置数据
+app.post('/api/data/batch/set', authMiddleware, async (req, res) => {
+  try {
+    const { items } = req.body
+
+    for (const { key, data } of items) {
+      await setUserKV(req.userId, key, data)
+    }
+
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Batch set error:', error)
+    res.status(500).json({ success: false, error: '批量设置失败' })
   }
 })
 
@@ -1320,204 +1340,6 @@ app.get('/api/logs', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Get logs error:', error)
     res.status(500).json({ error: '获取日志失败' })
-  }
-})
-
-// ============ 笔记分类 API ============
-
-const NOTES_CATEGORIES_KEY = 'notes_categories'
-
-app.get('/api/notes-categories', authMiddleware, async (req, res) => {
-  try {
-    const categories = await getUserKV(req.userId, NOTES_CATEGORIES_KEY) || []
-    res.json({ categories })
-  } catch (error) {
-    console.error('Get note categories error:', error)
-    res.status(500).json({ error: '获取分类失败' })
-  }
-})
-
-app.post('/api/notes-categories', authMiddleware, async (req, res) => {
-  try {
-    const { name, color } = req.body
-    const categories = await getUserKV(req.userId, NOTES_CATEGORIES_KEY) || []
-    const newCat = {
-      id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6),
-      name: name || '新分类',
-      color: color || '#667eea',
-      order: categories.length,
-      created_at: new Date().toISOString()
-    }
-    categories.push(newCat)
-    await setUserKV(req.userId, NOTES_CATEGORIES_KEY, categories)
-    res.json({ category: newCat })
-  } catch (error) {
-    console.error('Create note category error:', error)
-    res.status(500).json({ error: '创建分类失败' })
-  }
-})
-
-app.put('/api/notes-categories/:id', authMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params
-    const { name, color } = req.body
-    const categories = await getUserKV(req.userId, NOTES_CATEGORIES_KEY) || []
-    const idx = categories.findIndex(c => c.id === id)
-    if (idx === -1) return res.status(404).json({ error: '分类不存在' })
-    if (name !== undefined) categories[idx].name = name
-    if (color !== undefined) categories[idx].color = color
-    await setUserKV(req.userId, NOTES_CATEGORIES_KEY, categories)
-    res.json({ category: categories[idx] })
-  } catch (error) {
-    console.error('Update note category error:', error)
-    res.status(500).json({ error: '更新分类失败' })
-  }
-})
-
-app.delete('/api/notes-categories/:id', authMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params
-    const categories = await getUserKV(req.userId, NOTES_CATEGORIES_KEY) || []
-    const notebooks = await getUserKV(req.userId, 'notes_notebooks') || []
-    const notes = await getUserKV(req.userId, 'notes_items') || []
-    await setUserKV(req.userId, NOTES_CATEGORIES_KEY, categories.filter(c => c.id !== id))
-    await setUserKV(req.userId, 'notes_notebooks', notebooks.filter(n => n.categoryId !== id))
-    await setUserKV(req.userId, 'notes_items', notes.filter(n => n.notebookId && !notebooks.find(nb => nb.categoryId === id && nb.id === n.notebookId)))
-    res.json({ success: true })
-  } catch (error) {
-    console.error('Delete note category error:', error)
-    res.status(500).json({ error: '删除分类失败' })
-  }
-})
-
-// ============ 笔记本 API ============
-
-app.get('/api/notes-notebooks', authMiddleware, async (req, res) => {
-  try {
-    const notebooks = await getUserKV(req.userId, 'notes_notebooks') || []
-    const { categoryId } = req.query
-    const result = categoryId ? notebooks.filter(n => n.categoryId === categoryId) : notebooks
-    res.json({ notebooks: result })
-  } catch (error) {
-    console.error('Get notebooks error:', error)
-    res.status(500).json({ error: '获取笔记本失败' })
-  }
-})
-
-app.post('/api/notes-notebooks', authMiddleware, async (req, res) => {
-  try {
-    const { categoryId, name } = req.body
-    const notebooks = await getUserKV(req.userId, 'notes_notebooks') || []
-    const newNb = {
-      id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6),
-      categoryId: categoryId || '',
-      name: name || '新笔记本',
-      order: notebooks.length,
-      created_at: new Date().toISOString()
-    }
-    notebooks.push(newNb)
-    await setUserKV(req.userId, 'notes_notebooks', notebooks)
-    res.json({ notebook: newNb })
-  } catch (error) {
-    console.error('Create notebook error:', error)
-    res.status(500).json({ error: '创建笔记本失败' })
-  }
-})
-
-app.put('/api/notes-notebooks/:id', authMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params
-    const { name } = req.body
-    const notebooks = await getUserKV(req.userId, 'notes_notebooks') || []
-    const idx = notebooks.findIndex(n => n.id === id)
-    if (idx === -1) return res.status(404).json({ error: '笔记本不存在' })
-    if (name !== undefined) notebooks[idx].name = name
-    await setUserKV(req.userId, 'notes_notebooks', notebooks)
-    res.json({ notebook: notebooks[idx] })
-  } catch (error) {
-    console.error('Update notebook error:', error)
-    res.status(500).json({ error: '更新笔记本失败' })
-  }
-})
-
-app.delete('/api/notes-notebooks/:id', authMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params
-    const notebooks = await getUserKV(req.userId, 'notes_notebooks') || []
-    const notes = await getUserKV(req.userId, 'notes_items') || []
-    await setUserKV(req.userId, 'notes_notebooks', notebooks.filter(n => n.id !== id))
-    await setUserKV(req.userId, 'notes_items', notes.filter(n => n.notebookId !== id))
-    res.json({ success: true })
-  } catch (error) {
-    console.error('Delete notebook error:', error)
-    res.status(500).json({ error: '删除笔记本失败' })
-  }
-})
-
-// ============ 笔记内容 API ============
-
-const NOTES_ITEMS_KEY = 'notes_items'
-
-app.get('/api/notes', authMiddleware, async (req, res) => {
-  try {
-    const notes = await getUserKV(req.userId, NOTES_ITEMS_KEY) || []
-    const { notebookId } = req.query
-    const result = notebookId ? notes.filter(n => n.notebookId === notebookId) : notes
-    res.json({ notes: result })
-  } catch (error) {
-    console.error('Get notes error:', error)
-    res.status(500).json({ error: '获取笔记失败' })
-  }
-})
-
-app.post('/api/notes', authMiddleware, async (req, res) => {
-  try {
-    const { notebookId, title, content } = req.body
-    const notes = await getUserKV(req.userId, NOTES_ITEMS_KEY) || []
-    const newNote = {
-      id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6),
-      notebookId: notebookId || '',
-      title: title || '无标题',
-      content: content || '',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }
-    notes.unshift(newNote)
-    await setUserKV(req.userId, NOTES_ITEMS_KEY, notes)
-    res.json({ note: newNote })
-  } catch (error) {
-    console.error('Create note error:', error)
-    res.status(500).json({ error: '创建笔记失败' })
-  }
-})
-
-app.put('/api/notes/:id', authMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params
-    const { title, content } = req.body
-    const notes = await getUserKV(req.userId, NOTES_ITEMS_KEY) || []
-    const index = notes.findIndex(n => n.id === id)
-    if (index === -1) return res.status(404).json({ error: '笔记不存在' })
-    if (title !== undefined) notes[index].title = title
-    if (content !== undefined) notes[index].content = content
-    notes[index].updated_at = new Date().toISOString()
-    await setUserKV(req.userId, NOTES_ITEMS_KEY, notes)
-    res.json({ note: notes[index] })
-  } catch (error) {
-    console.error('Update note error:', error)
-    res.status(500).json({ error: '更新笔记失败' })
-  }
-})
-
-app.delete('/api/notes/:id', authMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params
-    const notes = await getUserKV(req.userId, NOTES_ITEMS_KEY) || []
-    await setUserKV(req.userId, NOTES_ITEMS_KEY, notes.filter(n => n.id !== id))
-    res.json({ success: true })
-  } catch (error) {
-    console.error('Delete note error:', error)
-    res.status(500).json({ error: '删除笔记失败' })
   }
 })
 

@@ -383,7 +383,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onActivated, watch, nextTick, onBeforeUpdate } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Calendar, Clock, Timer, Star, MoreFilled, Warning, Sunny } from '@element-plus/icons-vue'
+import { Plus, Calendar, Clock, Timer, Star, MoreFilled, Sunny } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import LunarDatePicker from './LunarDatePicker.vue'
 import { getData, setData, getSystemStateField, setSystemStateField } from '../services/storageService'
@@ -438,8 +438,8 @@ const ICON_OPTIONS = ['🎂', '💕', '🎉', '✈️', '🎮', '💼', '📚', 
 
 const COLOR_OPTIONS = ['#f472b6', '#ec4899', '#a855f7', '#8b5cf6', '#06b6d4', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6b7280']
 
-const STORAGE_KEY = 'milestones'
-const CATEGORY_KEY = 'earth-survival-countdown-categories'
+const STORAGE_KEY = ['countdown', 'countdowns'] as const
+const CATEGORY_KEY = ['countdown', 'categories'] as const
 
 const milestones = ref<Milestone[]>([])
 const categories = ref<Category[]>([...DEFAULT_CATEGORIES])
@@ -630,21 +630,21 @@ const getCategoryIcon = (categoryValue: string): string => {
 }
 
 const saveData = async () => {
-  await setData(STORAGE_KEY, milestones.value)
+  await setData(STORAGE_KEY[0], STORAGE_KEY[1], milestones.value)
 }
 
 const saveCategories = async () => {
-  await setData(CATEGORY_KEY, categories.value)
+  await setData(CATEGORY_KEY[0], CATEGORY_KEY[1], categories.value)
 }
 
 const loadData = async () => {
   try {
-    const savedCategories = await getData<Category[]>(CATEGORY_KEY)
+    const savedCategories = await getData<Category[]>(CATEGORY_KEY[0], CATEGORY_KEY[1])
     if (savedCategories && savedCategories.length > 0) {
       categories.value = savedCategories
     }
 
-    const saved = await getData<Milestone[]>(STORAGE_KEY)
+    const saved = await getData<Milestone[]>(STORAGE_KEY[0], STORAGE_KEY[1])
     if (saved) {
       milestones.value = saved.map((m: Milestone) => ({
         id: m.id || Date.now().toString() + Math.random(),

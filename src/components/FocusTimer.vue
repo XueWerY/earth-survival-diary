@@ -297,12 +297,27 @@ const startCountdown = () => {
 
     if (remainingSeconds.value <= 0) {
       // 时间到
+      sendNotification(focusName.value)
       completeFocus()
     }
   }
 
   updateTimer() // 立即执行一次
   timerInterval = setInterval(updateTimer, 1000)
+}
+
+// 发送系统通知
+const sendNotification = (name: string) => {
+  if (!('Notification' in window)) return
+  if (Notification.permission === 'granted') {
+    new Notification('专注完成', { body: `「${name}」已完成` })
+  } else if (Notification.permission !== 'denied') {
+    Notification.requestPermission().then((perm) => {
+      if (perm === 'granted') {
+        new Notification('专注完成', { body: `「${name}」已完成` })
+      }
+    })
+  }
 }
 
 // 开始正计时 - 使用时间戳计算
@@ -533,6 +548,7 @@ onMounted(async () => {
       } else {
         elapsedSeconds.value = totalSeconds
         remainingSeconds.value = 0
+        sendNotification(focusName.value)
         await completeFocus()
       }
     } else {
@@ -558,6 +574,7 @@ const handleVisibilityChange = () => {
       elapsedSeconds.value = elapsed
 
       if (remainingSeconds.value <= 0) {
+        sendNotification(focusName.value)
         completeFocus()
       }
     } else {
