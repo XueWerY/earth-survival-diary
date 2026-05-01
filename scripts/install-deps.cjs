@@ -8,7 +8,7 @@ if (fs.existsSync(MODULES_DIR)) {
   fs.rmSync(MODULES_DIR, { recursive: true, force: true })
 }
 
-execSync(`npm install --prefix "${path.join(__dirname, '..', 'electron')}" express@4 cors --no-audit --no-fund --no-save --loglevel=error --omit=dev`, {
+execSync(`npm install --prefix "${path.join(__dirname, '..', 'electron')}" express@4 cors electron-updater --no-audit --no-fund --no-save --loglevel=error --omit=dev`, {
   stdio: 'inherit'
 })
 

@@ -101,7 +101,7 @@
     },
     "publish": {
       "provider": "generic",
-      "url": "https://gitee.com/firefly3/earth-survival-diary/raw/main/releases/"
+      "url": "https://gitee.com/firefly3/earth-survival-diary/raw/master/release"
     }
   }
 }

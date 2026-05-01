@@ -41,4 +41,4 @@ __screenshots__/
 /public/avatars/
 /pnpm-lock.yaml
 
-/release/
+/release/win-unpacked/
