@@ -42,3 +42,5 @@ __screenshots__/
 
 /release/win-unpacked/
 /data/
+/release/*.exe
+/release/*.blockmap

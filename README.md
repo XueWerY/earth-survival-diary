@@ -236,6 +236,10 @@ pnpm electron:build:win
 
 ## 更新日志
 
+### v2.4.0 (2026-05)
+
+- 修正仓库地址为 XueWerY/earth-survival-diary，修复更新检查 404 问题
+
 ### v2.3.0 (2026-05)
 
 - 安装包下载从 raw 直链改为 GitHub Releases，修复更新检查失败问题
@@ -293,7 +297,7 @@ pnpm electron:build:win
 
 MIT License
 
-Copyright (c) 2026 firefly3
+Copyright (c) 2026 XueWerY
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
