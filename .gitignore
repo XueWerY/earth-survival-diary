@@ -42,3 +42,5 @@ __screenshots__/
 /pnpm-lock.yaml
 
 /release/win-unpacked/
+/release/*.exe
+/release/*.blockmap

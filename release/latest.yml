@@ -1,8 +1,8 @@
-version: 1.1.0
+version: 1.1.1
 files:
-  - url: 地球 Online 生存日记 Setup 1.1.0.exe
-    sha512: C3aBOxJudWipnzFlIjRz5be0nTvxNUlxSgGVqlbriv620nfhhdWhaYPvPfW4YztK71d+Lxj1juVLcoXPmkC8xw==
-    size: 103218625
-path: 地球 Online 生存日记 Setup 1.1.0.exe
-sha512: C3aBOxJudWipnzFlIjRz5be0nTvxNUlxSgGVqlbriv620nfhhdWhaYPvPfW4YztK71d+Lxj1juVLcoXPmkC8xw==
-releaseDate: '2026-05-02T05:40:02.091Z'
+  - url: https://gitee.com/firefly3/earth-survival-diary/releases/download/v1.1.1/%E5%9C%B0%E7%90%83%20Online%20%E7%94%9F%E5%AD%98%E6%97%A5%E8%AE%B0%20Setup%201.1.1.exe
+    sha512: QTcQ8+d4d25nPBdAFjghsGVmlT6W8dZOuIl5sPJrzBwzP0ZrenO16eKbvL/6Ysk+PKYowcR6AYUnATTgvsrTPA==
+    size: 103218730
+path: https://gitee.com/firefly3/earth-survival-diary/releases/download/v1.1.1/%E5%9C%B0%E7%90%83%20Online%20%E7%94%9F%E5%AD%98%E6%97%A5%E8%AE%B0%20Setup%201.1.1.exe
+sha512: QTcQ8+d4d25nPBdAFjghsGVmlT6W8dZOuIl5sPJrzBwzP0ZrenO16eKbvL/6Ysk+PKYowcR6AYUnATTgvsrTPA==
+releaseDate: '2026-05-02T06:00:07.187Z'

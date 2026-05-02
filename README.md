@@ -261,6 +261,11 @@ pnpm electron:build:win
 
 ## 更新日志
 
+### v1.1.1 (2026-05)
+
+- 修复 Gitee raw 下载大文件 403 问题，改用 Gitee Releases 分发安装包
+- 新增 `fix-latest-yml.cjs` 脚本自动生成发布用 latest.yml
+
 ### v1.1.0 (2026-05)
 
 - 新增 Electron 桌面应用自动更新功能（基于 electron-updater + Gitee Releases）
