@@ -52,6 +52,12 @@
 - 数据隔离：每个用户独立的数据
 - 个人资料：自定义昵称
 
+### 🔄 自动更新
+
+- 启动时自动检查新版本
+- 后台静默下载，下载完成后提示重启安装
+- 手动检查更新入口
+
 ## 技术栈
 
 | 类型     | 技术                        |
@@ -64,7 +70,7 @@
 | 图表     | ECharts                   |
 | 后端服务   | Express                   |
 | 数据存储   | 本地文件存储                  |
-| 桌面应用   | Electron                  |
+| 桌面应用   | Electron + electron-updater |
 | 实时通信   | WebSocket                 |
 
 ## 数据存储
@@ -81,7 +87,7 @@
 - 倒数日：事件、目标日期、分类、星标
 - 课程表：课程安排、地点、教师、周次
 - 专注记录：常用专注事项
-- 设置项：应用配置
+- 设置项：专注时长、学期信息等应用配置
 
 ## 项目结构
 
@@ -119,11 +125,15 @@
 │   ├── services/             # 服务层
 │   │   └── storageService.ts
 │   └── types/                # TypeScript 类型
+│       └── electron.d.ts
 ├── server/
 │   ├── index.js              # Express 服务器
 │   └── local-storage.js      # 本地存储适配器
 ├── electron/
-│   └── main.cjs              # Electron 主进程
+│   ├── main.cjs              # Electron 主进程
+│   ├── preload.cjs           # 预加载脚本（IPC 桥接）
+│   └── prod-server.cjs       # 生产环境内嵌服务器
+├── scripts/                  # 构建与发布脚本
 ├── public/                   # 静态资源
 ├── data/                     # 本地数据目录
 └── logs/                     # 日志目录
@@ -221,13 +231,11 @@ pnpm electron:build:win
 
 ### 通用数据接口
 
-| 方法     | 路径                  | 说明   |
-| ------ | ------------------- | ---- |
-| GET    | /api/data/:key      | 获取数据 |
-| POST   | /api/data/:key      | 保存数据 |
-| DELETE | /api/data/:key      | 删除数据 |
-| POST   | /api/data/batch/get | 批量获取 |
-| POST   | /api/data/batch/set | 批量设置 |
+| 方法     | 路径                     | 说明   |
+| ------ | ---------------------- | ---- |
+| GET    | /api/data/:type/:key   | 获取数据 |
+| POST   | /api/data/:type/:key   | 保存数据 |
+| DELETE | /api/data/:type/:key   | 删除数据 |
 
 ### 设置模块
 
@@ -250,6 +258,24 @@ pnpm electron:build:win
 | GET | /api/stats   | 获取统计 |
 | GET | /api/health  | 健康检查 |
 | GET | /api/version | 版本信息 |
+
+## 更新日志
+
+### v1.1.0 (2026-05)
+
+- 新增 Electron 桌面应用自动更新功能（基于 electron-updater + Gitee Releases）
+- 重构数据目录结构为 `<userId>/<type>/<key>.json`
+- 简化 API 接口：通用数据接口路径变为 `/api/data/:type/:key`
+- 修复安装后程序图标变黑的问题
+- 修复开学日期设置无法保存的问题
+- 将 npm 依赖安装从应用启动移至安装阶段
+
+### v1.0.0 (2026-04)
+
+- 首个正式版本
+- 足迹记录、专注计时、清单管理、倒数日、课程表、统计功能
+- 用户系统：邮箱注册/登录、数据隔离
+- Electron 桌面应用支持
 
 ## License
 

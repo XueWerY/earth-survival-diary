@@ -123,7 +123,7 @@
               <LunarDatePicker
                   v-model="courseSettings.semesterStartDate"
                   :show-lunar="true"
-                  @change="handleCourseSettingChange"
+                  @update:model-value="handleCourseSettingChange"
               />
             </div>
           </div>
