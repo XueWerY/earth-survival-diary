@@ -261,6 +261,10 @@ pnpm electron:build:win
 
 ## 更新日志
 
+### v1.1.2 (2026-05)
+
+- fix-latest-yml.cjs 已集成到 `electron:build:win` 构建命令，构建时自动生成 Gitee Releases 下载地址
+
 ### v1.1.1 (2026-05)
 
 - 修复 Gitee raw 下载大文件 403 问题，改用 Gitee Releases 分发安装包
