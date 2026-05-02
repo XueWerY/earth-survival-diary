@@ -236,6 +236,10 @@ pnpm electron:build:win
 
 ## 更新日志
 
+### v2.8.0 (2026-05)
+
+- 安装包文件名中文改英文，修复 URL 编码不一致导致更新下载失败
+
 ### v2.7.1 (2026-05)
 
 - 修正 publish.url 分支名 master→main，修复 latest.yml 404 导致更新检查失败
