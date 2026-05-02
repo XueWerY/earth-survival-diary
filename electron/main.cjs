@@ -51,7 +51,7 @@ ipcMain.handle('install-update', () => {
   autoUpdater.quitAndInstall()
 })
 
-const logFile = path.join(process.resourcesPath, 'electron-debug.log')
+const logFile = path.join(app.getPath('userData'), 'electron-debug.log')
 fs.writeFileSync(logFile, '[Electron] App started\n')
 
 function debugLog(msg) {
@@ -80,7 +80,7 @@ async function startServer() {
   const { createProdServer } = require(serverModulePath)
   const { server } = createProdServer({
     port: 5000,
-    dataDir: path.join(process.resourcesPath, 'data'),
+    dataDir: path.join(app.getPath('userData'), 'data'),
     distPath: path.join(unpackedPath, 'dist'),
     resourcesPath: process.resourcesPath
   })
@@ -180,6 +180,17 @@ app.whenReady().then(async () => {
         return
       }
     } else {
+      const oldDataDir = path.join(process.resourcesPath, 'data')
+      const newDataDir = path.join(app.getPath('userData'), 'data')
+      if (fs.existsSync(oldDataDir) && !fs.existsSync(newDataDir)) {
+        try {
+          fs.mkdirSync(app.getPath('userData'), { recursive: true })
+          fs.renameSync(oldDataDir, newDataDir)
+          debugLog('[Electron] Data migrated to userData: ' + newDataDir)
+        } catch (e) {
+          errorLog('[Electron] Data migration failed: ' + e.message)
+        }
+      }
       const port = await startServer()
       url = 'http://127.0.0.1:' + port
     }

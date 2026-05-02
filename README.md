@@ -75,7 +75,7 @@
 
 ## 数据存储
 
-所有数据存储在本地 JSON 文件中（`data/` 目录），用户数据通过 userId 隔离。
+所有数据存储在 `%APPDATA%/earth-survival-diary/data/` 目录中，用户数据通过 userId 隔离。更新或重装不会影响已有数据。卸载时可选择是否删除。
 
 ### 用户数据内容
 
@@ -133,7 +133,7 @@
 │   ├── main.cjs              # Electron 主进程
 │   ├── preload.cjs           # 预加载脚本（IPC 桥接）
 │   └── prod-server.cjs       # 生产环境内嵌服务器
-├── scripts/                  # 构建与发布脚本
+├── scripts/                  # 构建、图标、安装脚本
 ├── public/                   # 静态资源
 ├── data/                     # 本地数据目录
 └── logs/                     # 日志目录
@@ -260,6 +260,12 @@ pnpm electron:build:win
 | GET | /api/version | 版本信息 |
 
 ## 更新日志
+
+### v1.1.3 (2026-05)
+
+- 修复更新/重装时 data 目录被删除的问题，用户数据移至 `%APPDATA%` 独立存储
+- 首次启动自动迁移旧版 data 目录
+- 卸载时可选择是否删除用户数据
 
 ### v1.1.2 (2026-05)
 
