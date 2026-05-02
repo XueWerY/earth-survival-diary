@@ -12,38 +12,83 @@ if (!gotTheLock) {
 }
 
 let mainWindow
+let updateWindow = null
 let serverInstance = null
 let updateDownloaded = false
+let isManualCheck = false
 
 autoUpdater.autoDownload = false
 autoUpdater.autoInstallOnAppQuit = true
 
+function sendUpdateStatus(data) {
+  if (updateWindow && !updateWindow.isDestroyed()) {
+    updateWindow.webContents.send('update-status', data)
+  }
+}
+
+function createUpdateWindow() {
+  if (updateWindow && !updateWindow.isDestroyed()) {
+    updateWindow.focus()
+    return
+  }
+  updateWindow = new BrowserWindow({
+    width: 380,
+    height: 320,
+    resizable: false,
+    title: '更新',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.cjs')
+    }
+  })
+  updateWindow.setMenuBarVisibility(false)
+  updateWindow.loadFile(path.join(__dirname, 'update.html'))
+
+  updateWindow.on('closed', () => {
+    updateWindow = null
+    if (!updateDownloaded && mainWindow) {
+      mainWindow.show()
+    }
+  })
+}
+
 autoUpdater.on('update-available', (info) => {
   debugLog('[Updater] Update available: ' + info.version)
-  if (mainWindow) mainWindow.webContents.send('update-status', { status: 'available', version: info.version })
+  createUpdateWindow()
+  if (mainWindow && !isDev) mainWindow.hide()
   autoUpdater.downloadUpdate()
 })
 
 autoUpdater.on('download-progress', (progress) => {
-  if (mainWindow) mainWindow.webContents.send('update-status', { status: 'downloading', percent: Math.floor(progress.percent) })
+  sendUpdateStatus({ status: 'downloading', percent: Math.floor(progress.percent) })
 })
 
 autoUpdater.on('update-downloaded', () => {
   updateDownloaded = true
-  if (mainWindow) mainWindow.webContents.send('update-status', { status: 'downloaded' })
+  sendUpdateStatus({ status: 'downloaded' })
 })
 
 autoUpdater.on('error', (err) => {
   debugLog('[Updater] Error: ' + err.message)
-  if (mainWindow) mainWindow.webContents.send('update-status', { status: 'error', message: err.message })
+  sendUpdateStatus({ status: 'error', message: err.message })
 })
 
 ipcMain.handle('check-for-update', async () => {
+  isManualCheck = true
+  createUpdateWindow()
   try {
     const result = await autoUpdater.checkForUpdates()
-    return { updateAvailable: result?.updateInfo?.version !== app.getVersion() }
+    if (!result || result.updateInfo.version === app.getVersion()) {
+      sendUpdateStatus({ status: 'no-update' })
+      return { updateAvailable: false }
+    }
+    return { updateAvailable: true }
   } catch (e) {
+    sendUpdateStatus({ status: 'error', message: e.message })
     return { error: e.message }
+  } finally {
+    isManualCheck = false
   }
 })
 
@@ -76,12 +121,13 @@ async function startServer() {
   }
 
   const unpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked')
+  const asarDistPath = path.join(process.resourcesPath, 'app.asar', 'dist')
 
   const { createProdServer } = require(serverModulePath)
   const { server } = createProdServer({
     port: 5000,
     dataDir: path.join(app.getPath('userData'), 'data'),
-    distPath: path.join(unpackedPath, 'dist'),
+    distPath: asarDistPath,
     resourcesPath: process.resourcesPath
   })
 

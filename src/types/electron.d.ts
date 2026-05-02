@@ -12,7 +12,7 @@ declare global {
 }
 
 interface UpdateStatus {
-  status: 'available' | 'downloading' | 'downloaded' | 'error'
+  status: 'available' | 'downloading' | 'downloaded' | 'error' | 'no-update'
   version?: string
   percent?: number
   message?: string

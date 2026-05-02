@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>更新</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, "Microsoft YaHei", sans-serif;
+      background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      user-select: none;
+      -webkit-app-region: drag;
+    }
+    .container {
+      text-align: center;
+      padding: 32px;
+      max-width: 360px;
+    }
+    .icon { font-size: 48px; margin-bottom: 16px; }
+    .status { font-size: 15px; margin-bottom: 16px; line-height: 1.6; color: rgba(255,255,255,0.85); }
+    .version { font-size: 13px; color: rgba(100,200,255,0.85); margin-bottom: 4px; }
+    .bar {
+      width: 100%;
+      height: 6px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 3px;
+      margin: 12px 0 16px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+      border-radius: 3px;
+      transition: width 0.3s;
+    }
+    .btn {
+      padding: 8px 28px;
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 6px;
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+    }
+    .btn:hover { background: rgba(255,255,255,0.2); }
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border-color: transparent;
+    }
+    .btn-primary:hover { opacity: 0.9; }
+    .error { color: rgba(255,100,100,0.9); }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">🌍</div>
+    <div class="status" id="status">正在检查更新...</div>
+    <div id="infoArea" class="hidden">
+      <div class="version" id="versionText"></div>
+      <div class="bar" id="progressArea"><div class="bar-fill" id="barFill" style="width:0%"></div></div>
+    </div>
+    <button class="btn" id="closeBtn" style="display:none" onclick="closeWindow()">关闭</button>
+    <button class="btn btn-primary" id="installBtn" style="display:none" onclick="installUpdate()">立即重启并安装</button>
+  </div>
+  <script>
+    var st = document.getElementById('status')
+    var infoArea = document.getElementById('infoArea')
+    var versionText = document.getElementById('versionText')
+    var barFill = document.getElementById('barFill')
+    var progressArea = document.getElementById('progressArea')
+    var closeBtn = document.getElementById('closeBtn')
+    var installBtn = document.getElementById('installBtn')
+
+    window.electronAPI.onUpdateStatus(function (data) {
+      if (data.status === 'available') {
+        st.textContent = '发现新版本，正在下载...'
+        versionText.textContent = data.version ? 'v' + data.version : ''
+        infoArea.classList.remove('hidden')
+        installBtn.style.display = 'none'
+        closeBtn.style.display = 'none'
+      } else if (data.status === 'downloading') {
+        st.textContent = '正在下载更新 ' + data.percent + '%'
+        barFill.style.width = data.percent + '%'
+        installBtn.style.display = 'none'
+        closeBtn.style.display = 'inline-block'
+      } else if (data.status === 'downloaded') {
+        st.textContent = '更新已下载完成，重启后生效'
+        progressArea.classList.add('hidden')
+        closeBtn.style.display = 'none'
+        installBtn.style.display = 'inline-block'
+      } else if (data.status === 'error') {
+        st.textContent = '更新失败'
+        st.classList.add('error')
+        versionText.textContent = data.message || ''
+        infoArea.classList.remove('hidden')
+        progressArea.classList.add('hidden')
+        installBtn.style.display = 'none'
+        closeBtn.style.display = 'inline-block'
+      } else if (data.status === 'no-update') {
+        st.textContent = '已是最新版本'
+        setTimeout(function () { window.close() }, 1500)
+      }
+    })
+
+    function installUpdate() { window.electronAPI.installUpdate() }
+    function closeWindow() { window.close() }
+  </script>
+</body>
+</html>

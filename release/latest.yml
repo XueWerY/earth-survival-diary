@@ -1,8 +1,8 @@
-version: 1.1.3
+version: 1.2.0
 files:
-  - url: https://gitee.com/firefly3/earth-survival-diary/releases/download/v1.1.3/%E5%9C%B0%E7%90%83%20Online%20%E7%94%9F%E5%AD%98%E6%97%A5%E8%AE%B0%20Setup%201.1.3.exe
-    sha512: 6Uf9uWHUGMAXf+LaC8NPxpDLFpryy9HXZ4Wbl5EVSj3FY4TzktaSGJ3945XxFXKU9lfTXMh98uvf0W74yUvAYA==
-    size: 103219096
-path: https://gitee.com/firefly3/earth-survival-diary/releases/download/v1.1.3/%E5%9C%B0%E7%90%83%20Online%20%E7%94%9F%E5%AD%98%E6%97%A5%E8%AE%B0%20Setup%201.1.3.exe
-sha512: 6Uf9uWHUGMAXf+LaC8NPxpDLFpryy9HXZ4Wbl5EVSj3FY4TzktaSGJ3945XxFXKU9lfTXMh98uvf0W74yUvAYA==
-releaseDate: '2026-05-02T07:03:04.432Z'
+  - url: https://gitee.com/firefly3/earth-survival-diary/releases/download/v1.2.0/%E5%9C%B0%E7%90%83%20Online%20%E7%94%9F%E5%AD%98%E6%97%A5%E8%AE%B0%20Setup%201.2.0.exe
+    sha512: ze+Fx5mLdeAbuN5JUuxQ0T3IsMm1fW6uEqcWYjClM1Euzu1LFAM32AHb1ZZz0ZzkhKkn2hv/nZh5VDGOQEwkdQ==
+    size: 103220661
+path: https://gitee.com/firefly3/earth-survival-diary/releases/download/v1.2.0/%E5%9C%B0%E7%90%83%20Online%20%E7%94%9F%E5%AD%98%E6%97%A5%E8%AE%B0%20Setup%201.2.0.exe
+sha512: ze+Fx5mLdeAbuN5JUuxQ0T3IsMm1fW6uEqcWYjClM1Euzu1LFAM32AHb1ZZz0ZzkhKkn2hv/nZh5VDGOQEwkdQ==
+releaseDate: '2026-05-02T08:40:03.665Z'

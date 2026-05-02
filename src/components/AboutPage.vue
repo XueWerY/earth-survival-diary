@@ -33,9 +33,12 @@
             </div>
             <h1 class="hero-title">地球 Online 生存日记</h1>
             <p class="hero-desc">一个帮助记录生活足迹、规划目标、管理时间的个人效率应用</p>
-            <div class="version-badge">
-              <span class="version-icon">⭐</span>
-              {{ version }}
+            <div class="version-row">
+              <div class="version-badge">
+                <span class="version-icon">⭐</span>
+                {{ version }}
+              </div>
+              <button class="check-update-btn" @click="checkForUpdate">检查更新</button>
             </div>
           </div>
         </div>
@@ -73,6 +76,19 @@ const scrollbarRef = ref()
 const readmeContentRef = ref<HTMLElement>()
 const tocBarRef = ref<HTMLElement>()
 const tocItemRefs = ref<HTMLElement[]>([])
+
+const checkForUpdate = async () => {
+  if (!window.electronAPI?.checkForUpdate) {
+    console.log('[关于] 非 Electron 环境，无法检查更新')
+    return
+  }
+  try {
+    const result = await window.electronAPI.checkForUpdate()
+    logger.info('[关于] 检查更新结果', result)
+  } catch (e) {
+    logger.error('[关于] 检查更新失败', { error: e instanceof Error ? e.message : String(e) })
+  }
+}
 
 marked.setOptions({
   breaks: true,
@@ -355,6 +371,30 @@ onMounted(() => {
 
 .version-icon {
   font-size: 12px;
+}
+
+.version-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.check-update-btn {
+  padding: 8px 18px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(100,200,255,0.25);
+  border-radius: 30px;
+  font-size: 13px;
+  color: rgba(100,200,255,0.85);
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  transition: all 0.2s;
+}
+.check-update-btn:hover {
+  background: rgba(100,200,255,0.12);
+  border-color: rgba(100,200,255,0.5);
 }
 
 /* 加载状态 */

@@ -13,7 +13,7 @@ function createProdServer(options = {}) {
 
   // Resolve paths
   const DATA_DIR = dataDir || path.join(resourcesPath, 'data')
-  const DIST_PATH = distPath || path.join(resourcesPath, 'app.asar.unpacked', 'dist')
+  const DIST_PATH = distPath || path.join(resourcesPath, 'app.asar', 'dist')
 
   // Ensure directories exist
   if (!fs.existsSync(DATA_DIR)) {

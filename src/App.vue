@@ -1,18 +1,5 @@
 <template>
   <div class="app-container">
-    <!-- 更新通知 -->
-    <div v-if="updateStatus" class="update-notification" :class="'update-' + updateStatus.status">
-      <span class="update-text">
-        <template v-if="updateStatus.status === 'available'">发现新版本 {{ updateStatus.version }}，正在下载...</template>
-        <template v-else-if="updateStatus.status === 'downloading'">正在下载更新 {{ updateStatus.percent }}%
-          <div class="update-progress-bar"><div class="update-progress-fill" :style="{ width: updateStatus.percent + '%' }"></div></div>
-        </template>
-        <template v-else-if="updateStatus.status === 'downloaded'">更新已下载完成，重启后生效</template>
-        <template v-else-if="updateStatus.status === 'error'">更新失败: {{ updateStatus.message }}</template>
-      </span>
-      <button v-if="updateStatus.status === 'downloaded'" class="update-btn" @click="installUpdate">立即重启</button>
-    </div>
-
     <!-- 星空背景 - 始终存在但通过 CSS 控制显示 -->
     <canvas ref="starCanvas" class="star-canvas" :class="{ 'canvas-hidden': !showStarCanvas }"></canvas>
 
@@ -182,12 +169,6 @@ const navItems = ref<HTMLElement[]>([])
 const showLeftShadow = ref(false)
 const showRightShadow = ref(false)
 const isNavOverflow = ref(false)
-const updateStatus = ref<UpdateStatus | null>(null)
-
-function installUpdate() {
-  window.electronAPI.installUpdate()
-}
-
 const setNavItemRef = (el: any) => {
   if (el) {
     navItems.value.push(el)
@@ -511,10 +492,6 @@ const initCourseAutoRecordFromStorage = async () => {
 
 onMounted(async () => {
 
-  window.electronAPI?.onUpdateStatus((data) => {
-    updateStatus.value = data
-  })
-
   // 先初始化认证状态
   await authStore.init()
 
@@ -663,56 +640,6 @@ onUnmounted(() => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-}
-
-/* 更新通知 */
-.update-notification {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 1000;
-  padding: 10px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  font-size: 14px;
-  color: #fff;
-}
-.update-available, .update-downloading {
-  background: rgba(59, 130, 246, 0.95);
-}
-.update-downloaded {
-  background: rgba(34, 197, 94, 0.95);
-}
-.update-error {
-  background: rgba(239, 68, 68, 0.95);
-}
-.update-progress-bar {
-  width: 200px;
-  height: 4px;
-  background: rgba(255,255,255,0.3);
-  border-radius: 2px;
-  margin-top: 6px;
-}
-.update-progress-fill {
-  height: 100%;
-  background: #fff;
-  border-radius: 2px;
-  transition: width 0.3s;
-}
-.update-btn {
-  padding: 4px 16px;
-  background: rgba(255,255,255,0.2);
-  border: 1px solid rgba(255,255,255,0.4);
-  border-radius: 4px;
-  color: #fff;
-  cursor: pointer;
-  font-size: 13px;
-}
-.update-btn:hover {
-  background: rgba(255,255,255,0.3);
 }
 
 /* 被踢出提示 */
