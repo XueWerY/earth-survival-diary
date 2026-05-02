@@ -236,6 +236,10 @@ pnpm electron:build:win
 
 ## 更新日志
 
+### v2.10.1 (2026-05)
+
+- 确认 .gitignore 已排除安装包大文件，修复 GitHub 同步报错
+
 ### v2.10.0 (2026-05)
 
 - NSIS 定制 artifactName，彻底消除安装包文件名中的空格和 %20
