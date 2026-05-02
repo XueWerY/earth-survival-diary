@@ -1,8 +1,8 @@
-version: 2.10.0
+version: 2.10.1
 files:
-  - url: https://github.com/XueWerY/earth-survival-diary/releases/download/v2.10.0/Earth-Survival-Diary-Setup-2.10.0.exe
-    sha512: pDGJvh2Sw1MJCG0351UXBypIfEIfCpLOv6NQnLnprLWm2VfflRdmu3VsjdMnglfO2AZh4LfffdLr79HwGFDn/Q==
-    size: 106836826
-path: https://github.com/XueWerY/earth-survival-diary/releases/download/v2.10.0/Earth-Survival-Diary-Setup-2.10.0.exe
-sha512: pDGJvh2Sw1MJCG0351UXBypIfEIfCpLOv6NQnLnprLWm2VfflRdmu3VsjdMnglfO2AZh4LfffdLr79HwGFDn/Q==
-releaseDate: '2026-05-02T16:16:49.118Z'
+  - url: https://github.com/XueWerY/earth-survival-diary/releases/download/v2.10.1/Earth-Survival-Diary-Setup-2.10.1.exe
+    sha512: qaSlfhrYxu64eNVjH4M7XCgiWAiLfcHJjY799VpSqVi1+p7SCf8o9VGxss3NBCtnBEJma/0DrILzYqBP4Z7FSw==
+    size: 106836721
+path: https://github.com/XueWerY/earth-survival-diary/releases/download/v2.10.1/Earth-Survival-Diary-Setup-2.10.1.exe
+sha512: qaSlfhrYxu64eNVjH4M7XCgiWAiLfcHJjY799VpSqVi1+p7SCf8o9VGxss3NBCtnBEJma/0DrILzYqBP4Z7FSw==
+releaseDate: '2026-05-02T16:40:30.244Z'
