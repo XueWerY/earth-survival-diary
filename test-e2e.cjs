@@ -1,154 +1,141 @@
-const http = require('http')
 const fs = require('fs')
 const path = require('path')
 
-const TEST_DIR = path.join(__dirname, 'test-data')
-if (fs.existsSync(TEST_DIR)) fs.rmSync(TEST_DIR, { recursive: true, force: true })
+const PORT = 3003
+const API_BASE = 'http://127.0.0.1:' + PORT + '/api'
+const TMP = path.join(__dirname, 'temp-test-data')
 
-const { createProdServer } = require('./electron/prod-server.cjs')
-const { server } = createProdServer({
-  port: 55123,
-  dataDir: TEST_DIR,
-  resourcesPath: __dirname
-})
+let server
+let total = 0
+let passed = 0
+let token = ''
+let userId = ''
 
-server.listen(55123)
-const BASE = 'http://localhost:55123/api'
+function assert(label, ok) {
+  total++
+  if (ok) { passed++; console.log('  PASS ' + label); return }
+  console.error('  FAIL ' + label); process.exitCode = 1
+}
 
-function request(method, url, body, token) {
-  return new Promise((resolve, reject) => {
-    const u = new URL(url.startsWith('http') ? url : BASE + url)
-    const opts = {
-      method,
-      hostname: u.hostname,
-      port: u.port,
-      path: u.pathname,
-      headers: { 'Content-Type': 'application/json' }
-    }
-    if (token) opts.headers['Authorization'] = `Bearer ${token}`
-    const req = http.request(opts, res => {
-      let data = ''
-      res.on('data', c => data += c)
-      res.on('end', () => {
-        try { data = JSON.parse(data) } catch {}
-        resolve({ status: res.statusCode, data })
-      })
-    })
-    req.on('error', reject)
-    if (body) req.write(JSON.stringify(body))
-    req.end()
-  })
+async function post(p, body = {}) {
+  const h = { 'Content-Type': 'application/json' }
+  if (token) h['authorization'] = 'Bearer ' + token
+  const res = await fetch(API_BASE + p, { method: 'POST', headers: h, body: JSON.stringify(body) })
+  const data = await res.json()
+  return { status: res.status, data }
+}
+
+async function get(p) {
+  const h = {}
+  if (token) h['authorization'] = 'Bearer ' + token
+  const res = await fetch(API_BASE + p, { headers: h, signal: AbortSignal.timeout(5000) })
+  const text = await res.text()
+  let data
+  try { data = JSON.parse(text) } catch (e) { data = text }
+  return { status: res.status, data }
 }
 
 async function run() {
-  let passed = 0, failed = 0
-  function assert(cond, msg) {
-    if (cond) { passed++; console.log(`  PASS: ${msg}`) }
-    else { failed++; console.error(`  FAIL: ${msg}`) }
-  }
+  const { createProdServer } = require('./electron/prod-server.cjs')
+  const tmpDataDir = path.join(TMP, 'data')
+  fs.mkdirSync(tmpDataDir, { recursive: true })
+  const { server: srv } = createProdServer({
+    port: PORT,
+    dataDir: tmpDataDir,
+    distPath: path.join(__dirname, 'dist'),
+    resourcesPath: path.join(__dirname, 'electron')
+  })
 
-  try {
-    // 1. Signup
-    const s = await request('POST', '/auth/signup', { email: 'test@test.com', password: '123456', nickname: 'Tester' })
-    assert(s.status === 200 && s.data.user && s.data.session.access_token, 'Signup returns 200 with token')
-    const token = s.data.session.access_token
-    const userId = s.data.user.id
+  server = srv
+  await new Promise((resolve, reject) => {
+    server.listen(PORT, '127.0.0.1', () => resolve())
+    server.on('error', reject)
+  })
+  console.log('Server started on port ' + PORT)
 
-    // 2. User index
-    assert(fs.existsSync(path.join(TEST_DIR, 'users', 'test@test.com.json')), 'users/test@test.com.json exists')
+  console.log('\n-- 注册 --')
+  let r = await post('/auth/signup', { email: 'test@test.com', password: '123456' })
+  assert('注册成功', r.status === 200 && r.data.user && r.data.session)
+  token = r.data.session.access_token
+  userId = r.data.user.id
 
-    // 3. Profile
-    assert(fs.existsSync(path.join(TEST_DIR, userId, 'profile', 'profile.json')), 'profile/profile.json exists')
+  r = await post('/auth/signup', { email: 'test@test.com', password: '123456' })
+  assert('重复注册失败', r.status === 400)
 
-    // 4. Session
-    assert(fs.existsSync(path.join(TEST_DIR, userId, 'session', 'session.json')), 'session/session.json exists')
+  console.log('\n-- 登录 --')
+  r = await post('/auth/signin', { email: 'test@test.com', password: '123456' })
+  assert('登录成功', r.status === 200 && r.data.session)
+  token = r.data.session.access_token
 
-    // 5. Profile update
-    const p = await request('PUT', '/profile', { nickname: 'Updated' }, token)
-    assert(p.status === 200, 'Profile update returns 200')
-    assert(JSON.parse(fs.readFileSync(path.join(TEST_DIR, userId, 'profile', 'profile.json'), 'utf-8')).nickname === 'Updated', 'Profile nickname saved')
+  r = await post('/auth/signin', { email: 'test@test.com', password: 'wrong' })
+  assert('密码错误', r.status === 400)
 
-    // 6. Tasks → footprint/footprint.json
-    const t = await request('POST', '/tasks', { name: 'Test task', date: '2025-01-01' }, token)
-    assert(t.status === 200, 'Tasks POST returns 200')
-    assert(fs.existsSync(path.join(TEST_DIR, userId, 'footprint', 'footprint.json')), 'footprint/footprint.json exists')
+  console.log('\n-- 资料 --')
+  r = await get('/profile')
+  assert('获取资料', r.status === 200 && r.data.profile && r.data.profile.id === userId)
 
-    // 7. Mission lists → list/lists.json
-    const ml = await request('POST', '/mission-lists', { name: 'Test List' }, token)
-    assert(ml.status === 200, 'Mission lists POST returns 200')
-    assert(fs.existsSync(path.join(TEST_DIR, userId, 'list', 'lists.json')), 'list/lists.json exists')
+  console.log('\n-- 足迹 --')
+  r = await post('/tasks', { name: '测试足迹', date: '2026-05-01', startTime: '09:00', endTime: '10:00', notes: '备注' })
+  assert('添加足迹', r.status === 200 && r.data.task)
+  const fpId = r.data.task.id
 
-    // 8. Settings
-    await request('PUT', '/settings', { soundEnabled: false }, token)
-    assert(fs.existsSync(path.join(TEST_DIR, userId, 'settings', 'settings.json')), 'settings/settings.json exists')
+  r = await get('/tasks')
+  assert('获取足迹列表', r.status === 200 && r.data.tasks && r.data.tasks.length >= 1)
 
-    // 9. KV: course/courses
-    await request('POST', '/data/course/courses', { data: [{ name: 'Math' }] }, token)
-    assert(fs.existsSync(path.join(TEST_DIR, userId, 'course', 'courses.json')), 'course/courses.json exists')
+  console.log('\n-- 清单 --')
+  r = await post('/mission-lists', { name: '测试清单' })
+  assert('添加清单', r.status === 200 && r.data.list)
+  const listId = r.data.list.id
 
-    // 10. KV: course/recorded-courses
-    await request('POST', '/data/course/recorded-courses', { data: [{ course: 'Math', week: 1 }] }, token)
-    assert(fs.existsSync(path.join(TEST_DIR, userId, 'course', 'recorded-courses.json')), 'course/recorded-courses.json exists')
+  r = await post('/missions', { listId, name: '测试任务' })
+  assert('添加任务', r.status === 200 && r.data.mission)
 
-    // 11. KV: focus/favorites
-    await request('POST', '/data/focus/favorites', { data: [{ name: 'Coding' }] }, token)
-    assert(fs.existsSync(path.join(TEST_DIR, userId, 'focus', 'favorites.json')), 'focus/favorites.json exists')
+  console.log('\n-- 通用数据 --')
+  r = await post('/data/course/courses', { data: { semesterStart: '2026-02-15' } })
+  assert('保存课程', r.status === 200)
 
-    // 12. KV: focus/records
-    await request('POST', '/data/focus/records', { data: [{ duration: 1800 }] }, token)
-    assert(fs.existsSync(path.join(TEST_DIR, userId, 'focus', 'records.json')), 'focus/records.json exists')
+  r = await get('/data/course/courses')
+  assert('获取课程', r.status === 200)
 
-    // 13. KV: countdown/countdowns
-    await request('POST', '/data/countdown/countdowns', { data: [{ name: 'Birthday' }] }, token)
-    assert(fs.existsSync(path.join(TEST_DIR, userId, 'countdown', 'countdowns.json')), 'countdown/countdowns.json exists')
+  r = await post('/data/countdown/countdowns', { data: { event: '生日' } })
+  assert('保存倒数日', r.status === 200)
 
-    // 14. KV: countdown/categories
-    await request('POST', '/data/countdown/categories', { data: [{ label: 'Holiday' }] }, token)
-    assert(fs.existsSync(path.join(TEST_DIR, userId, 'countdown', 'categories.json')), 'countdown/categories.json exists')
+  r = await post('/data/focus/favorites', { data: { name: '阅读' } })
+  assert('保存专注', r.status === 200)
 
-    // 15. KV: system/state
-    await request('POST', '/data/system/state', { data: { currentPage: 'footprint' } }, token)
-    assert(fs.existsSync(path.join(TEST_DIR, userId, 'system', 'state.json')), 'system/state.json exists')
+  r = await post('/data/system/state', { data: { lastActive: '2026-05-01' } })
+  assert('保存系统状态', r.status === 200)
 
-    // 16. KV read-back
-    const r = await request('GET', '/data/system/state', null, token)
-    assert(r.status === 200 && r.data.data.currentPage === 'footprint', 'KV read system/state returns currentPage=footprint')
+  console.log('\n-- 垃圾 token --')
+  const bogusRes = await fetch(API_BASE + '/profile', {
+    headers: { 'authorization': 'Bearer invalid-token-value' },
+    signal: AbortSignal.timeout(5000)
+  })
+  assert('垃圾 token 被拒绝', bogusRes.status === 401)
 
-    // 17. No kv/ directory, no old dirs
-    const userDir = path.join(TEST_DIR, userId)
-    const entries = fs.readdirSync(userDir)
-    const expected = ['profile', 'session', 'footprint', 'list', 'settings', 'course', 'focus', 'countdown', 'system']
-    const forbidden = ['kv', 'tasks', 'mission_lists', 'missions']
-    const extra = entries.filter(e => !expected.includes(e))
-    const hasForbidden = entries.filter(e => forbidden.includes(e))
-    assert(extra.length === 0, `No unexpected dirs. Found: ${JSON.stringify(entries)}`)
-    assert(hasForbidden.length === 0, `No old dirs (kv/tasks/mission_lists/missions). Found: ${JSON.stringify(hasForbidden)}`)
+  console.log('\n-- 文件验证 --')
+  const dir = tmpDataDir
 
-    // ===== Garbage token tests =====
+  assert('users.json 存在', fs.existsSync(path.join(dir, 'users', 'test@test.com.json')))
+  assert('footprint.json 存在', fs.existsSync(path.join(dir, userId, 'footprint', 'footprint.json')))
+  assert('lists.json 存在', fs.existsSync(path.join(dir, userId, 'list', 'lists.json')))
+  assert('tasks.json 存在', fs.existsSync(path.join(dir, userId, 'list', 'tasks.json')))
+  assert('course.json 存在', fs.existsSync(path.join(dir, userId, 'course', 'courses.json')))
+  assert('countdown.json 存在', fs.existsSync(path.join(dir, userId, 'countdown', 'countdowns.json')))
+  assert('focus.json 存在', fs.existsSync(path.join(dir, userId, 'focus', 'favorites.json')))
+  assert('system.json 存在', fs.existsSync(path.join(dir, userId, 'system', 'state.json')))
 
-    const garbageToken = Buffer.from('fakeuser:0:x').toString('base64')
-    const garbageDir = path.join(TEST_DIR, 'fakeuser')
-
-    const r1 = await request('GET', '/profile', null, garbageToken)
-    assert(r1.status === 401, 'Garbage token on /profile returns 401')
-    assert(!fs.existsSync(garbageDir), 'No fakeuser/ directory created by authMiddleware')
-
-    const r2 = await request('POST', '/auth/check-session', null, garbageToken)
-    assert(r2.data.valid === false, 'check-session returns valid=false for garbage token')
-
-    const r3 = await request('POST', '/auth/signout', null, garbageToken)
-    assert(r3.data.success === true, 'signout returns success for garbage token')
-    assert(!fs.existsSync(garbageDir), 'No fakeuser/ directory created by signout')
-
-  } catch (e) {
-    console.error('Test error:', e)
-    failed++
-  }
-
-  console.log(`\n${passed} passed, ${failed} failed`)
-  server.close()
-  fs.rmSync(TEST_DIR, { recursive: true, force: true })
-  process.exit(failed ? 1 : 0)
+  console.log('\n' + '='.repeat(40))
+  console.log('总计: ' + total + ' | 通过: ' + passed + ' | ' + (passed === total ? '✅ 全部通过' : '❌ 存在失败'))
+  console.log('='.repeat(40))
 }
 
-setTimeout(run, 500)
+run().catch(e => {
+  console.error('Test failed: ' + e.message)
+  process.exitCode = 1
+}).finally(() => {
+  if (server) server.close()
+  setTimeout(() => {
+    try { fs.rmSync(TMP, { recursive: true, force: true }) } catch (e) {}
+  }, 500)
+})

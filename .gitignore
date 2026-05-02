@@ -37,10 +37,8 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
-/data/
 /public/avatars/
 /pnpm-lock.yaml
 
 /release/win-unpacked/
-/release/*.exe
-/release/*.blockmap
+/data/

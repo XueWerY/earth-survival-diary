@@ -2,7 +2,6 @@ const { app, BrowserWindow, Menu, ipcMain } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const fs = require('fs')
-const isDev = process.env.NODE_ENV === 'development' || process.argv.includes('--dev')
 
 Menu.setApplicationMenu(null)
 
@@ -15,7 +14,6 @@ let mainWindow
 let updateWindow = null
 let serverInstance = null
 let updateDownloaded = false
-let isManualCheck = false
 
 autoUpdater.autoDownload = false
 autoUpdater.autoInstallOnAppQuit = true
@@ -56,7 +54,7 @@ function createUpdateWindow() {
 autoUpdater.on('update-available', (info) => {
   debugLog('[Updater] Update available: ' + info.version)
   createUpdateWindow()
-  if (mainWindow && !isDev) mainWindow.hide()
+  if (mainWindow) mainWindow.hide()
   autoUpdater.downloadUpdate()
 })
 
@@ -75,7 +73,6 @@ autoUpdater.on('error', (err) => {
 })
 
 ipcMain.handle('check-for-update', async () => {
-  isManualCheck = true
   createUpdateWindow()
   try {
     const result = await autoUpdater.checkForUpdates()
@@ -87,8 +84,6 @@ ipcMain.handle('check-for-update', async () => {
   } catch (e) {
     sendUpdateStatus({ status: 'error', message: e.message })
     return { error: e.message }
-  } finally {
-    isManualCheck = false
   }
 })
 
@@ -110,17 +105,13 @@ function errorLog(msg) {
 }
 
 async function startServer() {
-  debugLog('[Electron] Starting server in main process...')
-  debugLog('[Electron] process.resourcesPath: ' + process.resourcesPath)
+  debugLog('[Electron] Starting server...')
 
   const serverModulePath = path.join(__dirname, 'prod-server.cjs')
-  debugLog('[Electron] serverModulePath: ' + serverModulePath)
-
   if (!fs.existsSync(serverModulePath)) {
     throw new Error('Server module not found at: ' + serverModulePath)
   }
 
-  const unpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked')
   const asarDistPath = path.join(process.resourcesPath, 'app.asar', 'dist')
 
   const { createProdServer } = require(serverModulePath)
@@ -145,7 +136,6 @@ async function startServer() {
 }
 
 function createWindow(url) {
-  debugLog('[Electron] Creating window: ' + url)
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -171,31 +161,6 @@ function createWindow(url) {
   mainWindow.show()
 }
 
-async function findViteServer() {
-  const net = require('net')
-  const PORTS = [5173, 5000, 5001, 5002, 5003, 5004, 5005]
-
-  await new Promise(r => setTimeout(r, 3000))
-
-  for (let attempt = 0; attempt < 30; attempt++) {
-    for (const port of PORTS) {
-      const result = await new Promise((resolve) => {
-        const socket = new net.Socket()
-        socket.setTimeout(300)
-        socket.on('connect', () => { socket.end(); resolve(port) })
-        socket.on('error', () => resolve(null))
-        socket.on('timeout', () => { socket.destroy(); resolve(null) })
-        socket.connect(port, 'localhost')
-      })
-      if (result) {
-        return 'http://localhost:' + result
-      }
-    }
-    await new Promise(r => setTimeout(r, 500))
-  }
-  return null
-}
-
 ipcMain.on('resize-window', (event, width, height) => {
   if (mainWindow) {
     mainWindow.setSize(width, height)
@@ -203,50 +168,28 @@ ipcMain.on('resize-window', (event, width, height) => {
 })
 
 app.whenReady().then(async () => {
-  debugLog('[Electron] App ready, isDev: ' + isDev)
-  debugLog('[Electron] process.execPath: ' + process.execPath)
-  debugLog('[Electron] process.resourcesPath: ' + process.resourcesPath)
-
-  const unpackedPath = path.join(process.resourcesPath, 'app.asar.unpacked')
-  debugLog('[Electron] unpackedPath: ' + unpackedPath)
-  debugLog('[Electron] unpackedPath exists: ' + fs.existsSync(unpackedPath))
-
-  if (fs.existsSync(unpackedPath)) {
-    const contents = fs.readdirSync(unpackedPath)
-    debugLog('[Electron] unpackedPath contents: ' + JSON.stringify(contents))
-  }
+  debugLog('[Electron] App ready')
 
   try {
-    let url
-    if (isDev) {
-      url = await findViteServer()
-      if (!url) {
-        errorLog('[Electron] Vite dev server not found')
-        app.quit()
-        return
+    const oldDataDir = path.join(process.resourcesPath, 'data')
+    const newDataDir = path.join(app.getPath('userData'), 'data')
+    if (fs.existsSync(oldDataDir) && !fs.existsSync(newDataDir)) {
+      try {
+        fs.mkdirSync(app.getPath('userData'), { recursive: true })
+        fs.renameSync(oldDataDir, newDataDir)
+        debugLog('[Electron] Data migrated to userData: ' + newDataDir)
+      } catch (e) {
+        errorLog('[Electron] Data migration failed: ' + e.message)
       }
-    } else {
-      const oldDataDir = path.join(process.resourcesPath, 'data')
-      const newDataDir = path.join(app.getPath('userData'), 'data')
-      if (fs.existsSync(oldDataDir) && !fs.existsSync(newDataDir)) {
-        try {
-          fs.mkdirSync(app.getPath('userData'), { recursive: true })
-          fs.renameSync(oldDataDir, newDataDir)
-          debugLog('[Electron] Data migrated to userData: ' + newDataDir)
-        } catch (e) {
-          errorLog('[Electron] Data migration failed: ' + e.message)
-        }
-      }
-      const port = await startServer()
-      url = 'http://127.0.0.1:' + port
     }
+    const port = await startServer()
+    const url = 'http://127.0.0.1:' + port
     debugLog('[Electron] Loading URL: ' + url)
     createWindow(url)
-    if (!isDev) {
-      setTimeout(() => {
-        autoUpdater.checkForUpdates().catch(e => debugLog('[Updater] Check failed: ' + e.message))
-      }, 5000)
-    }
+
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch(e => debugLog('[Updater] Check failed: ' + e.message))
+    }, 5000)
   } catch (err) {
     errorLog('[Electron] Fatal error: ' + err.message)
     errorLog('[Electron] Stack: ' + err.stack)
@@ -255,11 +198,7 @@ app.whenReady().then(async () => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      if (isDev) {
-        createWindow('http://localhost:5173')
-      } else {
-        createWindow('http://127.0.0.1:5000')
-      }
+      createWindow('http://127.0.0.1:5000')
     }
   })
 })
