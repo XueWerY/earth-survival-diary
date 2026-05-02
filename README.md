@@ -236,6 +236,18 @@ pnpm electron:build:win
 
 ## 更新日志
 
+### v2.7.0 (2026-05)
+
+- 日志目录改为 C:\Program Files\earth-survival-diary\logs，格式优化为 [时间] [级别] 消息
+
+### v2.6.0 (2026-05)
+
+- 日志系统改为文件写入：logs/app-yyyy-mm-dd.log，每日轮转
+
+### v2.5.0 (2026-05)
+
+- 修复日志系统：prod-server 补充缺失的 /api/logs 路由
+
 ### v2.4.0 (2026-05)
 
 - 修正仓库地址为 XueWerY/earth-survival-diary，修复更新检查 404 问题

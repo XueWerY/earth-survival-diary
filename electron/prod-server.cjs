@@ -673,6 +673,32 @@ function createProdServer(options = {}) {
     } catch (e) { console.error('Update settings error:', e); res.status(500).json({ error: '更新设置失败' }) }
   })
 
+  // ============ Logs API ============
+
+  const LOG_DIR = 'C:\\Program Files\\earth-survival-diary\\logs'
+
+  /** POST /api/logs (auth) body:{logs:LogEntry[]} => 200 {success:true} */
+  app.post('/api/logs', authMiddleware, async (req, res) => {
+    try {
+      const { logs } = req.body
+      if (!Array.isArray(logs)) return res.status(400).json({ error: 'logs 必须是数组' })
+      if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true })
+      const today = new Date().toISOString().slice(0, 10)
+      const logFile = path.join(LOG_DIR, `app-${today}.log`)
+      const p = (n, l = 2) => String(n).padStart(l, '0')
+      const lines = logs.map(e => {
+        const d = new Date(e.timestamp || Date.now())
+        const ts = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}:${p(d.getMilliseconds(), 3)}`
+        const level = ['TRACE','DEBUG','INFO','WARN','ERROR'][e.level] || 'INFO'
+        const meta = e.meta ? ' ' + JSON.stringify(e.meta) : ''
+        const stack = e.stack ? '\n' + e.stack : ''
+        return `[${ts}] [${level}] ${e.message}${meta}${stack}`
+      }).join('\n') + '\n'
+      fs.appendFileSync(logFile, lines, 'utf-8')
+      res.json({ success: true })
+    } catch (e) { console.error('Write logs error:', e); res.status(500).json({ error: '写入日志失败' }) }
+  })
+
   // ============ Health Check ============
 
   /** GET /api/health => 200 {status:"ok",time,wsPort?} */
