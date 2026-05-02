@@ -236,6 +236,10 @@ pnpm electron:build:win
 
 ## 更新日志
 
+### v2.7.1 (2026-05)
+
+- 修正 publish.url 分支名 master→main，修复 latest.yml 404 导致更新检查失败
+
 ### v2.7.0 (2026-05)
 
 - 日志目录改为 C:\Program Files\earth-survival-diary\logs，格式优化为 [时间] [级别] 消息

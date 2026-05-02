@@ -1,8 +1,8 @@
-version: 2.7.0
+version: 2.7.1
 files:
-  - url: https://github.com/XueWerY/earth-survival-diary/releases/download/v2.7.0/%E5%9C%B0%E7%90%83%20Online%20%E7%94%9F%E5%AD%98%E6%97%A5%E8%AE%B0%20Setup%202.7.0.exe
-    sha512: N7hKwax03n2QV7etcB2baLXIJC7LVDCpiqu954Gii6rY9FMioW0Dm34vCSSjoLAOoMSrKmpKnAFVi0m8aNSxpA==
-    size: 106836300
-path: https://github.com/XueWerY/earth-survival-diary/releases/download/v2.7.0/%E5%9C%B0%E7%90%83%20Online%20%E7%94%9F%E5%AD%98%E6%97%A5%E8%AE%B0%20Setup%202.7.0.exe
-sha512: N7hKwax03n2QV7etcB2baLXIJC7LVDCpiqu954Gii6rY9FMioW0Dm34vCSSjoLAOoMSrKmpKnAFVi0m8aNSxpA==
-releaseDate: '2026-05-02T14:04:42.324Z'
+  - url: https://github.com/XueWerY/earth-survival-diary/releases/download/v2.7.1/%E5%9C%B0%E7%90%83%20Online%20%E7%94%9F%E5%AD%98%E6%97%A5%E8%AE%B0%20Setup%202.7.1.exe
+    sha512: veqomypQUPVI8AZWihuUZMRrzi4LNClWFxEtg8+atjD/gmLfzM4osTb1fmST0Dz57QND720DbuLVbfWnJCSpKA==
+    size: 106836494
+path: https://github.com/XueWerY/earth-survival-diary/releases/download/v2.7.1/%E5%9C%B0%E7%90%83%20Online%20%E7%94%9F%E5%AD%98%E6%97%A5%E8%AE%B0%20Setup%202.7.1.exe
+sha512: veqomypQUPVI8AZWihuUZMRrzi4LNClWFxEtg8+atjD/gmLfzM4osTb1fmST0Dz57QND720DbuLVbfWnJCSpKA==
+releaseDate: '2026-05-02T14:45:08.552Z'
