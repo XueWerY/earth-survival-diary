@@ -236,6 +236,10 @@ pnpm electron:build:win
 
 ## 更新日志
 
+### v2.3.0 (2026-05)
+
+- 安装包下载从 raw 直链改为 GitHub Releases，修复更新检查失败问题
+
 ### v2.2.0 (2026-05)
 
 - 代码仓库和安装包分发从 Gitee 迁移至 GitHub

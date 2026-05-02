@@ -10,7 +10,7 @@ if (!fs.existsSync(latestPath)) {
 
 let content = fs.readFileSync(latestPath, 'utf-8')
 const version = pkg.version
-const baseUrl = `https://raw.githubusercontent.com/firefly3/earth-survival-diary/master/release`
+const baseUrl = `https://github.com/XueWerY/earth-survival-diary/releases/download/v${version}`
 
 const exeFile = content.match(/path: (.+)/)[1]
 const encodedFile = encodeURIComponent(exeFile)
