@@ -236,6 +236,10 @@ pnpm electron:build:win
 
 ## 更新日志
 
+### v2.2.0 (2026-05)
+
+- 代码仓库和安装包分发从 Gitee 迁移至 GitHub
+
 ### v2.1.0 (2026-05)
 
 - 安装包超过 Gitee Releases 单个附件 100MB 限制，下载地址改为仓库 raw 文件直链

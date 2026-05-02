@@ -1,8 +1,8 @@
-version: 2.1.0
+version: 2.2.0
 files:
-  - url: https://gitee.com/firefly3/earth-survival-diary/raw/master/release/%E5%9C%B0%E7%90%83%20Online%20%E7%94%9F%E5%AD%98%E6%97%A5%E8%AE%B0%20Setup%202.1.0.exe
-    sha512: Hci5J9XoBemsbpJkgpamjAAQ3TkMuSqb68P2bdFLTuLlC02NA/2UWbfMpU4zZsaXOPUus0N83zq+5OEH96Kg9w==
-    size: 106835817
-path: https://gitee.com/firefly3/earth-survival-diary/raw/master/release/%E5%9C%B0%E7%90%83%20Online%20%E7%94%9F%E5%AD%98%E6%97%A5%E8%AE%B0%20Setup%202.1.0.exe
-sha512: Hci5J9XoBemsbpJkgpamjAAQ3TkMuSqb68P2bdFLTuLlC02NA/2UWbfMpU4zZsaXOPUus0N83zq+5OEH96Kg9w==
-releaseDate: '2026-05-02T10:23:15.498Z'
+  - url: https://raw.githubusercontent.com/firefly3/earth-survival-diary/master/release/%E5%9C%B0%E7%90%83%20Online%20%E7%94%9F%E5%AD%98%E6%97%A5%E8%AE%B0%20Setup%202.2.0.exe
+    sha512: UFEQpzufzLVQHr484zIaf3WBw+IwufIMcws7Ou8qHl+m5+ViZtBHwrmhOf7xgPkatD/zh++tnca8lBgnW+AVbg==
+    size: 106835866
+path: https://raw.githubusercontent.com/firefly3/earth-survival-diary/master/release/%E5%9C%B0%E7%90%83%20Online%20%E7%94%9F%E5%AD%98%E6%97%A5%E8%AE%B0%20Setup%202.2.0.exe
+sha512: UFEQpzufzLVQHr484zIaf3WBw+IwufIMcws7Ou8qHl+m5+ViZtBHwrmhOf7xgPkatD/zh++tnca8lBgnW+AVbg==
+releaseDate: '2026-05-02T11:11:55.984Z'

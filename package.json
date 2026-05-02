@@ -1,7 +1,7 @@
 {
   "name": "earth-survival-diary",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.2.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -80,7 +80,7 @@
     },
     "publish": {
       "provider": "generic",
-      "url": "https://gitee.com/firefly3/earth-survival-diary/raw/master/release"
+      "url": "https://raw.githubusercontent.com/firefly3/earth-survival-diary/master/release"
     }
   }
 }
