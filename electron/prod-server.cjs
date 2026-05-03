@@ -677,8 +677,8 @@ function createProdServer(options = {}) {
 
   const LOG_DIR = 'C:\\Program Files\\earth-survival-diary\\logs'
 
-  /** POST /api/logs (auth) body:{logs:LogEntry[]} => 200 {success:true} */
-  app.post('/api/logs', authMiddleware, async (req, res) => {
+  /** POST /api/logs body:{logs:LogEntry[]} => 200 {success:true} */
+  app.post('/api/logs', async (req, res) => {
     try {
       const { logs } = req.body
       if (!Array.isArray(logs)) return res.status(400).json({ error: 'logs 必须是数组' })
@@ -697,6 +697,18 @@ function createProdServer(options = {}) {
       fs.appendFileSync(logFile, lines, 'utf-8')
       res.json({ success: true })
     } catch (e) { console.error('Write logs error:', e); res.status(500).json({ error: '写入日志失败' }) }
+  })
+
+  /** GET /api/logs => 200 {logs:string} */
+  app.get('/api/logs', (req, res) => {
+    try {
+      if (!fs.existsSync(LOG_DIR)) return res.json({ logs: '' })
+      const today = new Date().toISOString().slice(0, 10)
+      const logFile = path.join(LOG_DIR, `app-${today}.log`)
+      if (!fs.existsSync(logFile)) return res.json({ logs: '' })
+      const content = fs.readFileSync(logFile, 'utf-8')
+      res.json({ logs: content })
+    } catch (e) { console.error('Read logs error:', e); res.status(500).json({ error: '读取日志失败' }) }
   })
 
   // ============ Health Check ============

@@ -236,6 +236,14 @@ pnpm electron:build:win
 
 ## 更新日志
 
+### v2.10.3 (2026-05)
+
+- 确认日志系统完整实现：登录前后所有日志均写入 C:\Program Files\earth-survival-diary\logs\app-YYYY-MM-DD.log
+
+### v2.10.2 (2026-05)
+
+- 日志系统修复：POST /api/logs 去掉认证限制，未登录时的日志也能正常写入文件；新增 GET /api/logs 返回今日日志
+
 ### v2.10.1 (2026-05)
 
 - 确认 .gitignore 已排除安装包大文件，修复 GitHub 同步报错
