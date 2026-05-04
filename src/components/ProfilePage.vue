@@ -83,10 +83,7 @@
         </div>
 
         <div class="profile-section">
-          <h3 class="section-title">
-            <span class="title-icon">🍅</span>
-            专注设置
-          </h3>
+          <h3 class="section-title">专注设置</h3>
           <p class="section-desc">配置番茄钟的默认时长。</p>
 
           <div class="setting-item">
@@ -108,10 +105,7 @@
         </div>
 
         <div class="profile-section">
-          <h3 class="section-title">
-            <span class="title-icon">📚</span>
-            课程表设置
-          </h3>
+          <h3 class="section-title">课程表设置</h3>
           <p class="section-desc">设置学期信息，用于计算当前周次。</p>
 
           <div class="setting-item">
@@ -145,8 +139,37 @@
             </div>
           </div>
 
-          <div class="setting-tip" v-if="courseSettings.semesterStartDate">
-            当前学期第 {{ currentWeekNumber }} 周 / 共 {{ courseSettings.totalWeeks }} 周
+          <div class="setting-item course-reminder-item">
+            <div class="setting-info">
+              <span class="setting-label">提前提醒</span>
+              <span class="setting-desc">上课前多少分钟发送系统通知提醒</span>
+            </div>
+            <div class="setting-control">
+              <el-input-number
+                  v-model="courseSettings.reminderMinutes"
+                  :min="1"
+                  :max="60"
+                  :step="1"
+                  controls-position="right"
+                  size="default"
+                  @change="handleCourseReminderChange"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="profile-section">
+          <h3 class="section-title">关于</h3>
+
+          <div class="about-item">
+            <span class="about-label">项目地址</span>
+            <a class="about-link" @click.prevent="openProjectUrl">https://github.com/XueWerY/earth-survival-diary</a>
+          </div>
+
+          <div class="about-item">
+            <span class="about-label">版本号</span>
+            <span class="about-value">v{{ version }}</span>
+            <el-button size="small" @click="checkForUpdate">检查更新</el-button>
           </div>
         </div>
 
@@ -233,6 +256,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import * as api from '../lib/api'
 import LunarDatePicker from './LunarDatePicker.vue'
 import { logger } from '../lib/logger'
+import appVersion from 'virtual:version'
 
 const emit = defineEmits<{
   logout: []
@@ -277,8 +301,25 @@ const focusSettings = ref({
 
 const courseSettings = ref({
   semesterStartDate: '',
-  totalWeeks: 20
+  totalWeeks: 20,
+  reminderMinutes: 5
 })
+
+const version = ref(appVersion)
+
+const checkForUpdate = async () => {
+  if (!window.electronAPI?.checkForUpdate) return
+  try {
+    const result = await window.electronAPI.checkForUpdate()
+    logger.info('[关于] 检查更新结果', result)
+  } catch (e) {
+    logger.error('[关于] 检查更新失败', { error: e instanceof Error ? e.message : String(e) })
+  }
+}
+
+const openProjectUrl = () => {
+  window.electronAPI?.openExternal('https://github.com/XueWerY/earth-survival-diary')
+}
 
 const currentWeekNumber = computed(() => {
   if (!courseSettings.value.semesterStartDate) return 1
@@ -449,6 +490,7 @@ onMounted(async () => {
   focusSettings.value.pomodoroDuration = settingsStore.settings.focus?.pomodoroDuration || 25
   courseSettings.value.semesterStartDate = settingsStore.settings.course?.semesterStartDate || ''
   courseSettings.value.totalWeeks = settingsStore.settings.course?.totalWeeks || 20
+  courseSettings.value.reminderMinutes = settingsStore.settings.course?.reminderMinutes || 5
 })
 
 watch(() => authStore.profile?.nickname, (val) => {
@@ -468,6 +510,11 @@ const handleCourseSettingChange = async (val: string) => {
 const handleCourseWeeksChange = async (val: number) => {
   await settingsStore.updateCourseSettings({ totalWeeks: val })
   logger.info('[设置] 修改学期周数', { totalWeeks: val })
+}
+
+const handleCourseReminderChange = async (val: number) => {
+  await settingsStore.updateCourseSettings({ reminderMinutes: val })
+  logger.info('[设置] 修改课程提醒', { reminderMinutes: val })
 }
 </script>
 
@@ -507,10 +554,6 @@ const handleCourseWeeksChange = async (val: number) => {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.title-icon {
-  font-size: 18px;
 }
 
 .section-desc {
@@ -599,6 +642,10 @@ const handleCourseWeeksChange = async (val: number) => {
   gap: 16px;
 }
 
+.course-reminder-item {
+  margin-top: 16px;
+}
+
 .setting-info {
   flex: 1;
   display: flex;
@@ -629,6 +676,36 @@ const handleCourseWeeksChange = async (val: number) => {
   border-radius: 6px;
   color: #667eea;
   font-size: 13px;
+}
+
+.about-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  gap: 12px;
+}
+
+.about-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  width: 60px;
+  flex-shrink: 0;
+}
+
+.about-value {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.about-link {
+  font-size: 13px;
+  color: #6496ff;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.about-link:hover {
+  text-decoration: underline;
 }
 
 .danger-zone {

@@ -1,38 +1,10 @@
 <template>
   <div class="notes-container">
     <div class="top-nav-area">
-      <div class="cat-nav-wrapper" ref="catNavRef">
-        <div class="cat-nav-inner">
-          <div
-            v-for="(cat, index) in categories"
-            :key="cat.id"
-            class="nav-item"
-            :class="{ active: currentCategoryId === cat.id }"
-            :ref="setCatNavItemRef"
-            @click="selectCategory(cat.id)"
-          >
-            <span class="cat-color-dot" :style="{ background: cat.color }"></span>
-            <span class="nav-item-name">{{ cat.name }}</span>
-            <el-dropdown trigger="click" @command="(cmd: string) => handleCatCommand(cmd, cat, index)">
-              <el-button type="info" size="small" text :icon="MoreFilled" class="nav-more" @click.stop />
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="edit">编辑分类</el-dropdown-item>
-                  <el-dropdown-item command="delete">删除分类</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </div>
-          <div class="nav-item add-nav" :ref="setCatNavItemRef" @click="addCategory">
-            <el-icon><Plus /></el-icon>
-            <span class="nav-item-name">添加分类</span>
-          </div>
-        </div>
-      </div>
-      <div class="nb-nav-wrapper" v-show="currentCategoryId" ref="nbNavRef">
+      <div class="nb-nav-wrapper" ref="nbNavRef">
         <div class="nb-nav-inner">
           <div
-            v-for="(nb, index) in currentCategoryNotebooks"
+            v-for="(nb, index) in notebooks"
             :key="nb.id"
             class="group-nav-item"
             :class="{ active: currentNotebookId === nb.id }"
@@ -58,6 +30,32 @@
       </div>
     </div>
 
+    <div class="note-nav-area" v-if="currentNotebookId">
+      <div class="note-nav-wrapper" ref="noteNavRef">
+        <div class="note-nav-inner">
+          <div
+            v-for="note in currentNotebookNotes"
+            :key="note.id"
+            class="note-nav-item"
+            :class="{ active: currentNoteId === note.id }"
+            :ref="setNoteNavItemRef"
+            @click="openNote(note)"
+          >
+            <span class="note-nav-title">{{ note.title }}</span>
+            <span class="note-nav-date">{{ formatDate(note.updated_at) }}</span>
+          </div>
+          <div class="note-nav-item add-note-nav" :ref="setNoteNavItemRef" @click="createNote">
+            <el-icon><Plus /></el-icon>
+            <span class="note-nav-title">新建笔记</span>
+          </div>
+          <div class="note-nav-item delete-note-nav" v-if="currentNoteId" @click="deleteCurrentNote">
+            <el-icon><Delete /></el-icon>
+            <span class="note-nav-title">删除笔记</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="main-content">
       <template v-if="!currentNotebookId">
         <div class="empty-state">
@@ -65,60 +63,12 @@
         </div>
       </template>
       <template v-else-if="!currentNoteId">
-        <div class="note-list-sidebar">
-          <div class="sidebar-header">
-            <span>笔记列表</span>
-            <el-button type="primary" size="small" :icon="Plus" @click="createNote">新建笔记</el-button>
-          </div>
-          <div class="sidebar-list">
-            <div
-              v-for="note in currentNotebookNotes"
-              :key="note.id"
-              class="sidebar-item"
-              :class="{ active: currentNoteId === note.id }"
-              @click="selectNote(note)"
-              @dblclick="openNote(note)"
-            >
-              <div class="sidebar-item-title">{{ note.title }}</div>
-              <div class="sidebar-item-date">{{ formatDate(note.updated_at) }}</div>
-            </div>
-            <el-empty v-if="currentNotebookNotes.length === 0" description="暂无笔记" :image-size="50" />
-          </div>
-        </div>
         <div class="editor-area">
-          <div class="editor-empty">双击笔记打开编辑</div>
+          <div class="editor-empty">选择或新建笔记开始编辑</div>
         </div>
       </template>
       <template v-else>
-        <div class="note-list-sidebar">
-          <div class="sidebar-header">
-            <span>笔记列表</span>
-            <el-button type="primary" size="small" :icon="Plus" @click="createNote">新建笔记</el-button>
-          </div>
-          <div class="sidebar-list">
-            <div
-              v-for="note in currentNotebookNotes"
-              :key="note.id"
-              class="sidebar-item"
-              :class="{ active: currentNoteId === note.id }"
-              @click="openNote(note)"
-            >
-              <div class="sidebar-item-title">{{ note.title }}</div>
-              <div class="sidebar-item-date">{{ formatDate(note.updated_at) }}</div>
-            </div>
-            <el-empty v-if="currentNotebookNotes.length === 0" description="暂无笔记" :image-size="50" />
-          </div>
-        </div>
         <div class="editor-area editing">
-          <div class="editor-header">
-            <el-input
-              v-model="currentNoteTitle"
-              placeholder="笔记标题"
-              class="note-title-input"
-              @blur="saveNoteTitle"
-            />
-            <el-button type="danger" size="small" @click="deleteCurrentNote">删除笔记</el-button>
-          </div>
           <div id="vditor-container" class="vditor-wrapper"></div>
         </div>
       </template>
@@ -128,18 +78,16 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUpdate, watch, nextTick, onBeforeUnmount } from 'vue'
-import { Plus, MoreFilled } from '@element-plus/icons-vue'
+import { Plus, MoreFilled, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import Vditor from 'vditor'
 import 'vditor/dist/index.css'
 import dayjs from 'dayjs'
 import { getSystemStateField, setSystemStateField } from '../services/storageService'
+import { logger } from '../lib/logger'
 
-interface Category { id: string; name: string; color: string; order: number; created_at: string }
-interface Notebook { id: string; categoryId: string; name: string; order: number; created_at: string }
+interface Notebook { id: string; name: string; order: number; created_at: string }
 interface Note { id: string; notebookId: string; title: string; content: string; created_at: string; updated_at: string }
-
-const CAT_COLORS = ['#667eea', '#f56c6c', '#67c23a', '#e6a23c', '#909399', '#409eff']
 
 function getAuthToken() { return localStorage.getItem('auth_token') }
 function authHeaders(): Record<string, string> {
@@ -149,24 +97,23 @@ function authHeaders(): Record<string, string> {
   return h
 }
 
-const categories = ref<Category[]>([])
 const notebooks = ref<Notebook[]>([])
 const notes = ref<Note[]>([])
-const currentCategoryId = ref('')
 const currentNotebookId = ref('')
 const currentNoteId = ref('')
 const currentNoteTitle = ref('')
 
 let vditor: Vditor | null = null
+let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 
-const catNavRef = ref<HTMLElement>()
 const nbNavRef = ref<HTMLElement>()
-const catNavItemsRef = ref<HTMLElement[]>([])
 const nbNavItemsRef = ref<HTMLElement[]>([])
+const noteNavRef = ref<HTMLElement>()
+const noteNavItemsRef = ref<HTMLElement[]>([])
 
-const clearNavRefs = () => { catNavItemsRef.value = []; nbNavItemsRef.value = [] }
-const setCatNavItemRef = (el: any) => { if (el) catNavItemsRef.value.push(el) }
+const clearNavRefs = () => { nbNavItemsRef.value = []; noteNavItemsRef.value = [] }
 const setNbNavItemRef = (el: any) => { if (el) nbNavItemsRef.value.push(el) }
+const setNoteNavItemRef = (el: any) => { if (el) noteNavItemsRef.value.push(el) }
 
 const scrollToCenter = (container: HTMLElement, target: HTMLElement) => {
   if (!container || !target) return
@@ -177,14 +124,6 @@ const scrollToCenter = (container: HTMLElement, target: HTMLElement) => {
   container.scrollTo({ left: Math.max(0, center - w / 2), behavior: 'smooth' })
 }
 
-const scrollCatNav = () => {
-  nextTick(() => {
-    const el = catNavRef.value; if (!el) return
-    const active = catNavItemsRef.value.find(i => i.classList.contains('active'))
-    if (active) scrollToCenter(el, active)
-  })
-}
-
 const scrollNbNav = () => {
   nextTick(() => {
     const el = nbNavRef.value; if (!el) return
@@ -193,18 +132,18 @@ const scrollNbNav = () => {
   })
 }
 
-let isCatDragging = false, catDragStartX = 0, catDragScrollLeft = 0
-let isNbDragging = false, nbDragStartX = 0, nbDragScrollLeft = 0
-let isCatDragInit = false, isNbDragInit = false
-
-const initCatDrag = () => {
-  if (isCatDragInit) return; isCatDragInit = true
-  const el = catNavRef.value; if (!el) return
-  el.addEventListener('mousedown', (e: MouseEvent) => { if (e.button === 0) { isCatDragging = true; catDragStartX = e.pageX; catDragScrollLeft = el.scrollLeft; el.style.cursor = 'grabbing'; el.style.userSelect = 'none' } })
-  window.addEventListener('mousemove', (e: MouseEvent) => { if (!isCatDragging) return; e.preventDefault(); el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, catDragScrollLeft + catDragStartX - e.pageX)) })
-  const end = () => { if (!isCatDragging) return; isCatDragging = false; el.style.cursor = ''; el.style.userSelect = '' }
-  window.addEventListener('mouseup', end); window.addEventListener('mouseleave', end)
+const scrollNoteNav = () => {
+  nextTick(() => {
+    const el = noteNavRef.value; if (!el) return
+    const active = noteNavItemsRef.value.find(i => i.classList.contains('active'))
+    if (active) scrollToCenter(el, active)
+  })
 }
+
+let isNbDragging = false, nbDragStartX = 0, nbDragScrollLeft = 0
+let isNbDragInit = false
+let isNoteDragging = false, noteDragStartX = 0, noteDragScrollLeft = 0
+let isNoteDragInit = false
 
 const initNbDrag = () => {
   if (isNbDragInit) return; isNbDragInit = true
@@ -215,32 +154,37 @@ const initNbDrag = () => {
   window.addEventListener('mouseup', end); window.addEventListener('mouseleave', end)
 }
 
+const initNoteDrag = () => {
+  if (isNoteDragInit) return; isNoteDragInit = true
+  const el = noteNavRef.value; if (!el) return
+  el.addEventListener('mousedown', (e: MouseEvent) => { if (e.button === 0) { isNoteDragging = true; noteDragStartX = e.pageX; noteDragScrollLeft = el.scrollLeft; el.style.cursor = 'grabbing'; el.style.userSelect = 'none' } })
+  window.addEventListener('mousemove', (e: MouseEvent) => { if (!isNoteDragging) return; e.preventDefault(); el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, noteDragScrollLeft + noteDragStartX - e.pageX)) })
+  const end = () => { if (!isNoteDragging) return; isNoteDragging = false; el.style.cursor = ''; el.style.userSelect = '' }
+  window.addEventListener('mouseup', end); window.addEventListener('mouseleave', end)
+}
+
 // Navigation persistence
-watch([currentCategoryId, currentNotebookId, currentNoteId], async () => {
+watch([currentNotebookId, currentNoteId], async () => {
   await setSystemStateField('notes', {
-    currentCategoryId: currentCategoryId.value,
     currentNotebookId: currentNotebookId.value,
     currentNoteId: currentNoteId.value
   })
-  nextTick(() => { scrollCatNav(); if (currentCategoryId.value) scrollNbNav() })
+  nextTick(() => {
+    if (currentNotebookId.value) scrollNbNav()
+    if (currentNoteId.value) scrollNoteNav()
+  })
 }, { deep: true })
 
 // Computed
-const currentCategoryNotebooks = computed(() => notebooks.value.filter(n => n.categoryId === currentCategoryId.value))
 const currentNotebookNotes = computed(() => notes.value.filter(n => n.notebookId === currentNotebookId.value))
 
 // Data loading
-async function loadData() {
+async function loadNotebooks() {
   try {
-    const [catRes, nbRes] = await Promise.all([
-      fetch('/api/notes-categories', { headers: authHeaders() }),
-      fetch('/api/notes-notebooks', { headers: authHeaders() })
-    ])
-    const catData = await catRes.json()
-    const nbData = await nbRes.json()
-    categories.value = catData.categories || []
-    notebooks.value = nbData.notebooks || []
-  } catch { ElMessage.error('加载笔记数据失败') }
+    const res = await fetch('/api/notes-notebooks', { headers: authHeaders() })
+    const data = await res.json()
+    notebooks.value = data.notebooks || []
+  } catch { ElMessage.error('加载笔记本失败') }
 }
 
 async function loadNotes() {
@@ -250,64 +194,6 @@ async function loadNotes() {
     const data = await res.json()
     notes.value = data.notes || []
   } catch { ElMessage.error('加载笔记列表失败') }
-}
-
-// Category operations
-function selectCategory(id: string) {
-  currentCategoryId.value = id
-  currentNotebookId.value = ''
-  currentNoteId.value = ''
-  destroyVditor()
-  const nbs = currentCategoryNotebooks.value
-  if (nbs.length > 0) {
-    currentNotebookId.value = nbs[0].id
-  }
-}
-
-async function addCategory() {
-  try {
-    const { value } = await ElMessageBox.prompt('输入分类名称', '新建分类', { confirmButtonText: '确定', cancelButtonText: '取消' })
-    if (!value) return
-    const res = await fetch('/api/notes-categories', {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({ name: value, color: CAT_COLORS[categories.value.length % CAT_COLORS.length] })
-    })
-    const data = await res.json()
-    categories.value.push(data.category)
-    selectCategory(data.category.id)
-  } catch { /* cancelled */ }
-}
-
-async function handleCatCommand(cmd: string, cat: Category, _index: number) {
-  if (cmd === 'edit') {
-    try {
-      const { value } = await ElMessageBox.prompt('编辑分类名称', '编辑分类', {
-        confirmButtonText: '确定', cancelButtonText: '取消', inputValue: cat.name
-      })
-      if (!value) return
-      await fetch(`/api/notes-categories/${cat.id}`, {
-        method: 'PUT', headers: authHeaders(),
-        body: JSON.stringify({ name: value })
-      })
-      const idx = categories.value.findIndex(c => c.id === cat.id)
-      if (idx !== -1) categories.value[idx].name = value
-    } catch { /* cancelled */ }
-  } else if (cmd === 'delete') {
-    try {
-      await ElMessageBox.confirm(`确定删除分类「${cat.name}」及其所有笔记本和笔记？`, '确认删除', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' })
-      await fetch(`/api/notes-categories/${cat.id}`, { method: 'DELETE', headers: authHeaders() })
-      categories.value = categories.value.filter(c => c.id !== cat.id)
-      if (currentCategoryId.value === cat.id) {
-        currentCategoryId.value = ''
-        currentNotebookId.value = ''
-        currentNoteId.value = ''
-        destroyVditor()
-        if (categories.value.length > 0) selectCategory(categories.value[0].id)
-      }
-      await loadData()
-    } catch { /* cancelled */ }
-  }
 }
 
 // Notebook operations
@@ -324,10 +210,11 @@ async function addNotebook() {
     if (!value) return
     const res = await fetch('/api/notes-notebooks', {
       method: 'POST', headers: authHeaders(),
-      body: JSON.stringify({ categoryId: currentCategoryId.value, name: value })
+      body: JSON.stringify({ name: value })
     })
     const data = await res.json()
     notebooks.value.push(data.notebook)
+    logger.info('[笔记] 添加笔记本', { name: value })
     selectNotebook(data.notebook.id)
   } catch { /* cancelled */ }
 }
@@ -345,6 +232,7 @@ async function handleNbCommand(cmd: string, nb: Notebook, _index: number) {
       })
       const idx = notebooks.value.findIndex(n => n.id === nb.id)
       if (idx !== -1) notebooks.value[idx].name = value
+      logger.info('[笔记] 编辑笔记本', { id: nb.id, oldName: nb.name, newName: value })
     } catch { /* cancelled */ }
   } else if (cmd === 'delete') {
     try {
@@ -355,41 +243,26 @@ async function handleNbCommand(cmd: string, nb: Notebook, _index: number) {
         currentNotebookId.value = ''
         currentNoteId.value = ''
         destroyVditor()
-        const nbs = currentCategoryNotebooks.value
+        const nbs = notebooks.value
         if (nbs.length > 0) selectNotebook(nbs[0].id)
       }
       notes.value = notes.value.filter(n => n.notebookId !== nb.id)
+      logger.info('[笔记] 删除笔记本', { id: nb.id, name: nb.name })
     } catch { /* cancelled */ }
   }
 }
 
 // Note operations
-function selectNote(note: Note) {
-  currentNoteId.value = note.id
-}
-
 function openNote(note: Note) {
   currentNoteId.value = note.id
   currentNoteTitle.value = note.title
   nextTick(() => initVditor(note.content))
 }
 
-async function createNote() {
+async function autoSave() {
+  if (!currentNoteId.value || !vditor) return
+  const content = vditor.getValue()
   try {
-    const res = await fetch('/api/notes', {
-      method: 'POST', headers: authHeaders(),
-      body: JSON.stringify({ notebookId: currentNotebookId.value, title: '无标题', content: '' })
-    })
-    const data = await res.json()
-    notes.value.unshift(data.note)
-    openNote(data.note)
-  } catch { ElMessage.error('创建笔记失败') }
-}
-
-async function saveNoteTitle() {
-  if (!currentNoteId.value) return
-  try {
-    const content = vditor ? vditor.getValue() : ''
     const res = await fetch(`/api/notes/${currentNoteId.value}`, {
       method: 'PUT', headers: authHeaders(),
       body: JSON.stringify({ title: currentNoteTitle.value, content })
@@ -397,24 +270,48 @@ async function saveNoteTitle() {
     const data = await res.json()
     const idx = notes.value.findIndex(n => n.id === data.note.id)
     if (idx !== -1) { notes.value[idx].title = data.note.title; notes.value[idx].updated_at = data.note.updated_at }
-  } catch { ElMessage.error('保存失败') }
+    logger.info('[笔记] 保存笔记', { id: currentNoteId.value, title: currentNoteTitle.value })
+  } catch { /* silent */ }
 }
 
-async function deleteCurrentNote() {
-  if (!currentNoteId.value) return
+function scheduleAutoSave() {
+  if (autoSaveTimer) clearTimeout(autoSaveTimer)
+  autoSaveTimer = setTimeout(() => autoSave(), 2000)
+}
+
+async function createNote() {
   try {
-    await ElMessageBox.confirm(`确定删除笔记「${currentNoteTitle.value}」？`, '确认删除', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' })
-    await fetch(`/api/notes/${currentNoteId.value}`, { method: 'DELETE', headers: authHeaders() })
-    notes.value = notes.value.filter(n => n.id !== currentNoteId.value)
-    destroyVditor()
-    currentNoteId.value = ''
-    currentNoteTitle.value = ''
+    const { value } = await ElMessageBox.prompt('输入笔记名称', '新建笔记', { confirmButtonText: '确定', cancelButtonText: '取消' })
+    if (!value) return
+    const res = await fetch('/api/notes', {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ notebookId: currentNotebookId.value, title: value, content: '' })
+    })
+    const data = await res.json()
+    notes.value.unshift(data.note)
+    openNote(data.note)
+    logger.info('[笔记] 新建笔记', { notebookId: currentNotebookId.value, title: value })
   } catch { /* cancelled */ }
 }
 
 // Vditor lifecycle
 function destroyVditor() {
+  if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null }
   if (vditor) { vditor.destroy(); vditor = null }
+}
+
+async function deleteCurrentNote() {
+  if (!currentNoteId.value) return
+  try {
+    const note = notes.value.find(n => n.id === currentNoteId.value)
+    await ElMessageBox.confirm(`确定删除笔记「${note?.title || '当前笔记'}」？`, '确认删除', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' })
+    await fetch(`/api/notes/${currentNoteId.value}`, { method: 'DELETE', headers: authHeaders() })
+    logger.info('[笔记] 删除笔记', { id: currentNoteId.value, title: note?.title })
+    notes.value = notes.value.filter(n => n.id !== currentNoteId.value)
+    destroyVditor()
+    currentNoteId.value = ''
+    currentNoteTitle.value = ''
+  } catch { /* cancelled */ }
 }
 
 function initVditor(content: string) {
@@ -423,12 +320,13 @@ function initVditor(content: string) {
   if (!el) return
   vditor = new Vditor(el, {
     height: '100%',
-    mode: 'sv',
+    mode: 'ir',
     value: content,
     placeholder: '开始编写...',
     toolbar: ['headings', 'bold', 'italic', 'strike', '|', 'line', 'quote', 'list', 'ordered-list', 'check', '|', 'code', 'inline-code', 'link', 'table', '|', 'undo', 'redo', 'fullscreen'],
     cache: { enable: false },
-    after: () => { vditor?.focus() }
+    after: () => { vditor?.focus() },
+    input: () => { scheduleAutoSave() }
   })
 }
 
@@ -438,30 +336,27 @@ function formatDate(date: string) {
 
 // Init
 onMounted(async () => {
-  await loadData()
+  await loadNotebooks()
   const state = await getSystemStateField('notes') as any
-  if (state?.currentCategoryId && categories.value.some(c => c.id === state.currentCategoryId)) {
-    currentCategoryId.value = state.currentCategoryId
-    if (state.currentNotebookId) {
+  if (state?.currentNotebookId) {
+    await loadNotes()
+    const nbs = notebooks.value
+    if (nbs.some(n => n.id === state.currentNotebookId)) {
+      currentNotebookId.value = state.currentNotebookId
       await loadNotes()
-      const nbs = notebooks.value.filter(n => n.categoryId === state.currentCategoryId)
-      if (nbs.some(n => n.id === state.currentNotebookId)) {
-        currentNotebookId.value = state.currentNotebookId
-        await loadNotes()
-        if (state.currentNoteId && notes.value.some(n => n.id === state.currentNoteId)) {
-          const note = notes.value.find(n => n.id === state.currentNoteId)
-          if (note) openNote(note)
-        }
-      } else if (nbs.length > 0) {
-        currentNotebookId.value = nbs[0].id
-        await loadNotes()
+      if (state.currentNoteId && notes.value.some(n => n.id === state.currentNoteId)) {
+        const note = notes.value.find(n => n.id === state.currentNoteId)
+        if (note) openNote(note)
       }
+    } else if (nbs.length > 0) {
+      currentNotebookId.value = nbs[0].id
+      await loadNotes()
     }
-  } else if (categories.value.length > 0) {
-    selectCategory(categories.value[0].id)
+  } else if (notebooks.value.length > 0) {
+    currentNotebookId.value = notebooks.value[0].id
     await loadNotes()
   }
-  nextTick(() => { initCatDrag(); initNbDrag(); scrollCatNav() })
+  nextTick(() => { initNbDrag(); initNoteDrag(); scrollNbNav() })
 })
 
 onBeforeUpdate(() => clearNavRefs())
@@ -472,22 +367,9 @@ onBeforeUnmount(() => destroyVditor())
 <style scoped>
 .notes-container { display: flex; flex-direction: column; height: 100%; position: relative; }
 .top-nav-area { background: rgba(255, 255, 255, 0.03); border-bottom: 1px solid rgba(255, 255, 255, 0.08); flex-shrink: 0; }
-.cat-nav-wrapper { height: 56px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none; }
-.cat-nav-wrapper::-webkit-scrollbar { display: none; }
-.cat-nav-inner { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 8px 16px; white-space: nowrap; width: max-content; min-width: 100%; height: 100%; box-sizing: border-box; }
-.nav-item { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; user-select: none; height: 40px; }
-.nav-item:hover { background: rgba(255, 255, 255, 0.08); }
-.nav-item.active { background: rgba(102, 126, 234, 0.2); }
-.nav-item.active .nav-item-name { color: #fff; font-weight: 500; }
-.nav-item-name { font-size: 14px; color: rgba(255, 255, 255, 0.75); white-space: nowrap; }
-.cat-color-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
-.add-nav { color: rgba(255, 255, 255, 0.5); }
-.add-nav:hover { color: rgba(255, 255, 255, 0.8); }
-.add-nav .nav-item-name { color: rgba(255, 255, 255, 0.5); }
-.nav-more { opacity: 0; transition: opacity 0.2s; width: 20px; height: 20px; flex-shrink: 0; }
-.nav-item:hover .nav-more { opacity: 1; }
+.note-nav-area { background: rgba(255, 255, 255, 0.02); border-bottom: 1px solid rgba(255, 255, 255, 0.06); flex-shrink: 0; }
 
-.nb-nav-wrapper { height: 48px; border-top: 1px solid rgba(255, 255, 255, 0.06); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none; }
+.nb-nav-wrapper { height: 48px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none; }
 .nb-nav-wrapper::-webkit-scrollbar { display: none; }
 .nb-nav-inner { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 16px; white-space: nowrap; width: max-content; min-width: 100%; height: 100%; box-sizing: border-box; }
 .group-nav-item { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; user-select: none; height: 36px; }
@@ -501,24 +383,66 @@ onBeforeUnmount(() => destroyVditor())
 .add-group-nav:hover { color: rgba(255, 255, 255, 0.8); }
 .add-group-nav .group-nav-name { color: rgba(255, 255, 255, 0.5); }
 
-.main-content { flex: 1; display: flex; min-width: 0; overflow: hidden; }
+.note-nav-wrapper { height: 40px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none; }
+.note-nav-wrapper::-webkit-scrollbar { display: none; }
+.note-nav-inner { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 4px 16px; white-space: nowrap; width: max-content; min-width: 100%; height: 100%; box-sizing: border-box; }
+.note-nav-item { display: flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 4px; cursor: pointer; transition: all 0.2s ease; user-select: none; height: 32px; }
+.note-nav-item:hover { background: rgba(255, 255, 255, 0.06); }
+.note-nav-item.active { background: rgba(102, 126, 234, 0.15); }
+.note-nav-item.active .note-nav-title { color: #fff; font-weight: 500; }
+.note-nav-title { font-size: 12px; color: rgba(255, 255, 255, 0.6); white-space: nowrap; }
+.note-nav-date { font-size: 11px; color: rgba(255, 255, 255, 0.3); white-space: nowrap; }
+.add-note-nav { color: rgba(255, 255, 255, 0.4); }
+.add-note-nav:hover { color: rgba(255, 255, 255, 0.7); }
+.add-note-nav .note-nav-title { color: rgba(255, 255, 255, 0.4); }
+.delete-note-nav { color: rgba(255, 100, 100, 0.4); }
+.delete-note-nav:hover { color: rgba(255, 100, 100, 0.8); background: rgba(255, 100, 100, 0.1); }
+.delete-note-nav .note-nav-title { color: rgba(255, 100, 100, 0.4); }
 
-.note-list-sidebar { width: 200px; min-width: 200px; border-right: 1px solid rgba(255, 255, 255, 0.08); display: flex; flex-direction: column; background: rgba(255, 255, 255, 0.02); }
-.sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
-.sidebar-header span { color: #fff; font-size: 13px; }
-.sidebar-list { flex: 1; overflow-y: auto; padding: 6px; }
-.sidebar-item { padding: 8px 10px; border-radius: 6px; cursor: pointer; transition: background 0.15s; margin-bottom: 1px; }
-.sidebar-item:hover { background: rgba(255, 255, 255, 0.06); }
-.sidebar-item.active { background: rgba(102, 126, 234, 0.15); }
-.sidebar-item-title { color: #e0e0e0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sidebar-item-date { color: rgba(255, 255, 255, 0.3); font-size: 11px; margin-top: 1px; }
+.main-content { flex: 1; display: flex; min-width: 0; overflow: hidden; }
 
 .editor-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .editor-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: rgba(255, 255, 255, 0.3); font-size: 14px; }
 .editor-area.editing { }
-.editor-header { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
-.note-title-input { flex: 1; }
 .vditor-wrapper { flex: 1; overflow: hidden; }
 
 .empty-state { flex: 1; display: flex; align-items: center; justify-content: center; }
+</style>
+
+<style>
+.vditor { border: none !important; background: transparent !important; }
+.vditor-toolbar { background: rgba(255, 255, 255, 0.03) !important; border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important; }
+.vditor-toolbar__item { color: rgba(255, 255, 255, 0.6) !important; }
+.vditor-toolbar__item:hover { color: rgba(255, 255, 255, 0.9) !important; background: rgba(255, 255, 255, 0.08) !important; }
+.vditor-toolbar__item--current { color: #667eea !important; }
+.vditor-ir { background: #0a0a1a !important; color: #e0e0e0 !important; }
+.vditor-ir__node { color: #e0e0e0 !important; }
+.vditor-ir__heading { color: #82d8e8 !important; }
+.vditor-reset { background: transparent !important; color: #e0e0e0 !important; }
+.vditor-reset h1, .vditor-reset h2, .vditor-reset h3, .vditor-reset h4, .vditor-reset h5, .vditor-reset h6 { color: #82d8e8 !important; }
+.vditor-reset a { color: #667eea !important; }
+.vditor-reset code { background: rgba(255, 255, 255, 0.08) !important; color: #e0e0e0 !important; }
+.vditor-reset pre { background: rgba(255, 255, 255, 0.05) !important; border: 1px solid rgba(255, 255, 255, 0.08) !important; }
+.vditor-reset blockquote { border-left: 3px solid #667eea !important; background: rgba(102, 126, 234, 0.08) !important; color: rgba(255, 255, 255, 0.7) !important; }
+.vditor-reset table { border-color: rgba(255, 255, 255, 0.1) !important; }
+.vditor-reset th, .vditor-reset td { border-color: rgba(255, 255, 255, 0.1) !important; }
+.vditor-reset th { background: rgba(255, 255, 255, 0.05) !important; }
+.vditor-reset hr { border-color: rgba(255, 255, 255, 0.1) !important; }
+.vditor-reset input { background: rgba(255, 255, 255, 0.08) !important; border-color: rgba(255, 255, 255, 0.15) !important; }
+.vditor-reset strong { color: #fff !important; }
+.vditor-reset em { color: #82d8e8 !important; }
+.vditor-reset li { color: #e0e0e0 !important; }
+.vditor-reset p { color: #e0e0e0 !important; }
+.vditor-ir__block { background: rgba(255, 255, 255, 0.03) !important; }
+.vditor-ir__block--active { background: rgba(102, 126, 234, 0.1) !important; }
+.vditor-ir__node[data-type="code-block"] { background: rgba(255, 255, 255, 0.05) !important; }
+.vditor-reset code.hljs { background: rgba(255, 255, 255, 0.05) !important; }
+.vditor-reset code:not(.hljs) { background: rgba(102, 126, 234, 0.15) !important; color: #82d8e8 !important; padding: 2px 6px !important; border-radius: 3px !important; }
+.vditor-panel { background: #1a1a2e !important; border: 1px solid rgba(255, 255, 255, 0.1) !important; }
+.vditor-hint { background: #1a1a2e !important; border: 1px solid rgba(255, 255, 255, 0.1) !important; }
+.vditor-hint--current, .vditor-hint button:not([disabled]):hover { background: rgba(102, 126, 234, 0.2) !important; }
+.vditor-dialog { background: #1a1a2e !important; border: 1px solid rgba(255, 255, 255, 0.15) !important; }
+.vditor-dialog__bg { background: #0a0a1a !important; }
+.vditor-dialog__title { color: #fff !important; }
+.vditor-upload { background: #667eea !important; }
 </style>

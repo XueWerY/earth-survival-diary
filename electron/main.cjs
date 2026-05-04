@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const fs = require('fs')
@@ -13,10 +13,8 @@ if (!gotTheLock) {
 let mainWindow
 let updateWindow = null
 let serverInstance = null
-let updateDownloaded = false
 
 autoUpdater.autoDownload = false
-autoUpdater.autoInstallOnAppQuit = true
 
 function sendUpdateStatus(data) {
   if (updateWindow && !updateWindow.isDestroyed()) {
@@ -45,7 +43,7 @@ function createUpdateWindow() {
 
   updateWindow.on('closed', () => {
     updateWindow = null
-    if (!updateDownloaded && mainWindow) {
+    if (mainWindow) {
       mainWindow.show()
     }
   })
@@ -55,16 +53,7 @@ autoUpdater.on('update-available', (info) => {
   debugLog('[Updater] Update available: ' + info.version)
   createUpdateWindow()
   if (mainWindow) mainWindow.hide()
-  autoUpdater.downloadUpdate()
-})
-
-autoUpdater.on('download-progress', (progress) => {
-  sendUpdateStatus({ status: 'downloading', percent: Math.floor(progress.percent) })
-})
-
-autoUpdater.on('update-downloaded', () => {
-  updateDownloaded = true
-  sendUpdateStatus({ status: 'downloaded' })
+  sendUpdateStatus({ status: 'available', version: info.version })
 })
 
 autoUpdater.on('error', (err) => {
@@ -80,28 +69,41 @@ ipcMain.handle('check-for-update', async () => {
       sendUpdateStatus({ status: 'no-update' })
       return { updateAvailable: false }
     }
-    return { updateAvailable: true }
+    sendUpdateStatus({ status: 'available', version: result.updateInfo.version })
+    return { updateAvailable: true, version: result.updateInfo.version }
   } catch (e) {
     sendUpdateStatus({ status: 'error', message: e.message })
     return { error: e.message }
   }
 })
 
-ipcMain.handle('install-update', () => {
-  autoUpdater.quitAndInstall()
+ipcMain.handle('open-external', async (_event, url) => {
+  if (updateWindow && !updateWindow.isDestroyed()) {
+    updateWindow.close()
+  }
+  await shell.openExternal(url)
 })
 
-const logFile = path.join(app.getPath('userData'), 'electron-debug.log')
-fs.writeFileSync(logFile, '[Electron] App started\n')
+const logFile = path.join(app.getPath('userData'), 'logs', 'app-' + new Date().toISOString().slice(0, 10) + '.log')
+const p = (n, l = 2) => String(n).padStart(l, '0')
+const formatTs = () => { const d = new Date(); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}:${p(d.getMilliseconds(), 3)}` }
 
 function debugLog(msg) {
   console.log(msg)
-  try { fs.appendFileSync(logFile, msg + '\n') } catch (e) {}
+  try {
+    const dir = path.dirname(logFile)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.appendFileSync(logFile, `[${formatTs()}] [DEBUG] ${msg}\n`)
+  } catch (e) {}
 }
 
 function errorLog(msg) {
   console.error(msg)
-  try { fs.appendFileSync(logFile, '[ERROR] ' + msg + '\n') } catch (e) {}
+  try {
+    const dir = path.dirname(logFile)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.appendFileSync(logFile, `[${formatTs()}] [ERROR] ${msg}\n`)
+  } catch (e) {}
 }
 
 async function startServer() {
@@ -168,6 +170,10 @@ ipcMain.on('resize-window', (event, width, height) => {
 })
 
 app.whenReady().then(async () => {
+  const sep = '─'.repeat(60)
+  const dir = path.dirname(logFile)
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  fs.appendFileSync(logFile, `\n${sep}\n[${formatTs()}] [INFO] ===== 应用启动 =====\n${sep}\n`)
   debugLog('[Electron] App ready')
 
   try {
@@ -204,6 +210,7 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', async () => {
+  debugLog('[Electron] 应用已关闭')
   if (serverInstance) {
     try { serverInstance.close() } catch (e) {}
   }

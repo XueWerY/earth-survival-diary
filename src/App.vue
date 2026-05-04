@@ -94,16 +94,6 @@
               <span class="nav-label">统计</span>
             </div>
 
-            <!-- 关于 -->
-            <div
-                class="nav-item"
-                :class="{ active: currentPage === 'about' }"
-                :ref="setNavItemRef"
-                @click="switchPage('about')"
-            >
-              <span class="nav-label">关于</span>
-            </div>
-
             <!-- 我的 -->
             <div
                 class="nav-item"
@@ -130,7 +120,6 @@
           <NotesPage v-else-if="currentPage === 'notes'" />
           <StatisticsPage v-else-if="currentPage === 'statistics'" />
           <ProfilePage v-else-if="currentPage === 'profile'" @logout="handleLogout" />
-          <AboutPage v-else-if="currentPage === 'about'" />
         </div>
       </main>
     </template>
@@ -146,7 +135,6 @@ import CourseSchedule from './components/CourseSchedule.vue'
 import FocusTimer from './components/FocusTimer.vue'
 import AuthPage from './components/AuthPage.vue'
 import ProfilePage from './components/ProfilePage.vue'
-import AboutPage from './components/AboutPage.vue'
 import NotesPage from './components/NotesPage.vue'
 import StatisticsPage from './components/StatisticsPage.vue'
 import { initCourseAutoRecord } from './composables/useCourseAutoRecord'
@@ -367,7 +355,7 @@ const initializeData = async () => {
     // 从服务器恢复页面状态
     try {
       const savedPage = await getSystemStateField('currentPage')
-      if (savedPage && ['footprint', 'focus', 'mission', 'countdown', 'course', 'notes', 'statistics', 'profile', 'about'].includes(savedPage)) {
+      if (savedPage && ['footprint', 'focus', 'mission', 'countdown', 'course', 'notes', 'statistics', 'profile'].includes(savedPage)) {
         currentPage.value = savedPage as any
         logger.debug('[App] 恢复页面状态:', { page: savedPage })
       }
@@ -418,7 +406,7 @@ const preloadCourseData = async () => {
 }
 
 // 从 Redis 恢复页面状态
-const currentPage = ref<'footprint' | 'focus' | 'mission' | 'countdown' | 'course' | 'notes' | 'statistics' | 'profile' | 'about'>('footprint')
+const currentPage = ref<'footprint' | 'focus' | 'mission' | 'countdown' | 'course' | 'notes' | 'statistics' | 'profile'>('footprint')
 
 // 监听认证状态变化，当用户登录成功时初始化数据
 watch(

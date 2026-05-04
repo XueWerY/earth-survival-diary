@@ -60,6 +60,17 @@
             show-word-limit
         />
       </el-form-item>
+
+      <!-- 提醒 -->
+      <el-form-item label="提醒" v-if="form.countMode !== 'countup'">
+        <div class="reminder-row">
+          <el-select v-model="form.reminderStrategy" placeholder="选择提醒方式" style="width: 100%">
+            <el-option label="不提醒" value="none" />
+            <el-option label="准时提醒" value="on_time" />
+            <el-option label="提前提醒" value="advance" />
+          </el-select>
+        </div>
+      </el-form-item>
     </el-form>
 
     <template #footer>
@@ -87,6 +98,10 @@ interface Milestone {
   pinned: boolean
   createdAt: string
   updatedAt: string
+  reminderStrategy?: string
+  reminderDays?: number
+  reminderHours?: number
+  reminderMinutes?: number
 }
 
 interface Category {
@@ -122,7 +137,11 @@ const form = ref({
   targetDate: dayjs().format('YYYY-MM-DD'),
   category: 'life',
   description: '',
-  countMode: 'countdown' as 'countdown' | 'countup'
+  countMode: 'countdown' as 'countdown' | 'countup',
+  reminderStrategy: 'none' as string,
+  reminderDays: 0,
+  reminderHours: 0,
+  reminderMinutes: 0
 })
 
 // 表单验证规则
@@ -147,7 +166,11 @@ watch(() => props.milestone, (newVal) => {
       targetDate: newVal.targetDate,
       category: newVal.category,
       description: newVal.description,
-      countMode: newVal.countMode === 'countup' ? 'countup' : 'countdown'
+      countMode: newVal.countMode === 'countup' ? 'countup' : 'countdown',
+      reminderStrategy: newVal.reminderStrategy || 'none',
+      reminderDays: newVal.reminderDays || 0,
+      reminderHours: newVal.reminderHours || 0,
+      reminderMinutes: newVal.reminderMinutes || 0
     }
   } else {
     form.value.targetDate = dayjs().format('YYYY-MM-DD')
@@ -256,6 +279,9 @@ const handleSubmit = async () => {
 :deep(.el-form-item__label) {
   color: rgba(255, 255, 255, 0.7) !important;
 }
+
+.reminder-row { display: flex; align-items: center; gap: 8px; width: 100%; }
+.reminder-row .reminder-label { color: rgba(255,255,255,0.6); white-space: nowrap; font-size: 13px; }
 
 :deep(.el-input__count),
 :deep(.el-input__count-inner) {

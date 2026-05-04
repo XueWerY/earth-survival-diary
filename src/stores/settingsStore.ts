@@ -12,6 +12,7 @@ export interface ExtendedUserSettings {
     course: {
         semesterStartDate: string // 开学日期 YYYY-MM-DD
         totalWeeks: number // 学期总周数
+        reminderMinutes: number // 上课提前提醒分钟数
     }
 }
 
@@ -22,7 +23,8 @@ export const defaultSettings: ExtendedUserSettings = {
     },
     course: {
         semesterStartDate: '',
-        totalWeeks: 20
+        totalWeeks: 20,
+        reminderMinutes: 5
     }
 }
 

@@ -82,6 +82,25 @@
         <el-input v-model="form.notes" type="textarea" placeholder="添加备注..." :rows="3" />
       </el-form-item>
 
+      <el-form-item label="提醒">
+        <div class="reminder-row">
+          <el-select v-model="form.reminderStrategy" placeholder="选择提醒方式" style="width: 180px">
+            <el-option label="不提醒" value="none" />
+            <el-option label="准时提醒" value="on_time" />
+            <el-option label="提前提醒" value="advance" />
+          </el-select>
+          <template v-if="form.reminderStrategy === 'advance'">
+            <span class="reminder-label">提前</span>
+            <el-input-number v-model="form.reminderDays" :min="0" :max="365" controls-position="right" style="width: 80px" />
+            <span class="reminder-label">天</span>
+            <el-input-number v-model="form.reminderHours" :min="0" :max="23" controls-position="right" style="width: 80px" />
+            <span class="reminder-label">小时</span>
+            <el-input-number v-model="form.reminderMinutes" :min="form.reminderDays === 0 && form.reminderHours === 0 ? 1 : 0" :max="59" controls-position="right" style="width: 80px" />
+            <span class="reminder-label">分钟</span>
+          </template>
+        </div>
+      </el-form-item>
+
       <el-form-item>
         <div class="form-footer">
           <el-button @click="$emit('cancel')">取消</el-button>
@@ -96,7 +115,7 @@
 import { ref, computed, watch } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { useMissionStore, PRIORITIES, REPEAT_STRATEGIES, REPEAT_END_STRATEGIES, type Mission, type ChecklistItem, type RepeatStrategy, type RepeatEndStrategy, type Priority } from '../stores/missionStore'
+import { useMissionStore, PRIORITIES, REPEAT_STRATEGIES, REPEAT_END_STRATEGIES, type Mission, type ChecklistItem, type RepeatStrategy, type RepeatEndStrategy, type Priority, type ReminderStrategy } from '../stores/missionStore'
 import LunarDatePicker from './LunarDatePicker.vue'
 
 const props = defineProps<{ mission?: Mission | null; listId?: string; groupId?: string }>()
@@ -120,11 +139,12 @@ interface FormData {
   repeatStrategy: string; repeatCustomDays: number; repeatEndStrategy: string;
   repeatEndDate: string; repeatCount: number; priority: string;
   checklist: ChecklistItem[]; notes: string
+  reminderStrategy: string; reminderDays: number; reminderHours: number; reminderMinutes: number
 }
 
 const getDefaultForm = (): FormData => {
   const groups = availableGroups.value
-  return { name: '', listId: props.listId || (allLists.value.length > 0 ? allLists.value[0].id : ''), groupId: props.groupId || groups[0]?.id || '', date: '', endTime: '', repeatStrategy: 'none', repeatCustomDays: 1, repeatEndStrategy: 'never', repeatEndDate: '', repeatCount: 1, priority: 'none', checklist: [], notes: '' }
+  return { name: '', listId: props.listId || (allLists.value.length > 0 ? allLists.value[0].id : ''), groupId: props.groupId || groups[0]?.id || '', date: '', endTime: '', repeatStrategy: 'none', repeatCustomDays: 1, repeatEndStrategy: 'never', repeatEndDate: '', repeatCount: 1, priority: 'none', checklist: [], notes: '', reminderStrategy: 'none', reminderDays: 0, reminderHours: 0, reminderMinutes: 10 }
 }
 
 const form = ref<FormData>(getDefaultForm())
@@ -137,7 +157,7 @@ const rules: FormRules = {
 
 watch(() => props.mission, (nm) => {
   if (nm) { 
-    form.value = { name: nm.name, listId: nm.listId, groupId: nm.groupId, date: nm.date, endTime: nm.endTime || '', repeatStrategy: nm.repeatStrategy, repeatCustomDays: nm.repeatCustomDays || 1, repeatEndStrategy: nm.repeatEndStrategy, repeatEndDate: nm.repeatEndDate, repeatCount: nm.repeatCount, priority: nm.priority, checklist: nm.checklist.map(i => ({ ...i })), notes: nm.notes }
+    form.value = { name: nm.name, listId: nm.listId, groupId: nm.groupId, date: nm.date, endTime: nm.endTime || '', repeatStrategy: nm.repeatStrategy, repeatCustomDays: nm.repeatCustomDays || 1, repeatEndStrategy: nm.repeatEndStrategy, repeatEndDate: nm.repeatEndDate, repeatCount: nm.repeatCount, priority: nm.priority, checklist: nm.checklist.map(i => ({ ...i })), notes: nm.notes, reminderStrategy: nm.reminderStrategy, reminderDays: nm.reminderDays || 0, reminderHours: nm.reminderHours || 0, reminderMinutes: nm.reminderMinutes || 10 }
   }
   else { form.value = getDefaultForm() }
 }, { immediate: true })
@@ -163,7 +183,7 @@ const handleSubmit = async () => {
   await formRef.value.validate((valid) => {
     if (valid) {
       const listId = form.value.listId; if (!listId) return
-      const md = { name: form.value.name, listId, groupId: form.value.groupId, date: form.value.date, startTime: '', endTime: form.value.endTime || '', repeatStrategy: form.value.repeatStrategy as RepeatStrategy, repeatCustomDays: form.value.repeatCustomDays, repeatEndStrategy: form.value.repeatEndStrategy as RepeatEndStrategy, repeatEndDate: form.value.repeatEndDate, repeatCount: form.value.repeatCount, priority: form.value.priority as Priority, checklist: form.value.checklist.filter(i => i.text.trim()), completed: false, completedStartTime: '', completedEndTime: '', notes: form.value.notes }
+      const md = { name: form.value.name, listId, groupId: form.value.groupId, date: form.value.date, startTime: '', endTime: form.value.endTime || '', repeatStrategy: form.value.repeatStrategy as RepeatStrategy, repeatCustomDays: form.value.repeatCustomDays, repeatEndStrategy: form.value.repeatEndStrategy as RepeatEndStrategy, repeatEndDate: form.value.repeatEndDate, repeatCount: form.value.repeatCount, priority: form.value.priority as Priority, checklist: form.value.checklist.filter(i => i.text.trim()), completed: false, completedStartTime: '', completedEndTime: '', notes: form.value.notes, reminderStrategy: form.value.reminderStrategy as ReminderStrategy, reminderDays: form.value.reminderDays, reminderHours: form.value.reminderHours, reminderMinutes: form.value.reminderMinutes }
       if (isEdit.value && props.mission) missionStore.updateMission(props.mission.id, md); else missionStore.addMission(md)
       emit('submit')
     }
@@ -178,6 +198,8 @@ const handleSubmit = async () => {
 .repeat-end { display: flex; align-items: center; gap: 12px; }
 .repeat-strategy-row { display: flex; align-items: center; gap: 8px; width: 100%; }
 .custom-days-label { color: #606266; white-space: nowrap; }
+.reminder-row { display: flex; align-items: center; gap: 8px; width: 100%; flex-wrap: wrap; }
+.reminder-label { color: rgba(255,255,255,0.6); white-space: nowrap; font-size: 13px; }
 .count-suffix { color: #909399; }
 .checklist { width: 100%; }
 .checklist-item { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }

@@ -289,6 +289,10 @@ export interface Mission {
     completed_start_time?: string
     completed_end_time?: string
     notes?: string
+    reminder_strategy?: string
+    reminder_days?: number
+    reminder_hours?: number
+    reminder_minutes?: number
     updated_at?: string
 }
 
@@ -314,6 +318,10 @@ export interface AddMissionData {
     priority?: string
     checklist?: ChecklistItem[]
     notes?: string
+    reminderStrategy?: string
+    reminderDays?: number
+    reminderHours?: number
+    reminderMinutes?: number
 }
 
 export async function addMission(data: AddMissionData): Promise<{ mission: Mission }> {
@@ -344,6 +352,10 @@ export interface UpdateMissionData {
     completedStartTime?: string
     completedEndTime?: string
     notes?: string
+    reminderStrategy?: string
+    reminderDays?: number
+    reminderHours?: number
+    reminderMinutes?: number
 }
 
 export async function updateMission(id: string, data: UpdateMissionData): Promise<{ mission: Mission }> {

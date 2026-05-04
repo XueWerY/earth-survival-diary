@@ -190,6 +190,10 @@
                     <el-icon><Clock /></el-icon>
                     {{ mission.endTime }} 结束
                   </span>
+                  <span v-if="getReminderLabel(mission)" class="meta-item reminder-label">
+                    <el-icon><Bell /></el-icon>
+                    {{ getReminderLabel(mission) }}
+                  </span>
                   <span v-if="mission.repeatStrategy !== 'none'" class="meta-item repeat">
                     <el-icon><RefreshRight /></el-icon>
                     {{ getRepeatLabel(mission.repeatStrategy, mission.date, mission.repeatCustomDays) }}
@@ -254,6 +258,10 @@
                   <span v-if="mission.endTime" class="meta-item">
                     <el-icon><Clock /></el-icon>
                     {{ mission.endTime }} 结束
+                  </span>
+                  <span v-if="getReminderLabel(mission)" class="meta-item reminder-label">
+                    <el-icon><Bell /></el-icon>
+                    {{ getReminderLabel(mission) }}
                   </span>
                   <span v-if="mission.repeatStrategy !== 'none'" class="meta-item repeat">
                     <el-icon><RefreshRight /></el-icon>
@@ -320,6 +328,10 @@
                     <el-icon><Clock /></el-icon>
                     {{ mission.endTime }} 结束
                   </span>
+                  <span v-if="getReminderLabel(mission)" class="meta-item reminder-label">
+                    <el-icon><Bell /></el-icon>
+                    {{ getReminderLabel(mission) }}
+                  </span>
                   <span v-if="mission.repeatStrategy !== 'none'" class="meta-item repeat">
                     <el-icon><RefreshRight /></el-icon>
                     {{ getRepeatLabel(mission.repeatStrategy, mission.date, mission.repeatCustomDays) }}
@@ -376,7 +388,7 @@
                 </div>
               </div>
               <div class="mission-body">
-                <div class="mission-meta" v-if="mission.date || mission.startTime || mission.endTime || mission.repeatStrategy !== 'none'">
+                <div class="mission-meta" v-if="mission.date || mission.startTime || mission.endTime || mission.repeatStrategy !== 'none' || mission.reminderStrategy !== 'none'">
                   <span v-if="mission.date" class="meta-item">
                     <el-icon><Calendar /></el-icon>
                     {{ formatDate(mission.date) }}
@@ -384,6 +396,10 @@
                   <span v-if="mission.endTime" class="meta-item">
                     <el-icon><Clock /></el-icon>
                     {{ mission.endTime }} 结束
+                  </span>
+                  <span v-if="getReminderLabel(mission)" class="meta-item reminder-label">
+                    <el-icon><Bell /></el-icon>
+                    {{ getReminderLabel(mission) }}
                   </span>
                   <span v-if="mission.repeatStrategy !== 'none'" class="meta-item repeat">
                     <el-icon><RefreshRight /></el-icon>
@@ -420,9 +436,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUpdate, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onBeforeUpdate, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Edit, Delete, Calendar, Clock, RefreshRight, Check, CircleCheck, MoreFilled, Rank, Timer } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, Calendar, Clock, RefreshRight, Check, CircleCheck, MoreFilled, Rank, Timer, Bell } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { useMissionStore, REPEAT_STRATEGIES, type Mission, type MissionList, type MissionGroup } from '../stores/missionStore'
 import MissionFormInner from './MissionForm.vue'
@@ -432,6 +448,53 @@ import { getData, setData, getSystemStateField, setSystemStateField } from '../s
 import { logger } from '../lib/logger'
 
 const missionStore = useMissionStore()
+
+const sendNotification = (title: string, body: string) => {
+  if (!('Notification' in window)) return
+  if (Notification.permission === 'granted') {
+    new Notification(title, { body })
+  } else if (Notification.permission !== 'denied') {
+    Notification.requestPermission().then((perm) => {
+      if (perm === 'granted') new Notification(title, { body })
+    })
+  }
+}
+
+const triggeredReminders = new Set<string>()
+
+const checkReminders = () => {
+  const now = dayjs()
+  missionStore.missions.forEach(mission => {
+    if (mission.completed || mission.reminderStrategy === 'none') return
+    if (!mission.date) return
+
+    let triggerTime = dayjs(mission.date + (mission.endTime ? 'T' + mission.endTime : ''))
+    if (mission.reminderStrategy === 'advance') {
+      const offsetMinutes = (mission.reminderDays || 0) * 1440 + (mission.reminderHours || 0) * 60 + (mission.reminderMinutes || 0)
+      triggerTime = triggerTime.subtract(offsetMinutes, 'minute')
+    }
+
+    const reminderKey = mission.id + '_' + mission.date + '_' + mission.endTime
+    const diffMs = now.diff(triggerTime, 'millisecond')
+    if (diffMs >= 0 && diffMs < 3600000 && !triggeredReminders.has(reminderKey)) {
+      triggeredReminders.add(reminderKey)
+      sendNotification('任务提醒', `「${mission.name}」即将到期，请处理`)
+      setTimeout(() => triggeredReminders.delete(reminderKey), 3600000)
+    }
+  })
+}
+
+let reminderInterval: ReturnType<typeof setInterval> | null = null
+
+const startReminderChecker = () => {
+  if (reminderInterval) clearInterval(reminderInterval)
+  reminderInterval = setInterval(checkReminders, 30000)
+  checkReminders()
+}
+
+const stopReminderChecker = () => {
+  if (reminderInterval) { clearInterval(reminderInterval); reminderInterval = null }
+}
 
 const currentListId = ref<string>('')
 const currentGroupId = ref<string>('')
@@ -526,6 +589,11 @@ onMounted(async () => {
     }
   }
   nextTick(() => { initListNavDrag(); initGroupNavDrag(); scrollListNavToActive(); if (showGroupNav.value) scrollGroupNavToActive() })
+  startReminderChecker()
+})
+
+onUnmounted(() => {
+  stopReminderChecker()
 })
 
 onBeforeUpdate(() => clearNavRefs())
@@ -713,6 +781,19 @@ const getRepeatLabel = (strategy: string, missionDate?: string, customDays?: num
   return REPEAT_STRATEGIES.find(s => s.value === strategy)?.label || strategy
 }
 
+const getReminderLabel = (mission: Mission) => {
+  if (mission.reminderStrategy === 'none' || !mission.reminderStrategy) return ''
+  if (mission.reminderStrategy === 'on_time') return '准时提醒'
+  if (mission.reminderStrategy === 'advance') {
+    const parts: string[] = []
+    if (mission.reminderDays) parts.push(`${mission.reminderDays}天`)
+    if (mission.reminderHours) parts.push(`${mission.reminderHours}小时`)
+    if (mission.reminderMinutes) parts.push(`${mission.reminderMinutes}分钟`)
+    return `提前${parts.join('')}`
+  }
+  return ''
+}
+
 const handleAddList = () => { editingList.value = null; isEditListMode.value = true }
 
 const handleListCommand = async (command: string, list: MissionList, _index: number) => {
@@ -837,6 +918,7 @@ const handleGroupFormSubmit = () => { if (editingGroup.value) { logger.info('[�
 .mission-meta { display: flex; flex-wrap: wrap; gap: 12px; }
 
 .meta-item { display: flex; align-items: center; gap: 4px; font-size: 12px; color: rgba(255, 255, 255, 0.5); white-space: nowrap; }
+.meta-item.reminder-label { color: #f59e0b; }
 .meta-item.repeat { color: #667eea; }
 .meta-item.repeat-end-label { color: rgba(255, 255, 255, 0.45); }
 .meta-item.checklist-toggle { cursor: pointer; color: rgba(255, 255, 255, 0.55); user-select: none; transition: color 0.2s; }

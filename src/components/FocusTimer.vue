@@ -5,17 +5,53 @@
       <el-scrollbar>
         <!-- 非计时状态：显示计时器 -->
         <div v-if="timerState === 'idle'" class="idle-view">
-          <!-- 计时器圆环 -->
-          <div class="timer-ring" :class="{ 'stopwatch-mode': focusType === 'stopwatch' }">
-            <svg viewBox="0 0 200 200" class="timer-svg">
-              <circle cx="100" cy="100" r="90" class="timer-bg" />
-              <circle cx="100" cy="100" r="90" class="timer-progress" />
-            </svg>
-            <div class="timer-display">
-              <span class="timer-time">{{ displayTime }}</span>
-              <span class="timer-label">{{ focusType === 'pomodoro' ? '番茄钟' : '正计时' }}</span>
+          <!-- 番茄钟视觉 -->
+          <template v-if="focusType === 'pomodoro'">
+            <div class="star-ring-container">
+              <svg viewBox="0 0 260 260" class="star-ring-svg">
+                <defs>
+                  <filter id="star-glow">
+                    <feGaussianBlur stdDeviation="2" result="blur"/>
+                    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                  </filter>
+                </defs>
+                <circle v-for="(star, i) in starRingStars" :key="i"
+                  :cx="star.cx" :cy="star.cy" r="3"
+                  :class="star.lit ? 'ring-star-lit' : 'ring-star-dim'"
+                  :style="star.lit ? { animationDelay: `${i * 0.03}s` } : null"
+                  filter="url(#star-glow)"
+                />
+              </svg>
+              <div class="emoji-earth">🌍</div>
+              <div class="moon-orbit-container" :style="moonOrbitStyle">
+                <div class="emoji-moon">🌙</div>
+              </div>
             </div>
-          </div>
+          </template>
+
+          <!-- 正计时视觉：星轨环（全亮） -->
+          <template v-else>
+            <div class="star-ring-container">
+              <svg viewBox="0 0 260 260" class="star-ring-svg">
+                <defs>
+                  <filter id="star-glow">
+                    <feGaussianBlur stdDeviation="2" result="blur"/>
+                    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                  </filter>
+                </defs>
+                <circle v-for="(star, i) in stopwatchStars" :key="i"
+                  :cx="star.cx" :cy="star.cy" r="3"
+                  class="ring-star-lit"
+                  :style="{ animationDelay: `${i * 0.03}s` }"
+                  filter="url(#star-glow)"
+                />
+              </svg>
+              <div class="emoji-earth">🌍</div>
+              <div class="moon-orbit-container" :style="stopwatchMoonStyle">
+                <div class="emoji-moon">🌙</div>
+              </div>
+            </div>
+          </template>
 
           <!-- 模式切换 -->
           <div class="mode-switch">
@@ -89,29 +125,67 @@
 
         <!-- 计时中状态 -->
         <div v-else class="timing-view">
-          <!-- 计时器圆环 -->
-          <div class="timer-ring" :class="{ 'stopwatch-mode': focusType === 'stopwatch' }">
-            <svg viewBox="0 0 200 200" class="timer-svg">
-              <circle cx="100" cy="100" r="90" class="timer-bg" />
-              <circle
-                  cx="100"
-                  cy="100"
-                  r="90"
-                  class="timer-progress"
-                  :style="{ strokeDashoffset: progressOffset }"
-              />
-            </svg>
-            <div class="timer-display">
-              <span class="timer-time">{{ displayTime }}</span>
-              <span class="timer-label">{{ focusName }}</span>
+          <!-- 番茄钟：星轨环 -->
+          <template v-if="focusType === 'pomodoro'">
+            <div class="star-ring-container">
+              <svg viewBox="0 0 260 260" class="star-ring-svg">
+                <defs>
+                  <filter id="star-glow">
+                    <feGaussianBlur stdDeviation="2" result="blur"/>
+                    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                  </filter>
+                </defs>
+                <circle v-for="(star, i) in starRingStars" :key="i"
+                  :cx="star.cx" :cy="star.cy" r="3"
+                  :class="star.lit ? 'ring-star-lit' : 'ring-star-dim'"
+                  :style="star.lit ? { animationDelay: `${i * 0.03}s` } : null"
+                  filter="url(#star-glow)"
+                />
+              </svg>
+              <div class="emoji-earth">🌍</div>
+              <div class="moon-orbit-container" :style="moonOrbitStyle">
+                <div class="emoji-moon">🌙</div>
+              </div>
             </div>
-          </div>
 
-          <!-- 专注名称 -->
-          <div class="focus-name-display">
-            <h3>{{ focusName }}</h3>
-            <p v-if="focusNotes">{{ focusNotes }}</p>
-          </div>
+            <div class="focus-info-inline">
+              <span class="focus-name-inline">{{ focusName }}</span>
+              <span class="focus-sep-inline">:</span>
+              <span class="focus-time-inline">{{ displayTime }}</span>
+              <span v-if="focusNotes" class="focus-notes-inline">· {{ focusNotes }}</span>
+            </div>
+          </template>
+
+          <!-- 正计时：星轨环（全亮） -->
+          <template v-else>
+            <div class="star-ring-container">
+              <svg viewBox="0 0 260 260" class="star-ring-svg">
+                <defs>
+                  <filter id="star-glow">
+                    <feGaussianBlur stdDeviation="2" result="blur"/>
+                    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                  </filter>
+                </defs>
+                <circle v-for="(star, i) in stopwatchStars" :key="i"
+                  :cx="star.cx" :cy="star.cy" r="3"
+                  class="ring-star-lit"
+                  :style="{ animationDelay: `${i * 0.03}s` }"
+                  filter="url(#star-glow)"
+                />
+              </svg>
+              <div class="emoji-earth">🌍</div>
+              <div class="moon-orbit-container" :style="stopwatchMoonStyle">
+                <div class="emoji-moon">🌙</div>
+              </div>
+            </div>
+
+            <div class="focus-info-inline">
+              <span class="focus-name-inline">{{ focusName }}</span>
+              <span class="focus-sep-inline">:</span>
+              <span class="focus-time-inline">{{ displayTime }}</span>
+              <span v-if="focusNotes" class="focus-notes-inline">· {{ focusNotes }}</span>
+            </div>
+          </template>
 
           <!-- 操作按钮 -->
           <div class="action-buttons">
@@ -139,7 +213,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { VideoPlay, Star, Delete } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
@@ -181,6 +255,31 @@ const localPomodoroDuration = ref(settingsStore.settings.focus?.pomodoroDuration
 // 保存常用
 const showSaveFavorite = ref(false)
 const lastCompletedFocus = ref<{ name: string; notes: string; type: FocusType; targetDuration: number } | null>(null)
+
+const timeChars = ref<string[]>([])
+const prevTimeChars = ref<string[]>([])
+const flippingChars = ref(new Set<number>())
+
+// 星轨环 60 星
+const STAR_COUNT = 60
+const RING_RADIUS = 110
+const RING_CX = 130
+const RING_CY = 130
+
+interface RingStar { cx: number; cy: number; lit: boolean }
+
+const starRingStars = computed<RingStar[]>(() => {
+  const total = localPomodoroDuration.value * 60
+  const litCount = timerState.value === 'idle' ? 0 : Math.floor(((total - remainingSeconds.value) / total) * STAR_COUNT)
+  return Array.from({ length: STAR_COUNT }, (_, i) => {
+    const angle = (i / STAR_COUNT) * Math.PI * 2 - Math.PI / 2
+    return {
+      cx: RING_CX + Math.cos(angle) * RING_RADIUS,
+      cy: RING_CY + Math.sin(angle) * RING_RADIUS,
+      lit: i < litCount
+    }
+  })
+})
 
 // 常用专注
 const favorites = computed(() => focusStore.favorites)
@@ -231,6 +330,81 @@ const progressOffset = computed(() => {
   }
 })
 
+watch(displayTime, (val, old) => {
+  if (!old || timerState.value !== 'running' || focusType.value !== 'stopwatch') return
+  const nc = val.split('')
+  const oc = old.split('')
+  prevTimeChars.value = [...timeChars.value]
+  const flips = new Set<number>()
+  const maxLen = Math.max(nc.length, oc.length)
+  for (let i = 0; i < maxLen; i++) {
+    if ((nc[i] || '') !== (oc[i] || '')) flips.add(i)
+  }
+  flippingChars.value = flips
+  setTimeout(() => { flippingChars.value = new Set() }, 600)
+  timeChars.value = nc
+})
+
+watch(focusType, () => {
+  if (timerState.value === 'idle') {
+    stopwatchMoonAngle.value = 0
+  }
+})
+
+const moonOrbitAngle = computed(() => {
+  const total = localPomodoroDuration.value * 60
+  if (total <= 0) return 0
+  const progress = (total - remainingSeconds.value) / total
+  return progress * 360
+})
+
+const moonOrbitStyle = computed(() => ({
+  transform: `rotate(${moonOrbitAngle.value}deg)`
+}))
+
+const stopwatchStars = computed<RingStar[]>(() => {
+  return Array.from({ length: STAR_COUNT }, (_, i) => {
+    const angle = (i / STAR_COUNT) * Math.PI * 2 - Math.PI / 2
+    return {
+      cx: RING_CX + Math.cos(angle) * RING_RADIUS,
+      cy: RING_CY + Math.sin(angle) * RING_RADIUS,
+      lit: true
+    }
+  })
+})
+
+const stopwatchMoonAngle = ref(0)
+
+const stopwatchMoonStyle = computed(() => ({
+  transform: `rotate(${stopwatchMoonAngle.value}deg)`
+}))
+
+let moonAnimFrame: number | null = null
+const animateMoon = () => {
+  if (timerState.value === 'running' && focusType.value === 'stopwatch') {
+    stopwatchMoonAngle.value = ((Date.now() - startTimestamp.value) % 60000) / 60000 * 360
+    moonAnimFrame = requestAnimationFrame(animateMoon)
+  }
+}
+
+const stopMoonAnimation = () => {
+  if (moonAnimFrame) {
+    cancelAnimationFrame(moonAnimFrame)
+  }
+}
+
+const startMoonAnimation = () => {
+  if (focusType.value === 'stopwatch' && timerState.value === 'running') {
+    stopMoonAnimation()
+    moonAnimFrame = requestAnimationFrame(animateMoon)
+  }
+}
+
+const resetMoonAnimation = () => {
+  stopMoonAnimation()
+  stopwatchMoonAngle.value = 0
+}
+
 // 选择常用专注
 const selectFavorite = (fav: FavoriteFocus) => {
   focusName.value = fav.name
@@ -280,6 +454,7 @@ const startFocus = async () => {
   } else {
     elapsedSeconds.value = 0
     startStopwatch()
+    startMoonAnimation()
   }
 }
 
@@ -296,41 +471,50 @@ const startCountdown = () => {
     lastUpdateTime.value = now
 
     if (remainingSeconds.value <= 0) {
-      // 时间到
-      sendNotification(focusName.value)
+      sendNotification('专注完成', '专注完成，请放松一下吧')
       completeFocus()
     }
   }
 
   updateTimer() // 立即执行一次
   timerInterval = setInterval(updateTimer, 1000)
+  timeChars.value = '00:00'.split('')
+  prevTimeChars.value = [...timeChars.value]
 }
 
 // 发送系统通知
-const sendNotification = (name: string) => {
+const sendNotification = (title: string, body: string) => {
   if (!('Notification' in window)) return
   if (Notification.permission === 'granted') {
-    new Notification('专注完成', { body: `「${name}」已完成` })
+    new Notification(title, { body })
   } else if (Notification.permission !== 'denied') {
     Notification.requestPermission().then((perm) => {
       if (perm === 'granted') {
-        new Notification('专注完成', { body: `「${name}」已完成` })
+        new Notification(title, { body })
       }
     })
   }
 }
 
 // 开始正计时 - 使用时间戳计算
+let lastNotificationHour = 0
 const startStopwatch = () => {
   if (timerInterval) clearInterval(timerInterval)
+  lastNotificationHour = 0
 
   const updateTimer = () => {
     const now = Date.now()
     elapsedSeconds.value = Math.floor((now - startTimestamp.value) / 1000)
     lastUpdateTime.value = now
+
+    const currentHour = Math.floor(elapsedSeconds.value / 3600)
+    if (currentHour > 0 && currentHour !== lastNotificationHour) {
+      lastNotificationHour = currentHour
+      sendNotification('专注提醒', `您已累计专注${currentHour}小时，请放松一下吧`)
+    }
   }
 
-  updateTimer() // 立即执行一次
+  updateTimer()
   timerInterval = setInterval(updateTimer, 1000)
 }
 
@@ -340,16 +524,20 @@ const cancelFocus = async () => {
     clearInterval(timerInterval)
     timerInterval = null
   }
+  stopMoonAnimation()
   logger.info('[专注] 取消专注', { name: focusName.value })
   timerState.value = 'idle'
   remainingSeconds.value = 0
   elapsedSeconds.value = 0
-  pausedElapsedSeconds.value = 0
+  resetMoonAnimation()
   startTimestamp.value = 0
   lastUpdateTime.value = 0
+  lastNotificationHour = 0
 
   // 清除 store 中的计时状态
   await focusStore.clearTimerState()
+
+  timeChars.value = '00:00'.split('')
 
   ElMessage.info('已取消专注')
 }
@@ -471,11 +659,15 @@ const completeFocus = async () => {
   timerState.value = 'idle'
   remainingSeconds.value = 0
   elapsedSeconds.value = 0
+  resetMoonAnimation()
   startTimestamp.value = 0
   lastUpdateTime.value = 0
+  lastNotificationHour = 0
 
   // 清除 store 中的计时状态
   await focusStore.clearTimerState()
+
+  timeChars.value = '00:00'.split('')
 
   logger.info('[专注] 完成专注', { name: focusName.value, duration: totalDuration })
   ElMessage.success('专注完成！')
@@ -548,17 +740,24 @@ onMounted(async () => {
       } else {
         elapsedSeconds.value = totalSeconds
         remainingSeconds.value = 0
-        sendNotification(focusName.value)
+        sendNotification('专注完成', '专注完成，请放松一下吧')
         await completeFocus()
       }
     } else {
       elapsedSeconds.value = totalElapsed
+      lastNotificationHour = Math.floor(totalElapsed / 3600)
       startStopwatch()
+      const elapsedMs = (totalElapsed * 1000) % 60000
+      stopwatchMoonAngle.value = (elapsedMs / 60000) * 360
+      startMoonAnimation()
     }
   }
 
   // 监听页面可见性变化，确保后台计时准确
   document.addEventListener('visibilitychange', handleVisibilityChange)
+
+  timeChars.value = '00:00'.split('')
+  prevTimeChars.value = [...timeChars.value]
 })
 
 // 页面可见性变化处理
@@ -574,9 +773,9 @@ const handleVisibilityChange = () => {
       elapsedSeconds.value = elapsed
 
       if (remainingSeconds.value <= 0) {
-        sendNotification(focusName.value)
-        completeFocus()
-      }
+      sendNotification('专注完成', '专注完成，请放松一下吧')
+      completeFocus()
+    }
     } else {
       elapsedSeconds.value = elapsed
     }
@@ -664,19 +863,6 @@ onUnmounted(async () => {
   stroke: #10b981;
 }
 
-.timer-ring.active .timer-progress {
-  animation: pulse-ring 2s ease-in-out infinite;
-}
-
-@keyframes pulse-ring {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
-
 .timer-display {
   position: absolute;
   top: 50%;
@@ -702,9 +888,195 @@ onUnmounted(async () => {
   display: block;
 }
 
+/* 番茄钟视觉区（星轨环+星空） */
+.star-ring-container {
+  position: relative;
+  width: 260px;
+  height: 260px;
+  margin: 0 auto;
+}
+
+.star-ring-svg {
+  width: 100%;
+  height: 100%;
+  animation: ring-rotate 30s linear infinite;
+}
+
+@keyframes ring-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.ring-star-dim {
+  fill: rgba(255, 255, 255, 0.12);
+}
+
+.ring-star-lit {
+  fill: #a4b4ff;
+  animation: star-breathe 1.5s ease-in-out infinite;
+}
+
+@keyframes star-breathe {
+  0%, 100% { opacity: 0.8; r: 3; }
+  50% { opacity: 1; r: 3.5; }
+}
+
+.emoji-earth {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 48px;
+  line-height: 1;
+  user-select: none;
+  z-index: 3;
+  animation: earth-spin 12s linear infinite;
+}
+
+@keyframes earth-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.moon-orbit-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+}
+
+.emoji-moon {
+  position: absolute;
+  top: -85px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 16px;
+  user-select: none;
+  z-index: 4;
+}
+
+/* 番茄钟信息行 */
+.focus-info-inline {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.focus-name-inline {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.focus-sep-inline {
+  font-size: 18px;
+  color: rgba(255,255,255,0.4);
+  margin: 0 8px;
+}
+
+.focus-time-inline {
+  font-size: 20px;
+  font-weight: 700;
+  color: #82d8e8;
+  font-family: 'SF Mono', 'Monaco', monospace;
+  letter-spacing: 2px;
+}
+
+.focus-notes-inline {
+  display: block;
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+  margin-top: 4px;
+}
+
+/* 翻页时钟（正计时） */
+.flip-clock-container {
+  z-index: 1;
+}
+
+.flip-clock {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.flip-sep {
+  font-size: 56px;
+  font-weight: 700;
+  color: #a4b4ff;
+  font-family: 'SF Mono', 'Monaco', monospace;
+  line-height: 1;
+  padding: 0 2px;
+  text-shadow: 0 0 12px rgba(102, 126, 234, 0.5);
+  animation: sep-blink 1s step-end infinite;
+}
+
+@keyframes sep-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.flip-digit {
+  position: relative;
+  width: 46px;
+  height: 68px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #12102a 0%, #1a1640 50%, #12102a 100%);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.5), inset 0 -2px 4px rgba(0,0,0,0.4), 0 0 10px rgba(102,126,234,0.1);
+  overflow: hidden;
+  perspective: 400px;
+}
+
+.flip-digit::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  background: linear-gradient(180deg, transparent 48%, rgba(102,126,234,0.15) 49%, rgba(102,126,234,0.15) 51%, transparent 52%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.flip-digit-top,
+.flip-digit-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50%;
+  font-size: 52px;
+  font-weight: 700;
+  font-family: 'SF Mono', 'Monaco', monospace;
+  color: #c8d6ff;
+  text-align: center;
+  line-height: 68px;
+  backface-visibility: hidden;
+  perspective: 400px;
+}
+
+.flip-digit-top {
+  top: 0;
+  transform-origin: bottom;
+}
+
+.flip-digit-bottom {
+  bottom: 0;
+  line-height: 0;
+}
+
+.flip-digit.flip .flip-digit-top {
+  animation: digit-flip 0.6s ease-in forwards;
+}
+
+@keyframes digit-flip {
+  0% { transform: perspective(400px) rotateX(0deg); }
+  100% { transform: perspective(400px) rotateX(-90deg); opacity: 0; }
+}
+
 /* 模式切换 */
 .mode-switch {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
+  margin-top: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -840,6 +1212,25 @@ onUnmounted(async () => {
   flex-direction: column;
   align-items: center;
   padding: 40px 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.timing-view::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(1.5px 1.5px at 15% 25%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(2px 2px at 75% 15%, rgba(255,255,255,0.2), transparent),
+    radial-gradient(1px 1px at 35% 70%, rgba(255,255,255,0.25), transparent),
+    radial-gradient(1.5px 1.5px at 85% 60%, rgba(255,255,255,0.15), transparent),
+    radial-gradient(2px 2px at 20% 80%, rgba(255,255,255,0.2), transparent),
+    radial-gradient(1px 1px at 60% 40%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1.5px 1.5px at 50% 85%, rgba(255,255,255,0.15), transparent),
+    radial-gradient(1px 1px at 90% 30%, rgba(255,255,255,0.25), transparent);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .focus-name-display {

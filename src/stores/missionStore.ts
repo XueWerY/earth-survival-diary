@@ -27,6 +27,9 @@ export interface MissionGroup {
   order: number
 }
 
+// 提醒策略
+export type ReminderStrategy = 'none' | 'on_time' | 'advance'
+
 // 任务
 export interface Mission {
   id: string
@@ -48,6 +51,10 @@ export interface Mission {
   completedStartTime: string
   completedEndTime: string
   notes: string
+  reminderStrategy: ReminderStrategy
+  reminderDays: number
+  reminderHours: number
+  reminderMinutes: number
   createdAt: string
   updatedAt: string
 }
@@ -155,6 +162,10 @@ export const useMissionStore = defineStore('mission', () => {
         completedStartTime: db.completed_start_time || '',
         completedEndTime: db.completed_end_time || '',
         notes: db.notes || db.description || '',
+        reminderStrategy: (db.reminder_strategy || 'none') as ReminderStrategy,
+        reminderDays: db.reminder_days || 0,
+        reminderHours: db.reminder_hours || 0,
+        reminderMinutes: db.reminder_minutes || 0,
         createdAt: db.created_at,
         updatedAt: db.updated_at || db.created_at
       }))
@@ -414,7 +425,7 @@ export const useMissionStore = defineStore('mission', () => {
       return dayjs(nextDate).isAfter(dayjs(repeatEndDate), 'day')
     }
     if (repeatEndStrategy === 'count' && repeatCount) {
-      return repeatCompletedCount + 1 >= repeatCount
+      return repeatCompletedCount >= repeatCount
     }
     return false
   }
@@ -438,7 +449,11 @@ export const useMissionStore = defineStore('mission', () => {
         repeatCount: mission.repeatCount,
         priority: mission.priority,
         checklist: mission.checklist,
-        notes: mission.notes
+        notes: mission.notes,
+        reminderStrategy: mission.reminderStrategy,
+        reminderDays: mission.reminderDays,
+        reminderHours: mission.reminderHours,
+        reminderMinutes: mission.reminderMinutes
       })
 
       const newMission: Mission = {
@@ -461,6 +476,10 @@ export const useMissionStore = defineStore('mission', () => {
         completedStartTime: dbMission.completed_start_time || '',
         completedEndTime: dbMission.completed_end_time || '',
         notes: dbMission.notes || dbMission.description || '',
+        reminderStrategy: (dbMission.reminder_strategy || 'none') as ReminderStrategy,
+        reminderDays: dbMission.reminder_days || 0,
+        reminderHours: dbMission.reminder_hours || 0,
+        reminderMinutes: dbMission.reminder_minutes || 0,
         createdAt: dbMission.created_at,
         updatedAt: dbMission.updated_at || dbMission.created_at
       }
@@ -499,7 +518,11 @@ export const useMissionStore = defineStore('mission', () => {
         checklist: updates.checklist,
         completedStartTime: updates.completedStartTime,
         completedEndTime: updates.completedEndTime,
-        notes: updates.notes
+        notes: updates.notes,
+        reminderStrategy: updates.reminderStrategy,
+        reminderDays: updates.reminderDays,
+        reminderHours: updates.reminderHours,
+        reminderMinutes: updates.reminderMinutes
       })
 
       // 更新本地状态
@@ -520,6 +543,10 @@ export const useMissionStore = defineStore('mission', () => {
       if (updates.completedStartTime !== undefined) mission.completedStartTime = updates.completedStartTime
       if (updates.completedEndTime !== undefined) mission.completedEndTime = updates.completedEndTime
       if (updates.notes !== undefined) mission.notes = updates.notes
+      if (updates.reminderStrategy !== undefined) mission.reminderStrategy = updates.reminderStrategy
+      if (updates.reminderDays !== undefined) mission.reminderDays = updates.reminderDays
+      if (updates.reminderHours !== undefined) mission.reminderHours = updates.reminderHours
+      if (updates.reminderMinutes !== undefined) mission.reminderMinutes = updates.reminderMinutes
       mission.updatedAt = new Date().toISOString()
     } catch (error) {
       console.error('Failed to update mission:', error)

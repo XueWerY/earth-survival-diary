@@ -211,12 +211,6 @@ function createProdServer(options = {}) {
       if (!userEntry) {
         return res.status(401).json({ error: '用户不存在' })
       }
-      const session = await getUserSession(userId)
-      if (!session) {
-        await setUserSession(userId, token)
-      } else if (session.token !== token) {
-        return res.status(401).json({ error: '账号已在其他设备登录，请重新登录', kicked: true })
-      }
       req.userId = userId
       req.userEmail = userEntry.email
       next()
@@ -326,11 +320,7 @@ function createProdServer(options = {}) {
       const user = getUserIndexByEmail(email)
       if (user && user.id === userId) { userExists = true; break }
     }
-    if (!userExists) return res.json({ valid: false, kicked: false })
-    const session = await getUserSession(userId)
-    if (!session) { await setUserSession(userId, authHeader.substring(7)); return res.json({ valid: true, kicked: false }) }
-    if (session.token !== authHeader.substring(7)) return res.json({ valid: false, kicked: true })
-    res.json({ valid: true, kicked: false })
+    res.json({ valid: userExists, kicked: false })
   })
 
   // ============ Profile API ============
@@ -572,7 +562,7 @@ function createProdServer(options = {}) {
     try {
       const data = req.body
       const missions = await getUserMissions(req.userId)
-      const newMission = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), list_id: data.listId, name: data.name, description: data.description || null, target_count: data.targetCount || 1, current_count: 0, completed: false, group_id: data.groupId || '', date: data.date || '', start_time: data.startTime || '', end_time: data.endTime || '', repeat_strategy: data.repeatStrategy || 'none', repeat_custom_days: data.repeatCustomDays || 1, repeat_end_strategy: data.repeatEndStrategy || 'never', repeat_end_date: data.repeatEndDate || '', repeat_count: data.repeatCount || 1, repeat_completed_count: 0, priority: data.priority || 'none', checklist: data.checklist || [], completed_start_time: '', completed_end_time: '', notes: data.notes || '', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+      const newMission = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), list_id: data.listId, name: data.name, description: data.description || null, target_count: data.targetCount || 1, current_count: 0, completed: false, group_id: data.groupId || '', date: data.date || '', start_time: data.startTime || '', end_time: data.endTime || '', repeat_strategy: data.repeatStrategy || 'none', repeat_custom_days: data.repeatCustomDays || 1, repeat_end_strategy: data.repeatEndStrategy || 'never', repeat_end_date: data.repeatEndDate || '', repeat_count: data.repeatCount || 1, repeat_completed_count: 0, priority: data.priority || 'none', checklist: data.checklist || [], completed_start_time: '', completed_end_time: '', notes: data.notes || '', reminder_strategy: data.reminderStrategy || 'none', reminder_days: data.reminderDays || 0, reminder_hours: data.reminderHours || 0, reminder_minutes: data.reminderMinutes || 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
       missions.push(newMission)
       await setUserMissions(req.userId, missions)
       res.json({ mission: newMission })
@@ -607,6 +597,10 @@ function createProdServer(options = {}) {
       if (updates.completedStartTime !== undefined) mission.completed_start_time = updates.completedStartTime
       if (updates.completedEndTime !== undefined) mission.completed_end_time = updates.completedEndTime
       if (updates.notes !== undefined) mission.notes = updates.notes
+      if (updates.reminderStrategy !== undefined) mission.reminder_strategy = updates.reminderStrategy
+      if (updates.reminderDays !== undefined) mission.reminder_days = updates.reminderDays
+      if (updates.reminderHours !== undefined) mission.reminder_hours = updates.reminderHours
+      if (updates.reminderMinutes !== undefined) mission.reminder_minutes = updates.reminderMinutes
       mission.updated_at = new Date().toISOString()
       await setUserMissions(req.userId, missions)
       res.json({ mission })
@@ -633,6 +627,115 @@ function createProdServer(options = {}) {
       const tasks = await getUserTasks(req.userId)
       res.json({ stats: { listCount: lists.length, missionCount: missions.length, taskCount: tasks.length } })
     } catch (e) { console.error('Get stats error:', e); res.status(500).json({ error: '获取统计失败' }) }
+  })
+
+  // ============ Notes API ============
+
+  async function getUserNoteNotebooks(userId) {
+    return readJson(getDataPath('note', userId, 'notebooks'), [])
+  }
+  async function setUserNoteNotebooks(userId, nbs) {
+    writeJson(getDataPath('note', userId, 'notebooks'), nbs)
+  }
+  async function getUserNotes(userId) {
+    return readJson(getDataPath('note', userId, 'notes'), [])
+  }
+  async function setUserNotes(userId, notes) {
+    writeJson(getDataPath('note', userId, 'notes'), notes)
+  }
+
+  /** GET /api/notes-notebooks (auth) => 200 {notebooks:[]} */
+  app.get('/api/notes-notebooks', authMiddleware, async (req, res) => {
+    try {
+      const nbs = await getUserNoteNotebooks(req.userId)
+      nbs.sort((a, b) => (a.order || 0) - (b.order || 0))
+      res.json({ notebooks: nbs })
+    } catch (e) { console.error('Get note notebooks error:', e); res.status(500).json({ error: '获取笔记本失败' }) }
+  })
+
+  /** POST /api/notes-notebooks (auth) body:{name} => 200 {notebook} */
+  app.post('/api/notes-notebooks', authMiddleware, async (req, res) => {
+    try {
+      const { name } = req.body
+      const nbs = await getUserNoteNotebooks(req.userId)
+      const newNb = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), name, order: nbs.length, created_at: new Date().toISOString() }
+      nbs.push(newNb)
+      await setUserNoteNotebooks(req.userId, nbs)
+      res.json({ notebook: newNb })
+    } catch (e) { console.error('Add note notebook error:', e); res.status(500).json({ error: '添加笔记本失败' }) }
+  })
+
+  /** PUT /api/notes-notebooks/:id (auth) body:{name?} => 200 {notebook} */
+  app.put('/api/notes-notebooks/:id', authMiddleware, async (req, res) => {
+    try {
+      const { id } = req.params; const { name } = req.body
+      const nbs = await getUserNoteNotebooks(req.userId)
+      const idx = nbs.findIndex(nb => nb.id === id)
+      if (idx === -1) return res.status(404).json({ error: '笔记本不存在' })
+      if (name !== undefined) nbs[idx].name = name
+      await setUserNoteNotebooks(req.userId, nbs)
+      res.json({ notebook: nbs[idx] })
+    } catch (e) { console.error('Update note notebook error:', e); res.status(500).json({ error: '更新笔记本失败' }) }
+  })
+
+  /** DELETE /api/notes-notebooks/:id (auth) => 200 {success:true} */
+  app.delete('/api/notes-notebooks/:id', authMiddleware, async (req, res) => {
+    try {
+      const { id } = req.params
+      const nbs = await getUserNoteNotebooks(req.userId)
+      const notes = await getUserNotes(req.userId)
+      await setUserNoteNotebooks(req.userId, nbs.filter(nb => nb.id !== id))
+      await setUserNotes(req.userId, notes.filter(n => n.notebookId !== id))
+      res.json({ success: true })
+    } catch (e) { console.error('Delete note notebook error:', e); res.status(500).json({ error: '删除笔记本失败' }) }
+  })
+
+  /** GET /api/notes (auth) ?notebookId=xxx => 200 {notes:[]} */
+  app.get('/api/notes', authMiddleware, async (req, res) => {
+    try {
+      const { notebookId } = req.query
+      let notes = await getUserNotes(req.userId)
+      if (notebookId) notes = notes.filter(n => n.notebookId === notebookId)
+      res.json({ notes })
+    } catch (e) { console.error('Get notes error:', e); res.status(500).json({ error: '获取笔记失败' }) }
+  })
+
+  /** POST /api/notes (auth) body:{notebookId,title,content} => 200 {note} */
+  app.post('/api/notes', authMiddleware, async (req, res) => {
+    try {
+      const { notebookId, title, content } = req.body
+      const notes = await getUserNotes(req.userId)
+      const now = new Date().toISOString()
+      const newNote = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), notebookId, title: title || '无标题', content: content || '', created_at: now, updated_at: now }
+      notes.unshift(newNote)
+      await setUserNotes(req.userId, notes)
+      res.json({ note: newNote })
+    } catch (e) { console.error('Add note error:', e); res.status(500).json({ error: '创建笔记失败' }) }
+  })
+
+  /** PUT /api/notes/:id (auth) body:{title?,content?} => 200 {note} */
+  app.put('/api/notes/:id', authMiddleware, async (req, res) => {
+    try {
+      const { id } = req.params; const { title, content } = req.body
+      const notes = await getUserNotes(req.userId)
+      const idx = notes.findIndex(n => n.id === id)
+      if (idx === -1) return res.status(404).json({ error: '笔记不存在' })
+      if (title !== undefined) notes[idx].title = title
+      if (content !== undefined) notes[idx].content = content
+      notes[idx].updated_at = new Date().toISOString()
+      await setUserNotes(req.userId, notes)
+      res.json({ note: notes[idx] })
+    } catch (e) { console.error('Update note error:', e); res.status(500).json({ error: '更新笔记失败' }) }
+  })
+
+  /** DELETE /api/notes/:id (auth) => 200 {success:true} */
+  app.delete('/api/notes/:id', authMiddleware, async (req, res) => {
+    try {
+      const { id } = req.params
+      const notes = await getUserNotes(req.userId)
+      await setUserNotes(req.userId, notes.filter(n => n.id !== id))
+      res.json({ success: true })
+    } catch (e) { console.error('Delete note error:', e); res.status(500).json({ error: '删除笔记失败' }) }
   })
 
   // ============ Data API (type/key based) ============
@@ -663,6 +766,7 @@ function createProdServer(options = {}) {
     catch (e) { console.error('Get settings error:', e); res.status(500).json({ error: '获取设置失败' }) }
   })
 
+
   /** PUT /api/settings (auth) body:{...} => 200 {settings} */
   app.put('/api/settings', authMiddleware, async (req, res) => {
     try {
@@ -675,7 +779,7 @@ function createProdServer(options = {}) {
 
   // ============ Logs API ============
 
-  const LOG_DIR = 'C:\\Program Files\\earth-survival-diary\\logs'
+  const LOG_DIR = path.join(path.dirname(DATA_DIR), 'logs')
 
   /** POST /api/logs body:{logs:LogEntry[]} => 200 {success:true} */
   app.post('/api/logs', async (req, res) => {
@@ -716,21 +820,6 @@ function createProdServer(options = {}) {
   /** GET /api/health => 200 {status:"ok",time,wsPort?} */
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', storage: 'local', dataDir: DATA_DIR })
-  })
-
-  // ============ README ============
-
-  /** GET /api/readme => 200 {content} */
-  app.get('/api/readme', (req, res) => {
-    const readmePath = path.join(resourcesPath, 'app.asar.unpacked', 'README.md')
-    try {
-      if (fs.existsSync(readmePath)) {
-        res.set('Content-Type', 'text/markdown; charset=utf-8')
-        res.send(fs.readFileSync(readmePath, 'utf-8'))
-      } else {
-        res.status(404).json({ error: 'README.md not found' })
-      }
-    } catch (e) { res.status(500).json({ error: 'Failed to read README.md' }) }
   })
 
   // ============ Version ============

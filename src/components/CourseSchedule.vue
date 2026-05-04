@@ -18,6 +18,18 @@
             <span class="nav-day-name">{{ day.name }}</span>
             <span class="nav-day-date">{{ day.date }}</span>
             <span class="nav-count">{{ getDayCourseCount(index) }}</span>
+            <el-dropdown
+                trigger="click"
+                @command="(cmd: string) => handleDayCommand(cmd, index)"
+                @click.stop
+            >
+              <el-button type="info" size="small" text :icon="MoreFilled" class="nav-more" @click.stop />
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="add-course">添加课程</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </div>
       </div>
@@ -43,18 +55,6 @@
     <div class="main-content">
       <template v-if="!isFormMode">
         <div class="content-wrapper">
-          <!-- 头部 -->
-          <div class="content-header">
-            <div class="header-left">
-              <h2>{{ currentDayTitle }}</h2>
-              <span class="course-count-header">{{ currentDayCourses.length }} 节课</span>
-            </div>
-            <el-button type="primary" size="small" @click="handleAddCourse()">
-              <el-icon><Plus /></el-icon>
-              添加课程
-            </el-button>
-          </div>
-
           <!-- 课程列表区 -->
           <div class="content-body">
             <el-scrollbar>
@@ -204,7 +204,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, onBeforeUpdate } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, ArrowLeft, ArrowRight, Location, User } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, Location, User, MoreFilled } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { checkAndRecordFinishedCourses, loadRecordedCourses } from '../composables/useCourseAutoRecord'
 import { getData, setData } from '../services/storageService'
@@ -438,6 +438,12 @@ function selectDay(index: number) {
     isFormMode.value = false
   }
   scrollDateNavToActive()
+}
+
+function handleDayCommand(command: string, dayIndex: number) {
+  if (command === 'add-course') {
+    handleAddCourse(dayIndex)
+  }
 }
 
 const openFormMode = () => {
@@ -692,6 +698,18 @@ onBeforeUpdate(() => clearNavRefs())
   text-align: center;
 }
 
+.nav-more {
+  opacity: 0;
+  transition: opacity 0.2s;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.nav-item:hover .nav-more {
+  opacity: 1;
+}
+
 /* 周信息条 */
 .week-info-bar {
   padding: 8px 16px 12px;
@@ -771,33 +789,6 @@ onBeforeUpdate(() => clearNavRefs())
   .content-wrapper {
     max-width: none;
   }
-}
-
-.content-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  flex-shrink: 0;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.header-left h2 {
-  margin: 0;
-  font-size: 20px;
-  color: #fff;
-  font-weight: 600;
-}
-
-.course-count-header {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.5);
 }
 
 .content-body {

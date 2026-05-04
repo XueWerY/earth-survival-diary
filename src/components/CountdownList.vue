@@ -34,6 +34,7 @@
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="edit">编辑分类</el-dropdown-item>
+                  <el-dropdown-item command="add">添加倒数日</el-dropdown-item>
                   <el-dropdown-item v-if="!isDefaultCategory(cat.value)" command="delete" divided>删除分类</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -51,18 +52,6 @@
     <div class="main-content">
       <div class="content-wrapper">
       <template v-if="!isFormMode">
-        <!-- 头部 -->
-        <div class="content-header">
-          <div class="header-left">
-            <h2>{{ currentCategoryTitle }}</h2>
-            <span class="milestone-count">{{ filteredMilestones.length }} 个</span>
-          </div>
-          <el-button type="primary" size="small" @click="handleAddMilestone()">
-            <el-icon><Plus /></el-icon>
-            添加倒数日
-          </el-button>
-        </div>
-
         <!-- 主内容 -->
         <div class="content-body">
           <el-scrollbar>
@@ -117,6 +106,12 @@
                     <div class="milestone-date">
                       <el-icon><Calendar /></el-icon>
                       {{ formatDate(milestone.targetDate) }}
+                      <template v-if="getReminderLabel(milestone)">
+                        <span class="reminder-text">
+                          <el-icon><Bell /></el-icon>
+                          {{ getReminderLabel(milestone) }}
+                        </span>
+                      </template>
                     </div>
 
                     <div class="countdown-display" :class="getCountdownClass(milestone)">
@@ -164,6 +159,12 @@
                     <div class="milestone-date">
                       <el-icon><Calendar /></el-icon>
                       {{ formatDate(milestone.targetDate) }}
+                      <template v-if="getReminderLabel(milestone)">
+                        <span class="reminder-text">
+                          <el-icon><Bell /></el-icon>
+                          {{ getReminderLabel(milestone) }}
+                        </span>
+                      </template>
                     </div>
 
                     <div class="countdown-display" :class="getCountdownClass(milestone)">
@@ -210,6 +211,12 @@
                     <div class="milestone-date">
                       <el-icon><Calendar /></el-icon>
                       {{ formatDate(milestone.targetDate) }}
+                      <template v-if="getReminderLabel(milestone)">
+                        <span class="reminder-text">
+                          <el-icon><Bell /></el-icon>
+                          {{ getReminderLabel(milestone) }}
+                        </span>
+                      </template>
                     </div>
 
                     <div class="countdown-display" :class="getCountdownClass(milestone)">
@@ -256,6 +263,12 @@
                     <div class="milestone-date">
                       <el-icon><Calendar /></el-icon>
                       {{ formatDate(milestone.targetDate) }}
+                      <template v-if="getReminderLabel(milestone)">
+                        <span class="reminder-text">
+                          <el-icon><Bell /></el-icon>
+                          {{ getReminderLabel(milestone) }}
+                        </span>
+                      </template>
                     </div>
 
                     <div class="countdown-display" :class="getCountdownClass(milestone)">
@@ -331,6 +344,25 @@
                     />
                   </el-form-item>
 
+                  <el-form-item label="提醒" v-if="milestoneForm.countMode !== 'countup'">
+                    <div class="reminder-row">
+                      <el-select v-model="milestoneForm.reminderStrategy" placeholder="选择提醒方式" style="width: 180px">
+                        <el-option label="不提醒" value="none" />
+                        <el-option label="准时提醒" value="on_time" />
+                        <el-option label="提前提醒" value="advance" />
+                      </el-select>
+                      <template v-if="milestoneForm.reminderStrategy === 'advance'">
+                        <span class="reminder-label">提前</span>
+                        <el-input-number v-model="milestoneForm.reminderDays" :min="0" :max="365" controls-position="right" style="width: 80px" />
+                        <span class="reminder-label">天</span>
+                        <el-input-number v-model="milestoneForm.reminderHours" :min="0" :max="23" controls-position="right" style="width: 80px" />
+                        <span class="reminder-label">小时</span>
+                        <el-input-number v-model="milestoneForm.reminderMinutes" :min="milestoneForm.reminderDays === 0 && milestoneForm.reminderHours === 0 ? 1 : 0" :max="59" controls-position="right" style="width: 80px" />
+                        <span class="reminder-label">分钟</span>
+                      </template>
+                    </div>
+                  </el-form-item>
+
                   <div class="form-actions">
                     <el-button @click="isFormMode = false">取消</el-button>
                     <el-button type="primary" @click="handleMilestoneFormSubmit">
@@ -381,9 +413,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated, watch, nextTick, onBeforeUpdate } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted, watch, nextTick, onBeforeUpdate } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Calendar, Clock, Timer, Star, MoreFilled, Sunny } from '@element-plus/icons-vue'
+import { Plus, Calendar, Clock, Timer, Star, MoreFilled, Sunny, Bell } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import LunarDatePicker from './LunarDatePicker.vue'
 import { getData, setData, getSystemStateField, setSystemStateField } from '../services/storageService'
@@ -400,6 +432,10 @@ interface Milestone {
   isSystem?: boolean
   createdAt: string
   updatedAt: string
+  reminderStrategy?: string
+  reminderDays?: number
+  reminderHours?: number
+  reminderMinutes?: number
 }
 
 interface Category {
@@ -597,6 +633,20 @@ const getCountdownUnit = (milestone: Milestone): string => {
   return '今天'
 }
 
+const getReminderLabel = (milestone: Milestone) => {
+  if (milestone.countMode === 'countup') return ''
+  if (milestone.reminderStrategy === 'none' || !milestone.reminderStrategy) return ''
+  if (milestone.reminderStrategy === 'on_time') return '准时提醒'
+  if (milestone.reminderStrategy === 'advance') {
+    const parts: string[] = []
+    if (milestone.reminderDays) parts.push(`${milestone.reminderDays}天`)
+    if (milestone.reminderHours) parts.push(`${milestone.reminderHours}小时`)
+    if (milestone.reminderMinutes) parts.push(`${milestone.reminderMinutes}分钟`)
+    return `提前${parts.join('')}`
+  }
+  return ''
+}
+
 const getCountdownClass = (milestone: Milestone): string => {
   if (isSystemUsageMilestone(milestone)) {
     return getDaysSinceAccountRegistration(milestone) === 0 ? 'today' : 'passed'
@@ -630,11 +680,59 @@ const getCategoryIcon = (categoryValue: string): string => {
 }
 
 const saveData = async () => {
-  await setData(STORAGE_KEY[0], STORAGE_KEY[1], milestones.value)
+  const saved = await setData(STORAGE_KEY[0], STORAGE_KEY[1], milestones.value)
+  logger.info('[倒数日] 保存数据', { success: saved, count: milestones.value.length })
 }
 
 const saveCategories = async () => {
   await setData(CATEGORY_KEY[0], CATEGORY_KEY[1], categories.value)
+}
+
+const sendCountdownNotification = (title: string, body: string) => {
+  if (!('Notification' in window)) return
+  if (Notification.permission === 'granted') {
+    new Notification(title, { body })
+  } else if (Notification.permission !== 'denied') {
+    Notification.requestPermission().then((perm) => {
+      if (perm === 'granted') new Notification(title, { body })
+    })
+  }
+}
+
+const triggeredCountdownReminders = new Set<string>()
+
+const checkCountdownReminders = () => {
+  const now = dayjs()
+  milestones.value.forEach(milestone => {
+    if (milestone.reminderStrategy === 'none' || !milestone.reminderStrategy) return
+    if (!milestone.targetDate) return
+
+    let triggerTime = dayjs(milestone.targetDate + 'T00:00:00')
+    if (milestone.reminderStrategy === 'advance') {
+      const offsetMinutes = (milestone.reminderDays || 0) * 1440 + (milestone.reminderHours || 0) * 60 + (milestone.reminderMinutes || 0)
+      triggerTime = triggerTime.subtract(offsetMinutes, 'minute')
+    }
+
+    const reminderKey = milestone.id + '_' + milestone.targetDate
+    const diffMs = now.diff(triggerTime, 'millisecond')
+    if (diffMs >= 0 && diffMs < 3600000 && !triggeredCountdownReminders.has(reminderKey)) {
+      triggeredCountdownReminders.add(reminderKey)
+      sendCountdownNotification('倒数日提醒', `「${milestone.name}」即将到达`)
+      setTimeout(() => triggeredCountdownReminders.delete(reminderKey), 3600000)
+    }
+  })
+}
+
+let countdownReminderInterval: ReturnType<typeof setInterval> | null = null
+
+const startCountdownReminderChecker = () => {
+  if (countdownReminderInterval) clearInterval(countdownReminderInterval)
+  countdownReminderInterval = setInterval(checkCountdownReminders, 30000)
+  checkCountdownReminders()
+}
+
+const stopCountdownReminderChecker = () => {
+  if (countdownReminderInterval) { clearInterval(countdownReminderInterval); countdownReminderInterval = null }
 }
 
 const loadData = async () => {
@@ -656,8 +754,13 @@ const loadData = async () => {
         pinned: m.pinned === true,
         isSystem: m.isSystem || false,
         createdAt: m.createdAt || new Date().toISOString(),
-        updatedAt: m.updatedAt || new Date().toISOString()
+        updatedAt: m.updatedAt || new Date().toISOString(),
+        reminderStrategy: m.reminderStrategy || 'none',
+        reminderDays: m.reminderDays || 0,
+        reminderHours: m.reminderHours || 0,
+        reminderMinutes: m.reminderMinutes || 0
       }))
+      logger.info('[倒数日] 加载数据', { count: milestones.value.length, withReminder: milestones.value.filter(m => m.reminderStrategy !== 'none').length })
     }
 
     const authStore = await import('../stores/authStore').then(m => m.useAuthStore())
@@ -714,7 +817,11 @@ const loadData = async () => {
         pinned: true,
         isSystem: true,
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        reminderStrategy: 'advance',
+        reminderDays: 1,
+        reminderHours: 0,
+        reminderMinutes: 0
       })
       await saveData()
     } else if (!birthday && birthdayMilestoneIndex > -1) {
@@ -724,10 +831,14 @@ const loadData = async () => {
       const [, month, day] = birthday.split('-').map(Number)
       const birthdayDate = `${new Date().getFullYear()}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
       const existingMilestone = milestones.value[birthdayMilestoneIndex]
-      if (existingMilestone.targetDate !== birthdayDate) {
+      if (existingMilestone.targetDate !== birthdayDate || !existingMilestone.reminderStrategy) {
         milestones.value[birthdayMilestoneIndex] = {
           ...existingMilestone,
           targetDate: birthdayDate,
+          reminderStrategy: existingMilestone.reminderStrategy || 'advance',
+          reminderDays: existingMilestone.reminderDays || 1,
+          reminderHours: existingMilestone.reminderHours || 0,
+          reminderMinutes: existingMilestone.reminderMinutes || 0,
           updatedAt: new Date().toISOString()
         }
         await saveData()
@@ -755,7 +866,11 @@ const milestoneForm = ref({
   targetDate: dayjs().format('YYYY-MM-DD'),
   category: 'life',
   description: '',
-  countMode: 'countdown' as 'countdown' | 'countup'
+  countMode: 'countdown' as 'countdown' | 'countup',
+  reminderStrategy: 'none' as string,
+  reminderDays: 0,
+  reminderHours: 0,
+  reminderMinutes: 0
 })
 
 const milestoneRules = {
@@ -782,7 +897,11 @@ const handleAddMilestone = () => {
     targetDate: dayjs().format('YYYY-MM-DD'),
     category: currentCategory.value || 'life',
     description: '',
-    countMode: 'countdown'
+    countMode: 'countdown',
+    reminderStrategy: 'none',
+    reminderDays: 0,
+    reminderHours: 0,
+    reminderMinutes: 0
   }
   openFormMode()
 }
@@ -794,7 +913,11 @@ const handleEditMilestone = (milestone: Milestone) => {
     targetDate: milestone.targetDate,
     category: milestone.category,
     description: milestone.description,
-    countMode: milestone.countMode === 'countup' ? 'countup' : 'countdown'
+    countMode: milestone.countMode === 'countup' ? 'countup' : 'countdown',
+    reminderStrategy: milestone.reminderStrategy || 'none',
+    reminderDays: milestone.reminderDays || 0,
+    reminderHours: milestone.reminderHours || 0,
+    reminderMinutes: milestone.reminderMinutes || 0
   }
   openFormMode()
 }
@@ -811,7 +934,7 @@ const handleMilestoneFormSubmit = async () => {
           ...milestoneForm.value,
           updatedAt: new Date().toISOString()
         }
-        logger.info('[倒数日] 编辑倒数日', { id: editingMilestone.value.id, name: milestoneForm.value.name })
+        logger.info('[倒数日] 编辑倒数日', { id: editingMilestone.value.id, name: milestoneForm.value.name, reminder: milestoneForm.value.reminderStrategy === 'advance' ? `提前${milestoneForm.value.reminderDays}天${milestoneForm.value.reminderHours}小时${milestoneForm.value.reminderMinutes}分钟` : milestoneForm.value.reminderStrategy })
         ElMessage.success('更新成功')
       }
     } else {
@@ -824,10 +947,14 @@ const handleMilestoneFormSubmit = async () => {
         countMode: milestoneForm.value.countMode === 'countup' ? 'countup' : 'countdown',
         pinned: false,
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        reminderStrategy: milestoneForm.value.reminderStrategy,
+        reminderDays: milestoneForm.value.reminderDays,
+        reminderHours: milestoneForm.value.reminderHours,
+        reminderMinutes: milestoneForm.value.reminderMinutes
       }
       milestones.value.push(newMilestone)
-      logger.info('[倒数日] 添加倒数日', { name: milestoneForm.value.name })
+      logger.info('[倒数日] 添加倒数日', { name: milestoneForm.value.name, reminder: milestoneForm.value.reminderStrategy === 'advance' ? `提前${milestoneForm.value.reminderDays}天${milestoneForm.value.reminderHours}小时${milestoneForm.value.reminderMinutes}分钟` : milestoneForm.value.reminderStrategy })
       ElMessage.success('添加成功')
     }
     saveData()
@@ -908,6 +1035,16 @@ const handleCategoryCommand = (command: string, categoryValue: string) => {
       }
       categoryFormVisible.value = true
     }
+  } else if (command === 'add') {
+    editingMilestone.value = null
+    milestoneForm.value = {
+      name: '',
+      targetDate: dayjs().format('YYYY-MM-DD'),
+      category: categoryValue,
+      description: '',
+      countMode: 'countdown'
+    }
+    isFormMode.value = true
   } else if (command === 'delete') {
     const count = milestones.value.filter(m => m.category === categoryValue).length
     if (count > 0) {
@@ -982,9 +1119,14 @@ onMounted(async () => {
     initCategoryNavDrag()
     scrollCategoryNavToActive()
   })
+  startCountdownReminderChecker()
 })
 
 onBeforeUpdate(() => clearNavRefs())
+
+onUnmounted(() => {
+  stopCountdownReminderChecker()
+})
 
 onActivated(async () => {
   await loadData()
@@ -1132,43 +1274,6 @@ onActivated(async () => {
   }
 }
 
-.content-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  flex-shrink: 0;
-}
-
-.content-body {
-  flex: 1;
-  overflow: hidden;
-}
-
-.section {
-  padding: 20px 24px;
-  box-sizing: border-box;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.header-left h2 {
-  margin: 0;
-  font-size: 20px;
-  color: #fff;
-  font-weight: 600;
-}
-
-.milestone-count {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.5);
-}
-
 .content-body {
   flex: 1;
   overflow: hidden;
@@ -1262,6 +1367,15 @@ onActivated(async () => {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.5);
   margin-bottom: 16px;
+}
+
+.milestone-date .reminder-text {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #f59e0b;
+  margin-left: 4px;
 }
 
 .countdown-display {
@@ -1423,6 +1537,9 @@ onActivated(async () => {
   line-height: 1.45;
   color: rgba(255, 255, 255, 0.45);
 }
+
+.reminder-row { display: flex; align-items: center; gap: 8px; width: 100%; flex-wrap: wrap; }
+.reminder-row .reminder-label { color: rgba(255,255,255,0.6); white-space: nowrap; font-size: 13px; }
 
 .category-option {
   display: flex;
