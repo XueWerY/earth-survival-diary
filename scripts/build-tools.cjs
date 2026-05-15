@@ -44,16 +44,40 @@ async function makeIco() {
 function fixLatestYml() {
   const pkg = require(path.join(ROOT, 'package.json'))
   const latestPath = path.join(ROOT, 'release', 'latest.yml')
-  if (!fs.existsSync(latestPath)) { console.error('latest.yml not found, run build first'); process.exit(1) }
-  let content = fs.readFileSync(latestPath, 'utf-8')
   const version = pkg.version
   const baseUrl = `https://github.com/XueWerY/earth-survival-diary/releases/download/v${version}`
-  const exeFile = content.match(/path: (.+)/)[1]
+
+  if (fs.existsSync(latestPath)) {
+    let content = fs.readFileSync(latestPath, 'utf-8')
+    const exeFile = content.match(/path: (.+)/)[1]
+    const encodedFile = encodeURIComponent(exeFile)
+    content = content.replace(/^path: .+$/m, `path: ${baseUrl}/${encodedFile}`)
+    content = content.replace(/^(  - url: ).+$/m, `$1${baseUrl}/${encodedFile}`)
+    fs.writeFileSync(latestPath, content)
+    console.log('Updated latest.yml with GitHub URLs')
+    console.log('  version: ' + version)
+    console.log('  exe: ' + encodedFile)
+    return
+  }
+
+  const exeFile = fs.readdirSync(RELEASE_DIR).find(f => f.endsWith('.exe') && !f.includes('__uninstaller'))
+  if (!exeFile) { console.log('No installer exe found, skipping latest.yml generation'); return }
+
+  const crypto = require('crypto')
+  const filePath = path.join(RELEASE_DIR, exeFile)
+  const fileBuf = fs.readFileSync(filePath)
+  const sha512 = crypto.createHash('sha512').update(fileBuf).digest('base64')
+  const releaseDate = new Date(fs.statSync(filePath).mtime).toISOString()
   const encodedFile = encodeURIComponent(exeFile)
-  content = content.replace(/^path: .+$/m, `path: ${baseUrl}/${encodedFile}`)
-  content = content.replace(/^(  - url: ).+$/m, `$1${baseUrl}/${encodedFile}`)
-  fs.writeFileSync(latestPath, content)
-  console.log('Updated latest.yml with GitHub URLs')
+
+  const yaml = `version: ${version}
+path: ${baseUrl}/${encodedFile}
+sha512: ${sha512}
+releaseDate: ${releaseDate}
+`
+
+  fs.writeFileSync(latestPath, yaml)
+  console.log('Generated latest.yml')
   console.log('  version: ' + version)
   console.log('  exe: ' + encodedFile)
 }

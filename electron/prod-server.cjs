@@ -271,6 +271,48 @@ function createProdServer(options = {}) {
     res.json({ success: true })
   })
 
+  /** DELETE /api/auth/account (auth) => 200 {success:true} - 注销账号，删除当前用户所有数据 */
+  app.delete('/api/auth/account', authMiddleware, async (req, res) => {
+    try {
+      const userId = req.userId
+      const userEmail = req.userEmail
+
+      // 删除用户索引
+      await deleteUserIndex(userEmail)
+
+      // 删除用户数据目录
+      const userDir = path.join(DATA_DIR, userId)
+      if (fs.existsSync(userDir)) {
+        fs.rmSync(userDir, { recursive: true, force: true })
+      }
+
+      // 删除session
+      await deleteUserSession(userId)
+
+      console.log(`[Account] User deleted: ${userEmail} (${userId})`)
+      res.json({ success: true })
+    } catch (e) {
+      console.error('Delete account error:', e)
+      res.status(500).json({ error: '注销账号失败' })
+    }
+  })
+
+  /** DELETE /api/data/all (auth) => 200 {success:true} - 清空所有用户数据（所有账号） */
+  app.delete('/api/data/all', async (req, res) => {
+    try {
+      // 清空整个DATA_DIR
+      if (fs.existsSync(DATA_DIR)) {
+        fs.rmSync(DATA_DIR, { recursive: true, force: true })
+        fs.mkdirSync(DATA_DIR, { recursive: true })
+      }
+      console.log('[Data] All user data cleared')
+      res.json({ success: true })
+    } catch (e) {
+      console.error('Clear all data error:', e)
+      res.status(500).json({ error: '清空数据失败' })
+    }
+  })
+
   /** POST /api/auth/change-email (auth) body:{newEmail,password} => 200 {success,email} */
   app.post('/api/auth/change-email', authMiddleware, async (req, res) => {
     try {
@@ -298,6 +340,46 @@ function createProdServer(options = {}) {
       await setUserIndex(req.userEmail, currentUser)
       res.json({ success: true })
     } catch (e) { console.error('Change password error:', e); res.status(500).json({ error: '修改密码失败' }) }
+  })
+
+  /** GET /api/auth/users => 200 {users:[{email,nickname,createdAt}]} - 获取所有用户列表（登录界面备选项） */
+  app.get('/api/auth/users', async (req, res) => {
+    try {
+      const emails = getAllUserEmails()
+      const users = emails.map(email => {
+        const user = getUserIndexByEmail(email)
+        return user ? { email: user.email, nickname: user.nickname || email.split('@')[0], createdAt: user.createdAt } : null
+      }).filter(Boolean)
+      res.json({ users })
+    } catch (e) {
+      console.error('Get users error:', e)
+      res.status(500).json({ error: '获取用户列表失败' })
+    }
+  })
+
+  /** GET /api/auth/settings => 200 {settings} - 获取应用全局设置（如自动填充密码） */
+  app.get('/api/auth/settings', async (req, res) => {
+    try {
+      const settingsPath = path.join(DATA_DIR, 'settings', 'settings.json')
+      const settings = readJson(settingsPath)
+      res.json({ settings: settings || {} })
+    } catch (e) {
+      res.json({ settings: {} })
+    }
+  })
+
+  /** POST /api/auth/settings body:{key,value} => 200 {success} - 更新应用全局设置 */
+  app.post('/api/auth/settings', async (req, res) => {
+    try {
+      const settingsPath = path.join(DATA_DIR, 'settings', 'settings.json')
+      let settings = readJson(settingsPath) || {}
+      settings[req.body.key] = req.body.value
+      writeJson(settingsPath, settings)
+      res.json({ success: true })
+    } catch (e) {
+      console.error('Update settings error:', e)
+      res.status(500).json({ error: '更新设置失败' })
+    }
   })
 
   /** GET /api/auth/user (auth) => 200 {user:{id,email,nickname,createdAt}} */
@@ -777,7 +859,138 @@ function createProdServer(options = {}) {
     } catch (e) { console.error('Update settings error:', e); res.status(500).json({ error: '更新设置失败' }) }
   })
 
-  // ============ Logs API ============
+  // ============ Export/Import API ============
+
+  /** GET /api/export (auth) => 200 {所有模块数据} - 导出当前用户所有模块数据 */
+  app.get('/api/export', authMiddleware, async (req, res) => {
+    try {
+      const userId = req.userId
+      const userEmail = req.userEmail
+      const data = {
+        // 用户索引
+        user_index: getUserIndexByEmail(userEmail),
+        // 足迹
+        tasks: await getUserTasks(userId),
+        // 专注
+        focus_favorites: await getUserKV(userId, 'focus', 'favorites'),
+        focus_records: await getUserKV(userId, 'focus', 'records'),
+        // 清单
+        lists: await getUserMissionLists(userId),
+        missions: await getUserMissions(userId),
+        // 倒数日
+        countdown_categories: await getUserKV(userId, 'countdown', 'categories'),
+        countdowns: await getUserKV(userId, 'countdown', 'countdowns'),
+        // 课程表
+        courses: await getUserKV(userId, 'course', 'courses'),
+        course_recorded_courses: await getUserKV(userId, 'course', 'recorded-courses'),
+        // 笔记
+        notebooks: await getUserNoteNotebooks(userId),
+        notes: await getUserNotes(userId),
+        // 我的
+        profile: await getUserProfile(userId),
+        login_info: await getUserSession(userId),
+        settings: await getUserSettings(userId),
+        system_state: await getUserKV(userId, 'system', 'state'),
+        exportTime: new Date().toISOString()
+      }
+      res.json({ success: true, data })
+    } catch (e) {
+      console.error('Export error:', e)
+      res.status(500).json({ error: '导出数据失败' })
+    }
+  })
+
+  /** POST /api/import body:{各模块数据} => 200 {success} - 导入数据（登录后可导入到当前账号，未登录时从user_index获取账号信息） */
+  app.post('/api/import', async (req, res) => {
+    try {
+      const { user_index, tasks, focus_favorites, focus_records, lists, missions, countdown_categories, countdowns, courses, course_recorded_courses, notebooks, notes, profile, login_info, settings, system_state } = req.body
+
+      // 尝试从token获取用户信息（可选，不要求必须登录）
+      let userId = req.userId
+      let userEmail = req.userEmail
+
+      // 如果没有通过中间件获取，尝试从token获取
+      if (!userId) {
+        const token = req.headers.authorization?.replace('Bearer ', '')
+        if (token) {
+          userId = verifyToken(token)
+          if (userId) {
+            userEmail = (await getUserProfile(userId))?.email || ''
+          }
+        }
+      }
+
+      // 如果未登录，从user_index获取
+      if (!userId && user_index?.id) {
+        userId = user_index.id
+        userEmail = user_index.email || ''
+      }
+
+      if (!userId) {
+        return res.status(400).json({ error: '缺少用户信息，请确保已登录或导出文件中包含账户信息' })
+      }
+
+      // 恢复用户索引
+      if (user_index && userEmail) await setUserIndex(userEmail, { ...user_index, email: userEmail })
+
+      if (tasks) await setUserTasks(userId, tasks)
+      if (focus_favorites !== undefined) await setUserKV(userId, 'focus', 'favorites', focus_favorites)
+      if (focus_records !== undefined) await setUserKV(userId, 'focus', 'records', focus_records)
+      if (lists) await setUserMissionLists(userId, lists)
+      if (missions) await setUserMissions(userId, missions)
+      if (countdown_categories !== undefined) await setUserKV(userId, 'countdown', 'categories', countdown_categories)
+      if (countdowns !== undefined) await setUserKV(userId, 'countdown', 'countdowns', countdowns)
+      if (courses !== undefined) await setUserKV(userId, 'course', 'courses', courses)
+      if (course_recorded_courses !== undefined) await setUserKV(userId, 'course', 'recorded-courses', course_recorded_courses)
+      if (notebooks) await setUserNoteNotebooks(userId, notebooks)
+      if (notes) await setUserNotes(userId, notes)
+      if (profile) await setUserProfile(userId, profile)
+      if (login_info) await setUserSession(userId, login_info)
+      if (settings) await setUserSettings(userId, settings)
+      if (system_state !== undefined) await setUserKV(userId, 'system', 'state', system_state)
+
+      console.log(`[Import] Data imported for user ${userId}`)
+      res.json({ success: true })
+    } catch (e) {
+      console.error('Import error:', e)
+      res.status(500).json({ error: '导入数据失败' })
+    }
+  })
+
+  /** POST /api/clean body:{各模块null值} => 200 {success} - 清理指定模块数据（不删除账号信息） */
+  app.post('/api/clean', async (req, res) => {
+    try {
+      const userId = req.userId
+      if (!userId) return res.status(401).json({ error: '请先登录' })
+
+      const cleanMap = req.body
+      const PROTECTED_KEYS = ['user_index', 'email', 'profile', 'login_info']
+
+      for (const key of Object.keys(cleanMap)) {
+        if (PROTECTED_KEYS.includes(key)) continue
+        if (key === 'lists') await setUserMissionLists(userId, [])
+        else if (key === 'missions') await setUserMissions(userId, [])
+        else if (key === 'notebooks') await setUserNoteNotebooks(userId, [])
+        else if (key === 'notes') await setUserNotes(userId, [])
+        else if (key === 'tasks') await setUserTasks(userId, [])
+        else if (key === 'focus_favorites') await setUserKV(userId, 'focus', 'favorites', [])
+        else if (key === 'focus_records') await setUserKV(userId, 'focus', 'records', [])
+        else if (key === 'countdown_categories') await setUserKV(userId, 'countdown', 'categories', [])
+        else if (key === 'countdowns') await setUserKV(userId, 'countdown', 'countdowns', [])
+        else if (key === 'courses') await setUserKV(userId, 'course', 'courses', [])
+        else if (key === 'course_recorded_courses') await setUserKV(userId, 'course', 'recorded-courses', [])
+        else if (key === 'settings') await setUserKV(userId, 'system', 'settings', null)
+        else if (key === 'system_state') await setUserKV(userId, 'system', 'state', null)
+        else if (key === 'profile') continue
+      }
+
+      console.log(`[Clean] Data cleaned for user ${userId}: ${Object.keys(cleanMap).join(', ')}`)
+      res.json({ success: true })
+    } catch (e) {
+      console.error('Clean error:', e)
+      res.status(500).json({ error: '清理数据失败' })
+    }
+  })
 
   const LOG_DIR = path.join(path.dirname(DATA_DIR), 'logs')
 

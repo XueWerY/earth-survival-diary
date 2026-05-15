@@ -37,7 +37,7 @@
 
       <el-form-item label="重复">
         <div class="repeat-strategy-row">
-          <el-select v-model="form.repeatStrategy" placeholder="选择重复策略" style="flex: 1">
+          <el-select v-model="form.repeatStrategy" placeholder="选择重复策略" style="flex: 1" :disabled="!form.date">
             <el-option v-for="s in REPEAT_STRATEGIES" :key="s.value" :label="s.label" :value="s.value" />
           </el-select>
           <template v-if="form.repeatStrategy === 'custom_days'">
@@ -59,22 +59,23 @@
         </div>
       </el-form-item>
 
-      <el-form-item label="检查事项">
+      <el-form-item label="检查事项" class="checklist-form-item">
         <div class="checklist">
-          <div v-for="(item, index) in form.checklist" :key="item.id" class="checklist-item">
-            <el-input v-model="item.text" placeholder="检查事项" size="small" />
-            <el-dropdown trigger="click" @command="(cmd: string) => handleChecklistCommand(cmd, index, item.id)">
-              <el-button class="more-btn" size="small">⋯</el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="up" :disabled="index === 0">上移</el-dropdown-item>
-                  <el-dropdown-item command="down" :disabled="index === form.checklist.length - 1">下移</el-dropdown-item>
-                  <el-dropdown-item command="delete" class="delete-item">删除</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+          <div v-for="(item, index) in form.checklist" :key="item.id" class="checklist-item"
+               :class="{ 'drag-over': checklistDragOverIdx === index }"
+               @dragover.prevent="onChecklistDragOver(index)"
+               @drop="onChecklistDrop(index)"
+               @dragleave="checklistDragOverIdx = -1">
+            <el-icon class="checklist-form-drag-handle" draggable="true"
+              @dragstart="onChecklistDragStart(index)"
+              @dragend="checklistDragOverIdx = -1"
+            ><Rank /></el-icon>
+            <el-input v-model="item.text" type="textarea" autosize placeholder="检查事项" size="small" class="checklist-textarea" />
+            <el-button class="checklist-delete-btn" text size="small" @click="removeChecklistItem(item.id)"><el-icon><Delete /></el-icon></el-button>
           </div>
-          <el-button type="primary" text :icon="Plus" @click="addChecklistItem">添加检查事项</el-button>
+          <div class="checklist-add-btn-wrapper">
+            <el-button class="checklist-add-btn" text @click="addChecklistItem"><el-icon><Plus /></el-icon><span>添加检查事项</span></el-button>
+          </div>
         </div>
       </el-form-item>
 
@@ -90,21 +91,8 @@
             <el-option label="提前提醒" value="advance" />
           </el-select>
           <template v-if="form.reminderStrategy === 'advance'">
-            <span class="reminder-label">提前</span>
-            <el-input-number v-model="form.reminderDays" :min="0" :max="365" controls-position="right" style="width: 80px" />
-            <span class="reminder-label">天</span>
-            <el-input-number v-model="form.reminderHours" :min="0" :max="23" controls-position="right" style="width: 80px" />
-            <span class="reminder-label">小时</span>
-            <el-input-number v-model="form.reminderMinutes" :min="form.reminderDays === 0 && form.reminderHours === 0 ? 1 : 0" :max="59" controls-position="right" style="width: 80px" />
-            <span class="reminder-label">分钟</span>
+            <ReminderTimePicker v-model="reminderTime" />
           </template>
-        </div>
-      </el-form-item>
-
-      <el-form-item>
-        <div class="form-footer">
-          <el-button @click="$emit('cancel')">取消</el-button>
-          <el-button type="primary" @click="handleSubmit">{{ isEdit ? '保存' : '添加' }}</el-button>
         </div>
       </el-form-item>
     </el-form>
@@ -113,13 +101,17 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Rank, Delete } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useMissionStore, PRIORITIES, REPEAT_STRATEGIES, REPEAT_END_STRATEGIES, type Mission, type ChecklistItem, type RepeatStrategy, type RepeatEndStrategy, type Priority, type ReminderStrategy } from '../stores/missionStore'
 import LunarDatePicker from './LunarDatePicker.vue'
+import ReminderTimePicker from './ReminderTimePicker.vue'
 
 const props = defineProps<{ mission?: Mission | null; listId?: string; groupId?: string }>()
-const emit = defineEmits<{ (e: 'submit'): void; (e: 'cancel'): void }>()
+const emit = defineEmits<{
+  (e: 'submit', data: Record<string, unknown>): void
+  (e: 'cancel'): void
+}>()
 
 const missionStore = useMissionStore()
 const formRef = ref<FormInstance>()
@@ -149,6 +141,11 @@ const getDefaultForm = (): FormData => {
 
 const form = ref<FormData>(getDefaultForm())
 
+const reminderTime = computed({
+  get: () => ({ days: form.value.reminderDays, hours: form.value.reminderHours, minutes: form.value.reminderMinutes }),
+  set: (v) => { form.value.reminderDays = v.days; form.value.reminderHours = v.hours; form.value.reminderMinutes = v.minutes }
+})
+
 const rules: FormRules = {
   name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }],
   groupId: [{ required: true, message: '请选择所属分组', trigger: 'change' }],
@@ -157,7 +154,7 @@ const rules: FormRules = {
 
 watch(() => props.mission, (nm) => {
   if (nm) { 
-    form.value = { name: nm.name, listId: nm.listId, groupId: nm.groupId, date: nm.date, endTime: nm.endTime || '', repeatStrategy: nm.repeatStrategy, repeatCustomDays: nm.repeatCustomDays || 1, repeatEndStrategy: nm.repeatEndStrategy, repeatEndDate: nm.repeatEndDate, repeatCount: nm.repeatCount, priority: nm.priority, checklist: nm.checklist.map(i => ({ ...i })), notes: nm.notes, reminderStrategy: nm.reminderStrategy, reminderDays: nm.reminderDays || 0, reminderHours: nm.reminderHours || 0, reminderMinutes: nm.reminderMinutes || 10 }
+    form.value = { name: nm.name, listId: nm.listId, groupId: nm.groupId, date: nm.date, endTime: nm.endTime || '', repeatStrategy: nm.repeatStrategy, repeatCustomDays: nm.repeatCustomDays || 1, repeatEndStrategy: nm.repeatEndStrategy, repeatEndDate: nm.repeatEndDate, repeatCount: nm.repeatCount, priority: nm.priority, checklist: nm.checklist.map(i => ({ ...i })), notes: nm.notes, reminderStrategy: nm.reminderStrategy, reminderDays: nm.reminderDays ?? 0, reminderHours: nm.reminderHours ?? 0, reminderMinutes: nm.reminderMinutes ?? 10 }
   }
   else { form.value = getDefaultForm() }
 }, { immediate: true })
@@ -169,13 +166,19 @@ const handleListChange = () => { const g = availableGroups.value; form.value.gro
 const addChecklistItem = () => { form.value.checklist.push({ id: Date.now().toString(), text: '', completed: false }) }
 const removeChecklistItem = (id: string) => { form.value.checklist = form.value.checklist.filter(i => i.id !== id) }
 
-const moveChecklistItemUp = (idx: number) => { if (idx === 0) return; const a = form.value.checklist; [a[idx], a[idx-1]] = [a[idx-1], a[idx]]; form.value.checklist = [...a] }
-const moveChecklistItemDown = (idx: number) => { const a = form.value.checklist; if (idx >= a.length - 1) return; [a[idx], a[idx+1]] = [a[idx+1], a[idx]]; form.value.checklist = [...a] }
+const checklistDragSourceIdx = ref(-1)
+const checklistDragOverIdx = ref(-1)
 
-const handleChecklistCommand = (cmd: string, idx: number, itemId: string) => {
-  if (cmd === 'up') moveChecklistItemUp(idx)
-  else if (cmd === 'down') moveChecklistItemDown(idx)
-  else if (cmd === 'delete') removeChecklistItem(itemId)
+const onChecklistDragStart = (idx: number) => { checklistDragSourceIdx.value = idx }
+const onChecklistDragOver = (idx: number) => { checklistDragOverIdx.value = idx }
+const onChecklistDrop = (targetIdx: number) => {
+  checklistDragOverIdx.value = -1
+  const a = form.value.checklist
+  const from = checklistDragSourceIdx.value
+  if (from < 0 || from >= a.length || from === targetIdx) return
+  const [moved] = a.splice(from, 1)
+  a.splice(targetIdx, 0, moved)
+  form.value.checklist = [...a]
 }
 
 const handleSubmit = async () => {
@@ -184,38 +187,38 @@ const handleSubmit = async () => {
     if (valid) {
       const listId = form.value.listId; if (!listId) return
       const md = { name: form.value.name, listId, groupId: form.value.groupId, date: form.value.date, startTime: '', endTime: form.value.endTime || '', repeatStrategy: form.value.repeatStrategy as RepeatStrategy, repeatCustomDays: form.value.repeatCustomDays, repeatEndStrategy: form.value.repeatEndStrategy as RepeatEndStrategy, repeatEndDate: form.value.repeatEndDate, repeatCount: form.value.repeatCount, priority: form.value.priority as Priority, checklist: form.value.checklist.filter(i => i.text.trim()), completed: false, completedStartTime: '', completedEndTime: '', notes: form.value.notes, reminderStrategy: form.value.reminderStrategy as ReminderStrategy, reminderDays: form.value.reminderDays, reminderHours: form.value.reminderHours, reminderMinutes: form.value.reminderMinutes }
-      if (isEdit.value && props.mission) missionStore.updateMission(props.mission.id, md); else missionStore.addMission(md)
-      emit('submit')
+      emit('submit', md as unknown as Record<string, unknown>)
     }
   })
 }
+
+defineExpose({ handleSubmit })
+
 </script>
 
 <style scoped>
-.mission-form-container { max-width: 600px; width: 100%; margin: 0 auto; }
-.form-body { padding: 0 8px; }
-.form-footer { display: flex; justify-content: flex-end; gap: 12px; width: 100%; }
+.mission-form-container { max-width: 600px; width: 100%; margin: 0 auto; padding-top: 20px; }
+.form-body { padding: 0 8px; overflow: hidden; }
+.form-body::-webkit-scrollbar { display: none; }
 .repeat-end { display: flex; align-items: center; gap: 12px; }
 .repeat-strategy-row { display: flex; align-items: center; gap: 8px; width: 100%; }
 .custom-days-label { color: #606266; white-space: nowrap; }
 .reminder-row { display: flex; align-items: center; gap: 8px; width: 100%; flex-wrap: wrap; }
 .reminder-label { color: rgba(255,255,255,0.6); white-space: nowrap; font-size: 13px; }
 .count-suffix { color: #909399; }
-.checklist { width: 100%; }
-.checklist-item { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.checklist-item .el-input { flex: 1; }
-.more-btn {
-  width: 36px;
-  min-width: 36px;
-  padding: 0;
-  background: transparent !important;
-  border: none;
-  color: rgba(255,255,255,0.7);
-  font-size: 18px;
-  font-weight: bold;
-}
-.more-btn:hover { background: rgba(255,255,255,0.08) !important; }
-.delete-item { color: #ef4444 !important; }
+.checklist { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.checklist-item { display: flex; align-items: flex-start; gap: 4px; margin-bottom: 0; }
+.checklist-item.drag-over { background: rgba(102, 126, 234, 0.1); border-radius: 6px; }
+.checklist-form-drag-handle { font-size: 16px; color: rgba(255, 255, 255, 0.2); cursor: grab; flex-shrink: 0; margin-top: 6px; }
+.checklist-form-drag-handle:active { cursor: grabbing; }
+.checklist-textarea { flex: 1; }
+.checklist-delete-btn { color: #ef4444; flex-shrink: 0; width: 24px; height: 24px; padding: 0; min-width: auto; margin-top: 4px; background: #1d1b34 !important; }
+.checklist-delete-btn:hover { color: #ff6b6b; background: #1d1b34 !important; }
+.checklist-add-btn-wrapper { display: flex; gap: 4px; align-items: center; }
+.checklist-add-btn-wrapper::before { content: ''; width: 16px; flex-shrink: 0; }
+.checklist-add-btn-wrapper::after { content: ''; width: 24px; flex-shrink: 0; }
+.checklist-add-btn { flex: 1; justify-content: center; color: rgba(255, 255, 255, 0.3); border: 1px dashed rgba(255, 255, 255, 0.1); border-radius: 6px; padding: 6px 0; display: flex; align-items: center; gap: 6px; font-size: 12px; background: #1d1b34 !important; }
+.checklist-add-btn:hover { color: rgba(255, 255, 255, 0.6); border-color: rgba(255, 255, 255, 0.2); background: #1d1b34 !important; }
 
 :deep(.el-time-panel) {
   background: rgba(30, 30, 50, 0.98) !important;

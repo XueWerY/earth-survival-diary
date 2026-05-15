@@ -6,14 +6,16 @@ import * as api from '../lib/api'
 export interface ExtendedUserSettings {
     // 专注模块设置
     focus: {
-        pomodoroDuration: number // 番茄时长（分钟）
+        pomodoroDuration: number
     }
     // 课程表模块设置
     course: {
-        semesterStartDate: string // 开学日期 YYYY-MM-DD
-        totalWeeks: number // 学期总周数
-        reminderMinutes: number // 上课提前提醒分钟数
+        semesterStartDate: string
+        totalWeeks: number
+        reminderMinutes: number
     }
+    // 提醒持续显示时间（秒）
+    reminderPersistDuration: number
 }
 
 // 默认设置
@@ -25,7 +27,8 @@ export const defaultSettings: ExtendedUserSettings = {
         semesterStartDate: '',
         totalWeeks: 20,
         reminderMinutes: 5
-    }
+    },
+    reminderPersistDuration: 30
 }
 
 export const useSettingsStore = defineStore('settings', () => {

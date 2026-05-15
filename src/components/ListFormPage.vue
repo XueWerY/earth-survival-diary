@@ -2,7 +2,6 @@
   <div class="list-form-page">
     <div class="form-page-body">
       <div class="list-form-container">
-        <div class="form-title">{{ isEdit ? '编辑清单' : '创建清单' }}</div>
         <el-form :model="form" :rules="rules" ref="formRef" label-width="70px" class="form-body">
           <el-form-item label="名称" prop="name">
             <el-input v-model="form.name" placeholder="清单名称" />
@@ -27,10 +26,7 @@
 
           <el-form-item>
             <div class="form-footer">
-              <el-button @click="$emit('cancel')">取消</el-button>
-              <el-button type="primary" @click="handleSubmit">
-                {{ isEdit ? '保存' : '创建' }}
-              </el-button>
+              <el-button type="primary" @click="handleSubmit">保存</el-button>
             </div>
           </el-form-item>
         </el-form>
@@ -49,7 +45,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'submit'): void
+  (e: 'submit', data: Record<string, unknown>): void
   (e: 'cancel'): void
 }>()
 
@@ -104,13 +100,9 @@ const handleSubmit = async () => {
 
   await formRef.value.validate((valid) => {
     if (valid) {
-      if (isEdit.value && props.list) {
-        missionStore.updateList(props.list.id, form.value)
-      } else {
-        missionStore.addList(form.value.name, form.value.color)
-      }
-
-      emit('submit')
+      emit('submit', isEdit.value && props.list
+        ? { listId: props.list.id, name: form.value.name, color: form.value.color }
+        : { name: form.value.name, color: form.value.color })
     }
   })
 }
@@ -120,7 +112,6 @@ const handleSubmit = async () => {
 .list-form-page { display: flex; flex-direction: column; height: 100%; }
 .form-page-body { flex: 1; overflow-y: auto; padding: 24px; }
 .list-form-container { max-width: 600px; width: 100%; margin: 0 auto; }
-.form-title { font-size: 18px; font-weight: 500; color: #fff; margin-bottom: 24px; text-align: center; }
 
 .color-picker { display: flex; flex-wrap: wrap; gap: 8px; }
 
@@ -145,7 +136,7 @@ const handleSubmit = async () => {
 .used-mark { font-size: 12px; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
 .color-tip { margin-top: 8px; font-size: 12px; color: rgba(255, 255, 255, 0.5); padding-left: 70px; }
 
-.form-footer { display: flex; justify-content: flex-end; gap: 12px; width: 100%; }
+.form-footer { display: flex; justify-content: flex-end; gap: 12px; width: 100%; margin-top: 24px; }
 
 :deep(.el-input__wrapper) { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
 :deep(.el-input__inner) { color: #fff; }

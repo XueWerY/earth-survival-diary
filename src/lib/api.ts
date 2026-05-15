@@ -111,6 +111,21 @@ export async function getUser(): Promise<{ user: AuthResponse['user'] }> {
     return request('/auth/user')
 }
 
+// 获取所有用户列表（无需登录）
+export async function getUsers(): Promise<{ users: Array<{ email: string, nickname: string, createdAt: string }> }> {
+    return request('/auth/users')
+}
+
+// 获取应用设置（无需登录）
+export async function getAppSettings(): Promise<{ settings: Record<string, any> }> {
+    return request('/auth/settings')
+}
+
+// 更新应用设置（无需登录）
+export async function updateAppSetting(key: string, value: any): Promise<{ success: boolean }> {
+    return request('/auth/settings', { method: 'POST', body: JSON.stringify({ key, value }) })
+}
+
 // 检查会话状态（用于单点登录检测）
 export async function checkSession(): Promise<{ valid: boolean; kicked: boolean }> {
     return request('/auth/check-session', { method: 'POST' })
@@ -428,5 +443,46 @@ export async function changePassword(oldPassword: string, newPassword: string): 
     return request('/auth/change-password', {
         method: 'POST',
         body: JSON.stringify({ oldPassword, newPassword })
+    })
+}
+
+// ============ 账号管理 API ============
+
+export async function deleteAccount(): Promise<{ success: boolean }> {
+    return request('/auth/account', { method: 'DELETE' })
+}
+
+export async function clearAllData(): Promise<{ success: boolean }> {
+    return request('/data/all', { method: 'DELETE' })
+}
+
+// ============ 导出/导入 API ============
+
+export interface ExportData {
+    profile?: any
+    tasks?: any[]
+    lists?: any[]
+    missions?: any[]
+    settings?: any
+    notes?: any[]
+    notebooks?: any[]
+    exportTime?: string
+}
+
+export async function exportData(): Promise<{ success: boolean; data: ExportData }> {
+    return request('/export')
+}
+
+export async function importData(data: ExportData): Promise<{ success: boolean }> {
+    return request('/import', {
+        method: 'POST',
+        body: JSON.stringify(data)
+    })
+}
+
+export async function cleanData(data: Record<string, null>): Promise<{ success: boolean }> {
+    return request('/clean', {
+        method: 'POST',
+        body: JSON.stringify(data)
     })
 }

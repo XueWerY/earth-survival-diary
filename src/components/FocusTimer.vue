@@ -213,7 +213,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onActivated, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { VideoPlay, Star, Delete } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
@@ -451,10 +451,12 @@ const startFocus = async () => {
     remainingSeconds.value = localPomodoroDuration.value * 60
     elapsedSeconds.value = 0
     startCountdown()
+    ;(window as any).__countdownRefresh?.()
   } else {
     elapsedSeconds.value = 0
     startStopwatch()
     startMoonAnimation()
+    ;(window as any).__countdownRefresh?.()
   }
 }
 
@@ -471,7 +473,6 @@ const startCountdown = () => {
     lastUpdateTime.value = now
 
     if (remainingSeconds.value <= 0) {
-      sendNotification('专注完成', '专注完成，请放松一下吧')
       completeFocus()
     }
   }
@@ -482,36 +483,14 @@ const startCountdown = () => {
   prevTimeChars.value = [...timeChars.value]
 }
 
-// 发送系统通知
-const sendNotification = (title: string, body: string) => {
-  if (!('Notification' in window)) return
-  if (Notification.permission === 'granted') {
-    new Notification(title, { body })
-  } else if (Notification.permission !== 'denied') {
-    Notification.requestPermission().then((perm) => {
-      if (perm === 'granted') {
-        new Notification(title, { body })
-      }
-    })
-  }
-}
-
 // 开始正计时 - 使用时间戳计算
-let lastNotificationHour = 0
 const startStopwatch = () => {
   if (timerInterval) clearInterval(timerInterval)
-  lastNotificationHour = 0
 
   const updateTimer = () => {
     const now = Date.now()
     elapsedSeconds.value = Math.floor((now - startTimestamp.value) / 1000)
     lastUpdateTime.value = now
-
-    const currentHour = Math.floor(elapsedSeconds.value / 3600)
-    if (currentHour > 0 && currentHour !== lastNotificationHour) {
-      lastNotificationHour = currentHour
-      sendNotification('专注提醒', `您已累计专注${currentHour}小时，请放松一下吧`)
-    }
   }
 
   updateTimer()
@@ -532,7 +511,8 @@ const cancelFocus = async () => {
   resetMoonAnimation()
   startTimestamp.value = 0
   lastUpdateTime.value = 0
-  lastNotificationHour = 0
+
+  ;(window as any).__countdownRefresh?.()
 
   // 清除 store 中的计时状态
   await focusStore.clearTimerState()
@@ -662,7 +642,8 @@ const completeFocus = async () => {
   resetMoonAnimation()
   startTimestamp.value = 0
   lastUpdateTime.value = 0
-  lastNotificationHour = 0
+
+  ;(window as any).__countdownRefresh?.()
 
   // 清除 store 中的计时状态
   await focusStore.clearTimerState()
@@ -740,12 +721,10 @@ onMounted(async () => {
       } else {
         elapsedSeconds.value = totalSeconds
         remainingSeconds.value = 0
-        sendNotification('专注完成', '专注完成，请放松一下吧')
         await completeFocus()
       }
     } else {
       elapsedSeconds.value = totalElapsed
-      lastNotificationHour = Math.floor(totalElapsed / 3600)
       startStopwatch()
       const elapsedMs = (totalElapsed * 1000) % 60000
       stopwatchMoonAngle.value = (elapsedMs / 60000) * 360
@@ -773,7 +752,6 @@ const handleVisibilityChange = () => {
       elapsedSeconds.value = elapsed
 
       if (remainingSeconds.value <= 0) {
-      sendNotification('专注完成', '专注完成，请放松一下吧')
       completeFocus()
     }
     } else {
@@ -783,6 +761,25 @@ const handleVisibilityChange = () => {
     lastUpdateTime.value = now
   }
 }
+
+onActivated(() => {
+  if (timerState.value !== 'running' || !startTimestamp.value) return
+
+  const now = Date.now()
+  const elapsed = Math.floor((now - startTimestamp.value) / 1000)
+
+  if (focusType.value === 'pomodoro') {
+    const totalSeconds = localPomodoroDuration.value * 60
+    remainingSeconds.value = Math.max(0, totalSeconds - elapsed)
+    elapsedSeconds.value = elapsed
+    if (remainingSeconds.value <= 0) {
+      completeFocus()
+    }
+  } else {
+    elapsedSeconds.value = elapsed
+    lastUpdateTime.value = now
+  }
+})
 
 // 清理
 onUnmounted(async () => {

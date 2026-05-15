@@ -1,8 +1,23 @@
 <template>
   <div class="profile-page">
+    <div class="profile-nav-wrapper" ref="profileNavRef">
+      <div class="profile-nav-inner">
+        <div
+            v-for="item in navItems"
+            :key="item.key"
+            class="profile-nav-item"
+            :class="{ active: activeNavKey === item.key }"
+            :ref="setProfileNavItemRef"
+            @click="scrollToSection(item.key, item.id)"
+        >
+          <el-icon v-if="item.icon" class="nav-icon"><component :is="item.icon" /></el-icon>
+          <span class="nav-name">{{ item.name }}</span>
+        </div>
+      </div>
+    </div>
     <div class="profile-content">
-      <el-scrollbar>
-        <div class="profile-section">
+      <el-scrollbar ref="profileScrollbarRef" @scroll="handleProfileScroll">
+        <div class="profile-section" id="section-profile">
           <h3 class="section-title">个人信息</h3>
 
           <el-form
@@ -41,7 +56,7 @@
           </el-form>
         </div>
 
-        <div class="profile-section">
+        <div class="profile-section" id="section-security">
           <h3 class="section-title">账号安全</h3>
 
           <div class="security-item">
@@ -80,9 +95,18 @@
               <span class="security-value">{{ formatCreatedAt() }}</span>
             </div>
           </div>
+
+          <div class="security-actions">
+            <el-button type="danger" @click="handleLogout" :loading="loggingOut">
+              退出登录
+            </el-button>
+            <el-button type="danger" plain @click="handleDeleteAccount" :loading="deletingAccount">
+              注销账号
+            </el-button>
+          </div>
         </div>
 
-        <div class="profile-section">
+        <div class="profile-section" id="section-focus">
           <h3 class="section-title">专注设置</h3>
           <p class="section-desc">配置番茄钟的默认时长。</p>
 
@@ -104,7 +128,7 @@
           </div>
         </div>
 
-        <div class="profile-section">
+        <div class="profile-section" id="section-course">
           <h3 class="section-title">课程表设置</h3>
           <p class="section-desc">设置学期信息，用于计算当前周次。</p>
 
@@ -158,7 +182,45 @@
           </div>
         </div>
 
-        <div class="profile-section">
+        <div class="profile-section" id="section-system">
+          <h3 class="section-title">系统设置</h3>
+          <p class="section-desc">配置程序在系统中的行为。</p>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">开机自启动</span>
+              <span class="setting-desc">登录系统时自动启动程序</span>
+            </div>
+            <div class="setting-control">
+              <el-switch
+                  v-model="autoLaunch"
+                  inline-prompt
+                  size="default"
+                  @change="handleAutoLaunchChange"
+              />
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">关闭程序时</span>
+              <span class="setting-desc">点击窗口关闭按钮时的行为</span>
+            </div>
+            <div class="setting-control">
+              <el-select
+                  v-model="closeAction"
+                  size="default"
+                  style="width: 140px;"
+                  @change="handleCloseActionChange"
+              >
+                <el-option label="隐藏到托盘" value="minimize" />
+                <el-option label="直接退出" value="exit" />
+              </el-select>
+            </div>
+          </div>
+        </div>
+
+        <div class="profile-section" id="section-about">
           <h3 class="section-title">关于</h3>
 
           <div class="about-item">
@@ -169,14 +231,85 @@
           <div class="about-item">
             <span class="about-label">版本号</span>
             <span class="about-value">v{{ version }}</span>
-            <el-button size="small" @click="checkForUpdate">检查更新</el-button>
+            <div class="about-actions">
+              <el-button size="small" @click="checkForUpdate">检查更新</el-button>
+              <el-button size="small" @click="openChangelogDialog">查看更新日志</el-button>
+            </div>
           </div>
         </div>
 
-        <div class="profile-section danger-zone">
-          <el-button type="danger" @click="handleLogout" :loading="loggingOut">
-            退出登录
-          </el-button>
+        <div class="profile-section" id="section-storage">
+          <h3 class="section-title">存储管理</h3>
+
+          <div class="storage-list">
+            <div class="storage-item">
+              <div class="storage-item-info">
+                <span class="storage-item-label">导出数据</span>
+                <span class="storage-item-desc">选择模块导出为 JSON 文件</span>
+              </div>
+              <el-button class="storage-btn storage-btn-normal" @click="showExportDialog = true">
+                导出
+              </el-button>
+            </div>
+            <div class="storage-item">
+              <div class="storage-item-info">
+                <span class="storage-item-label">导入数据</span>
+                <span class="storage-item-desc">从 JSON 文件导入数据</span>
+              </div>
+              <el-button class="storage-btn storage-btn-normal" @click="showImportDialog = true">
+                导入
+              </el-button>
+            </div>
+            <div class="storage-item">
+              <div class="storage-item-info">
+                <span class="storage-item-label">查看日志</span>
+                <span class="storage-item-desc">查看日志文件内容</span>
+              </div>
+              <el-button class="storage-btn storage-btn-normal" @click="handleViewLogs">
+                查看
+              </el-button>
+            </div>
+            <div class="storage-item">
+              <div class="storage-item-info">
+                <span class="storage-item-label">清空日志</span>
+                <span class="storage-item-desc">{{ logFileSizeDesc }}</span>
+              </div>
+              <div class="storage-item-actions">
+                <span class="switch-label">自动清理日志</span>
+                <el-switch
+                    v-model="autoCleanEnabled"
+                    inline-prompt
+                    size="small"
+                    @change="handleAutoCleanChange"
+                />
+                <el-button class="storage-btn storage-btn-danger" @click="handleClearLogs" :loading="clearingLogs">
+                  清空
+                </el-button>
+              </div>
+            </div>
+            <div v-if="autoCleanEnabled" class="auto-clean-setting">
+              <span class="auto-clean-label">自动清理过去</span>
+              <el-input-number
+                  v-model="autoCleanDays"
+                  :min="1"
+                  :max="365"
+                  :step="1"
+                  size="small"
+                  controls-position="right"
+                  @change="handleAutoCleanDaysChange"
+              />
+              <span class="auto-clean-unit">天的日志</span>
+            </div>
+            <div class="storage-item">
+              <div class="storage-item-info">
+                <span class="storage-item-label">清理数据</span>
+                <span class="storage-item-desc">数据文件共占用 {{ dataDirSizeDesc }}，按账号选择数据模块清理</span>
+              </div>
+              <el-button class="storage-btn storage-btn-danger" @click="handleOpenCleanWindow" :loading="cleaningData">
+                清理
+              </el-button>
+            </div>
+          </div>
         </div>
       </el-scrollbar>
     </div>
@@ -243,13 +376,99 @@
         <el-button type="primary" @click="changePassword" :loading="changingPassword">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 导出数据对话框 -->
+    <el-dialog
+        v-model="showExportDialog"
+        title="导出数据"
+        width="450px"
+        :append-to-body="true"
+    >
+      <div class="export-tree">
+        <div class="select-all-row">
+          <el-checkbox v-model="selectAllExportModules" @change="onSelectAllExportChange">全选</el-checkbox>
+        </div>
+        <div v-for="group in exportGroups" :key="group.key" class="export-group">
+          <div class="group-header" @click="toggleGroup(group.key)">
+            <span class="expand-icon">{{ expandedGroups.includes(group.key) ? '−' : '+' }}</span>
+            <span class="group-label">{{ group.label }}</span>
+          </div>
+          <div v-show="expandedGroups.includes(group.key)" class="group-children">
+            <div v-for="child in group.children" :key="child.key" class="child-item">
+              <el-checkbox
+                  v-model="selectedModules"
+                  :label="child.key"
+              >{{ child.label }}</el-checkbox>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="showExportDialog = false">取消</el-button>
+        <el-button type="primary" @click="handleExport" :loading="exporting">导出</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 导入数据对话框 -->
+    <el-dialog
+        v-model="showImportDialog"
+        title="导入数据"
+        width="450px"
+        :append-to-body="true"
+    >
+      <div class="import-description">
+        <div class="import-desc-header">
+          <span class="import-desc-icon">⚠</span>
+          <span class="import-desc-title">导入说明</span>
+        </div>
+        <p class="import-desc-text">请选择不包含邮箱标识的通用数据文件（earth-survival-diary-export-YYYY-MM-DD.json），导入将覆盖当前用户的对应数据。</p>
+      </div>
+      <div class="import-file-info" v-if="importFileInfo">
+        <p>已选择文件: {{ importFileInfo.name }}</p>
+        <p>导出时间: {{ formatExportTime(importFileInfo.exportTime) }}</p>
+      </div>
+      <div class="import-select-prompt" v-else>
+        请选择文件
+      </div>
+      <div class="import-tree" v-if="importFileInfo">
+        <div class="select-all-row">
+          <el-checkbox v-model="selectAllModules" @change="onSelectAllChange">全选</el-checkbox>
+        </div>
+        <div v-for="group in importGroups" :key="group.key" class="import-group">
+          <div class="group-header" @click="toggleImportGroup(group.key)">
+            <span class="expand-icon">{{ expandedImportGroups.includes(group.key) ? '−' : '+' }}</span>
+            <span class="group-label">{{ group.label }}</span>
+          </div>
+          <div v-show="expandedImportGroups.includes(group.key)" class="group-children">
+            <div v-for="child in group.children" :key="child.key" class="child-item">
+              <el-checkbox
+                  v-model="selectedImportModules"
+                  :label="child.key"
+                  :disabled="!importDataAvailable[child.key]"
+              >{{ child.label }} {{ !importDataAvailable[child.key] ? '(无数据)' : '' }}</el-checkbox>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="closeImportDialog">取消</el-button>
+        <el-button @click="selectImportFile">选择文件</el-button>
+        <el-button type="primary" @click="handleImport" :loading="importing" :disabled="!importDataRaw">导入</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="showChangelogDialog" title="更新日志" width="600px" class="changelog-dialog" center>
+      <div class="changelog-body" v-html="changelogHtml"></div>
+    </el-dialog>
+
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
+import { Calendar, Lock, Timer, Setting, InfoFilled, Files, Bell, Monitor } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { useAuthStore } from '../stores/authStore'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -257,6 +476,8 @@ import * as api from '../lib/api'
 import LunarDatePicker from './LunarDatePicker.vue'
 import { logger } from '../lib/logger'
 import appVersion from 'virtual:version'
+// @ts-expect-error - Vite raw import
+import changelogContent from '../../CHANGELOG.md?raw'
 
 const emit = defineEmits<{
   logout: []
@@ -268,6 +489,252 @@ const settingsStore = useSettingsStore()
 const formRef = ref<FormInstance>()
 const saving = ref(false)
 const loggingOut = ref(false)
+const deletingAccount = ref(false)
+const exporting = ref(false)
+const showExportDialog = ref(false)
+const selectedModules = ref<string[]>(['user_index', 'tasks', 'focus_favorites', 'focus_records', 'lists', 'countdown', 'courses', 'notebooks', 'profile', 'login_info', 'settings', 'system_state'])
+const expandedGroups = ref<string[]>(['tasks', 'focus', 'lists', 'countdown', 'courses', 'notes', 'profile'])
+const selectAllExportModules = ref(true)
+
+const allExportModuleKeys = computed(() => {
+  const keys: string[] = []
+  exportGroups.forEach(group => {
+    group.children.forEach(child => keys.push(child.key))
+  })
+  return keys
+})
+
+const onSelectAllExportChange = (checked: boolean) => {
+  if (checked) {
+    selectedModules.value = allExportModuleKeys.value
+  } else {
+    selectedModules.value = []
+  }
+}
+
+const exportGroups = [
+  {
+    key: 'tasks',
+    label: '足迹',
+    children: [
+      { key: 'tasks', label: '足迹记录' }
+    ]
+  },
+  {
+    key: 'focus',
+    label: '专注',
+    children: [
+      { key: 'focus_favorites', label: '常用专注' },
+      { key: 'focus_records', label: '专注记录' }
+    ]
+  },
+  {
+    key: 'lists',
+    label: '清单',
+    children: [
+      { key: 'lists', label: '清单列表及其任务' }
+    ]
+  },
+  {
+    key: 'countdown',
+    label: '倒数日',
+    children: [
+      { key: 'countdown', label: '倒数日分类及其倒数日' }
+    ]
+  },
+  {
+    key: 'courses',
+    label: '课程表',
+    children: [
+      { key: 'courses', label: '课程' }
+    ]
+  },
+  {
+    key: 'notes',
+    label: '笔记',
+    children: [
+      { key: 'notebooks', label: '笔记本及其笔记' }
+    ]
+  },
+  {
+    key: 'profile',
+    label: '我的',
+    children: [
+      { key: 'user_index', label: '账户信息' },
+      { key: 'profile', label: '我的' },
+      { key: 'login_info', label: '登录信息' },
+      { key: 'settings', label: '设置' },
+      { key: 'system_state', label: '系统状态' }
+    ]
+  }
+]
+
+// 导出复选框对应的实际服务端 key
+const exportKeyMapping: Record<string, string[]> = {
+  lists: ['lists', 'missions'],
+  countdown: ['countdown_categories', 'countdowns'],
+  courses: ['courses', 'course_recorded_courses'],
+  notebooks: ['notebooks', 'notes']
+}
+
+const toggleGroup = (key: string) => {
+  const idx = expandedGroups.value.indexOf(key)
+  if (idx >= 0) {
+    expandedGroups.value.splice(idx, 1)
+  } else {
+    expandedGroups.value.push(key)
+  }
+}
+
+// 导入相关状态
+const showImportDialog = ref(false)
+const importing = ref(false)
+const importDataRaw = ref<any>(null)
+const importFileInfo = ref<{ name: string, exportTime?: string } | null>(null)
+const selectedImportModules = ref<string[]>(['user_index', 'tasks', 'focus_favorites', 'focus_records', 'lists', 'countdown', 'courses', 'notebooks', 'profile', 'login_info', 'settings', 'system_state'])
+const expandedImportGroups = ref<string[]>(['tasks', 'focus', 'lists', 'countdown', 'courses', 'notes', 'profile'])
+const selectAllModules = ref(true)
+
+const importGroups = exportGroups
+
+const importKeyMapping = exportKeyMapping
+
+const allImportModuleKeys = computed(() => {
+  const keys: string[] = []
+  importGroups.forEach(group => {
+    group.children.forEach(child => keys.push(child.key))
+  })
+  return keys
+})
+
+const importDataAvailable = computed(() => {
+  const available: Record<string, boolean> = {}
+  Object.keys(importKeyMapping).forEach(key => {
+    const keys = importKeyMapping[key]
+    available[key] = keys.some(k => importDataRaw.value && importDataRaw.value[k] !== undefined && importDataRaw.value[k] !== null)
+  })
+  importGroups.forEach(group => {
+    group.children.forEach(child => {
+      if (!importKeyMapping[child.key]) {
+        available[child.key] = importDataRaw.value && importDataRaw.value[child.key] !== undefined && importDataRaw.value[child.key] !== null
+      }
+    })
+  })
+  return available
+})
+
+const toggleImportGroup = toggleGroup
+
+const onSelectAllChange = (checked: boolean) => {
+  if (checked) {
+    selectedImportModules.value = allImportModuleKeys.value.filter(key => importDataAvailable.value[key])
+  } else {
+    selectedImportModules.value = []
+  }
+}
+
+const formatExportTime = (time?: string) => {
+  if (!time) return '未知'
+  const d = new Date(time)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+const closeImportDialog = () => {
+  showImportDialog.value = false
+  importDataRaw.value = null
+  importFileInfo.value = null
+  selectedImportModules.value = ['user_index', 'tasks', 'focus_favorites', 'focus_records', 'lists', 'countdown', 'courses', 'notebooks', 'profile', 'login_info', 'settings', 'system_state']
+  selectAllModules.value = true
+}
+
+const selectImportFile = async () => {
+  const filePath = await window.electronAPI.openFileDialog({
+    filters: [{ name: 'JSON', extensions: ['json'] }]
+  })
+
+  if (!filePath) return
+
+  // 只允许不包含邮箱标识的文件
+  const fileName = filePath.split('/').pop() || filePath.split('\\').pop() || ''
+  if (fileName.includes('@')) {
+    ElMessage.error('只能导入不包含邮箱标识的通用数据文件')
+    return
+  }
+
+  try {
+    const content = await window.electronAPI.readFile(filePath)
+    if (!content) {
+      ElMessage.error('读取文件失败')
+      return
+    }
+
+    const data = JSON.parse(content)
+    importDataRaw.value = data
+    importFileInfo.value = {
+      name: fileName,
+      exportTime: data.exportTime || '未知'
+    }
+    selectedImportModules.value = allImportModuleKeys.value.filter(key => importDataAvailable.value[key])
+    selectAllModules.value = selectedImportModules.value.length > 0
+  } catch (e) {
+    console.error('解析导入文件失败:', e)
+    ElMessage.error('文件格式错误')
+  }
+}
+
+const handleImport = async () => {
+  if (!importDataRaw.value) {
+    ElMessage.warning('请先选择导入文件')
+    return
+  }
+
+  if (selectedImportModules.value.length === 0) {
+    ElMessage.warning('请至少选择一个模块')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      '导入将覆盖当前用户的对应数据，此操作不可恢复！\n确定要导入吗？',
+      '导入确认',
+      {
+        type: 'warning',
+        confirmButtonText: '确定导入',
+        cancelButtonText: '取消'
+      }
+    )
+
+    importing.value = true
+
+    const importObj: any = {}
+    selectedImportModules.value.forEach(key => {
+      const keys = importKeyMapping[key] || [key]
+      keys.forEach(k => {
+        if (importDataRaw.value[k] !== undefined) {
+          importObj[k] = importDataRaw.value[k]
+        }
+      })
+    })
+
+    await api.importData(importObj)
+
+    logger.info('[我的] 导入数据成功，准备重启应用', { modules: selectedImportModules.value })
+    ElMessage.success('导入成功')
+
+    // 导入成功后重启应用
+    setTimeout(async () => {
+      await window.electronAPI.restartApp()
+    }, 500)
+  } catch (err: any) {
+    if (err !== 'cancel') {
+      console.error('导入数据失败:', err)
+      ElMessage.error(err?.response?.data?.error || '导入数据失败')
+    }
+  } finally {
+    importing.value = false
+  }
+}
 const showPhoneDialog = ref(false)
 const showEmailDialog = ref(false)
 const showPasswordDialog = ref(false)
@@ -305,7 +772,92 @@ const courseSettings = ref({
   reminderMinutes: 5
 })
 
-const version = ref(appVersion)
+const autoLaunch = ref(false)
+const closeAction = ref('minimize')
+
+const loadSystemSettings = async () => {
+  if (window.electronAPI) {
+    autoLaunch.value = await window.electronAPI.getAutoLaunch()
+    closeAction.value = await window.electronAPI.getCloseAction() || 'minimize'
+  }
+}
+
+const handleAutoLaunchChange = async (val: boolean) => {
+  if (window.electronAPI) {
+    await window.electronAPI.setAutoLaunch(val)
+    logger.info('[设置] 修改开机自启动', { enabled: val })
+  }
+}
+
+const handleCloseActionChange = async (val: string) => {
+  if (window.electronAPI) {
+    await window.electronAPI.setCloseAction(val)
+    logger.info('[设置] 修改关闭程序行为', { action: val })
+  }
+}
+
+const version = ref(appVersion.replace('-', '.'))
+
+const logFileSizeDesc = ref('加载...')
+const dataDirSizeDesc = ref('加载...')
+const clearingLogs = ref(false)
+const cleaningData = ref(false)
+const autoCleanEnabled = ref((settingsStore.settings as any)?.autoClean?.enabled ?? false)
+const autoCleanDays = ref((settingsStore.settings as any)?.autoClean?.days ?? 30)
+
+const loadSizes = async () => {
+  try {
+    if (window.electronAPI) {
+      const logSize = await window.electronAPI.getLogDirSize()
+      logFileSizeDesc.value = logSize.size > 0 ? formatSize(logSize.size) : '暂无日志文件'
+      const dataSize = await window.electronAPI.getDataDirSize()
+      dataDirSizeDesc.value = formatSize(dataSize.size)
+      console.log('[ProfilePage] loadSizes 完成', { logBytes: logSize.size, logDesc: logFileSizeDesc.value, dataBytes: dataSize.size, dataDesc: dataDirSizeDesc.value })
+    } else {
+      logFileSizeDesc.value = '仅 Electron 可用'
+      dataDirSizeDesc.value = '仅 Electron 可用'
+    }
+  } catch (e) {
+    console.error('[ProfilePage] loadSizes 失败', e)
+    logFileSizeDesc.value = '获取失败'
+    dataDirSizeDesc.value = '获取失败'
+  }
+}
+
+const formatSize = (bytes: number) => {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+const handleViewLogs = async () => {
+  logger.info('[我的] 查看日志')
+  try {
+    const content = await window.electronAPI.getLogContent()
+    window.electronAPI?.openLogViewer?.(content)
+    ElMessage.success('日志查看器已打开')
+  } catch (e) {
+    logger.error('[我的] 打开日志失败', { error: e instanceof Error ? e.message : String(e) })
+    ElMessage.error('打开日志失败')
+  }
+}
+
+const handleClearLogs = async () => {
+  try {
+    await ElMessageBox.confirm('确定要清空当前日志文件吗？', '清空确认', { type: 'warning' })
+    clearingLogs.value = true
+    logger.info('[我的] 清空日志')
+    await window.electronAPI.clearLogs()
+    await loadSizes()
+    ElMessage.success('日志已清空')
+  } catch (err: any) {
+    if (err !== 'cancel') {
+      logger.error('[我的] 清空日志失败', { error: err instanceof Error ? err.message : String(err) })
+    }
+  } finally {
+    clearingLogs.value = false
+  }
+}
 
 const checkForUpdate = async () => {
   if (!window.electronAPI?.checkForUpdate) return
@@ -315,6 +867,32 @@ const checkForUpdate = async () => {
   } catch (e) {
     logger.error('[关于] 检查更新失败', { error: e instanceof Error ? e.message : String(e) })
   }
+}
+
+const showChangelogDialog = ref(false)
+
+const changelogHtml = computed(() => {
+  const content = changelogContent.replace(/^# 更新日志\n*/, '')
+  const lines = content.split('\n')
+  let html = ''
+  let inList = false
+  for (const line of lines) {
+    if (line.startsWith('### ')) {
+      if (inList) { html += '</ul>'; inList = false }
+      html += `<h3 class="cl-version">${line.slice(4)}</h3>`
+    } else if (line.startsWith('- ')) {
+      if (!inList) { html += '<ul class="cl-list">'; inList = true }
+      html += `<li>${line.slice(2)}</li>`
+    } else if (!line.trim()) {
+      if (inList) { html += '</ul>'; inList = false }
+    }
+  }
+  if (inList) html += '</ul>'
+  return html
+})
+
+const openChangelogDialog = () => {
+  showChangelogDialog.value = true
 }
 
 const openProjectUrl = () => {
@@ -472,10 +1050,86 @@ const handleLogout = async () => {
     loggingOut.value = true
     logger.info('[我的] 退出登录')
     await authStore.signOut()
-    emit('logout')
+    // 触发重启程序
+    await window.electronAPI.restartApp()
   } catch {
   } finally {
     loggingOut.value = false
+  }
+}
+
+const handleDeleteAccount = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '注销账号将永久删除您的所有数据，此操作不可恢复！\n确定要注销吗？',
+      '注销确认',
+      {
+        type: 'warning',
+        confirmButtonText: '确定注销',
+        cancelButtonText: '取消'
+      }
+    )
+
+    deletingAccount.value = true
+    logger.info('[我的] 注销账号')
+    await api.deleteAccount()
+    await authStore.signOut()
+    logger.info('[我的] 注销成功，准备重启应用')
+    await window.electronAPI.restartApp()
+  } catch (err: any) {
+    if (err !== 'cancel') {
+      console.error('注销账号失败:', err)
+      ElMessage.error(err?.response?.data?.error || '注销账号失败')
+    }
+  } finally {
+    deletingAccount.value = false
+  }
+}
+
+const handleExport = async () => {
+  if (selectedModules.value.length === 0) {
+    ElMessage.warning('请至少选择一个模块')
+    return
+  }
+
+  exporting.value = true
+  try {
+    const { data } = await api.exportData()
+    const exportObj: any = { exportTime: new Date().toISOString() }
+    selectedModules.value.forEach(key => {
+      const keys = exportKeyMapping[key] || [key]
+      keys.forEach(k => {
+        if (data[k] !== undefined) exportObj[k] = data[k]
+      })
+    })
+
+    const includeEmail = selectedModules.value.includes('user_index')
+    const emailSuffix = includeEmail && authStore.user?.email
+      ? `-${authStore.user.email}`
+      : ''
+    const filePath = await window.electronAPI.saveFileDialog({
+      defaultPath: `earth-survival-diary-export${emailSuffix}-${new Date().toISOString().slice(0, 10)}.json`
+    })
+
+    if (!filePath) {
+      ElMessage.info('已取消保存')
+      return
+    }
+
+    const success = await window.electronAPI.writeFile(filePath, JSON.stringify(exportObj, null, 2))
+    if (!success) {
+      ElMessage.error('写入文件失败')
+      return
+    }
+
+    logger.info('[我的] 导出数据', { modules: selectedModules.value, filePath })
+    ElMessage.success('导出成功')
+    showExportDialog.value = false
+  } catch (err: any) {
+    console.error('导出数据失败:', err)
+    ElMessage.error(err?.response?.data?.error || '导出数据失败')
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -486,12 +1140,221 @@ onMounted(async () => {
     phoneForm.phone = authStore.profile.phone || ''
   }
 
-  await settingsStore.loadSettings()
   focusSettings.value.pomodoroDuration = settingsStore.settings.focus?.pomodoroDuration || 25
   courseSettings.value.semesterStartDate = settingsStore.settings.course?.semesterStartDate || ''
   courseSettings.value.totalWeeks = settingsStore.settings.course?.totalWeeks || 20
   courseSettings.value.reminderMinutes = settingsStore.settings.course?.reminderMinutes || 5
+
+  loadSystemSettings()
+  loadSizes()
+
+  nextTick(() => {
+    initProfileNavDrag()
+    centerNavActive()
+  })
+  window.addEventListener('resize', () => {
+    scrollingLock = true
+    centerNavActive()
+    setTimeout(() => { scrollingLock = false }, 400)
+  })
 })
+
+// 导航栏相关
+
+const navItems = [
+  { key: 'profile', name: '个人信息', id: 'section-profile', icon: Calendar },
+  { key: 'security', name: '账号安全', id: 'section-security', icon: Lock },
+  { key: 'focus', name: '专注设置', id: 'section-focus', icon: Timer },
+  { key: 'course', name: '课程表设置', id: 'section-course', icon: Setting },
+  { key: 'system', name: '系统设置', id: 'section-system', icon: Monitor },
+  { key: 'about', name: '关于', id: 'section-about', icon: InfoFilled },
+  { key: 'storage', name: '存储管理', id: 'section-storage', icon: Files }
+]
+
+const activeNavKey = ref('profile')
+const profileNavRef = ref<HTMLElement>()
+const profileScrollbarRef = ref()
+const profileNavItemRefs = ref<HTMLElement[]>([])
+
+const setProfileNavItemRef = (el: HTMLElement | null) => {
+  if (el) profileNavItemRefs.value.push(el)
+}
+
+const centerNavActive = () => {
+  const wrapper = profileNavRef.value
+  if (!wrapper) return
+  const inner = wrapper.querySelector('.profile-nav-inner') as HTMLElement
+  if (!inner) return
+
+  const wrapperWidth = wrapper.clientWidth
+  const innerWidth = inner.scrollWidth
+
+  if (innerWidth <= wrapperWidth) {
+    inner.style.marginLeft = ((wrapperWidth - innerWidth) / 2) + 'px'
+    wrapper.scrollLeft = 0
+    return
+  }
+
+  inner.style.marginLeft = '0'
+  const idx = navItems.findIndex(item => item.key === activeNavKey.value)
+  if (idx < 0) return
+  const activeEl = profileNavItemRefs.value[idx]
+  if (!activeEl) return
+  const visibleWidth = wrapperWidth - 32
+  const maxScroll = Math.max(0, innerWidth - visibleWidth)
+  const target = activeEl.offsetLeft - (visibleWidth - activeEl.offsetWidth) / 2
+  wrapper.scrollTo({ left: Math.max(0, Math.min(target, maxScroll)), behavior: 'smooth' })
+}
+
+let scrollingLock = false
+
+const scrollToSection = (key: string, domId: string) => {
+  activeNavKey.value = key
+  nextTick(() => centerNavActive())
+  const el = document.getElementById(domId)
+  if (!el) return
+  const scrollbarEl = profileScrollbarRef.value?.$el?.querySelector('.el-scrollbar__wrap')
+  if (scrollbarEl) {
+    scrollingLock = true
+    scrollbarEl.scrollTo({ top: el.offsetTop - 10, behavior: 'smooth' })
+    setTimeout(() => { scrollingLock = false }, 600)
+  }
+}
+
+const handleProfileScroll = () => {
+  if (scrollingLock) return
+  const scrollbarEl = profileScrollbarRef.value?.$el?.querySelector('.el-scrollbar__wrap')
+  if (!scrollbarEl) return
+  const sections = navItems.map(item => ({ key: item.key, el: document.getElementById(item.id) }))
+    .filter(s => s.el)
+  let currentKey = 'profile'
+  for (const section of sections) {
+    if (section.el && section.el.offsetTop <= scrollbarEl.scrollTop + 60) {
+      currentKey = section.key
+    }
+  }
+  const last = sections[sections.length - 1]
+  if (last && last.el && last.el.offsetTop + last.el.offsetHeight <= scrollbarEl.scrollTop + scrollbarEl.offsetHeight) {
+    currentKey = last.key
+  }
+  activeNavKey.value = currentKey
+}
+
+let isProfileDragging = false
+let profileDragStartX = 0
+let profileDragStartScrollLeft = 0
+
+const initProfileNavDrag = () => {
+  const el = profileNavRef.value
+  if (!el) return
+  el.addEventListener('mousedown', (e: MouseEvent) => {
+    const inner = el.querySelector('.profile-nav-inner') as HTMLElement
+    if (inner && inner.scrollWidth <= el.clientWidth) return
+    isProfileDragging = false
+    profileDragStartX = e.pageX
+    profileDragStartScrollLeft = el.scrollLeft
+    const onMove = (ev: MouseEvent) => {
+      const diff = ev.pageX - profileDragStartX
+      if (Math.abs(diff) > 3) isProfileDragging = true
+      el.scrollLeft = profileDragStartScrollLeft - diff
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  })
+  el.addEventListener('click', (e: MouseEvent) => {
+    if (isProfileDragging) { e.preventDefault(); e.stopPropagation(); isProfileDragging = false }
+  }, true)
+}
+
+// 清理数据子窗口
+const handleOpenCleanWindow = async () => {
+  if (!window.electronAPI) {
+    ElMessage.warning('仅 Electron 环境可用')
+    return
+  }
+
+  try {
+    cleaningData.value = true
+    logger.info('[我的] 打开清理数据窗口')
+
+    const moduleSizes = await window.electronAPI.getModuleSizes()
+    if (!moduleSizes.users || moduleSizes.users.length === 0) {
+      ElMessage.info('暂无用户数据')
+      cleaningData.value = false
+      return
+    }
+
+    const result = await window.electronAPI.openCleanDataWindow({
+      users: moduleSizes.users,
+      totalDataSize: moduleSizes.totalDataSize,
+      moduleGroups: moduleSizes.moduleGroups
+    })
+
+    if (!result) {
+      logger.info('[我的] 取消清理数据')
+      return
+    }
+
+    if (result.deleteAll) {
+      logger.info('[我的] 清空全部应用数据')
+      await api.clearAllData()
+      ElMessage.success('全部数据已清空')
+    } else if (result.modules.length > 0) {
+      logger.info('[我的] 清理数据', { modules: result.modules })
+      const cleanObj: any = {}
+      result.modules.forEach(key => {
+        const keys = cleanKeyMapping[key] || [key]
+        keys.forEach(k => { cleanObj[k] = null })
+      })
+      await api.cleanData(cleanObj)
+      ElMessage.success('清理成功')
+    } else {
+      ElMessage.warning('请至少选择一个模块')
+      return
+    }
+
+    loadSizes()
+
+    setTimeout(async () => {
+      await window.electronAPI.restartApp()
+    }, 500)
+  } catch (err: any) {
+    console.error('[ProfilePage] 清理数据失败:', err)
+    ElMessage.error(err?.response?.data?.error || '清理数据失败')
+  } finally {
+    cleaningData.value = false
+  }
+}
+
+const cleanKeyMapping: Record<string, string[]> = {
+  lists: ['lists', 'missions'],
+  countdown: ['countdown_categories', 'countdowns'],
+  courses: ['courses', 'course_recorded_courses'],
+  notebooks: ['notebooks', 'notes']
+}
+
+// 自动清理日志
+const handleAutoCleanChange = async (val: boolean) => {
+  try {
+    await api.updateSettings({ autoClean: { enabled: val, days: autoCleanDays.value } } as any)
+    logger.info('[我的] 设置自动清理日志', { enabled: val, days: autoCleanDays.value })
+  } catch (e) {
+    console.error('[ProfilePage] 保存自动清理设置失败:', e)
+  }
+}
+
+const handleAutoCleanDaysChange = async (val: number) => {
+  try {
+    await api.updateSettings({ autoClean: { enabled: autoCleanEnabled.value, days: val } } as any)
+    logger.info('[我的] 设置自动清理天数', { days: val })
+  } catch (e) {
+    console.error('[ProfilePage] 保存自动清理天数失败:', e)
+  }
+}
 
 watch(() => authStore.profile?.nickname, (val) => {
   if (val) form.nickname = val
@@ -525,6 +1388,52 @@ const handleCourseReminderChange = async (val: number) => {
   flex-direction: column;
   background: transparent;
   justify-content: center;
+}
+
+.profile-nav-wrapper {
+  overflow: hidden;
+  padding: 12px 16px;
+  -webkit-user-select: none;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.profile-nav-inner {
+  display: inline-flex;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.profile-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.profile-nav-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.profile-nav-item.active {
+  background: rgba(102, 126, 234, 0.25);
+  color: #667eea;
+}
+
+.nav-icon {
+  font-size: 14px;
+}
+
+.nav-name {
+  white-space: nowrap;
 }
 
 .profile-content {
@@ -697,6 +1606,12 @@ const handleCourseReminderChange = async (val: number) => {
   color: rgba(255, 255, 255, 0.85);
 }
 
+.about-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .about-link {
   font-size: 13px;
   color: #6496ff;
@@ -708,8 +1623,111 @@ const handleCourseReminderChange = async (val: number) => {
   text-decoration: underline;
 }
 
-.danger-zone {
-  border-bottom: none;
+.security-actions {
+  display: flex;
+  gap: 12px;
+  padding-top: 16px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.storage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.storage-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  gap: 16px;
+}
+
+.storage-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* 存储管理按钮样式 */
+.storage-btn {
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 8px 18px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: #fff !important;
+  transition: all 0.2s ease !important;
+  flex-shrink: 0;
+}
+
+.storage-btn-normal {
+  background: linear-gradient(135deg, #4facfe, #667eea) !important;
+}
+.storage-btn-normal:hover {
+  background: linear-gradient(135deg, #63baff, #7b93f5) !important;
+  box-shadow: 0 2px 12px rgba(79, 172, 254, 0.4) !important;
+}
+
+.storage-btn-danger {
+  background: linear-gradient(135deg, #f5576c, #ff6b6b) !important;
+}
+.storage-btn-danger:hover {
+  background: linear-gradient(135deg, #f76d7f, #ff8585) !important;
+  box-shadow: 0 2px 12px rgba(245, 87, 108, 0.4) !important;
+}
+
+.switch-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+}
+
+/* 自动清理日志设置 */
+.auto-clean-setting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px 12px 16px;
+  margin-top: -4px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+}
+
+.auto-clean-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.auto-clean-unit {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.storage-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.storage-item-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.storage-item-desc {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
 }
 
 :deep(.el-button--danger) {
@@ -727,4 +1745,138 @@ const handleCourseReminderChange = async (val: number) => {
   background: transparent !important;
   color: rgba(255, 255, 255, 0.4) !important;
 }
+
+/* 导出对话框样式 */
+.export-tree {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.select-all-row {
+  padding: 4px 0 8px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 8px;
+}
+
+.select-all-row :deep(.el-checkbox__label) {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.export-group {
+  margin-bottom: 8px;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.group-header:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.expand-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  color: rgba(255, 255, 255, 0.85);
+  margin-right: 8px;
+}
+
+.group-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.group-children {
+  padding: 8px 0 8px 28px;
+}
+
+.child-item {
+  padding: 4px 0;
+}
+
+.child-item :deep(.el-checkbox__label) {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+}
+
+.child-item :deep(.el-checkbox.is-checked .el-checkbox__label) {
+  color: #8ab4f8;
+}
+
+/* 导入对话框样式 */
+.import-description {
+  margin-bottom: 16px;
+}
+
+.import-desc-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.import-desc-icon {
+  color: #e6a23c;
+  font-size: 16px;
+}
+
+.import-desc-title {
+  color: #e6a23c;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.import-desc-text {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  margin: 8px 0 0 0;
+  line-height: 1.5;
+}
+
+.import-file-info p {
+  margin: 4px 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.import-select-prompt {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.4);
+  padding: 20px 0;
+  font-size: 14px;
+}
+
+.import-tree {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.import-group {
+  margin-bottom: 8px;
+}
+
+.changelog-dialog :deep(.el-dialog__header) { position: relative; display: flex; justify-content: center; }
+.changelog-dialog :deep(.el-dialog__headerbtn) { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); }
+.changelog-body { max-height: 60vh; overflow-y: auto; padding: 4px 16px 4px 8px; }
+.changelog-body::-webkit-scrollbar { width: 4px; }
+.changelog-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.changelog-body::-webkit-scrollbar-track { background: transparent; }
+.changelog-body :deep(.cl-version) { color: #f0c040; font-size: 15px; font-weight: 600; margin: 16px 0 8px; padding: 6px 0 6px 12px; border-left: 3px solid #f0c040; background: linear-gradient(90deg, rgba(240,192,64,0.06) 0%, transparent 100%); border-radius: 0 4px 4px 0; }
+.changelog-body :deep(.cl-list) { margin: 0 0 4px 20px; padding: 0; list-style: none; color: rgba(255,255,255,0.75); }
+.changelog-body :deep(.cl-list li) { font-size: 13px; line-height: 1.8; padding: 2px 0; position: relative; padding-left: 16px; }
+.changelog-body :deep(.cl-list li)::before { content: '•'; position: absolute; left: 0; color: rgba(255,255,255,0.25); font-size: 10px; top: 6px; }
 </style>

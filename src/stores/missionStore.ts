@@ -113,6 +113,23 @@ export const useMissionStore = defineStore('mission', () => {
   const missions = ref<Mission[]>([])
   const isLoaded = ref(false)
 
+  const LS_GROUPS_KEY = 'esd_groups_backup'
+
+  const saveGroupsLocal = () => {
+    try {
+      const data = lists.value.map(l => ({ id: l.id, groups: l.groups.map(g => ({ id: g.id, name: g.name, color: g.color, order: g.order })) }))
+      localStorage.setItem(LS_GROUPS_KEY, JSON.stringify(data))
+    } catch { /* 静默失败 */ }
+  }
+
+  const loadGroupsLocal = () => {
+    try {
+      const raw = localStorage.getItem(LS_GROUPS_KEY)
+      if (!raw) return null
+      return JSON.parse(raw)
+    } catch { return null }
+  }
+
   // getUserId 不再需要，保留用于未来扩展
   // const getUserId = () => {
   //   const authStore = useAuthStore()
@@ -126,19 +143,37 @@ export const useMissionStore = defineStore('mission', () => {
     try {
       // 加载清单
       const { lists: dbLists } = await api.getMissionLists()
-      lists.value = dbLists.map(db => ({
-        id: db.id,
-        name: db.name,
-        color: db.icon || '#667eea',
-        groups: (db.groups && db.groups.length > 0) ? db.groups : [{
+      const localBackup = loadGroupsLocal()
+      lists.value = dbLists.map(db => {
+        const rawGroups = (db.groups && db.groups.length > 0) ? db.groups : [{
           id: `${db.id}-default`,
           name: '默认分组',
           color: DEFAULT_GROUP_COLORS[0],
           order: 0
-        }],
-        order: db.order || 0,
-        createdAt: db.created_at
-      }))
+        }]
+        // 从本地备份恢复 order（当 API 数据缺失 order 时）
+        const localList = localBackup?.find((l: any) => l.id === db.id)
+        if (localList) {
+          rawGroups.forEach((g: any) => {
+            if (g.order == null) {
+              const local = localList.groups.find((lg: any) => lg.id === g.id)
+              if (local != null && local.order != null) g.order = local.order
+            }
+          })
+        }
+        rawGroups.sort((a: { order?: number }, b: { order?: number }) => (a.order ?? 0) - (b.order ?? 0))
+        rawGroups.forEach((g: any, i: number) => { if (g.order == null) g.order = i })
+        return {
+          id: db.id,
+          name: db.name,
+          color: db.icon || '#667eea',
+          groups: rawGroups,
+          order: db.order || 0,
+          createdAt: db.created_at
+        }
+      })
+
+      saveGroupsLocal()
 
       // 加载使命 - 保留所有原始字段
       const { missions: dbMissions } = await api.getMissions()
@@ -296,6 +331,7 @@ export const useMissionStore = defineStore('mission', () => {
       }
 
       list.groups.push(newGroup)
+      saveGroupsLocal()
       return newGroup
     } catch (error) {
       console.error('Failed to add group:', error)
@@ -326,16 +362,17 @@ export const useMissionStore = defineStore('mission', () => {
     if (!list) return
     const index = list.groups.findIndex(g => g.id === groupId)
     if (index <= 0) return
-    const temp = list.groups[index].order
-    list.groups[index].order = list.groups[index - 1].order
-    list.groups[index - 1].order = temp
-    list.groups.sort((a, b) => a.order - b.order)
+    const item = list.groups.splice(index, 1)[0]
+    list.groups.splice(index - 1, 0, item)
+    list.groups.forEach((g, i) => { g.order = i })
+    saveGroupsLocal()
 
     try {
       const orders = list.groups.map(g => ({ id: g.id, order: g.order }))
+      console.log('[MissionStore] moveGroupUp 完成', { listId, groupId, fromIndex: index, toIndex: index - 1, orders })
       await api.reorderGroups(listId, orders)
     } catch (error) {
-      console.error('Failed to reorder groups:', error)
+      console.error('[MissionStore] moveGroupUp 同步失败', error)
     }
   }
 
@@ -345,16 +382,17 @@ export const useMissionStore = defineStore('mission', () => {
     if (!list) return
     const index = list.groups.findIndex(g => g.id === groupId)
     if (index < 0 || index >= list.groups.length - 1) return
-    const temp = list.groups[index].order
-    list.groups[index].order = list.groups[index + 1].order
-    list.groups[index + 1].order = temp
-    list.groups.sort((a, b) => a.order - b.order)
+    const item = list.groups.splice(index, 1)[0]
+    list.groups.splice(index + 1, 0, item)
+    list.groups.forEach((g, i) => { g.order = i })
+    saveGroupsLocal()
 
     try {
       const orders = list.groups.map(g => ({ id: g.id, order: g.order }))
+      console.log('[MissionStore] moveGroupDown 完成', { listId, groupId, fromIndex: index, toIndex: index + 1, orders })
       await api.reorderGroups(listId, orders)
     } catch (error) {
-      console.error('Failed to reorder groups:', error)
+      console.error('[MissionStore] moveGroupDown 同步失败', error)
     }
   }
 
@@ -373,6 +411,8 @@ export const useMissionStore = defineStore('mission', () => {
     }
 
     list.groups = list.groups.filter(g => g.id !== groupId)
+    list.groups.forEach((g, i) => { g.order = i })
+    saveGroupsLocal()
 
     // 更新使命的分组
     if (defaultGroup) {

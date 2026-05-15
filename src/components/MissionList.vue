@@ -45,21 +45,6 @@
             <span class="list-color-dot" :style="{ background: list.color }"></span>
             <span class="nav-item-name">{{ list.name }}</span>
             <span class="nav-item-count">{{ getListMissionCount(list.id) }}</span>
-            <el-dropdown trigger="click" @command="(cmd: string) => handleListCommand(cmd, list, index)">
-              <el-button type="info" size="small" text :icon="MoreFilled" class="nav-more" @click.stop />
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="edit">编辑清单</el-dropdown-item>
-                  <el-dropdown-item command="moveUp" :disabled="index === 0">左移</el-dropdown-item>
-                  <el-dropdown-item command="moveDown" :disabled="index === lists.length - 1">右移</el-dropdown-item>
-                  <el-dropdown-item command="delete" :disabled="lists.length <= 1">删除清单</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </div>
-          <div class="nav-item add-list-nav" :ref="setListNavItemRef" @click="handleAddList">
-            <el-icon><Plus /></el-icon>
-            <span class="nav-item-name">添加清单</span>
           </div>
         </div>
       </div>
@@ -76,92 +61,30 @@
             <span class="group-color-dot" :style="{ background: group.color }"></span>
             <span class="group-nav-name">{{ group.name }}</span>
             <span class="group-nav-count">{{ getGroupMissionCount(group.id) }}</span>
-            <el-dropdown trigger="click" @command="(cmd: string) => handleGroupCommand(cmd, group, currentSelectedListId, groupIndex)">
-              <el-button type="info" size="small" text :icon="MoreFilled" class="group-nav-more" @click.stop />
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="addMission">添加任务</el-dropdown-item>
-                  <el-dropdown-item command="edit">编辑分组</el-dropdown-item>
-                  <el-dropdown-item command="moveUp" :disabled="groupIndex === 0">左移</el-dropdown-item>
-                  <el-dropdown-item command="moveDown" :disabled="groupIndex === currentSelectedListGroups.length - 1">右移</el-dropdown-item>
-                  <el-dropdown-item command="delete" :disabled="currentSelectedListGroups.length <= 1">删除分组</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
           </div>
-          <div class="group-nav-item add-group-nav" :ref="setGroupNavItemRef" @click="handleAddGroup">
-            <el-icon><Plus /></el-icon>
-            <span class="group-nav-name">添加分组</span>
-          </div>
+        </div>
+      </div>
+      <div class="op-nav-scroll-wrapper" ref="opNavRef" v-show="showGroupNav">
+        <div class="op-nav-inner">
+          <div class="op-nav-item" :ref="setOpNavItemRef" @click="handleOpenEditList">编辑清单</div>
+          <div class="op-nav-item" :ref="setOpNavItemRef" @click="handleAddList">添加清单</div>
+          <div class="op-nav-item" :ref="setOpNavItemRef" @click="handleMoveListUp">左移清单</div>
+          <div class="op-nav-item" :ref="setOpNavItemRef" @click="handleMoveListDown">右移清单</div>
+          <div class="op-nav-item" :ref="setOpNavItemRef" @click="handleDeleteList">删除清单</div>
+          <div class="op-nav-separator"></div>
+          <div class="op-nav-item" :ref="setOpNavItemRef" @click="handleOpenEditGroup">编辑分组</div>
+          <div class="op-nav-item" :ref="setOpNavItemRef" @click="handleAddGroup">添加分组</div>
+          <div class="op-nav-item" :ref="setOpNavItemRef" @click="handleMoveGroupLeft">左移分组</div>
+          <div class="op-nav-item" :ref="setOpNavItemRef" @click="handleMoveGroupRight">右移分组</div>
+          <div class="op-nav-item" :ref="setOpNavItemRef" @click="handleDeleteGroup">删除分组</div>
+          <div class="op-nav-separator"></div>
+          <div class="op-nav-item" :ref="setOpNavItemRef" @click="handleOpenAddMission">添加任务</div>
         </div>
       </div>
     </div>
 
     <div class="main-content">
-      <template v-if="isEditMode">
-        <div class="mission-form-page">
-          <div class="form-page-body">
-            <MissionFormInner
-                :mission="editingMission"
-                :list-id="currentListId"
-                :group-id="currentGroupId"
-                @submit="handleMissionFormSubmit"
-                @cancel="isEditMode = false"
-            />
-          </div>
-        </div>
-      </template>
-
-      <template v-else-if="isMoveMode">
-        <div class="move-form-page">
-          <div class="move-form-body">
-            <div class="move-form-container">
-              <div class="move-title">{{ movingMission?.name }}</div>
-              <el-form label-width="100px" class="form-body">
-                <el-form-item label="目标清单">
-                  <el-select v-model="moveTargetListId" placeholder="选择清单" style="width: 100%" @change="handleMoveListChange">
-                    <el-option v-for="list in lists" :key="list.id" :label="list.name" :value="list.id">
-                      <span class="list-option"><span class="list-color-option" :style="{ background: list.color }"></span>{{ list.name }}</span>
-                    </el-option>
-                  </el-select>
-                </el-form-item>
-                <el-form-item label="目标分组">
-                  <el-select v-model="moveTargetGroupId" placeholder="选择分组" style="width: 100%">
-                    <el-option v-for="group in moveTargetGroups" :key="group.id" :label="group.name" :value="group.id">
-                      <span class="list-option"><span class="list-color-option" :style="{ background: group.color }"></span>{{ group.name }}</span>
-                    </el-option>
-                  </el-select>
-                </el-form-item>
-                <el-form-item>
-                  <div class="form-footer">
-                    <el-button @click="handleMoveCancel">取消</el-button>
-                    <el-button type="primary" @click="confirmMove">确定移动</el-button>
-                  </div>
-                </el-form-item>
-              </el-form>
-            </div>
-          </div>
-        </div>
-      </template>
-
-      <template v-else-if="isEditListMode">
-        <ListFormPage
-            :list="editingList"
-            @submit="handleListFormSubmit"
-            @cancel="isEditListMode = false"
-        />
-      </template>
-
-      <template v-else-if="isEditGroupMode">
-        <GroupFormPage
-            :group="editingGroup"
-            :list-id="editingGroupListId"
-            @submit="handleGroupFormSubmit"
-            @cancel="isEditGroupMode = false"
-        />
-      </template>
-
-      <template v-else-if="isTodaySmartList">
+      <template v-if="isTodaySmartList">
         <el-scrollbar class="content-body">
           <el-empty v-if="todayMissions.length === 0" description="今天没有任务，好好休息吧" :image-size="120" />
           <div v-else class="today-missions">
@@ -170,18 +93,9 @@
                 <el-checkbox :model-value="mission.completed" @change="handleMissionComplete(mission)" />
                 <div class="mission-name" :style="{ color: getPriorityColor(mission.priority) }">{{ mission.name }}</div>
                 <div class="mission-actions">
-                  <el-dropdown trigger="click" @command="(cmd: string) => handleMissionAction(cmd, mission)">
-                    <el-button class="mission-action-btn">
-                      <el-icon><MoreFilled /></el-icon>
-                    </el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="edit"><el-icon><Edit /></el-icon>编辑</el-dropdown-item>
-                        <el-dropdown-item command="move"><el-icon><Rank /></el-icon>移动</el-dropdown-item>
-                        <el-dropdown-item command="delete" class="dropdown-delete"><el-icon><Delete /></el-icon>删除</el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
+                  <el-button class="mission-icon-btn" text size="small" @click.stop="handleEditMission(mission)" title="编辑"><el-icon><Edit /></el-icon></el-button>
+                  <el-button class="mission-icon-btn" text size="small" @click.stop="openChildFormMove(mission)" title="移动"><el-icon><Switch /></el-icon></el-button>
+                  <el-button class="mission-icon-btn mission-icon-btn-delete" text size="small" @click.stop="deleteMission(mission.id)" title="删除"><el-icon><Delete /></el-icon></el-button>
                 </div>
               </div>
               <div class="mission-body">
@@ -213,13 +127,54 @@
                   </span>
                 </div>
                 <div v-if="mission.checklist.length > 0" class="checklist-items-always">
-                  <div v-for="item in mission.checklist" :key="item.id" class="checklist-item" :class="{ completed: item.completed }" @click="toggleChecklistItem(mission.id, item.id, $event)">
-                    <el-icon class="check-icon" v-if="item.completed"><Check /></el-icon>
-                    <el-icon class="check-icon" v-else><CircleCheck /></el-icon>
-                    <span class="check-text">{{ item.text }}</span>
+                  <div v-for="item in mission.checklist" :key="item.id" class="checklist-item" :class="{ completed: item.completed, 'drag-over': dragOverItemId === item.id }"
+                       @dragover.prevent="onChecklistDragOver($event, mission.id, item.id)"
+                       @drop="onChecklistDrop(mission.id, item.id)"
+                       @dragleave="onChecklistDragLeave(item.id)">
+                    <el-icon class="checklist-drag-handle" draggable="true"
+                      @dragstart="onChecklistDragStart($event, mission.id, item.id)"
+                      @dragend="dragOverItemId = null"
+                    ><Rank /></el-icon>
+                    <el-icon class="check-icon" v-if="item.completed" @click.stop="toggleChecklistItem(mission.id, item.id, $event)"><Check /></el-icon>
+                    <el-icon class="check-icon" v-else @click.stop="toggleChecklistItem(mission.id, item.id, $event)"><CircleCheck /></el-icon>
+                    <template v-if="editingChecklistId === item.id && editingChecklistMissionId === mission.id">
+                      <el-input v-model="editingChecklistText" type="textarea" autosize size="small" class="checklist-edit-input"
+                        @keyup.escape="cancelEditChecklistItem"
+                        @blur="finishEditChecklistItem" />
+                    </template>
+                    <span v-else class="check-text" @click.stop="startEditChecklistItem(mission.id, item)">{{ item.text }}</span>
+                  </div>
+                  <div class="checklist-add-row">
+                    <el-input
+                      v-if="addingChecklist[mission.id]"
+                      v-model="newChecklistText[mission.id]"
+                      size="small"
+                      placeholder="输入后回车确认"
+                      :ref="(el: any) => { if (el && addingChecklistMissionId === mission.id) { nextTick(() => { const input = (el as any).input || (el as any).textarea; if (input) input.focus() }) } }"
+                      @keyup.enter="handleAddChecklist(mission.id)"
+                      @keyup.escape="cancelAddChecklist(mission.id)"
+                      @blur="cancelAddChecklist(mission.id)"
+                    />
+                    <div v-else class="checklist-add-btn" @click.stop="showAddChecklist(mission.id)">
+                      <el-icon><Plus /></el-icon>
+                      <span>新增检查事项</span>
+                    </div>
                   </div>
                 </div>
-                <div v-if="mission.notes" class="mission-notes-content">{{ mission.notes }}</div>
+                    <div v-if="editingNotesMissionId === mission.id" class="mission-notes-edit-wrapper">
+                      <el-input
+                        v-model="editingNotesText"
+                        type="textarea"
+                        autosize
+                        size="small"
+                        class="mission-notes-edit-input"
+                        placeholder="双击编辑备注"
+                        @keyup.escape="cancelEditNotes"
+                        @blur="finishEditNotes"
+                      />
+                    </div>
+                    <div v-else-if="mission.notes" class="mission-notes-content" @dblclick.stop="startEditNotes(mission)">{{ mission.notes }}</div>
+                    <div v-else class="mission-notes-placeholder" @dblclick.stop="startEditNotes(mission)">双击添加备注</div>
               </div>
             </div>
           </div>
@@ -235,18 +190,9 @@
                 <el-checkbox :model-value="mission.completed" @change="handleMissionComplete(mission)" />
                 <div class="mission-name" :style="{ color: getPriorityColor(mission.priority) }">{{ mission.name }}</div>
                 <div class="mission-actions">
-                  <el-dropdown trigger="click" @command="(cmd: string) => handleMissionAction(cmd, mission)">
-                    <el-button class="mission-action-btn">
-                      <el-icon><MoreFilled /></el-icon>
-                    </el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="edit"><el-icon><Edit /></el-icon>编辑</el-dropdown-item>
-                        <el-dropdown-item command="move"><el-icon><Rank /></el-icon>移动</el-dropdown-item>
-                        <el-dropdown-item command="delete" class="dropdown-delete"><el-icon><Delete /></el-icon>删除</el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
+                  <el-button class="mission-icon-btn" text size="small" @click.stop="handleEditMission(mission)" title="编辑"><el-icon><Edit /></el-icon></el-button>
+                  <el-button class="mission-icon-btn" text size="small" @click.stop="openChildFormMove(mission)" title="移动"><el-icon><Switch /></el-icon></el-button>
+                  <el-button class="mission-icon-btn mission-icon-btn-delete" text size="small" @click.stop="deleteMission(mission.id)" title="删除"><el-icon><Delete /></el-icon></el-button>
                 </div>
               </div>
               <div class="mission-body">
@@ -282,13 +228,54 @@
                   </span>
                 </div>
                 <div v-if="mission.checklist.length > 0" class="checklist-items-always">
-                  <div v-for="item in mission.checklist" :key="item.id" class="checklist-item" :class="{ completed: item.completed }" @click="toggleChecklistItem(mission.id, item.id, $event)">
-                    <el-icon class="check-icon" v-if="item.completed"><Check /></el-icon>
-                    <el-icon class="check-icon" v-else><CircleCheck /></el-icon>
-                    <span class="check-text">{{ item.text }}</span>
+                  <div v-for="item in mission.checklist" :key="item.id" class="checklist-item" :class="{ completed: item.completed, 'drag-over': dragOverItemId === item.id }"
+                       @dragover.prevent="onChecklistDragOver($event, mission.id, item.id)"
+                       @drop="onChecklistDrop(mission.id, item.id)"
+                       @dragleave="onChecklistDragLeave(item.id)">
+                    <el-icon class="checklist-drag-handle" draggable="true"
+                      @dragstart="onChecklistDragStart($event, mission.id, item.id)"
+                      @dragend="dragOverItemId = null"
+                    ><Rank /></el-icon>
+                    <el-icon class="check-icon" v-if="item.completed" @click.stop="toggleChecklistItem(mission.id, item.id, $event)"><Check /></el-icon>
+                    <el-icon class="check-icon" v-else @click.stop="toggleChecklistItem(mission.id, item.id, $event)"><CircleCheck /></el-icon>
+                    <template v-if="editingChecklistId === item.id && editingChecklistMissionId === mission.id">
+                      <el-input v-model="editingChecklistText" type="textarea" autosize size="small" class="checklist-edit-input"
+                        @keyup.escape="cancelEditChecklistItem"
+                        @blur="finishEditChecklistItem" />
+                    </template>
+                    <span v-else class="check-text" @click.stop="startEditChecklistItem(mission.id, item)">{{ item.text }}</span>
+                  </div>
+                  <div class="checklist-add-row">
+                    <el-input
+                      v-if="addingChecklist[mission.id]"
+                      v-model="newChecklistText[mission.id]"
+                      size="small"
+                      placeholder="输入后回车确认"
+                      :ref="(el: any) => { if (el && addingChecklistMissionId === mission.id) { nextTick(() => { const input = (el as any).input || (el as any).textarea; if (input) input.focus() }) } }"
+                      @keyup.enter="handleAddChecklist(mission.id)"
+                      @keyup.escape="cancelAddChecklist(mission.id)"
+                      @blur="cancelAddChecklist(mission.id)"
+                    />
+                    <div v-else class="checklist-add-btn" @click.stop="showAddChecklist(mission.id)">
+                      <el-icon><Plus /></el-icon>
+                      <span>新增检查事项</span>
+                    </div>
                   </div>
                 </div>
-                <div v-if="mission.notes" class="mission-notes-content">{{ mission.notes }}</div>
+                    <div v-if="editingNotesMissionId === mission.id" class="mission-notes-edit-wrapper">
+                      <el-input
+                        v-model="editingNotesText"
+                        type="textarea"
+                        autosize
+                        size="small"
+                        class="mission-notes-edit-input"
+                        placeholder="双击编辑备注"
+                        @keyup.escape="cancelEditNotes"
+                        @blur="finishEditNotes"
+                      />
+                    </div>
+                    <div v-else-if="mission.notes" class="mission-notes-content" @dblclick.stop="startEditNotes(mission)">{{ mission.notes }}</div>
+                    <div v-else class="mission-notes-placeholder" @dblclick.stop="startEditNotes(mission)">双击添加备注</div>
               </div>
             </div>
           </div>
@@ -304,18 +291,9 @@
                 <el-checkbox :model-value="mission.completed" @change="handleMissionComplete(mission)" />
                 <div class="mission-name" :style="{ color: getPriorityColor(mission.priority) }">{{ mission.name }}</div>
                 <div class="mission-actions">
-                  <el-dropdown trigger="click" @command="(cmd: string) => handleMissionAction(cmd, mission)">
-                    <el-button class="mission-action-btn">
-                      <el-icon><MoreFilled /></el-icon>
-                    </el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="edit"><el-icon><Edit /></el-icon>编辑</el-dropdown-item>
-                        <el-dropdown-item command="move"><el-icon><Rank /></el-icon>移动</el-dropdown-item>
-                        <el-dropdown-item command="delete" class="dropdown-delete"><el-icon><Delete /></el-icon>删除</el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
+                  <el-button class="mission-icon-btn" text size="small" @click.stop="handleEditMission(mission)" title="编辑"><el-icon><Edit /></el-icon></el-button>
+                  <el-button class="mission-icon-btn" text size="small" @click.stop="openChildFormMove(mission)" title="移动"><el-icon><Switch /></el-icon></el-button>
+                  <el-button class="mission-icon-btn mission-icon-btn-delete" text size="small" @click.stop="deleteMission(mission.id)" title="删除"><el-icon><Delete /></el-icon></el-button>
                 </div>
               </div>
               <div class="mission-body">
@@ -351,13 +329,54 @@
                   </span>
                 </div>
                 <div v-if="mission.checklist.length > 0" class="checklist-items-always">
-                  <div v-for="item in mission.checklist" :key="item.id" class="checklist-item" :class="{ completed: item.completed }" @click="toggleChecklistItem(mission.id, item.id, $event)">
-                    <el-icon class="check-icon" v-if="item.completed"><Check /></el-icon>
-                    <el-icon class="check-icon" v-else><CircleCheck /></el-icon>
-                    <span class="check-text">{{ item.text }}</span>
+                  <div v-for="item in mission.checklist" :key="item.id" class="checklist-item" :class="{ completed: item.completed, 'drag-over': dragOverItemId === item.id }"
+                       @dragover.prevent="onChecklistDragOver($event, mission.id, item.id)"
+                       @drop="onChecklistDrop(mission.id, item.id)"
+                       @dragleave="onChecklistDragLeave(item.id)">
+                    <el-icon class="checklist-drag-handle" draggable="true"
+                      @dragstart="onChecklistDragStart($event, mission.id, item.id)"
+                      @dragend="dragOverItemId = null"
+                    ><Rank /></el-icon>
+                    <el-icon class="check-icon" v-if="item.completed" @click.stop="toggleChecklistItem(mission.id, item.id, $event)"><Check /></el-icon>
+                    <el-icon class="check-icon" v-else @click.stop="toggleChecklistItem(mission.id, item.id, $event)"><CircleCheck /></el-icon>
+                    <template v-if="editingChecklistId === item.id && editingChecklistMissionId === mission.id">
+                      <el-input v-model="editingChecklistText" type="textarea" autosize size="small" class="checklist-edit-input"
+                        @keyup.escape="cancelEditChecklistItem"
+                        @blur="finishEditChecklistItem" />
+                    </template>
+                    <span v-else class="check-text" @click.stop="startEditChecklistItem(mission.id, item)">{{ item.text }}</span>
+                  </div>
+                  <div class="checklist-add-row">
+                    <el-input
+                      v-if="addingChecklist[mission.id]"
+                      v-model="newChecklistText[mission.id]"
+                      size="small"
+                      placeholder="输入后回车确认"
+                      :ref="(el: any) => { if (el && addingChecklistMissionId === mission.id) { nextTick(() => { const input = (el as any).input || (el as any).textarea; if (input) input.focus() }) } }"
+                      @keyup.enter="handleAddChecklist(mission.id)"
+                      @keyup.escape="cancelAddChecklist(mission.id)"
+                      @blur="cancelAddChecklist(mission.id)"
+                    />
+                    <div v-else class="checklist-add-btn" @click.stop="showAddChecklist(mission.id)">
+                      <el-icon><Plus /></el-icon>
+                      <span>新增检查事项</span>
+                    </div>
                   </div>
                 </div>
-                <div v-if="mission.notes" class="mission-notes-content">{{ mission.notes }}</div>
+                    <div v-if="editingNotesMissionId === mission.id" class="mission-notes-edit-wrapper">
+                      <el-input
+                        v-model="editingNotesText"
+                        type="textarea"
+                        autosize
+                        size="small"
+                        class="mission-notes-edit-input"
+                        placeholder="双击编辑备注"
+                        @keyup.escape="cancelEditNotes"
+                        @blur="finishEditNotes"
+                      />
+                    </div>
+                    <div v-else-if="mission.notes" class="mission-notes-content" @dblclick.stop="startEditNotes(mission)">{{ mission.notes }}</div>
+                    <div v-else class="mission-notes-placeholder" @dblclick.stop="startEditNotes(mission)">双击添加备注</div>
               </div>
             </div>
           </div>
@@ -373,18 +392,9 @@
                 <el-checkbox :model-value="mission.completed" @change="handleMissionComplete(mission)" />
                 <div class="mission-name" :style="{ color: getPriorityColor(mission.priority) }">{{ mission.name }}</div>
                 <div class="mission-actions">
-                  <el-dropdown trigger="click" @command="(cmd: string) => handleMissionAction(cmd, mission)">
-                    <el-button class="mission-action-btn">
-                      <el-icon><MoreFilled /></el-icon>
-                    </el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="edit"><el-icon><Edit /></el-icon>编辑</el-dropdown-item>
-                        <el-dropdown-item command="move"><el-icon><Rank /></el-icon>移动</el-dropdown-item>
-                        <el-dropdown-item command="delete" class="dropdown-delete"><el-icon><Delete /></el-icon>删除</el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
+                  <el-button class="mission-icon-btn" text size="small" @click.stop="handleEditMission(mission)" title="编辑"><el-icon><Edit /></el-icon></el-button>
+                  <el-button class="mission-icon-btn" text size="small" @click.stop="openChildFormMove(mission)" title="移动"><el-icon><Switch /></el-icon></el-button>
+                  <el-button class="mission-icon-btn mission-icon-btn-delete" text size="small" @click.stop="deleteMission(mission.id)" title="删除"><el-icon><Delete /></el-icon></el-button>
                 </div>
               </div>
               <div class="mission-body">
@@ -413,13 +423,54 @@
                   </span>
                 </div>
                 <div v-if="mission.checklist.length > 0" class="checklist-items-always">
-                  <div v-for="item in mission.checklist" :key="item.id" class="checklist-item" :class="{ completed: item.completed }" @click="toggleChecklistItem(mission.id, item.id, $event)">
-                    <el-icon class="check-icon" v-if="item.completed"><Check /></el-icon>
-                    <el-icon class="check-icon" v-else><CircleCheck /></el-icon>
-                    <span class="check-text">{{ item.text }}</span>
+                  <div v-for="item in mission.checklist" :key="item.id" class="checklist-item" :class="{ completed: item.completed, 'drag-over': dragOverItemId === item.id }"
+                       @dragover.prevent="onChecklistDragOver($event, mission.id, item.id)"
+                       @drop="onChecklistDrop(mission.id, item.id)"
+                       @dragleave="onChecklistDragLeave(item.id)">
+                    <el-icon class="checklist-drag-handle" draggable="true"
+                      @dragstart="onChecklistDragStart($event, mission.id, item.id)"
+                      @dragend="dragOverItemId = null"
+                    ><Rank /></el-icon>
+                    <el-icon class="check-icon" v-if="item.completed" @click.stop="toggleChecklistItem(mission.id, item.id, $event)"><Check /></el-icon>
+                    <el-icon class="check-icon" v-else @click.stop="toggleChecklistItem(mission.id, item.id, $event)"><CircleCheck /></el-icon>
+                    <template v-if="editingChecklistId === item.id && editingChecklistMissionId === mission.id">
+                      <el-input v-model="editingChecklistText" type="textarea" autosize size="small" class="checklist-edit-input"
+                        @keyup.escape="cancelEditChecklistItem"
+                        @blur="finishEditChecklistItem" />
+                    </template>
+                    <span v-else class="check-text" @click.stop="startEditChecklistItem(mission.id, item)">{{ item.text }}</span>
+                  </div>
+                  <div class="checklist-add-row">
+                    <el-input
+                      v-if="addingChecklist[mission.id]"
+                      v-model="newChecklistText[mission.id]"
+                      size="small"
+                      placeholder="输入后回车确认"
+                      :ref="(el: any) => { if (el && addingChecklistMissionId === mission.id) { nextTick(() => { const input = (el as any).input || (el as any).textarea; if (input) input.focus() }) } }"
+                      @keyup.enter="handleAddChecklist(mission.id)"
+                      @keyup.escape="cancelAddChecklist(mission.id)"
+                      @blur="cancelAddChecklist(mission.id)"
+                    />
+                    <div v-else class="checklist-add-btn" @click.stop="showAddChecklist(mission.id)">
+                      <el-icon><Plus /></el-icon>
+                      <span>新增检查事项</span>
+                    </div>
                   </div>
                 </div>
-                <div v-if="mission.notes" class="mission-notes-content">{{ mission.notes }}</div>
+                    <div v-if="editingNotesMissionId === mission.id" class="mission-notes-edit-wrapper">
+                      <el-input
+                        v-model="editingNotesText"
+                        type="textarea"
+                        autosize
+                        size="small"
+                        class="mission-notes-edit-input"
+                        placeholder="双击编辑备注"
+                        @keyup.escape="cancelEditNotes"
+                        @blur="finishEditNotes"
+                      />
+                    </div>
+                    <div v-else-if="mission.notes" class="mission-notes-content" @dblclick.stop="startEditNotes(mission)">{{ mission.notes }}</div>
+                    <div v-else class="mission-notes-placeholder" @dblclick.stop="startEditNotes(mission)">双击添加备注</div>
               </div>
             </div>
           </div>
@@ -433,68 +484,94 @@
       </template>
     </div>
   </div>
+
+  <!-- List Dialog -->
+  <div v-if="showListDialog" class="dialog-overlay" @click.self="closeListDialog">
+    <div class="dialog-container">
+      <div class="dialog-header">
+        <span class="dialog-header-title">{{ dialogList ? '编辑清单' : '添加清单' }}</span>
+        <el-button class="dialog-close-btn" text @click="closeListDialog"><el-icon><Close /></el-icon></el-button>
+      </div>
+      <div class="dialog-body">
+        <ListFormPage :list="dialogList" @submit="onListSubmit" @cancel="closeListDialog" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Group Dialog -->
+  <div v-if="showGroupDialog" class="dialog-overlay" @click.self="closeGroupDialog">
+    <div class="dialog-container">
+      <div class="dialog-header">
+        <span class="dialog-header-title">{{ dialogGroup ? '编辑分组' : '添加分组' }}</span>
+        <el-button class="dialog-close-btn" text @click="closeGroupDialog"><el-icon><Close /></el-icon></el-button>
+      </div>
+      <div class="dialog-body">
+        <GroupFormPage :group="dialogGroup" :list-id="currentSelectedListId" @submit="onGroupSubmit" @cancel="closeGroupDialog" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Mission Dialog -->
+  <div v-if="showMissionDialog" class="dialog-overlay" @click.self="closeMissionDialog">
+    <div class="dialog-container mission-dialog-container">
+      <div class="dialog-header mission-dialog-header">
+        <span class="dialog-header-title mission-dialog-title">{{ dialogMission ? '编辑任务' : '添加任务' }}</span>
+        <div class="mission-dialog-header-actions">
+          <el-button class="mission-dialog-save-btn" text @click="triggerMissionFormSubmit" title="保存"><el-icon class="rotate-check"><Check /></el-icon></el-button>
+          <el-button class="mission-dialog-close-btn" text @click="closeMissionDialog"><el-icon><Close /></el-icon></el-button>
+        </div>
+      </div>
+      <div class="dialog-body mission-dialog-body">
+        <MissionForm ref="missionFormRef" :mission="dialogMission" :list-id="currentSelectedListId" :group-id="currentGroupId" @submit="onMissionSubmit" @cancel="closeMissionDialog" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Move Mission Dialog -->
+  <div v-if="showMoveDialog" class="dialog-overlay" @click.self="closeMoveDialog">
+    <div class="dialog-container">
+      <div class="dialog-header">
+        <span class="dialog-header-title">移动任务</span>
+        <el-button class="dialog-close-btn" text @click="closeMoveDialog"><el-icon><Close /></el-icon></el-button>
+      </div>
+      <div class="dialog-body">
+        <MoveMissionPage :mission-id="moveMissionId" @submit="onMoveSubmit" @cancel="closeMoveDialog" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Dialog -->
+  <div v-if="showConfirmDialog" class="dialog-overlay" @click.self="closeConfirmDialog">
+    <div class="dialog-container confirm-dialog-container">
+      <div class="confirm-icon">
+        <el-icon class="warning-icon"><Warning /></el-icon>
+      </div>
+      <h3 class="confirm-title">{{ confirmDialogTitle }}</h3>
+      <p class="confirm-message">{{ confirmDialogMessage }}</p>
+      <div class="confirm-actions">
+        <el-button type="default" @click="closeConfirmDialog">取消</el-button>
+        <el-button type="danger" @click="handleConfirmAction">确认删除</el-button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, onBeforeUpdate, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onBeforeUpdate, watch, nextTick, inject } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Edit, Delete, Calendar, Clock, RefreshRight, Check, CircleCheck, MoreFilled, Rank, Timer, Bell } from '@element-plus/icons-vue'
-import dayjs from 'dayjs'
-import { useMissionStore, REPEAT_STRATEGIES, type Mission, type MissionList, type MissionGroup } from '../stores/missionStore'
-import MissionFormInner from './MissionForm.vue'
+import { Calendar, Clock, RefreshRight, Check, CircleCheck, Timer, Bell, Close, Warning, Plus, Edit, Switch, Delete, Rank } from '@element-plus/icons-vue'
 import ListFormPage from './ListFormPage.vue'
 import GroupFormPage from './GroupFormPage.vue'
+import MissionForm from './MissionForm.vue'
+import MoveMissionPage from './MoveMissionPage.vue'
+import dayjs from 'dayjs'
+import { useMissionStore, REPEAT_STRATEGIES, type Mission, type MissionList, type MissionGroup } from '../stores/missionStore'
 import { getData, setData, getSystemStateField, setSystemStateField } from '../services/storageService'
 import { logger } from '../lib/logger'
 
 const missionStore = useMissionStore()
 
-const sendNotification = (title: string, body: string) => {
-  if (!('Notification' in window)) return
-  if (Notification.permission === 'granted') {
-    new Notification(title, { body })
-  } else if (Notification.permission !== 'denied') {
-    Notification.requestPermission().then((perm) => {
-      if (perm === 'granted') new Notification(title, { body })
-    })
-  }
-}
-
-const triggeredReminders = new Set<string>()
-
-const checkReminders = () => {
-  const now = dayjs()
-  missionStore.missions.forEach(mission => {
-    if (mission.completed || mission.reminderStrategy === 'none') return
-    if (!mission.date) return
-
-    let triggerTime = dayjs(mission.date + (mission.endTime ? 'T' + mission.endTime : ''))
-    if (mission.reminderStrategy === 'advance') {
-      const offsetMinutes = (mission.reminderDays || 0) * 1440 + (mission.reminderHours || 0) * 60 + (mission.reminderMinutes || 0)
-      triggerTime = triggerTime.subtract(offsetMinutes, 'minute')
-    }
-
-    const reminderKey = mission.id + '_' + mission.date + '_' + mission.endTime
-    const diffMs = now.diff(triggerTime, 'millisecond')
-    if (diffMs >= 0 && diffMs < 3600000 && !triggeredReminders.has(reminderKey)) {
-      triggeredReminders.add(reminderKey)
-      sendNotification('任务提醒', `「${mission.name}」即将到期，请处理`)
-      setTimeout(() => triggeredReminders.delete(reminderKey), 3600000)
-    }
-  })
-}
-
-let reminderInterval: ReturnType<typeof setInterval> | null = null
-
-const startReminderChecker = () => {
-  if (reminderInterval) clearInterval(reminderInterval)
-  reminderInterval = setInterval(checkReminders, 30000)
-  checkReminders()
-}
-
-const stopReminderChecker = () => {
-  if (reminderInterval) { clearInterval(reminderInterval); reminderInterval = null }
-}
+const refreshReminders = inject<() => void>('refreshReminders', () => {})
 
 const currentListId = ref<string>('')
 const currentGroupId = ref<string>('')
@@ -502,12 +579,15 @@ const currentSelectedListId = ref<string>('')
 
 const listNavRef = ref()
 const groupNavRef = ref()
+const opNavRef = ref()
 const listNavItemsRef = ref<HTMLElement[]>([])
 const groupNavItemsRef = ref<HTMLElement[]>([])
+const opNavItemsRef = ref<HTMLElement[]>([])
 
-const clearNavRefs = () => { listNavItemsRef.value = []; groupNavItemsRef.value = [] }
+const clearNavRefs = () => { listNavItemsRef.value = []; groupNavItemsRef.value = []; opNavItemsRef.value = [] }
 const setListNavItemRef = (el: any) => { if (el) listNavItemsRef.value.push(el) }
 const setGroupNavItemRef = (el: any) => { if (el) groupNavItemsRef.value.push(el) }
+const setOpNavItemRef = (el: any) => { if (el) opNavItemsRef.value.push(el) }
 
 const scrollToCenter = (container: HTMLElement, target: HTMLElement) => {
   if (!container || !target) return
@@ -538,6 +618,7 @@ const scrollGroupNavToActive = () => {
 
 let isListNavDragging = false, listNavDragStartX = 0, listNavDragScrollLeft = 0, isListNavDragInitialized = false
 let isGroupNavDragging = false, groupNavDragStartX = 0, groupNavDragScrollLeft = 0, isGroupNavDragInitialized = false
+let isOpNavDragging = false, opNavDragStartX = 0, opNavDragScrollLeft = 0, isOpNavDragInitialized = false
 
 const initListNavDrag = () => {
   if (isListNavDragInitialized) return
@@ -565,9 +646,22 @@ const initGroupNavDrag = () => {
   el.addEventListener('touchmove', (e: TouchEvent) => { const walk = groupNavDragStartX - e.touches[0].pageX; el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, groupNavDragScrollLeft + walk)) }, { passive: true })
 }
 
+const initOpNavDrag = () => {
+  if (isOpNavDragInitialized) return
+  isOpNavDragInitialized = true
+  const el = opNavRef.value
+  if (!el) return
+  el.addEventListener('mousedown', (e: MouseEvent) => { if (e.button === 0) { isOpNavDragging = true; opNavDragStartX = e.pageX; opNavDragScrollLeft = el.scrollLeft; el.style.cursor = 'grabbing'; el.style.userSelect = 'none' } })
+  window.addEventListener('mousemove', (e: MouseEvent) => { if (!isOpNavDragging) return; e.preventDefault(); const walk = opNavDragStartX - e.pageX; el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, opNavDragScrollLeft + walk)) })
+  const endDrag = () => { if (!isOpNavDragging) return; isOpNavDragging = false; el.style.cursor = ''; el.style.userSelect = '' }
+  window.addEventListener('mouseup', endDrag); window.addEventListener('mouseleave', endDrag)
+  el.addEventListener('touchstart', (e: TouchEvent) => { opNavDragStartX = e.touches[0].pageX; opNavDragScrollLeft = el.scrollLeft }, { passive: true })
+  el.addEventListener('touchmove', (e: TouchEvent) => { const walk = opNavDragStartX - e.touches[0].pageX; el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, opNavDragScrollLeft + walk)) }, { passive: true })
+}
+
 const isSmartListActive = computed(() => isTodaySmartList.value || isExpiredSmartList.value || isFutureSmartList.value)
 const showGroupNav = computed(() => !isSmartListActive.value && currentSelectedListId.value !== '')
-const currentSelectedListGroups = computed(() => { const list = lists.value.find(l => l.id === currentSelectedListId.value); return list?.groups || [] })
+const currentSelectedListGroups = computed(() => { const list = lists.value.find(l => l.id === currentSelectedListId.value); if (!list?.groups) return []; return [...list.groups].sort((a, b) => a.order - b.order) })
 
 const initMissionState = async () => {
   const parsed = await getSystemStateField('list')
@@ -588,12 +682,7 @@ onMounted(async () => {
       const f = lists.value[0]; if (f.groups.length > 0) { currentListId.value = f.id; currentGroupId.value = f.groups[0].id; currentSelectedListId.value = f.id }
     }
   }
-  nextTick(() => { initListNavDrag(); initGroupNavDrag(); scrollListNavToActive(); if (showGroupNav.value) scrollGroupNavToActive() })
-  startReminderChecker()
-})
-
-onUnmounted(() => {
-  stopReminderChecker()
+  nextTick(() => { initListNavDrag(); initGroupNavDrag(); initOpNavDrag(); scrollListNavToActive(); if (showGroupNav.value) scrollGroupNavToActive() })
 })
 
 onBeforeUpdate(() => clearNavRefs())
@@ -603,20 +692,7 @@ watch([currentListId, currentGroupId, currentSelectedListId], async () => {
   nextTick(() => { scrollListNavToActive(); if (showGroupNav.value) scrollGroupNavToActive() })
 }, { deep: true })
 
-const listFormVisible = ref(false)
-const groupFormVisible = ref(false)
-const isEditListMode = ref(false)
-const isEditGroupMode = ref(false)
-const moveTargetListId = ref('')
-const moveTargetGroupId = ref('')
-const editingMission = ref<Mission | null>(null)
-const editingList = ref<MissionList | null>(null)
-const editingGroup = ref<MissionGroup | null>(null)
-const editingGroupListId = ref<string>('')
-const isEditMode = ref(false)
-const isMoveMode = ref(false)
-const movingMission = ref<Mission | null>(null)
-
+const showStarCanvas = ref(true)
 const getPriorityColor = (priority: string) => {
   switch (priority) { case 'high': return '#ef4444'; case 'medium': return '#f59e0b'; case 'low': return '#22c55e'; default: return 'rgba(255, 255, 255, 0.5)' }
 }
@@ -706,7 +782,30 @@ const currentGroupMissions = computed(() => {
   })
 })
 
-const moveTargetGroups = computed(() => { const list = lists.value.find(l => l.id === moveTargetListId.value); return list?.groups || [] })
+
+const showListDialog = ref(false)
+const showGroupDialog = ref(false)
+const showMissionDialog = ref(false)
+const showMoveDialog = ref(false)
+const showConfirmDialog = ref(false)
+const dialogList = ref<MissionList | null>(null)
+const dialogGroup = ref<MissionGroup | null>(null)
+const dialogMission = ref<Mission | null>(null)
+const moveMissionId = ref('')
+const confirmDialogTitle = ref('')
+const confirmDialogMessage = ref('')
+let pendingConfirmAction: (() => void) | null = null
+
+const missionFormRef = ref<InstanceType<typeof MissionForm> | null>(null)
+
+const triggerMissionFormSubmit = () => {
+  missionFormRef.value?.handleSubmit()
+}
+
+const addingChecklist = ref<Record<string, boolean>>({})
+const newChecklistText = ref<Record<string, string>>({})
+const addingChecklistMissionId = ref<string>('')
+
 
 const getListMissionCount = (listId: string) => missionStore.missions.filter(m => m.listId === listId && !m.completed).length
 const getGroupMissionCount = (groupId: string) => missionStore.missions.filter(m => m.groupId === groupId && !m.completed).length
@@ -717,11 +816,11 @@ const getGroupName = (listId: string, groupId: string) => { const list = lists.v
 const isListSelected = (listId: string) => currentListId.value === listId
 const isGroupSelected = (groupId: string) => currentGroupId.value === groupId
 
-const selectList = (listId: string) => { logger.info('[清单] 切换清单项', { listId, listName: lists.value.find(l => l.id === listId)?.name }); isEditMode.value = false; isMoveMode.value = false; isEditListMode.value = false; isEditGroupMode.value = false; currentListId.value = listId; currentGroupId.value = ''; currentSelectedListId.value = listId; const list = lists.value.find(l => l.id === listId); if (list && list.groups.length > 0) currentGroupId.value = list.groups[0].id }
-const selectTodaySmartList = () => { logger.info('[清单] 切换清单项', { listId: 'today-smart-list' }); isEditMode.value = false; isMoveMode.value = false; isEditListMode.value = false; isEditGroupMode.value = false; currentListId.value = 'today-smart-list'; currentGroupId.value = ''; currentSelectedListId.value = '' }
-const selectExpiredSmartList = () => { logger.info('[清单] 切换清单项', { listId: 'expired-smart-list' }); isEditMode.value = false; isMoveMode.value = false; isEditListMode.value = false; isEditGroupMode.value = false; currentListId.value = 'expired-smart-list'; currentGroupId.value = ''; currentSelectedListId.value = '' }
-const selectFutureSmartList = () => { logger.info('[清单] 切换清单项', { listId: 'future-smart-list' }); isEditMode.value = false; isMoveMode.value = false; isEditListMode.value = false; isEditGroupMode.value = false; currentListId.value = 'future-smart-list'; currentGroupId.value = ''; currentSelectedListId.value = '' }
-const selectGroup = (listId: string, groupId: string) => { const list = lists.value.find(l => l.id === listId); const group = list?.groups.find(g => g.id === groupId); logger.info('[清单] 切换分组项', { listId, listName: list?.name, groupId, groupName: group?.name }); isEditMode.value = false; isMoveMode.value = false; isEditListMode.value = false; isEditGroupMode.value = false; currentListId.value = listId; currentGroupId.value = groupId; currentSelectedListId.value = listId }
+const selectList = (listId: string) => { logger.info('[清单] 切换清单项', { listId, listName: lists.value.find(l => l.id === listId)?.name }); currentListId.value = listId; currentGroupId.value = ''; currentSelectedListId.value = listId; const list = lists.value.find(l => l.id === listId); if (list && list.groups.length > 0) currentGroupId.value = list.groups[0].id }
+const selectTodaySmartList = () => { logger.info('[清单] 切换清单项', { listId: 'today-smart-list' }); currentListId.value = 'today-smart-list'; currentGroupId.value = ''; currentSelectedListId.value = '' }
+const selectExpiredSmartList = () => { logger.info('[清单] 切换清单项', { listId: 'expired-smart-list' }); currentListId.value = 'expired-smart-list'; currentGroupId.value = ''; currentSelectedListId.value = '' }
+const selectFutureSmartList = () => { logger.info('[清单] 切换清单项', { listId: 'future-smart-list' }); currentListId.value = 'future-smart-list'; currentGroupId.value = ''; currentSelectedListId.value = '' }
+const selectGroup = (listId: string, groupId: string) => { const list = lists.value.find(l => l.id === listId); const group = list?.groups.find(g => g.id === groupId); logger.info('[清单] 切换分组项', { listId, listName: list?.name, groupId, groupName: group?.name }); currentListId.value = listId; currentGroupId.value = groupId; currentSelectedListId.value = listId }
 
 const formatDate = (date: string) => { if (!date) return ''; return dayjs(date).format('MM月DD日') }
 
@@ -794,58 +893,293 @@ const getReminderLabel = (mission: Mission) => {
   return ''
 }
 
-const handleAddList = () => { editingList.value = null; isEditListMode.value = true }
+const handleAddList = () => { dialogList.value = null; showListDialog.value = true }
 
-const handleListCommand = async (command: string, list: MissionList, _index: number) => {
-  if (command === 'edit') { editingList.value = list; isEditListMode.value = true }
-  else if (command === 'moveUp') { await missionStore.moveListUp(list.id); nextTick(() => scrollListNavToActive()) }
-  else if (command === 'moveDown') { await missionStore.moveListDown(list.id); nextTick(() => scrollListNavToActive()) }
-  else if (command === 'delete') { missionStore.deleteList(list.id); logger.info('[清单] 删除清单', { listId: list.id, listName: list.name }); ElMessage.success('清单已删除'); if (currentListId.value === list.id) { const f = lists.value[0]; if (f && f.groups.length > 0) { currentListId.value = f.id; currentGroupId.value = f.groups[0].id } else { currentListId.value = ''; currentGroupId.value = '' } } }
+const handleAddGroup = () => { if (!currentSelectedListId.value) return; dialogGroup.value = null; showGroupDialog.value = true }
+
+const handleEditMission = (mission: Mission) => { dialogMission.value = mission; showMissionDialog.value = true }
+
+const handleOpenEditList = () => {
+  const list = lists.value.find(l => l.id === currentSelectedListId.value)
+  if (list) { dialogList.value = list; showListDialog.value = true }
 }
 
-const handleAddGroup = () => { if (!currentSelectedListId.value) return; editingGroup.value = null; editingGroupListId.value = currentSelectedListId.value; isEditGroupMode.value = true }
+const handleMoveListUp = async () => { if (currentSelectedListId.value) { const idx = lists.value.findIndex(l => l.id === currentSelectedListId.value); if (idx > 0) { await missionStore.moveListUp(currentSelectedListId.value); nextTick(() => scrollListNavToActive()) } } }
+const handleMoveListDown = async () => { if (currentSelectedListId.value) { const idx = lists.value.findIndex(l => l.id === currentSelectedListId.value); if (idx < lists.value.length - 1) { await missionStore.moveListDown(currentSelectedListId.value); nextTick(() => scrollListNavToActive()) } } }
+const handleDeleteList = () => {
+  if (!currentSelectedListId.value) return
+  const list = lists.value.find(l => l.id === currentSelectedListId.value)
+  if (!list) return
 
-const handleGroupCommand = async (command: string, group: MissionGroup, listId: string, _groupIndex: number) => {
-  if (command === 'addMission') { currentListId.value = listId; currentGroupId.value = group.id; editingMission.value = null; isEditMode.value = true }
-  else if (command === 'edit') { editingGroup.value = group; editingGroupListId.value = listId; isEditGroupMode.value = true }
-  else if (command === 'moveUp') { await missionStore.moveGroupUp(listId, group.id); nextTick(() => scrollGroupNavToActive()) }
-  else if (command === 'moveDown') { await missionStore.moveGroupDown(listId, group.id); nextTick(() => scrollGroupNavToActive()) }
-  else if (command === 'delete') { missionStore.deleteGroupFromList(listId, group.id); logger.info('[清单] 删除分组', { listId, groupId: group.id, groupName: group.name }); ElMessage.success('分组已删除'); if (currentGroupId.value === group.id) { const list = lists.value.find(l => l.id === listId); if (list && list.groups.length > 0) currentGroupId.value = list.groups[0].id } }
+  const missionCount = getListMissionCount(list.id)
+  confirmDialogTitle.value = '删除清单'
+  confirmDialogMessage.value = `确定要删除清单「${list.name}」吗？${missionCount > 0 ? `该清单下有 ${missionCount} 个任务，将一起被删除。` : ''}`
+  pendingConfirmAction = async () => {
+    await missionStore.deleteList(list.id)
+    logger.info('[清单] 删除清单', { listId: list.id, listName: list.name })
+    ElMessage.success('清单已删除')
+    const f = lists.value[0]
+    if (f && f.groups.length > 0) {
+      currentListId.value = f.id
+      currentGroupId.value = f.groups[0].id
+      currentSelectedListId.value = f.id
+    } else {
+      currentListId.value = ''
+      currentGroupId.value = ''
+      currentSelectedListId.value = ''
+    }
+  }
+  showConfirmDialog.value = true
 }
 
-const handleEditMission = (mission: Mission) => { editingMission.value = mission; isEditMode.value = true }
+const handleOpenEditGroup = () => {
+  if (currentGroupId.value && currentSelectedListId.value) {
+    const group = currentSelectedListGroups.value.find(g => g.id === currentGroupId.value)
+    if (group) { dialogGroup.value = group; showGroupDialog.value = true }
+  }
+}
+const handleMoveGroupLeft = async () => { if (currentGroupId.value && currentSelectedListId.value) { const idx = currentSelectedListGroups.value.findIndex(g => g.id === currentGroupId.value); if (idx > 0) { await missionStore.moveGroupUp(currentSelectedListId.value, currentGroupId.value); nextTick(() => scrollGroupNavToActive()) } } }
+const handleMoveGroupRight = async () => { if (currentGroupId.value && currentSelectedListId.value) { const idx = currentSelectedListGroups.value.findIndex(g => g.id === currentGroupId.value); if (idx < currentSelectedListGroups.value.length - 1) { await missionStore.moveGroupDown(currentSelectedListId.value, currentGroupId.value); nextTick(() => scrollGroupNavToActive()) } } }
+const handleDeleteGroup = () => {
+  if (!currentGroupId.value || !currentSelectedListId.value) return
+  const group = currentSelectedListGroups.value.find(g => g.id === currentGroupId.value)
+  if (!group) return
 
-const handleMissionAction = (cmd: string, mission: Mission) => {
-  if (cmd === 'edit') handleEditMission(mission)
-  else if (cmd === 'move') handleMoveMission(mission)
-  else if (cmd === 'delete') deleteMission(mission.id)
+  const missionCount = getGroupMissionCount(group.id)
+  confirmDialogTitle.value = '删除分组'
+  confirmDialogMessage.value = `确定要删除分组「${group.name}」吗？${missionCount > 0 ? `该分组下有 ${missionCount} 个任务，将被移到默认分组。` : ''}`
+  pendingConfirmAction = async () => {
+    await missionStore.deleteGroupFromList(currentSelectedListId.value, group.id)
+    logger.info('[清单] 删除分组', { listId: currentSelectedListId.value, groupId: group.id, groupName: group.name })
+    ElMessage.success('分组已删除')
+    const remaining = (lists.value.find(l => l.id === currentSelectedListId.value)?.groups) || []
+    if (remaining.length > 0) {
+      currentGroupId.value = remaining[0].id
+    }
+  }
+  showConfirmDialog.value = true
+}
+const handleOpenAddMission = () => {
+  if (currentGroupId.value && currentSelectedListId.value) {
+    currentListId.value = currentSelectedListId.value
+    currentGroupId.value = currentGroupId.value
+    dialogMission.value = null
+    showMissionDialog.value = true
+  }
+}
+
+const openChildFormMove = (mission: Mission) => {
+  moveMissionId.value = mission.id
+  showMoveDialog.value = true
+  logger.info('[清单] 打开移动对话框', { missionId: mission.id, missionName: mission.name })
 }
 
 const toggleChecklistItem = (missionId: string, itemId: string, event: Event) => { event.stopPropagation(); const mission = missionStore.missions.find(m => m.id === missionId); const item = mission?.checklist.find(c => c.id === itemId); logger.info('[清单] 完成检查事项', { missionId, missionName: mission?.name, itemId, itemName: item?.text }); missionStore.toggleChecklistItem(missionId, itemId) }
 
-const getChecklistProgress = (checklist: { completed: boolean }[]) => { const c = checklist.filter(i => i.completed).length; return `${c}/${checklist.length}` }
-
-const deleteMission = (id: string) => { missionStore.deleteMission(id); logger.info('[清单] 删除任务', { missionId: id }); ElMessage.success('任务已删除') }
-
-const handleMissionComplete = (mission: Mission) => { if (mission.completed) missionStore.uncompleteMission(mission.id); else missionStore.completeMission(mission.id) }
-
-const handleMoveMission = (mission: Mission) => { movingMission.value = mission; moveTargetListId.value = mission.listId; moveTargetGroupId.value = mission.groupId; isMoveMode.value = true }
-
-const handleMoveCancel = () => { isMoveMode.value = false; movingMission.value = null }
-
-const handleMoveListChange = () => { const groups = moveTargetGroups.value; moveTargetGroupId.value = groups[0]?.id || '' }
-
-const confirmMove = () => {
-  if (!moveTargetListId.value) { ElMessage.warning('请选择目标清单'); return }
-  if (!moveTargetGroupId.value) { ElMessage.warning('请选择目标分组'); return }
-  if (movingMission.value) { missionStore.updateMission(movingMission.value.id, { listId: moveTargetListId.value, groupId: moveTargetGroupId.value }); logger.info('[清单] 移动任务', { missionId: movingMission.value.id, toListId: moveTargetListId.value, toGroupId: moveTargetGroupId.value }); isMoveMode.value = false; movingMission.value = null; ElMessage.success('任务已移动') }
+const showAddChecklist = (missionId: string) => {
+  addingChecklist.value[missionId] = true
+  newChecklistText.value[missionId] = ''
+  addingChecklistMissionId.value = missionId
 }
 
-const handleMissionFormSubmit = () => { if (editingMission.value) { logger.info('[清单] 编辑任务', { missionId: editingMission.value.id }) } else { logger.info('[清单] 添加任务') }; ElMessage.success(editingMission.value ? '任务已更新' : '任务已添加'); editingMission.value = null; isEditMode.value = false }
+const cancelAddChecklist = (missionId: string) => {
+  addingChecklist.value[missionId] = false
+  delete newChecklistText.value[missionId]
+  if (addingChecklistMissionId.value === missionId) addingChecklistMissionId.value = ''
+}
 
-const handleListFormSubmit = () => { if (editingList.value) { logger.info('[清单] 编辑清单', { listId: editingList.value.id, listName: editingList.value.name }) } else { logger.info('[清单] 添加清单') }; ElMessage.success(editingList.value ? '清单已更新' : '清单已创建'); isEditListMode.value = false; if (!editingList.value && missionStore.lists.length > 0) { const nl = missionStore.lists[missionStore.lists.length - 1]; currentListId.value = nl.id; currentSelectedListId.value = nl.id; if (nl.groups.length > 0) currentGroupId.value = nl.groups[0].id } }
+const handleAddChecklist = async (missionId: string) => {
+  const text = (newChecklistText.value[missionId] || '').trim()
+  if (!text) { cancelAddChecklist(missionId); return }
+  await missionStore.addChecklistItem(missionId, text)
+  logger.info('[清单] 快速添加检查事项', { missionId, text })
+  addingChecklistMissionId.value = ''
+  cancelAddChecklist(missionId)
+}
 
-const handleGroupFormSubmit = () => { if (editingGroup.value) { logger.info('[清单] 编辑分组', { groupId: editingGroup.value.id, groupName: editingGroup.value.name }) } else { logger.info('[清单] 添加分组') }; ElMessage.success(editingGroup.value ? '分组已更新' : '分组已创建'); isEditGroupMode.value = false }
+const dragSourceMissionId = ref('')
+const dragSourceItemId = ref('')
+const dragOverItemId = ref('')
+const editingChecklistId = ref('')
+const editingChecklistMissionId = ref('')
+const editingChecklistText = ref('')
+
+const onChecklistDragStart = (e: DragEvent, missionId: string, itemId: string) => {
+  dragSourceMissionId.value = missionId
+  dragSourceItemId.value = itemId
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+}
+
+const onChecklistDragOver = (_e: DragEvent, _missionId: string, itemId: string) => {
+  dragOverItemId.value = itemId
+}
+
+const onChecklistDragLeave = (itemId: string) => {
+  if (dragOverItemId.value === itemId) dragOverItemId.value = null
+}
+
+const onChecklistDrop = async (missionId: string, targetItemId: string) => {
+  dragOverItemId.value = null
+  const mission = missionStore.missions.find(m => m.id === missionId)
+  if (!mission) return
+  const fromIdx = mission.checklist.findIndex(c => c.id === dragSourceItemId.value)
+  const toIdx = mission.checklist.findIndex(c => c.id === targetItemId)
+  if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return
+  const items = [...mission.checklist]
+  const [moved] = items.splice(fromIdx, 1)
+  items.splice(toIdx, 0, moved)
+  mission.checklist = items
+  await missionStore.updateMission(missionId, { checklist: items })
+  logger.info('[清单] 拖拽排序检查事项', { missionId, fromIdx, toIdx })
+}
+
+const startEditChecklistItem = (missionId: string, item: { id: string; text: string }) => {
+  editingChecklistId.value = item.id
+  editingChecklistMissionId.value = missionId
+  editingChecklistText.value = item.text
+  nextTick(() => {
+    const el = document.querySelector('.checklist-edit-input textarea') as HTMLTextAreaElement
+    if (el) el.focus()
+  })
+}
+
+const finishEditChecklistItem = async () => {
+  const mission = missionStore.missions.find(m => m.id === editingChecklistMissionId.value)
+  if (!mission) { cancelEditChecklistItem(); return }
+  const item = mission.checklist.find(c => c.id === editingChecklistId.value)
+  if (!item) { cancelEditChecklistItem(); return }
+  const newText = editingChecklistText.value.trim()
+  if (newText && newText !== item.text) {
+    item.text = newText
+    await missionStore.updateMission(editingChecklistMissionId.value, { checklist: mission.checklist })
+    logger.info('[清单] 编辑检查事项', { missionId: editingChecklistMissionId.value, itemId: editingChecklistId.value, text: newText })
+  }
+  cancelEditChecklistItem()
+}
+
+const cancelEditChecklistItem = () => {
+  editingChecklistId.value = ''
+  editingChecklistMissionId.value = ''
+  editingChecklistText.value = ''
+}
+
+const editingNotesMissionId = ref('')
+const editingNotesText = ref('')
+
+const startEditNotes = (mission: Mission) => {
+  editingNotesMissionId.value = mission.id
+  editingNotesText.value = mission.notes || ''
+  nextTick(() => {
+    const el = document.querySelector('.mission-notes-edit-input textarea') as HTMLTextAreaElement
+    if (el) el.focus()
+  })
+}
+
+const finishEditNotes = async () => {
+  const mission = missionStore.missions.find(m => m.id === editingNotesMissionId.value)
+  if (!mission) { cancelEditNotes(); return }
+  const newText = editingNotesText.value.trim()
+  await missionStore.updateMission(editingNotesMissionId.value, { notes: newText || undefined })
+  logger.info('[清单] 编辑备注', { missionId: editingNotesMissionId.value, notes: newText })
+  cancelEditNotes()
+}
+
+const cancelEditNotes = () => {
+  editingNotesMissionId.value = ''
+  editingNotesText.value = ''
+}
+
+const getChecklistProgress = (checklist: { completed: boolean }[]) => { const c = checklist.filter(i => i.completed).length; return `${c}/${checklist.length}` }
+
+const deleteMission = async (id: string) => {
+  const mission = missionStore.missions.find(m => m.id === id)
+  const hadReminder = mission && mission.reminderStrategy !== 'none' && mission.date
+  await missionStore.deleteMission(id)
+  logger.info('[清单] 删除任务', { missionId: id })
+  ElMessage.success('任务已删除')
+  if (hadReminder) refreshReminders()
+}
+
+const handleMissionComplete = async (mission: Mission) => {
+  const hadReminder = mission.reminderStrategy !== 'none' && mission.date
+  if (mission.completed) await missionStore.uncompleteMission(mission.id)
+  else await missionStore.completeMission(mission.id)
+  if (hadReminder) refreshReminders()
+}
+
+const closeListDialog = () => { showListDialog.value = false; dialogList.value = null }
+const closeGroupDialog = () => { showGroupDialog.value = false; dialogGroup.value = null }
+const closeMissionDialog = () => { showMissionDialog.value = false; dialogMission.value = null }
+const closeMoveDialog = () => { showMoveDialog.value = false; moveMissionId.value = '' }
+const closeConfirmDialog = () => { showConfirmDialog.value = false; pendingConfirmAction = null }
+
+function onListSubmit(data: Record<string, unknown>) {
+  logger.info('[清单] 清单表单提交', { data })
+  if (dialogList.value) {
+    missionStore.updateList(dialogList.value.id, { name: data.name as string, color: data.color as string })
+    logger.info('[清单] 编辑清单', { listId: dialogList.value.id, listName: data.name })
+    ElMessage.success('清单已更新')
+  } else {
+    missionStore.addList(data.name as string, data.color as string)
+    logger.info('[清单] 添加清单')
+    ElMessage.success('清单已创建')
+    const nl = missionStore.lists[missionStore.lists.length - 1]
+    if (nl) {
+      currentListId.value = nl.id
+      currentSelectedListId.value = nl.id
+      if (nl.groups.length > 0) currentGroupId.value = nl.groups[0].id
+    }
+  }
+  closeListDialog()
+}
+
+function onGroupSubmit(data: Record<string, unknown>) {
+  logger.info('[清单] 分组表单提交', { data })
+  if (dialogGroup.value) {
+    missionStore.updateGroupInList(data.listId as string, data.groupId as string, { name: data.name as string, color: data.color as string })
+    logger.info('[清单] 编辑分组', { groupId: data.groupId, groupName: data.name })
+    ElMessage.success('分组已更新')
+  } else {
+    missionStore.addGroupToList(data.listId as string, data.name as string, data.color as string)
+    logger.info('[清单] 添加分组')
+    ElMessage.success('分组已创建')
+  }
+  closeGroupDialog()
+}
+
+async function onMissionSubmit(data: Record<string, unknown>) {
+  logger.info('[清单] 任务表单提交', { data })
+  const hasReminder = data.reminderStrategy !== 'none' && data.date
+  if (dialogMission.value) {
+    await missionStore.updateMission(dialogMission.value.id, data)
+    logger.info('[清单] 编辑任务', { missionId: dialogMission.value.id })
+    ElMessage.success('任务已更新')
+  } else {
+    await missionStore.addMission({ ...data, listId: data.listId || currentListId.value, groupId: data.groupId || currentGroupId.value } as any)
+    logger.info('[清单] 添加任务')
+    ElMessage.success('任务已添加')
+  }
+  closeMissionDialog()
+  if (hasReminder) refreshReminders()
+}
+
+async function onMoveSubmit(data: Record<string, unknown>) {
+  const mission = missionStore.missions.find(m => m.id === moveMissionId.value)
+  const hadReminder = mission && mission.reminderStrategy !== 'none' && mission.date
+  await missionStore.updateMission(moveMissionId.value, { listId: data.listId as string, groupId: data.groupId as string })
+  logger.info('[清单] 移动任务', { missionId: moveMissionId.value, toListId: data.listId, toGroupId: data.groupId })
+  ElMessage.success('任务已移动')
+  closeMoveDialog()
+  if (hadReminder) refreshReminders()
+}
+
+function handleConfirmAction() {
+  if (pendingConfirmAction) {
+    pendingConfirmAction()
+    pendingConfirmAction = null
+  }
+  showConfirmDialog.value = false
+}
 </script>
 
 <style scoped>
@@ -887,13 +1221,13 @@ const handleGroupFormSubmit = () => { if (editingGroup.value) { logger.info('[�
 .add-group-nav:hover { color: rgba(255, 255, 255, 0.8); }
 .add-group-nav .group-nav-name { color: rgba(255, 255, 255, 0.5); }
 
-.mission-form-page { display: flex; flex-direction: column; height: 100%; }
-.form-page-body { flex: 1; overflow-y: auto; padding: 24px; }
-
-.move-form-page { display: flex; flex-direction: column; height: 100%; }
-.move-form-body { flex: 1; overflow-y: auto; padding: 24px; }
-.move-form-container { max-width: 600px; width: 100%; margin: 0 auto; }
-.move-title { font-size: 18px; font-weight: 500; color: #fff; margin-bottom: 24px; text-align: center; }
+.op-nav-scroll-wrapper { height: 40px; border-top: 1px solid rgba(255, 255, 255, 0.06); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -ms-overflow-style: none; -webkit-overflow-scrolling: touch; }
+.op-nav-scroll-wrapper::-webkit-scrollbar { display: none; }
+.op-nav-inner { display: flex; align-items: center; justify-content: center; gap: 2px; padding: 4px 16px; white-space: nowrap; width: max-content; min-width: 100%; height: 100%; box-sizing: border-box; }
+.op-nav-item { padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; color: rgba(255, 255, 255, 0.7); transition: all 0.15s; user-select: none; height: 28px; display: flex; align-items: center; }
+.op-nav-item:hover { background: rgba(102, 126, 234, 0.15); color: #fff; }
+.op-nav-separator { width: 1px; height: 18px; background: rgba(255, 255, 255, 0.1); margin: 0 4px; flex-shrink: 0; }
+.mission-action-btn-inline { padding: 0 8px; font-size: 12px; height: 24px; min-height: 24px; }
 
 .main-content { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 .empty-state { flex: 1; display: flex; align-items: center; justify-content: center; }
@@ -933,7 +1267,12 @@ const handleGroupFormSubmit = () => { if (editingGroup.value) { logger.info('[�
 .remaining-time.future { color: rgba(255, 255, 255, 0.6); }
 
 .checklist-items-always { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; padding-left: 4px; }
-.mission-notes-content { margin-top: 8px; font-size: 13px; color: rgba(180, 170, 150, 0.75); line-height: 1.6; word-break: break-word; }
+.mission-notes-content { margin-top: 8px; font-size: 13px; color: rgba(180, 170, 150, 0.75); line-height: 1.6; word-break: break-word; white-space: pre-wrap; }
+.mission-notes-placeholder { margin-top: 8px; font-size: 13px; color: rgba(180, 170, 150, 0.35); line-height: 1.6; word-break: break-word; white-space: pre-wrap; cursor: pointer; transition: color 0.2s; }
+.mission-notes-placeholder:hover { color: rgba(180, 170, 150, 0.55); }
+.mission-notes-edit-wrapper { margin-top: 8px; }
+.mission-notes-edit-input { flex: 1; }
+.mission-notes-edit-input :deep(.el-textarea__inner) { background: rgba(255, 255, 255, 0.05) !important; border: 1px solid rgba(102, 126, 234, 0.3) !important; color: rgba(255, 255, 255, 0.9) !important; }
 .checklist-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: rgba(255, 255, 255, 0.7); padding: 6px 8px; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; }
 .checklist-item:hover { background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.9); }
 .checklist-item .check-icon { font-size: 16px; flex-shrink: 0; }
@@ -942,10 +1281,38 @@ const handleGroupFormSubmit = () => { if (editingGroup.value) { logger.info('[�
 .checklist-item.completed .check-text { text-decoration: line-through; }
 .checklist-item.completed .check-icon { color: #667eea; }
 
-.mission-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.checklist-add-row { margin-top: 2px; }
+.checklist-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.checklist-add-btn:hover { color: rgba(255, 255, 255, 0.7); background: rgba(255, 255, 255, 0.05); }
+
+.mission-actions { display: flex; align-items: center; gap: 1px; flex-shrink: 0; }
 .mission-action-btn { background: transparent !important; border: none !important; color: rgba(255,255,255,0.5); width: 32px; height: 32px; padding: 0; }
 .mission-action-btn:hover { background: rgba(255,255,255,0.1) !important; color: rgba(255,255,255,0.8); }
+.mission-icon-btn { width: 22px; height: 22px; padding: 0; min-width: auto; background: transparent !important; border: none !important; }
+.mission-icon-btn:nth-child(1) { color: #60a5fa; }
+.mission-icon-btn:nth-child(2) { color: #4ade80; }
+.mission-icon-btn:nth-child(3) { color: #f87171; }
+.mission-icon-btn:nth-child(1):hover { color: #93c5fd; }
+.mission-icon-btn:nth-child(2):hover { color: #86efac; }
+.mission-icon-btn:nth-child(3):hover { color: #fca5a5; }
+.mission-icon-btn-delete { color: #f87171; }
+.mission-icon-btn-delete:hover { color: #fca5a5; }
 .dropdown-delete { color: #ef4444 !important; }
+
+.checklist-drag-handle { font-size: 14px; color: rgba(255,255,255,0.25); cursor: grab; flex-shrink: 0; }
+.checklist-drag-handle:active { cursor: grabbing; }
+.checklist-item.drag-over { background: rgba(102,126,234,0.15); }
+.checklist-edit-input { flex: 1; }
 
 :deep(.el-checkbox__inner) { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
 :deep(.el-checkbox__input.is-checked .el-checkbox__inner) { background: #667eea; border-color: #667eea; }
@@ -956,4 +1323,133 @@ const handleGroupFormSubmit = () => { if (editingGroup.value) { logger.info('[�
 .form-footer { display: flex; justify-content: flex-end; gap: 12px; width: 100%; }
 .list-option { display: flex; align-items: center; gap: 8px; }
 .list-color-option { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+
+/* Dialog overlays */
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.dialog-container {
+  background: rgba(30, 28, 52, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  width: 420px;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.mission-dialog-container {
+  width: 580px;
+  max-height: 85vh;
+}
+.mission-dialog-container::-webkit-scrollbar { display: none; }
+
+.confirm-dialog-container {
+  width: 380px;
+  text-align: center;
+  padding: 32px;
+}
+
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 0;
+  flex-shrink: 0;
+}
+
+.dialog-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.dialog-close-btn {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 0;
+  min-width: auto;
+  width: 28px;
+  height: 28px;
+}
+
+.dialog-close-btn:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+}
+
+.mission-dialog-header { justify-content: center; position: relative; }
+.mission-dialog-title { flex: 1; text-align: center; }
+.mission-dialog-header-actions { position: absolute; right: 12px; top: 10px; display: flex; align-items: center; gap: 4px; }
+.mission-dialog-save-btn { font-size: 18px; color: rgba(255,255,255,0.6); padding: 0; min-width: auto; width: 28px; height: 28px; background: #1d1b34 !important; border-radius: 4px; }
+.mission-dialog-save-btn:hover { color: #667eea; background: #1d1b34 !important; }
+.rotate-check { transition: none; }
+.mission-dialog-close-btn { font-size: 18px; color: #ef4444; padding: 0; min-width: auto; width: 28px; height: 28px; background: #1d1b34 !important; border-radius: 4px; }
+.mission-dialog-close-btn:hover { color: #ff6b6b; background: #1d1b34 !important; }
+.mission-dialog-body { }
+
+.dialog-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 20px 20px;
+}
+
+.confirm-icon {
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.warning-icon {
+  font-size: 48px;
+  color: #f59e0b;
+}
+
+.confirm-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 12px 0;
+}
+
+.confirm-message {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0 0 24px 0;
+  line-height: 1.6;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.confirm-actions :deep(.el-button) {
+  padding: 8px 24px;
+  font-size: 14px;
+  border-radius: 8px;
+}
+
+.confirm-actions :deep(.el-button--danger) {
+  background: #ef4444;
+  border-color: #ef4444;
+}
+
+.confirm-actions :deep(.el-button--danger:hover) {
+  background: #dc2626;
+  border-color: #dc2626;
+}
 </style>

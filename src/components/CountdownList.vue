@@ -1,6 +1,5 @@
 <template>
   <div class="countdown-container">
-    <!-- 顶部区域分类导航区 -->
     <div class="top-nav-area">
       <div class="category-nav-scroll-wrapper" ref="categoryNavRef">
         <div class="category-nav-inner">
@@ -25,44 +24,52 @@
             <span class="nav-icon">{{ cat.icon }}</span>
             <span class="nav-name">{{ cat.label }}</span>
             <span class="nav-count">{{ getCategoryCount(cat.value) }}</span>
-            <el-dropdown
-                trigger="click"
-                @command="(cmd: string) => handleCategoryCommand(cmd, cat.value)"
-                @click.stop
-            >
-              <el-button type="info" size="small" text :icon="MoreFilled" class="nav-more" @click.stop />
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="edit">编辑分类</el-dropdown-item>
-                  <el-dropdown-item command="add">添加倒数日</el-dropdown-item>
-                  <el-dropdown-item v-if="!isDefaultCategory(cat.value)" command="delete" divided>删除分类</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </div>
-          <div class="nav-item add-nav-item" :ref="setCategoryNavItemRef" @click="handleAddCategory">
-            <el-icon><Plus /></el-icon>
-            <span class="nav-name">添加分类</span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 主内容区 -->
+    <div class="ops-nav-area">
+      <div class="ops-nav-scroll-wrapper" ref="opsNavRef">
+        <div class="ops-nav-inner">
+          <div class="ops-item" :ref="setOpsNavItemRef" @click="handleEditCurrentCategory">
+            <span class="ops-icon">✏️</span>
+            <span class="ops-name">编辑分类</span>
+          </div>
+          <div class="ops-item" :ref="setOpsNavItemRef" @click="handleAddCategory">
+            <span class="ops-icon">➕</span>
+            <span class="ops-name">添加分类</span>
+          </div>
+          <div class="ops-item" :ref="setOpsNavItemRef" @click="handleDeleteCurrentCategory">
+            <span class="ops-icon">🗑️</span>
+            <span class="ops-name">删除分类</span>
+          </div>
+          <div class="ops-item" :ref="setOpsNavItemRef" @click="moveCategoryLeft">
+            <span class="ops-icon">⬅️</span>
+            <span class="ops-name">左移分类</span>
+          </div>
+          <div class="ops-item" :ref="setOpsNavItemRef" @click="moveCategoryRight">
+            <span class="ops-icon">➡️</span>
+            <span class="ops-name">右移分类</span>
+          </div>
+          <div class="ops-item ops-add-milestone" :ref="setOpsNavItemRef" @click="handleAddMilestone">
+            <span class="ops-icon">📅</span>
+            <span class="ops-name">添加倒数日</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="main-content">
       <div class="content-wrapper">
-      <template v-if="!isFormMode">
-        <!-- 主内容 -->
         <div class="content-body">
           <el-scrollbar>
-            <!-- 空状态 -->
             <el-empty
                 v-if="milestones.length === 0"
-                description="暂无倒数日，点击左侧分类添加你的第一个重要时刻"
+                description="暂无倒数日，点击下方操作栏添加你的第一个重要时刻"
                 :image-size="120"
             />
 
-            <!-- 筛选结果为空 -->
             <el-empty
                 v-else-if="filteredMilestones.length === 0"
                 description="该分类下暂无倒数日"
@@ -70,7 +77,6 @@
             />
 
             <template v-else>
-              <!-- 星标倒数日 -->
               <div v-if="pinnedMilestones.length > 0" class="section pinned-section">
                 <div class="section-title">
                   <el-icon><Star /></el-icon>
@@ -82,26 +88,20 @@
                       :key="milestone.id"
                       class="milestone-card pinned"
                       :class="{ 'system-card': milestone.isSystem }"
-                      @click="!milestone.isSystem && handleEditMilestone(milestone)"
                   >
-                    <div class="card-header" @click.stop>
+                    <div class="card-header">
                       <span class="category-badge">
                         {{ getCategoryIcon(milestone.category) }}
                       </span>
-                      <el-dropdown v-if="!milestone.isSystem" trigger="click" @command="(cmd: string) => handleCommand(cmd, milestone)">
-                        <el-button type="info" size="small" text :icon="MoreFilled" @click.stop />
-                        <template #dropdown>
-                          <el-dropdown-menu>
-                            <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                            <el-dropdown-item command="unpin">取消星标</el-dropdown-item>
-                            <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                          </el-dropdown-menu>
-                        </template>
-                      </el-dropdown>
-                      <span v-else class="system-badge">系统</span>
+                      <div class="card-actions">
+                        <el-button v-if="!milestone.isSystem" type="info" size="small" text :icon="Edit" class="card-btn" @click.stop="handleEditMilestone(milestone)" title="编辑" />
+                        <el-button v-if="!milestone.isSystem" type="warning" size="small" text :icon="Star" class="card-btn card-btn-unpin" @click.stop="handleCommand('unpin', milestone)" title="取消星标" />
+                        <el-button v-if="!milestone.isSystem" type="danger" size="small" text :icon="Delete" class="card-btn" @click.stop="handleCommand('delete', milestone)" title="删除" />
+                        <span v-if="milestone.isSystem" class="system-badge">系统</span>
+                      </div>
                     </div>
 
-                    <h3 class="milestone-name">{{ milestone.name }}</h3>
+                    <h3 class="milestone-name" @click="!milestone.isSystem && handleEditMilestone(milestone)">{{ milestone.name }}</h3>
 
                     <div class="milestone-date">
                       <el-icon><Calendar /></el-icon>
@@ -124,7 +124,6 @@
                 </div>
               </div>
 
-              <!-- 即将到来 -->
               <div v-if="upcomingMilestones.length > 0" class="section upcoming-section">
                 <div class="section-title">
                   <el-icon><Clock /></el-icon>
@@ -136,25 +135,19 @@
                       :key="milestone.id"
                       class="milestone-card"
                       :class="{ 'urgent': isUrgent(milestone) }"
-                      @click="handleEditMilestone(milestone)"
                   >
-                    <div class="card-header" @click.stop>
+                    <div class="card-header">
                       <span class="category-badge">
                         {{ getCategoryIcon(milestone.category) }}
                       </span>
-                      <el-dropdown trigger="click" @command="(cmd: string) => handleCommand(cmd, milestone)">
-                        <el-button type="info" size="small" text :icon="MoreFilled" @click.stop />
-                        <template #dropdown>
-                          <el-dropdown-menu>
-                            <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                            <el-dropdown-item command="pin">设为星标</el-dropdown-item>
-                            <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                          </el-dropdown-menu>
-                        </template>
-                      </el-dropdown>
+                      <div class="card-actions">
+                        <el-button type="info" size="small" text :icon="Edit" class="card-btn" @click.stop="handleEditMilestone(milestone)" title="编辑" />
+                        <el-button type="warning" size="small" text :icon="Star" class="card-btn" @click.stop="handleCommand('pin', milestone)" title="设为星标" />
+                        <el-button type="danger" size="small" text :icon="Delete" class="card-btn" @click.stop="handleCommand('delete', milestone)" title="删除" />
+                      </div>
                     </div>
 
-                    <h3 class="milestone-name">{{ milestone.name }}</h3>
+                    <h3 class="milestone-name" @click="handleEditMilestone(milestone)">{{ milestone.name }}</h3>
 
                     <div class="milestone-date">
                       <el-icon><Calendar /></el-icon>
@@ -177,7 +170,6 @@
                 </div>
               </div>
 
-              <!-- 未来展望 -->
               <div v-if="futureMilestones.length > 0" class="section future-section">
                 <div class="section-title">
                   <el-icon><Sunny /></el-icon>
@@ -188,25 +180,19 @@
                       v-for="milestone in futureMilestones"
                       :key="milestone.id"
                       class="milestone-card"
-                      @click="handleEditMilestone(milestone)"
                   >
-                    <div class="card-header" @click.stop>
+                    <div class="card-header">
                       <span class="category-badge">
                         {{ getCategoryIcon(milestone.category) }}
                       </span>
-                      <el-dropdown trigger="click" @command="(cmd: string) => handleCommand(cmd, milestone)">
-                        <el-button type="info" size="small" text :icon="MoreFilled" @click.stop />
-                        <template #dropdown>
-                          <el-dropdown-menu>
-                            <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                            <el-dropdown-item command="pin">设为星标</el-dropdown-item>
-                            <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                          </el-dropdown-menu>
-                        </template>
-                      </el-dropdown>
+                      <div class="card-actions">
+                        <el-button type="info" size="small" text :icon="Edit" class="card-btn" @click.stop="handleEditMilestone(milestone)" title="编辑" />
+                        <el-button type="warning" size="small" text :icon="Star" class="card-btn" @click.stop="handleCommand('pin', milestone)" title="设为星标" />
+                        <el-button type="danger" size="small" text :icon="Delete" class="card-btn" @click.stop="handleCommand('delete', milestone)" title="删除" />
+                      </div>
                     </div>
 
-                    <h3 class="milestone-name">{{ milestone.name }}</h3>
+                    <h3 class="milestone-name" @click="handleEditMilestone(milestone)">{{ milestone.name }}</h3>
 
                     <div class="milestone-date">
                       <el-icon><Calendar /></el-icon>
@@ -229,7 +215,6 @@
                 </div>
               </div>
 
-              <!-- 时光印记 -->
               <div v-if="passedMilestones.length > 0" class="section passed-section">
                 <div class="section-title">
                   <el-icon><Timer /></el-icon>
@@ -240,25 +225,19 @@
                       v-for="milestone in passedMilestones"
                       :key="milestone.id"
                       class="milestone-card passed"
-                      @click="handleEditMilestone(milestone)"
                   >
-                    <div class="card-header" @click.stop>
+                    <div class="card-header">
                       <span class="category-badge">
                         {{ getCategoryIcon(milestone.category) }}
                       </span>
-                      <el-dropdown trigger="click" @command="(cmd: string) => handleCommand(cmd, milestone)">
-                        <el-button type="info" size="small" text :icon="MoreFilled" @click.stop />
-                        <template #dropdown>
-                          <el-dropdown-menu>
-                            <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                            <el-dropdown-item command="pin">设为星标</el-dropdown-item>
-                            <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                          </el-dropdown-menu>
-                        </template>
-                      </el-dropdown>
+                      <div class="card-actions">
+                        <el-button type="info" size="small" text :icon="Edit" class="card-btn" @click.stop="handleEditMilestone(milestone)" title="编辑" />
+                        <el-button type="warning" size="small" text :icon="Star" class="card-btn" @click.stop="handleCommand('pin', milestone)" title="设为星标" />
+                        <el-button type="danger" size="small" text :icon="Delete" class="card-btn" @click.stop="handleCommand('delete', milestone)" title="删除" />
+                      </div>
                     </div>
 
-                    <h3 class="milestone-name">{{ milestone.name }}</h3>
+                    <h3 class="milestone-name" @click="handleEditMilestone(milestone)">{{ milestone.name }}</h3>
 
                     <div class="milestone-date">
                       <el-icon><Calendar /></el-icon>
@@ -283,102 +262,17 @@
             </template>
           </el-scrollbar>
         </div>
-      </template>
-
-      <template v-else>
-        <!-- 添加/编辑倒数日界面 -->
-        <div class="milestone-form-page">
-          <div class="form-page-header">
-            <h2 class="form-page-title">{{ editingMilestone ? '编辑倒数日' : '添加倒数日' }}</h2>
-          </div>
-          <div class="form-page-body">
-            <el-scrollbar>
-              <div class="form-container">
-                <el-form :model="milestoneForm" :rules="milestoneRules" ref="milestoneFormRef" label-width="80px" class="milestone-form">
-                  <el-form-item label="名称" prop="name">
-                    <el-input v-model="milestoneForm.name" placeholder="这个倒数日叫什么？" maxlength="50" show-word-limit />
-                  </el-form-item>
-
-                  <el-form-item label="类型" prop="countMode">
-                    <el-radio-group v-model="milestoneForm.countMode" class="count-mode-group">
-                      <el-radio value="countdown">倒数日</el-radio>
-                      <el-radio value="countup">正数日</el-radio>
-                    </el-radio-group>
-                    <p class="count-mode-hint">
-                      倒数日：距离目标日期还有多久；正数日：从所选日期起已过去多少天。
-                    </p>
-                  </el-form-item>
-
-                  <el-form-item :label="milestoneForm.countMode === 'countup' ? '起始日期' : '目标日期'" prop="targetDate">
-                    <LunarDatePicker
-                        v-model="milestoneForm.targetDate"
-                        :placeholder="milestoneForm.countMode === 'countup' ? '选择起始日期' : '选择目标日期'"
-                        full-width
-                    />
-                  </el-form-item>
-
-                  <el-form-item label="分类" prop="category">
-                    <el-select v-model="milestoneForm.category" placeholder="选择分类" style="width: 100%">
-                      <el-option
-                          v-for="cat in categories"
-                          :key="cat.value"
-                          :label="cat.label"
-                          :value="cat.value"
-                      >
-                        <span class="category-option">
-                          <span class="category-icon">{{ cat.icon }}</span>
-                          <span class="category-label">{{ cat.label }}</span>
-                        </span>
-                      </el-option>
-                    </el-select>
-                  </el-form-item>
-
-                  <el-form-item label="描述">
-                    <el-input
-                        v-model="milestoneForm.description"
-                        type="textarea"
-                        :rows="3"
-                        placeholder="添加一些备注（可选）"
-                        maxlength="200"
-                        show-word-limit
-                    />
-                  </el-form-item>
-
-                  <el-form-item label="提醒" v-if="milestoneForm.countMode !== 'countup'">
-                    <div class="reminder-row">
-                      <el-select v-model="milestoneForm.reminderStrategy" placeholder="选择提醒方式" style="width: 180px">
-                        <el-option label="不提醒" value="none" />
-                        <el-option label="准时提醒" value="on_time" />
-                        <el-option label="提前提醒" value="advance" />
-                      </el-select>
-                      <template v-if="milestoneForm.reminderStrategy === 'advance'">
-                        <span class="reminder-label">提前</span>
-                        <el-input-number v-model="milestoneForm.reminderDays" :min="0" :max="365" controls-position="right" style="width: 80px" />
-                        <span class="reminder-label">天</span>
-                        <el-input-number v-model="milestoneForm.reminderHours" :min="0" :max="23" controls-position="right" style="width: 80px" />
-                        <span class="reminder-label">小时</span>
-                        <el-input-number v-model="milestoneForm.reminderMinutes" :min="milestoneForm.reminderDays === 0 && milestoneForm.reminderHours === 0 ? 1 : 0" :max="59" controls-position="right" style="width: 80px" />
-                        <span class="reminder-label">分钟</span>
-                      </template>
-                    </div>
-                  </el-form-item>
-
-                  <div class="form-actions">
-                    <el-button @click="isFormMode = false">取消</el-button>
-                    <el-button type="primary" @click="handleMilestoneFormSubmit">
-                      {{ editingMilestone ? '保存' : '添加' }}
-                    </el-button>
-                  </div>
-                </el-form>
-              </div>
-            </el-scrollbar>
-          </div>
-        </div>
-      </template>
       </div>
     </div>
 
-    <!-- 分类表单对话框 -->
+    <CountdownForm
+        v-model:visible="countdownFormVisible"
+        :milestone="editingMilestoneForForm"
+        :categories="categories"
+        :default-category="currentCategory || 'life'"
+        @submit="handleCountdownFormSubmit"
+    />
+
     <el-dialog
         v-model="categoryFormVisible"
         :title="editingCategory ? '编辑分类' : '添加分类'"
@@ -413,12 +307,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated, onUnmounted, watch, nextTick, onBeforeUpdate } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted, watch, nextTick, onBeforeUpdate, inject, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Calendar, Clock, Timer, Star, MoreFilled, Sunny, Bell } from '@element-plus/icons-vue'
+import { Calendar, Clock, Timer, Star, Sunny, Bell, Edit, Delete } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
-import LunarDatePicker from './LunarDatePicker.vue'
-import { getData, setData, getSystemStateField, setSystemStateField } from '../services/storageService'
+import CountdownForm from './CountdownForm.vue'
+import { setData, getSystemStateField, setSystemStateField } from '../services/storageService'
 import { logger } from '../lib/logger'
 
 interface Milestone {
@@ -447,7 +341,6 @@ interface Category {
 }
 
 const SYSTEM_MILESTONE_ID = 'system-usage-days'
-const BIRTHDAY_MILESTONE_ID = 'user-birthday'
 
 const isSystemUsageMilestone = (m: Milestone): boolean => m.id === SYSTEM_MILESTONE_ID
 
@@ -477,19 +370,26 @@ const COLOR_OPTIONS = ['#f472b6', '#ec4899', '#a855f7', '#8b5cf6', '#06b6d4', '#
 const STORAGE_KEY = ['countdown', 'countdowns'] as const
 const CATEGORY_KEY = ['countdown', 'categories'] as const
 
-const milestones = ref<Milestone[]>([])
-const categories = ref<Category[]>([...DEFAULT_CATEGORIES])
+const milestones = inject<Ref<Milestone[]>>('countdownMilestones', ref<Milestone[]>([]))
+const categories = inject<Ref<Category[]>>('countdownCategories', ref<Category[]>([...DEFAULT_CATEGORIES]))
 const currentCategory = ref('')
 
 const categoryNavRef = ref<HTMLElement>()
+const opsNavRef = ref<HTMLElement>()
 const categoryNavItemsRef = ref<HTMLElement[]>([])
+const opsNavItemsRef = ref<HTMLElement[]>([])
 
 const clearNavRefs = () => {
   categoryNavItemsRef.value = []
+  opsNavItemsRef.value = []
 }
 
 const setCategoryNavItemRef = (el: any) => {
   if (el) categoryNavItemsRef.value.push(el)
+}
+
+const setOpsNavItemRef = (el: any) => {
+  if (el) opsNavItemsRef.value.push(el)
 }
 
 const scrollToCenter = (container: HTMLElement, target: HTMLElement) => {
@@ -528,6 +428,24 @@ const initCategoryNavDrag = () => {
   el.addEventListener('touchmove', (e: TouchEvent) => { const walk = categoryNavDragStartX - e.touches[0].pageX; el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, categoryNavDragScrollLeft + walk)) }, { passive: true })
 }
 
+let isOpsNavDragging = false
+let opsNavDragStartX = 0
+let opsNavDragScrollLeft = 0
+let isOpsNavDragInitialized = false
+
+const initOpsNavDrag = () => {
+  if (isOpsNavDragInitialized) return
+  isOpsNavDragInitialized = true
+  const el = opsNavRef.value
+  if (!el) return
+  el.addEventListener('mousedown', (e: MouseEvent) => { if (e.button === 0) { isOpsNavDragging = true; opsNavDragStartX = e.pageX; opsNavDragScrollLeft = el.scrollLeft; el.style.cursor = 'grabbing'; el.style.userSelect = 'none' } })
+  window.addEventListener('mousemove', (e: MouseEvent) => { if (!isOpsNavDragging) return; e.preventDefault(); const walk = opsNavDragStartX - e.pageX; el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, opsNavDragScrollLeft + walk)) })
+  const endOpsDrag = () => { if (!isOpsNavDragging) return; isOpsNavDragging = false; el.style.cursor = ''; el.style.userSelect = '' }
+  window.addEventListener('mouseup', endOpsDrag); window.addEventListener('mouseleave', endOpsDrag)
+  el.addEventListener('touchstart', (e: TouchEvent) => { opsNavDragStartX = e.touches[0].pageX; opsNavDragScrollLeft = el.scrollLeft }, { passive: true })
+  el.addEventListener('touchmove', (e: TouchEvent) => { const walk = opsNavDragStartX - e.touches[0].pageX; el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, opsNavDragScrollLeft + walk)) }, { passive: true })
+}
+
 const isDefaultCategory = (value: string): boolean => {
   return DEFAULT_CATEGORIES.some(c => c.value === value)
 }
@@ -543,12 +461,6 @@ watch(currentCategory, async () => {
   const state = { currentCategory: currentCategory.value }
   await setSystemStateField('countdown', state)
   scrollCategoryNavToActive()
-})
-
-const currentCategoryTitle = computed(() => {
-  if (!currentCategory.value) return '全部'
-  const cat = categories.value.find(c => c.value === currentCategory.value)
-  return cat?.label || '未知分类'
 })
 
 const filteredMilestones = computed(() => {
@@ -667,12 +579,6 @@ const formatDate = (date: string): string => {
   return dayjs(date).format('YYYY年MM月DD日')
 }
 
-const getCategoryColor = (categoryValue: string): string => {
-  if (!categoryValue) return '#6b7280'
-  const cat = categories.value.find(c => c.value === categoryValue)
-  return cat?.color || '#6b7280'
-}
-
 const getCategoryIcon = (categoryValue: string): string => {
   if (!categoryValue) return '📌'
   const cat = categories.value.find(c => c.value === categoryValue)
@@ -688,278 +594,62 @@ const saveCategories = async () => {
   await setData(CATEGORY_KEY[0], CATEGORY_KEY[1], categories.value)
 }
 
-const sendCountdownNotification = (title: string, body: string) => {
-  if (!('Notification' in window)) return
-  if (Notification.permission === 'granted') {
-    new Notification(title, { body })
-  } else if (Notification.permission !== 'denied') {
-    Notification.requestPermission().then((perm) => {
-      if (perm === 'granted') new Notification(title, { body })
-    })
-  }
-}
-
-const triggeredCountdownReminders = new Set<string>()
-
-const checkCountdownReminders = () => {
-  const now = dayjs()
-  milestones.value.forEach(milestone => {
-    if (milestone.reminderStrategy === 'none' || !milestone.reminderStrategy) return
-    if (!milestone.targetDate) return
-
-    let triggerTime = dayjs(milestone.targetDate + 'T00:00:00')
-    if (milestone.reminderStrategy === 'advance') {
-      const offsetMinutes = (milestone.reminderDays || 0) * 1440 + (milestone.reminderHours || 0) * 60 + (milestone.reminderMinutes || 0)
-      triggerTime = triggerTime.subtract(offsetMinutes, 'minute')
-    }
-
-    const reminderKey = milestone.id + '_' + milestone.targetDate
-    const diffMs = now.diff(triggerTime, 'millisecond')
-    if (diffMs >= 0 && diffMs < 3600000 && !triggeredCountdownReminders.has(reminderKey)) {
-      triggeredCountdownReminders.add(reminderKey)
-      sendCountdownNotification('倒数日提醒', `「${milestone.name}」即将到达`)
-      setTimeout(() => triggeredCountdownReminders.delete(reminderKey), 3600000)
-    }
-  })
-}
-
-let countdownReminderInterval: ReturnType<typeof setInterval> | null = null
-
-const startCountdownReminderChecker = () => {
-  if (countdownReminderInterval) clearInterval(countdownReminderInterval)
-  countdownReminderInterval = setInterval(checkCountdownReminders, 30000)
-  checkCountdownReminders()
-}
-
-const stopCountdownReminderChecker = () => {
-  if (countdownReminderInterval) { clearInterval(countdownReminderInterval); countdownReminderInterval = null }
-}
-
-const loadData = async () => {
-  try {
-    const savedCategories = await getData<Category[]>(CATEGORY_KEY[0], CATEGORY_KEY[1])
-    if (savedCategories && savedCategories.length > 0) {
-      categories.value = savedCategories
-    }
-
-    const saved = await getData<Milestone[]>(STORAGE_KEY[0], STORAGE_KEY[1])
-    if (saved) {
-      milestones.value = saved.map((m: Milestone) => ({
-        id: m.id || Date.now().toString() + Math.random(),
-        name: m.name || '未命名里程碑',
-        targetDate: m.targetDate || dayjs().format('YYYY-MM-DD'),
-        category: m.category || 'life',
-        description: m.description || '',
-        countMode: m.countMode === 'countup' ? 'countup' : 'countdown',
-        pinned: m.pinned === true,
-        isSystem: m.isSystem || false,
-        createdAt: m.createdAt || new Date().toISOString(),
-        updatedAt: m.updatedAt || new Date().toISOString(),
-        reminderStrategy: m.reminderStrategy || 'none',
-        reminderDays: m.reminderDays || 0,
-        reminderHours: m.reminderHours || 0,
-        reminderMinutes: m.reminderMinutes || 0
-      }))
-      logger.info('[倒数日] 加载数据', { count: milestones.value.length, withReminder: milestones.value.filter(m => m.reminderStrategy !== 'none').length })
-    }
-
-    const authStore = await import('../stores/authStore').then(m => m.useAuthStore())
-    const userAny = authStore.user as { createdAt?: string; created_at?: string } | null | undefined
-    const startDate =
-        authStore.profile?.created_at ||
-        userAny?.createdAt ||
-        userAny?.created_at ||
-        new Date().toISOString()
-    const registrationDay = dayjs(startDate).format('YYYY-MM-DD')
-
-    const systemMilestoneIndex = milestones.value.findIndex(m => m.id === SYSTEM_MILESTONE_ID)
-    if (systemMilestoneIndex === -1) {
-      milestones.value.unshift({
-        id: SYSTEM_MILESTONE_ID,
-        name: '已使用地球 Online 生存日记',
-        targetDate: registrationDay,
-        category: 'anniversary',
-        description: '记录你在这个宇宙中的旅程',
-        pinned: true,
-        isSystem: true,
-        createdAt: startDate,
-        updatedAt: new Date().toISOString()
-      })
-      await saveData()
-    } else {
-      const existingMilestone = milestones.value[systemMilestoneIndex]
-      const needUpdate =
-          existingMilestone.targetDate !== registrationDay ||
-          existingMilestone.category !== 'anniversary'
-      if (needUpdate) {
-        milestones.value[systemMilestoneIndex] = {
-          ...existingMilestone,
-          targetDate: registrationDay,
-          category: 'anniversary',
-          updatedAt: new Date().toISOString()
-        }
-        await saveData()
-      }
-    }
-
-    const birthday = (authStore.profile as any)?.birthday
-
-    const birthdayMilestoneIndex = milestones.value.findIndex(m => m.id === BIRTHDAY_MILESTONE_ID)
-    if (birthday && birthdayMilestoneIndex === -1) {
-      const [, month, day] = birthday.split('-').map(Number)
-      const birthdayDate = `${new Date().getFullYear()}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-      milestones.value.push({
-        id: BIRTHDAY_MILESTONE_ID,
-        name: '我的生日',
-        targetDate: birthdayDate,
-        category: 'birthday',
-        description: '',
-        pinned: true,
-        isSystem: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        reminderStrategy: 'advance',
-        reminderDays: 1,
-        reminderHours: 0,
-        reminderMinutes: 0
-      })
-      await saveData()
-    } else if (!birthday && birthdayMilestoneIndex > -1) {
-      milestones.value.splice(birthdayMilestoneIndex, 1)
-      await saveData()
-    } else if (birthday && birthdayMilestoneIndex > -1) {
-      const [, month, day] = birthday.split('-').map(Number)
-      const birthdayDate = `${new Date().getFullYear()}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-      const existingMilestone = milestones.value[birthdayMilestoneIndex]
-      if (existingMilestone.targetDate !== birthdayDate || !existingMilestone.reminderStrategy) {
-        milestones.value[birthdayMilestoneIndex] = {
-          ...existingMilestone,
-          targetDate: birthdayDate,
-          reminderStrategy: existingMilestone.reminderStrategy || 'advance',
-          reminderDays: existingMilestone.reminderDays || 1,
-          reminderHours: existingMilestone.reminderHours || 0,
-          reminderMinutes: existingMilestone.reminderMinutes || 0,
-          updatedAt: new Date().toISOString()
-        }
-        await saveData()
-      }
-    }
-  } catch (e) {
-    console.error('Failed to load data:', e)
-    milestones.value = []
-  }
-}
-
 const selectCategory = (category: string) => {
   logger.info('[倒数日] 切换分类', { category: category || '全部' })
   currentCategory.value = category
-  if (isFormMode.value) {
-    isFormMode.value = false
-  }
 }
 
-const isFormMode = ref(false)
-const editingMilestone = ref<Milestone | null>(null)
-const milestoneFormRef = ref()
-const milestoneForm = ref({
-  name: '',
-  targetDate: dayjs().format('YYYY-MM-DD'),
-  category: 'life',
-  description: '',
-  countMode: 'countdown' as 'countdown' | 'countup',
-  reminderStrategy: 'none' as string,
-  reminderDays: 0,
-  reminderHours: 0,
-  reminderMinutes: 0
-})
-
-const milestoneRules = {
-  name: [
-    { required: true, message: '请输入倒数日名称', trigger: 'blur' },
-    { min: 1, max: 50, message: '名称长度在 1 到 50 个字符', trigger: 'blur' }
-  ],
-  targetDate: [
-    { required: true, message: '请选择目标日期', trigger: 'change' }
-  ],
-  category: [
-    { required: true, message: '请选择分类', trigger: 'change' }
-  ]
-}
-
-const openFormMode = () => {
-  isFormMode.value = true
-}
+const countdownFormVisible = ref(false)
+const editingMilestoneForForm = ref<Milestone | null>(null)
 
 const handleAddMilestone = () => {
-  editingMilestone.value = null
-  milestoneForm.value = {
-    name: '',
-    targetDate: dayjs().format('YYYY-MM-DD'),
-    category: currentCategory.value || 'life',
-    description: '',
-    countMode: 'countdown',
-    reminderStrategy: 'none',
-    reminderDays: 0,
-    reminderHours: 0,
-    reminderMinutes: 0
-  }
-  openFormMode()
+  editingMilestoneForForm.value = null
+  countdownFormVisible.value = true
+  logger.info('[倒数日] 打开添加倒数日对话框')
 }
 
 const handleEditMilestone = (milestone: Milestone) => {
-  editingMilestone.value = { ...milestone }
-  milestoneForm.value = {
-    name: milestone.name,
-    targetDate: milestone.targetDate,
-    category: milestone.category,
-    description: milestone.description,
-    countMode: milestone.countMode === 'countup' ? 'countup' : 'countdown',
-    reminderStrategy: milestone.reminderStrategy || 'none',
-    reminderDays: milestone.reminderDays || 0,
-    reminderHours: milestone.reminderHours || 0,
-    reminderMinutes: milestone.reminderMinutes || 0
-  }
-  openFormMode()
+  editingMilestoneForForm.value = { ...milestone }
+  countdownFormVisible.value = true
+  logger.info('[倒数日] 打开编辑倒数日对话框', { id: milestone.id, name: milestone.name })
 }
 
-const handleMilestoneFormSubmit = async () => {
-  if (!milestoneFormRef.value) return
-  await milestoneFormRef.value.validate((valid: boolean) => {
-    if (!valid) return
-    if (editingMilestone.value) {
-      const index = milestones.value.findIndex(m => m.id === editingMilestone.value!.id)
-      if (index > -1) {
-        milestones.value[index] = {
-          ...milestones.value[index],
-          ...milestoneForm.value,
-          updatedAt: new Date().toISOString()
-        }
-        logger.info('[倒数日] 编辑倒数日', { id: editingMilestone.value.id, name: milestoneForm.value.name, reminder: milestoneForm.value.reminderStrategy === 'advance' ? `提前${milestoneForm.value.reminderDays}天${milestoneForm.value.reminderHours}小时${milestoneForm.value.reminderMinutes}分钟` : milestoneForm.value.reminderStrategy })
-        ElMessage.success('更新成功')
+const handleCountdownFormSubmit = (data: Partial<Milestone>) => {
+  const hasReminder = data.reminderStrategy === 'advance'
+  if (editingMilestoneForForm.value) {
+    const index = milestones.value.findIndex(m => m.id === editingMilestoneForForm.value!.id)
+    if (index > -1) {
+      milestones.value[index] = {
+        ...milestones.value[index],
+        ...data,
+        updatedAt: new Date().toISOString()
       }
-    } else {
-      const newMilestone: Milestone = {
-        id: Date.now().toString(),
-        name: milestoneForm.value.name,
-        targetDate: milestoneForm.value.targetDate,
-        category: milestoneForm.value.category || 'life',
-        description: milestoneForm.value.description,
-        countMode: milestoneForm.value.countMode === 'countup' ? 'countup' : 'countdown',
-        pinned: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        reminderStrategy: milestoneForm.value.reminderStrategy,
-        reminderDays: milestoneForm.value.reminderDays,
-        reminderHours: milestoneForm.value.reminderHours,
-        reminderMinutes: milestoneForm.value.reminderMinutes
-      }
-      milestones.value.push(newMilestone)
-      logger.info('[倒数日] 添加倒数日', { name: milestoneForm.value.name, reminder: milestoneForm.value.reminderStrategy === 'advance' ? `提前${milestoneForm.value.reminderDays}天${milestoneForm.value.reminderHours}小时${milestoneForm.value.reminderMinutes}分钟` : milestoneForm.value.reminderStrategy })
-      ElMessage.success('添加成功')
+      logger.info('[倒数日] 编辑倒数日', { id: editingMilestoneForForm.value.id, name: data.name, reminder: data.reminderStrategy === 'advance' ? `提前${data.reminderDays}天${data.reminderHours}小时${data.reminderMinutes}分钟` : data.reminderStrategy })
+      ElMessage.success('更新成功')
     }
-    saveData()
-    isFormMode.value = false
-  })
+  } else {
+    const newMilestone: Milestone = {
+      id: Date.now().toString(),
+      name: data.name || '未命名',
+      targetDate: data.targetDate || dayjs().format('YYYY-MM-DD'),
+      category: data.category || 'life',
+      description: data.description || '',
+      countMode: data.countMode === 'countup' ? 'countup' : 'countdown',
+      pinned: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      reminderStrategy: data.reminderStrategy || 'none',
+      reminderDays: data.reminderDays || 0,
+      reminderHours: data.reminderHours || 0,
+      reminderMinutes: data.reminderMinutes || 0
+    }
+    milestones.value.push(newMilestone)
+    logger.info('[倒数日] 添加倒数日', { name: data.name })
+    ElMessage.success('添加成功')
+  }
+  saveData()
+  if (hasReminder) refreshReminders()
+  editingMilestoneForForm.value = null
 }
 
 const handleCommand = (command: string, milestone: Milestone) => {
@@ -977,6 +667,7 @@ const handleCommand = (command: string, milestone: Milestone) => {
       if (index > -1) {
         milestones.value[index].pinned = true
         saveData()
+        if (milestone.reminderStrategy === 'advance') refreshReminders()
         logger.info('[倒数日] 设为星标', { id: milestone.id, name: milestone.name })
         ElMessage.success('已设为星标')
       }
@@ -989,6 +680,7 @@ const handleCommand = (command: string, milestone: Milestone) => {
       if (index > -1) {
         milestones.value[index].pinned = false
         saveData()
+        if (milestone.reminderStrategy === 'advance') refreshReminders()
         logger.info('[倒数日] 取消星标', { id: milestone.id, name: milestone.name })
         ElMessage.success('已取消星标')
       }
@@ -1005,13 +697,32 @@ const handleCommand = (command: string, milestone: Milestone) => {
       }).then(() => {
         const deleteIndex = milestones.value.findIndex(m => m.id === milestone.id)
         if (deleteIndex > -1) {
+          const hadReminder = milestones.value[deleteIndex].reminderStrategy === 'advance'
           milestones.value.splice(deleteIndex, 1)
           saveData()
+          if (hadReminder) refreshReminders()
           logger.info('[倒数日] 删除倒数日', { id: milestone.id, name: milestone.name })
           ElMessage.success('删除成功')
         }
       }).catch(() => {})
       break
+  }
+}
+
+const handleEditCurrentCategory = () => {
+  if (!currentCategory.value) {
+    ElMessage.warning('请先选择一个分类')
+    return
+  }
+  const cat = categories.value.find(c => c.value === currentCategory.value)
+  if (cat) {
+    editingCategory.value = currentCategory.value
+    categoryForm.value = {
+      label: cat.label,
+      icon: cat.icon
+    }
+    categoryFormVisible.value = true
+    logger.info('[倒数日] 编辑当前分类', { value: currentCategory.value })
   }
 }
 
@@ -1022,52 +733,71 @@ const handleAddCategory = () => {
     icon: '📌'
   }
   categoryFormVisible.value = true
+  logger.info('[倒数日] 打开添加分类对话框')
 }
 
-const handleCategoryCommand = (command: string, categoryValue: string) => {
-  if (command === 'edit') {
-    const cat = categories.value.find(c => c.value === categoryValue)
-    if (cat) {
-      editingCategory.value = categoryValue
-      categoryForm.value = {
-        label: cat.label,
-        icon: cat.icon
-      }
-      categoryFormVisible.value = true
-    }
-  } else if (command === 'add') {
-    editingMilestone.value = null
-    milestoneForm.value = {
-      name: '',
-      targetDate: dayjs().format('YYYY-MM-DD'),
-      category: categoryValue,
-      description: '',
-      countMode: 'countdown'
-    }
-    isFormMode.value = true
-  } else if (command === 'delete') {
-    const count = milestones.value.filter(m => m.category === categoryValue).length
-    if (count > 0) {
-      ElMessage.warning(`该分类下有 ${count} 个倒数日，请先删除或移动这些倒数日`)
-      return
-    }
-    ElMessageBox.confirm('确定要删除这个分类吗？', '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }).then(() => {
-      const index = categories.value.findIndex(c => c.value === categoryValue)
-      if (index > -1) {
-        categories.value.splice(index, 1)
-        saveCategories()
-        logger.info('[倒数日] 删除分类', { value: categoryValue })
-        ElMessage.success('删除成功')
-        if (currentCategory.value === categoryValue) {
-          currentCategory.value = ''
-        }
-      }
-    }).catch(() => {})
+const handleDeleteCurrentCategory = () => {
+  if (!currentCategory.value) {
+    ElMessage.warning('请先选择一个分类')
+    return
   }
+  if (isDefaultCategory(currentCategory.value)) {
+    ElMessage.warning('系统默认分类不可删除')
+    return
+  }
+  const count = milestones.value.filter(m => m.category === currentCategory.value).length
+  if (count > 0) {
+    ElMessage.warning(`该分类下有 ${count} 个倒数日，请先删除或移动这些倒数日`)
+    return
+  }
+  ElMessageBox.confirm('确定要删除当前分类吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
+    const index = categories.value.findIndex(c => c.value === currentCategory.value)
+    if (index > -1) {
+      categories.value.splice(index, 1)
+      saveCategories()
+      logger.info('[倒数日] 删除分类', { value: currentCategory.value })
+      ElMessage.success('删除成功')
+      currentCategory.value = ''
+    }
+  }).catch(() => {})
+}
+
+const moveCategoryLeft = () => {
+  if (!currentCategory.value) {
+    ElMessage.warning('请先选择一个分类')
+    return
+  }
+  const index = categories.value.findIndex(c => c.value === currentCategory.value)
+  if (index <= 0) {
+    ElMessage.warning('已经是第一个分类，无法左移')
+    return
+  }
+  const [moved] = categories.value.splice(index, 1)
+  categories.value.splice(index - 1, 0, moved)
+  saveCategories()
+  logger.info('[倒数日] 左移分类', { value: currentCategory.value })
+  ElMessage.success('分类已左移')
+}
+
+const moveCategoryRight = () => {
+  if (!currentCategory.value) {
+    ElMessage.warning('请先选择一个分类')
+    return
+  }
+  const index = categories.value.findIndex(c => c.value === currentCategory.value)
+  if (index >= categories.value.length - 1) {
+    ElMessage.warning('已经是最后一个分类，无法右移')
+    return
+  }
+  const [moved] = categories.value.splice(index, 1)
+  categories.value.splice(index + 1, 0, moved)
+  saveCategories()
+  logger.info('[倒数日] 右移分类', { value: currentCategory.value })
+  ElMessage.success('分类已右移')
 }
 
 const categoryFormVisible = ref(false)
@@ -1112,24 +842,36 @@ const handleCategoryFormSubmit = () => {
   categoryFormVisible.value = false
 }
 
+const refreshReminders = () => {
+  if (typeof window !== 'undefined' && (window as any).__countdownRefresh) {
+    (window as any).__countdownRefresh()
+  }
+}
+
 onMounted(async () => {
-  await loadData()
+  if (milestones.value.length === 0) {
+    await new Promise<void>(resolve => {
+      const check = () => {
+        if (milestones.value.length > 0) { resolve(); return }
+        setTimeout(check, 50)
+      }
+      check()
+    })
+  }
   await initFilterState()
   nextTick(() => {
     initCategoryNavDrag()
+    initOpsNavDrag()
     scrollCategoryNavToActive()
   })
-  startCountdownReminderChecker()
 })
 
 onBeforeUpdate(() => clearNavRefs())
 
 onUnmounted(() => {
-  stopCountdownReminderChecker()
 })
 
 onActivated(async () => {
-  await loadData()
   nextTick(() => {
     scrollCategoryNavToActive()
   })
@@ -1147,12 +889,12 @@ onActivated(async () => {
 
 .top-nav-area {
   background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   flex-shrink: 0;
 }
 
 .category-nav-scroll-wrapper {
-  height: 56px;
+  height: 48px;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
@@ -1169,7 +911,7 @@ onActivated(async () => {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 8px 16px;
+  padding: 4px 16px;
   white-space: nowrap;
   width: max-content;
   min-width: 100%;
@@ -1177,17 +919,86 @@ onActivated(async () => {
   box-sizing: border-box;
 }
 
+.ops-nav-area {
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.ops-nav-scroll-wrapper {
+  height: 40px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ops-nav-scroll-wrapper::-webkit-scrollbar {
+  display: none;
+}
+
+.ops-nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 2px 16px;
+  white-space: nowrap;
+  width: max-content;
+  min-width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.ops-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  height: 32px;
+}
+
+.ops-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ops-icon {
+  font-size: 13px;
+  width: 16px;
+  text-align: center;
+}
+
+.ops-name {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+}
+
+.ops-add-milestone .ops-name {
+  color: rgba(102, 126, 234, 0.85);
+  font-weight: 500;
+}
+
+.ops-add-milestone:hover {
+  background: rgba(102, 126, 234, 0.15);
+}
+
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: 8px;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
   user-select: none;
   position: relative;
-  height: 40px;
+  height: 36px;
 }
 
 .nav-item:hover {
@@ -1204,13 +1015,13 @@ onActivated(async () => {
 }
 
 .nav-icon {
-  font-size: 16px;
-  width: 20px;
+  font-size: 15px;
+  width: 18px;
   text-align: center;
 }
 
 .nav-name {
-  font-size: 14px;
+  font-size: 13px;
   color: rgba(255, 255, 255, 0.75);
   white-space: nowrap;
 }
@@ -1223,30 +1034,6 @@ onActivated(async () => {
   background: rgba(255, 255, 255, 0.1);
   min-width: 20px;
   text-align: center;
-}
-
-.nav-more {
-  opacity: 0;
-  transition: opacity 0.2s;
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-}
-
-.nav-item:hover .nav-more {
-  opacity: 1;
-}
-
-.add-nav-item {
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.add-nav-item:hover {
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.add-nav-item .nav-name {
-  color: rgba(255, 255, 255, 0.5);
 }
 
 .main-content {
@@ -1304,7 +1091,6 @@ onActivated(async () => {
   background: rgba(255, 255, 255, 0.03);
   border-radius: 12px;
   padding: 20px;
-  cursor: pointer;
   transition: all 0.2s ease;
   border: 1px solid rgba(255, 255, 255, 0.08);
   position: relative;
@@ -1337,6 +1123,29 @@ onActivated(async () => {
   margin-bottom: 12px;
 }
 
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.card-btn {
+  opacity: 0;
+  transition: opacity 0.2s;
+  width: 24px;
+  height: 24px;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.milestone-card:hover .card-btn {
+  opacity: 1;
+}
+
+.card-btn-unpin {
+  opacity: 1;
+}
+
 .category-badge {
   width: 32px;
   height: 32px;
@@ -1358,6 +1167,7 @@ onActivated(async () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: pointer;
 }
 
 .milestone-date {
@@ -1459,7 +1269,6 @@ onActivated(async () => {
 }
 
 .milestone-card.system-card {
-  cursor: default;
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.05) 100%);
   border-color: rgba(59, 130, 246, 0.3);
 }
@@ -1476,90 +1285,6 @@ onActivated(async () => {
   background: rgba(59, 130, 246, 0.1);
   padding: 2px 8px;
   border-radius: 4px;
-}
-
-.milestone-form-page {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.form-page-header {
-  padding: 16px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  flex-shrink: 0;
-  text-align: center;
-}
-
-.form-page-title {
-  margin: 0;
-  font-size: 18px;
-  color: #fff;
-  font-weight: 600;
-}
-
-.form-page-body {
-  flex: 1;
-  overflow: hidden;
-}
-
-.form-container {
-  max-width: 600px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 24px;
-}
-
-.milestone-form :deep(.el-input__wrapper) {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: none;
-}
-
-.milestone-form :deep(.el-input__inner) {
-  color: #fff;
-}
-
-.milestone-form :deep(.el-textarea__inner) {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: none;
-  color: #fff;
-}
-
-.count-mode-group {
-  width: 100%;
-}
-
-.count-mode-hint {
-  margin: 6px 0 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: rgba(255, 255, 255, 0.45);
-}
-
-.reminder-row { display: flex; align-items: center; gap: 8px; width: 100%; flex-wrap: wrap; }
-.reminder-row .reminder-label { color: rgba(255,255,255,0.6); white-space: nowrap; font-size: 13px; }
-
-.category-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.category-icon {
-  font-size: 16px;
-}
-
-.category-label {
-  flex: 1;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding-top: 24px;
 }
 
 .icon-picker {

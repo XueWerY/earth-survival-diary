@@ -64,11 +64,14 @@
       <!-- 提醒 -->
       <el-form-item label="提醒" v-if="form.countMode !== 'countup'">
         <div class="reminder-row">
-          <el-select v-model="form.reminderStrategy" placeholder="选择提醒方式" style="width: 100%">
+          <el-select v-model="form.reminderStrategy" placeholder="选择提醒方式" style="width: 180px">
             <el-option label="不提醒" value="none" />
             <el-option label="准时提醒" value="on_time" />
             <el-option label="提前提醒" value="advance" />
           </el-select>
+          <template v-if="form.reminderStrategy === 'advance'">
+            <ReminderTimePicker v-model="reminderTime" />
+          </template>
         </div>
       </el-form-item>
     </el-form>
@@ -87,6 +90,7 @@ import { ref, computed, watch } from 'vue'
 import type { FormInstance } from 'element-plus'
 import dayjs from 'dayjs'
 import LunarDatePicker from './LunarDatePicker.vue'
+import ReminderTimePicker from './ReminderTimePicker.vue'
 
 interface Milestone {
   id: string
@@ -142,6 +146,11 @@ const form = ref({
   reminderDays: 0,
   reminderHours: 0,
   reminderMinutes: 0
+})
+
+const reminderTime = computed({
+  get: () => ({ days: form.value.reminderDays, hours: form.value.reminderHours, minutes: form.value.reminderMinutes }),
+  set: (v) => { form.value.reminderDays = v.days; form.value.reminderHours = v.hours; form.value.reminderMinutes = v.minutes }
 })
 
 // 表单验证规则
