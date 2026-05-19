@@ -28,7 +28,7 @@ declare global {
       scheduleReminders: (reminders: ReminderItem[], persistDuration: number | null) => Promise<{ ok: boolean; count: number }>
       cancelAllReminders: () => Promise<{ ok: boolean }>
       getReminderPersistDuration: () => Promise<{ persistDuration: number }>
-      onReminderClosed: (callback: (data: { id: string }) => void) => void
+      onShowReminder: (callback: (data: ReminderItem) => void) => void
     }
   }
 }

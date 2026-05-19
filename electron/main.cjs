@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Menu, ipcMain, shell, dialog, Tray } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const { spawn } = require('child_process')
 const { autoUpdater } = require('electron-updater')
 
 Menu.setApplicationMenu(null)
@@ -365,8 +366,7 @@ const MODULE_FILE_MAP = {
   focus_records: ['focus/records.json'],
   lists: ['list/lists.json', 'list/tasks.json'],
   countdown: ['countdown/categories.json', 'countdown/countdowns.json'],
-  courses: ['course/courses.json', 'course/recorded-courses.json'],
-  notebooks: ['note/notebooks.json', 'note/notes.json']
+  courses: ['course/courses.json', 'course/recorded-courses.json']
 }
 
 const MODULE_GROUP_DEF = [
@@ -374,8 +374,7 @@ const MODULE_GROUP_DEF = [
   { key: 'focus', label: '专注', children: [{ key: 'focus_favorites', label: '常用专注', serverKeys: ['focus_favorites'] }, { key: 'focus_records', label: '专注记录', serverKeys: ['focus_records'] }] },
   { key: 'lists', label: '清单', children: [{ key: 'lists', label: '清单列表及其任务', serverKeys: ['lists', 'missions'] }] },
   { key: 'countdown', label: '倒数日', children: [{ key: 'countdown', label: '倒数日分类及其倒数日', serverKeys: ['countdown_categories', 'countdowns'] }] },
-  { key: 'courses', label: '课程表', children: [{ key: 'courses', label: '课程', serverKeys: ['courses', 'course_recorded_courses'] }] },
-  { key: 'notes', label: '笔记', children: [{ key: 'notebooks', label: '笔记本及其笔记', serverKeys: ['notebooks', 'notes'] }] }
+  { key: 'courses', label: '课程表', children: [{ key: 'courses', label: '课程', serverKeys: ['courses', 'course_recorded_courses'] }] }
 ]
 
 ipcMain.handle('get-module-sizes', async () => {
@@ -730,38 +729,31 @@ ipcMain.handle('check-version-update', async (_event, userId) => {
 
     const currentVersion = app.getVersion()
     const versionDir = path.join(DATA_DIR, userId, 'system')
-    const versionPath = path.join(versionDir, 'version.json')
-    const oldStatePath = path.join(versionDir, 'state.json')
+    const statePath = path.join(versionDir, 'state.json')
+    const legacyVersionPath = path.join(versionDir, 'version.json')
 
     if (!fs.existsSync(versionDir)) fs.mkdirSync(versionDir, { recursive: true })
 
-    // 迁移：如果旧 state.json 中有 version 字段但 version.json 没有，则迁移
     let storedVersion = null
-    if (!fs.existsSync(versionPath) && fs.existsSync(oldStatePath)) {
-      try {
-        const oldState = JSON.parse(fs.readFileSync(oldStatePath, 'utf-8'))
-        if (oldState.version) {
-          storedVersion = oldState.version
-          fs.writeFileSync(versionPath, JSON.stringify({ version: storedVersion }, null, 2), 'utf-8')
-          delete oldState.version
-          fs.writeFileSync(oldStatePath, JSON.stringify(oldState, null, 2), 'utf-8')
-          debugLog('[Main] 已迁移版本号到 version.json')
-        }
-      } catch { /* ignore */ }
-    }
+    try {
+      const stateData = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
+      storedVersion = stateData.version || null
+    } catch {}
 
-    // 从独立文件读取版本号
-    if (fs.existsSync(versionPath)) {
+    if (!storedVersion && fs.existsSync(legacyVersionPath)) {
       try {
-        const ver = JSON.parse(fs.readFileSync(versionPath, 'utf-8'))
+        const ver = JSON.parse(fs.readFileSync(legacyVersionPath, 'utf-8'))
         storedVersion = ver.version || null
-      } catch { /* ignore */ }
+        try { fs.unlinkSync(legacyVersionPath) } catch {}
+      } catch {}
     }
 
     const isUpdated = storedVersion !== currentVersion
 
-    // 写入版本号到独立文件
-    fs.writeFileSync(versionPath, JSON.stringify({ version: currentVersion }, null, 2), 'utf-8')
+    let stateData = {}
+    try { stateData = JSON.parse(fs.readFileSync(statePath, 'utf-8')) } catch {}
+    stateData.version = currentVersion
+    fs.writeFileSync(statePath, JSON.stringify(stateData, null, 2), 'utf-8')
 
     if (isUpdated) {
       _versionUpdateNotified = true
@@ -847,9 +839,6 @@ ipcMain.handle('open-changelog-window', async (_event, content) => {
 let reminderTimers = []
 let reminderQueue = []
 let reminderPersistDuration = 30
-let reminderWindowStack = []
-let reminderWindowOffset = 0
-let reminderWindowDataMap = new Map()
 let isShowingReminder = false
 let showReminderTimer = null
 
@@ -857,12 +846,6 @@ function cancelAllReminderTimers() {
   reminderTimers.forEach(t => clearTimeout(t.timeout))
   reminderTimers = []
   reminderQueue = []
-  reminderWindowStack.forEach(w => {
-    if (w && !w.isDestroyed()) w.close()
-  })
-  reminderWindowStack = []
-  reminderWindowOffset = 0
-  reminderWindowDataMap.clear()
   isShowingReminder = false
   if (showReminderTimer) {
     clearTimeout(showReminderTimer)
@@ -870,127 +853,30 @@ function cancelAllReminderTimers() {
   }
 }
 
-function playReminderSound(win) {
-  win.webContents.executeJavaScript(`
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)()
-      const notes = [800, 1000, 1200]
-      notes.forEach((freq, i) => {
-        const osc = ctx.createOscillator()
-        const gain = ctx.createGain()
-        osc.type = 'sine'
-        osc.frequency.value = freq
-        gain.gain.setValueAtTime(0.3, ctx.currentTime + i * 0.15)
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.15 + 0.2)
-        osc.connect(gain)
-        gain.connect(ctx.destination)
-        osc.start(ctx.currentTime + i * 0.15)
-        osc.stop(ctx.currentTime + i * 0.15 + 0.2)
-      })
-    } catch(e) {}
-  `)
-}
-
 function showNextReminder() {
   if (isShowingReminder) return
-  if (reminderQueue.length === 0) return
+  if (reminderQueue.length === 0) {
+    debugLog('[提醒] 队列为空，提醒流程结束')
+    return
+  }
 
   isShowingReminder = true
   const reminder = reminderQueue.shift()
-  const { width: screenW, height: screenH } = require('electron').screen.getPrimaryDisplay().workAreaSize
-  const winW = 340
-  const winH = 130
+  debugLog('[提醒] 发送提醒到主窗口: ' + reminder.name + ' (id=' + reminder.id + ', 剩余=' + reminderQueue.length + ')')
 
-  const offsetIndex = reminderWindowOffset
-  reminderWindowOffset++
-  const offsetY = offsetIndex * 80
-  const x = screenW - winW - 20
-  const y = screenH - winH - 20 - offsetY
-  if (y < 0) reminderWindowOffset = 0
-
-  const win = new BrowserWindow({
-    width: winW,
-    height: winH,
-    x,
-    y,
-    frame: false,
-    resizable: false,
-    skipTaskbar: true,
-    alwaysOnTop: true,
-    focusable: false,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'preload.cjs')
-    }
-  })
-
-  win.setMenuBarVisibility(false)
-
-  const title = escapeHtml(reminder.name || '任务提醒')
-  const body = reminder.body || ''
-  const listName = escapeHtml(reminder.listName || '')
-  const groupName = escapeHtml(reminder.groupName || '')
-  const subtitle = [listName, groupName].filter(Boolean).join(' / ')
-
-  win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>提醒</title>
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; height: 100vh; display: flex; flex-direction: column; border: 1px solid rgba(102,126,234,0.3); border-radius: 10px; overflow: hidden; }
-        .header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px 6px; }
-        .header .bell { font-size: 18px; }
-        .header .close-btn { width: 24px; height: 24px; border: none; background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.5); border-radius: 4px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; line-height: 1; -webkit-app-region: no-drag; }
-        .header .close-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
-        .body { flex: 1; padding: 0 14px 10px; display: flex; flex-direction: column; justify-content: center; }
-        .title { font-size: 15px; font-weight: 600; color: #fff; margin-bottom: 4px; }
-        .subtitle { font-size: 11px; color: rgba(255,255,255,0.35); margin-bottom: 6px; }
-        .info { font-size: 12px; color: rgba(255,255,255,0.55); }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <span class="bell">🔔</span>
-        <button class="close-btn" onclick="window.close()">✕</button>
-      </div>
-      <div class="body">
-        <div class="title">${title}</div>
-        ${subtitle ? '<div class="subtitle">' + subtitle + '</div>' : ''}
-        <div class="info">${body}</div>
-      </div>
-    </body>
-    </html>
-  `)}`)
-
-  win.on('closed', () => {
-    reminderWindowStack = reminderWindowStack.filter(w => w !== win)
-    reminderWindowOffset = Math.max(0, reminderWindowOffset - 1)
-    reminderWindowDataMap.delete(win)
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('reminder-closed', { id: reminder.id })
-    }
-  })
-
-  win.once('ready-to-show', () => {
-    playReminderSound(win)
-    isShowingReminder = false
-    if (reminderQueue.length > 0) {
-      showReminderTimer = setTimeout(() => {
-        showReminderTimer = null
-        showNextReminder()
-      }, 5000)
-    }
-  })
-
-  reminderWindowStack.push(win)
-  reminderWindowDataMap.set(win, reminder)
   if (reminder.repeatStrategy && reminder.repeatStrategy !== 'none') {
     scheduleNextRepeat(reminder)
   }
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('show-reminder', reminder)
+  }
+
+  showReminderTimer = setTimeout(() => {
+    showReminderTimer = null
+    isShowingReminder = false
+    showNextReminder()
+  }, 5000)
 }
 
 function scheduleNextRepeat(reminder) {

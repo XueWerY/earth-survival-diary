@@ -25,7 +25,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   scheduleReminders: (reminders, persistDuration) => ipcRenderer.invoke('schedule-reminders', reminders, persistDuration),
   cancelAllReminders: () => ipcRenderer.invoke('cancel-all-reminders'),
   getReminderPersistDuration: () => ipcRenderer.invoke('get-reminder-persist-duration'),
-  onReminderClosed: (callback) => ipcRenderer.on('reminder-closed', (_event, data) => callback(data)),
+  onShowReminder: (callback) => ipcRenderer.on('show-reminder', (_event, data) => callback(data)),
   setAutoLaunch: (enable) => ipcRenderer.invoke('set-auto-launch', enable),
   getAutoLaunch: () => ipcRenderer.invoke('get-auto-launch'),
   setCloseAction: (action) => ipcRenderer.invoke('set-close-action', action),

@@ -43,16 +43,6 @@
                   full-width
               />
             </el-form-item>
-
-            <el-form-item>
-              <el-button
-                  type="primary"
-                  :loading="saving"
-                  @click="handleSave"
-              >
-                保存修改
-              </el-button>
-            </el-form-item>
           </el-form>
         </div>
 
@@ -231,10 +221,12 @@
           <div class="about-item">
             <span class="about-label">版本号</span>
             <span class="about-value">v{{ version }}</span>
-            <div class="about-actions">
-              <el-button size="small" @click="checkForUpdate">检查更新</el-button>
-              <el-button size="small" @click="openChangelogDialog">查看更新日志</el-button>
-            </div>
+            <el-button size="small" @click="checkForUpdate" :disabled="isGuideActive">检查更新</el-button>
+            <el-button size="small" @click="openChangelogDialog" :disabled="isGuideActive">查看更新日志</el-button>
+          </div>
+          <div class="about-item about-tools-row">
+            <el-button size="small" type="primary" @click="startGuide" :disabled="isGuideActive">新手引导</el-button>
+            <el-button size="small" class="storage-btn storage-btn-normal" @click="handleViewLogs" :disabled="isGuideActive">查看日志</el-button>
           </div>
         </div>
 
@@ -247,7 +239,7 @@
                 <span class="storage-item-label">导出数据</span>
                 <span class="storage-item-desc">选择模块导出为 JSON 文件</span>
               </div>
-              <el-button class="storage-btn storage-btn-normal" @click="showExportDialog = true">
+              <el-button class="storage-btn storage-btn-normal" @click="showExportDialog = true" :disabled="isGuideActive">
                 导出
               </el-button>
             </div>
@@ -256,17 +248,8 @@
                 <span class="storage-item-label">导入数据</span>
                 <span class="storage-item-desc">从 JSON 文件导入数据</span>
               </div>
-              <el-button class="storage-btn storage-btn-normal" @click="showImportDialog = true">
+              <el-button class="storage-btn storage-btn-normal" @click="showImportDialog = true" :disabled="isGuideActive">
                 导入
-              </el-button>
-            </div>
-            <div class="storage-item">
-              <div class="storage-item-info">
-                <span class="storage-item-label">查看日志</span>
-                <span class="storage-item-desc">查看日志文件内容</span>
-              </div>
-              <el-button class="storage-btn storage-btn-normal" @click="handleViewLogs">
-                查看
               </el-button>
             </div>
             <div class="storage-item">
@@ -282,7 +265,7 @@
                     size="small"
                     @change="handleAutoCleanChange"
                 />
-                <el-button class="storage-btn storage-btn-danger" @click="handleClearLogs" :loading="clearingLogs">
+                <el-button class="storage-btn storage-btn-danger" @click="handleClearLogs" :loading="clearingLogs" :disabled="isGuideActive">
                   清空
                 </el-button>
               </div>
@@ -305,7 +288,7 @@
                 <span class="storage-item-label">清理数据</span>
                 <span class="storage-item-desc">数据文件共占用 {{ dataDirSizeDesc }}，按账号选择数据模块清理</span>
               </div>
-              <el-button class="storage-btn storage-btn-danger" @click="handleOpenCleanWindow" :loading="cleaningData">
+              <el-button class="storage-btn storage-btn-danger" @click="handleOpenCleanWindow" :loading="cleaningData" :disabled="isGuideActive">
                 清理
               </el-button>
             </div>
@@ -457,15 +440,19 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showChangelogDialog" title="更新日志" width="600px" class="changelog-dialog" center>
-      <div class="changelog-body" v-html="changelogHtml"></div>
-    </el-dialog>
+    <div v-if="showChangelogDialog" class="changelog-panel">
+      <div class="changelog-panel-header">
+        <span class="changelog-panel-title">更新日志</span>
+        <button class="changelog-panel-close" @click="showChangelogDialog = false">&times;</button>
+      </div>
+      <div class="changelog-panel-body" v-html="changelogHtml"></div>
+    </div>
 
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick, inject } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Calendar, Lock, Timer, Setting, InfoFilled, Files, Bell, Monitor } from '@element-plus/icons-vue'
@@ -483,17 +470,19 @@ const emit = defineEmits<{
   logout: []
 }>()
 
+const startGuide = inject<() => void>('startGuide', () => {})
+const isGuideActive = inject('guideVisible', ref(false))
+
 const authStore = useAuthStore()
 const settingsStore = useSettingsStore()
 
 const formRef = ref<FormInstance>()
-const saving = ref(false)
 const loggingOut = ref(false)
 const deletingAccount = ref(false)
 const exporting = ref(false)
 const showExportDialog = ref(false)
-const selectedModules = ref<string[]>(['user_index', 'tasks', 'focus_favorites', 'focus_records', 'lists', 'countdown', 'courses', 'notebooks', 'profile', 'login_info', 'settings', 'system_state'])
-const expandedGroups = ref<string[]>(['tasks', 'focus', 'lists', 'countdown', 'courses', 'notes', 'profile'])
+const selectedModules = ref<string[]>(['user_index', 'tasks', 'focus_favorites', 'focus_records', 'lists', 'countdown', 'courses', 'profile', 'login_info', 'settings', 'system_state'])
+const expandedGroups = ref<string[]>(['tasks', 'focus', 'lists', 'countdown', 'courses', 'profile'])
 const selectAllExportModules = ref(true)
 
 const allExportModuleKeys = computed(() => {
@@ -550,13 +539,6 @@ const exportGroups = [
     ]
   },
   {
-    key: 'notes',
-    label: '笔记',
-    children: [
-      { key: 'notebooks', label: '笔记本及其笔记' }
-    ]
-  },
-  {
     key: 'profile',
     label: '我的',
     children: [
@@ -573,8 +555,7 @@ const exportGroups = [
 const exportKeyMapping: Record<string, string[]> = {
   lists: ['lists', 'missions'],
   countdown: ['countdown_categories', 'countdowns'],
-  courses: ['courses', 'course_recorded_courses'],
-  notebooks: ['notebooks', 'notes']
+  courses: ['courses', 'course_recorded_courses']
 }
 
 const toggleGroup = (key: string) => {
@@ -591,8 +572,8 @@ const showImportDialog = ref(false)
 const importing = ref(false)
 const importDataRaw = ref<any>(null)
 const importFileInfo = ref<{ name: string, exportTime?: string } | null>(null)
-const selectedImportModules = ref<string[]>(['user_index', 'tasks', 'focus_favorites', 'focus_records', 'lists', 'countdown', 'courses', 'notebooks', 'profile', 'login_info', 'settings', 'system_state'])
-const expandedImportGroups = ref<string[]>(['tasks', 'focus', 'lists', 'countdown', 'courses', 'notes', 'profile'])
+const selectedImportModules = ref<string[]>(['user_index', 'tasks', 'focus_favorites', 'focus_records', 'lists', 'countdown', 'courses', 'profile', 'login_info', 'settings', 'system_state'])
+const expandedImportGroups = ref<string[]>(['tasks', 'focus', 'lists', 'countdown', 'courses', 'profile'])
 const selectAllModules = ref(true)
 
 const importGroups = exportGroups
@@ -939,7 +920,15 @@ const savePhone = async () => {
   }
   form.phone = phoneForm.phone
   showPhoneDialog.value = false
-  await handleSave()
+  try {
+    await api.updateProfile({ phone: form.phone })
+    ;(authStore.profile as any) = { ...authStore.profile, phone: form.phone }
+    logger.info('[我的] 修改手机号')
+    ElMessage.success('手机号已保存')
+  } catch (error) {
+    console.error('保存手机号失败:', error)
+    ElMessage.error('保存失败')
+  }
 }
 
 // 修改账号
@@ -1005,39 +994,6 @@ const changePassword = async () => {
     ElMessage.error(error?.response?.data?.error || '修改密码失败')
   } finally {
     changingPassword.value = false
-  }
-}
-
-const handleSave = async () => {
-  const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
-
-  saving.value = true
-  try {
-    const changed: string[] = []
-    if (form.nickname !== authStore.profile?.nickname) changed.push('nickname')
-    if (form.birthday !== authStore.profile?.birthday) changed.push('birthday')
-    if (form.phone !== authStore.profile?.phone) changed.push('phone')
-
-    await api.updateProfile({ nickname: form.nickname, birthday: form.birthday, phone: form.phone })
-
-    ;(authStore.profile as any) = {
-      ...authStore.profile,
-      nickname: form.nickname,
-      birthday: form.birthday,
-      phone: form.phone
-    }
-
-    if (changed.length > 0) {
-      logger.info('[我的] 修改个人资料', { fields: changed })
-    }
-
-    ElMessage.success('保存成功')
-  } catch (error) {
-    console.error('保存失败:', error)
-    ElMessage.error('保存失败')
-  } finally {
-    saving.value = false
   }
 }
 
@@ -1333,8 +1289,7 @@ const handleOpenCleanWindow = async () => {
 const cleanKeyMapping: Record<string, string[]> = {
   lists: ['lists', 'missions'],
   countdown: ['countdown_categories', 'countdowns'],
-  courses: ['courses', 'course_recorded_courses'],
-  notebooks: ['notebooks', 'notes']
+  courses: ['courses', 'course_recorded_courses']
 }
 
 // 自动清理日志
@@ -1359,6 +1314,31 @@ const handleAutoCleanDaysChange = async (val: number) => {
 watch(() => authStore.profile?.nickname, (val) => {
   if (val) form.nickname = val
 }, { immediate: true })
+
+let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
+
+const autoSaveProfile = async () => {
+  if (autoSaveTimer) clearTimeout(autoSaveTimer)
+  autoSaveTimer = setTimeout(async () => {
+    try {
+      const nickname = form.nickname || ''
+      const birthday = form.birthday || ''
+      await api.updateProfile({ nickname, birthday })
+      ;(authStore.profile as any) = { ...authStore.profile, nickname, birthday }
+      logger.info('[我的] 个人资料自动保存')
+    } catch (error) {
+      console.error('自动保存失败:', error)
+    }
+  }, 800)
+}
+
+watch(() => form.nickname, () => {
+  autoSaveProfile()
+})
+
+watch(() => form.birthday, () => {
+  autoSaveProfile()
+})
 
 const handleFocusSettingChange = async (val: number) => {
   await settingsStore.updateFocusSettings({ pomodoroDuration: val })
@@ -1606,10 +1586,11 @@ const handleCourseReminderChange = async (val: number) => {
   color: rgba(255, 255, 255, 0.85);
 }
 
-.about-actions {
+.about-tools-row {
   display: flex;
   gap: 8px;
-  margin-left: auto;
+  justify-content: flex-start;
+  margin-top: 8px;
 }
 
 .about-link {
@@ -1869,14 +1850,70 @@ const handleCourseReminderChange = async (val: number) => {
   margin-bottom: 8px;
 }
 
-.changelog-dialog :deep(.el-dialog__header) { position: relative; display: flex; justify-content: center; }
-.changelog-dialog :deep(.el-dialog__headerbtn) { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); }
-.changelog-body { max-height: 60vh; overflow-y: auto; padding: 4px 16px 4px 8px; }
-.changelog-body::-webkit-scrollbar { width: 4px; }
-.changelog-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
-.changelog-body::-webkit-scrollbar-track { background: transparent; }
-.changelog-body :deep(.cl-version) { color: #f0c040; font-size: 15px; font-weight: 600; margin: 16px 0 8px; padding: 6px 0 6px 12px; border-left: 3px solid #f0c040; background: linear-gradient(90deg, rgba(240,192,64,0.06) 0%, transparent 100%); border-radius: 0 4px 4px 0; }
-.changelog-body :deep(.cl-list) { margin: 0 0 4px 20px; padding: 0; list-style: none; color: rgba(255,255,255,0.75); }
-.changelog-body :deep(.cl-list li) { font-size: 13px; line-height: 1.8; padding: 2px 0; position: relative; padding-left: 16px; }
-.changelog-body :deep(.cl-list li)::before { content: '•'; position: absolute; left: 0; color: rgba(255,255,255,0.25); font-size: 10px; top: 6px; }
+.changelog-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 3000;
+  width: 480px;
+  max-height: 55vh;
+  background: rgba(20, 16, 55, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  animation: changelogSlideIn 0.3s ease-out;
+}
+
+@keyframes changelogSlideIn {
+  from { opacity: 0; transform: translateY(20px) translateX(20px); }
+  to { opacity: 1; transform: translateY(0) translateX(0); }
+}
+
+.changelog-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.changelog-panel-title {
+  color: #f0c040;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.changelog-panel-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.changelog-panel-close:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.changelog-panel-body {
+  overflow-y: auto;
+  padding: 8px 16px 12px 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+.changelog-panel-body::-webkit-scrollbar { width: 4px; }
+.changelog-panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.changelog-panel-body::-webkit-scrollbar-track { background: transparent; }
+.changelog-panel-body :deep(.cl-version) { color: #f0c040; font-size: 14px; font-weight: 600; margin: 14px 0 6px; padding: 5px 0 5px 10px; border-left: 3px solid #f0c040; background: linear-gradient(90deg, rgba(240,192,64,0.06) 0%, transparent 100%); border-radius: 0 4px 4px 0; }
+.changelog-panel-body :deep(.cl-list) { margin: 0 0 4px 16px; padding: 0; list-style: none; color: rgba(255,255,255,0.75); }
+.changelog-panel-body :deep(.cl-list li) { font-size: 12px; line-height: 1.7; padding: 2px 0; position: relative; padding-left: 14px; }
+.changelog-panel-body :deep(.cl-list li)::before { content: '•'; position: absolute; left: 0; color: rgba(255,255,255,0.25); font-size: 10px; top: 5px; }
 </style>

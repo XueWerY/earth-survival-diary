@@ -66,14 +66,6 @@
             </div>
             <div
                 class="nav-item"
-                :class="{ active: isActive('notes') }"
-                :ref="setNavItemRef"
-                @click="navigateTo('/notes')"
-            >
-              <span class="nav-label">笔记</span>
-            </div>
-            <div
-                class="nav-item"
                 :class="{ active: isActive('statistics') }"
                 :ref="setNavItemRef"
                 @click="navigateTo('/statistics')"
@@ -109,42 +101,61 @@
         </div>
       </main>
 
-      <!-- 版本更新对话框 -->
-      <el-dialog
-          v-model="updateDialogVisible"
-          title="版本更新"
-          width="380px"
-          :close-on-click-modal="false"
-          :show-close="true"
-          append-to-body
-          class="update-dialog"
-      >
-        <div class="update-dialog-body">
-          <div class="update-icon">🌍</div>
+      <GuideOverlay
+        :steps="guideSteps"
+        :visible="guideVisible"
+        :current-index="guideCurrentIndex"
+        @prev="handleGuidePrev"
+        @next="handleGuideNext"
+        @skip="handleGuideSkip"
+      />
+
+      <!-- 版本更新右下角面板 -->
+      <template v-if="!guideVisible">
+      <div v-if="updateDialogVisible" class="update-panel">
+        <div class="update-panel-header">
+          <span class="update-panel-title">版本更新</span>
+          <button class="update-panel-close" @click="updateDialogVisible = false">&times;</button>
+        </div>
+        <div class="update-panel-body">
           <div
-              class="update-status"
-              :class="{ 'update-error': updateStatus === 'error', 'update-no-new': updateStatus === 'no-update' }"
+            class="update-status"
+            :class="{ 'update-error': updateStatus === 'error', 'update-no-new': updateStatus === 'no-update' }"
           >
-            {{ updateStatusText }}
-          </div>
-          <div v-if="updateStatus === 'available'" class="update-version">
-            v{{ updateVersion }}
+            <span v-if="updateStatus === 'available'">
+              发现新版本 v{{ updateVersion }}，请前往
+              <a class="update-link" href="#" @click.prevent="openReleasesUrl">GitHub Releases</a>
+              下载
+            </span>
+            <template v-else>{{ updateStatusText }}</template>
           </div>
           <div v-if="updateStatus === 'error' && updateMessage" class="update-message">
             {{ updateMessage }}
           </div>
         </div>
-        <template #footer>
-          <el-button v-if="updateStatus === 'available'" type="primary" @click="handleUpdateDownload">
-            前往 GitHub Releases 下载
-          </el-button>
-          <el-button v-else @click="updateDialogVisible = false">关闭</el-button>
-        </template>
-      </el-dialog>
+      </div>
 
-      <el-dialog v-model="showAppChangelogDialog" title="更新日志" width="600px" class="changelog-dialog" center>
-        <div class="changelog-body" v-html="appChangelogHtml"></div>
-      </el-dialog>
+      <div v-if="showAppChangelogDialog" class="changelog-panel">
+        <div class="changelog-panel-header">
+          <span class="changelog-panel-title">更新日志</span>
+          <button class="changelog-panel-close" @click="showAppChangelogDialog = false">&times;</button>
+        </div>
+        <div class="changelog-panel-body" v-html="appChangelogHtml"></div>
+      </div>
+      </template>
+      <div class="reminder-stack">
+        <div v-for="(r, i) in activeReminders" :key="r.id" class="reminder-panel">
+          <div class="reminder-panel-header">
+            <span class="reminder-panel-icon">🔔</span>
+            <button class="reminder-panel-close" @click="dismissReminder(i)">✕</button>
+          </div>
+          <div class="reminder-panel-content">
+            <div class="reminder-panel-title">{{ r.name }}</div>
+            <div v-if="r.listName || r.groupName" class="reminder-panel-subtitle">{{ [r.listName, r.groupName].filter(Boolean).join(' / ') }}</div>
+            <div class="reminder-panel-body">{{ r.body }}</div>
+          </div>
+        </div>
+      </div>
     </template>
   </div>
 </template>
@@ -164,11 +175,14 @@ import { logger } from './lib/logger'
 import dayjs from 'dayjs'
 // @ts-expect-error - Vite raw import
 import changelogContent from '../CHANGELOG.md?raw'
+import GuideOverlay from './components/GuideOverlay.vue'
+import { guideSteps } from './data/guideSteps'
+import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const route = useRoute()
 
-const VALID_ROUTES = ['footprint', 'focus', 'mission', 'countdown', 'course', 'notes', 'statistics', 'profile']
+const VALID_ROUTES = ['footprint', 'focus', 'mission', 'countdown', 'course', 'statistics', 'profile']
 const MAX_SCHEDULE_DELAY = 20 * 24 * 3600 * 1000
 
 const isActive = (name: string) => route.name === name
@@ -386,6 +400,34 @@ const handleRefreshData = async () => {
 
 const showAppChangelogDialog = ref(false)
 
+const activeReminders = ref<ReminderItem[]>([])
+
+function playReminderSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const notes = [800, 1000, 1200]
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + i * 0.15)
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.15 + 0.2)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(ctx.currentTime + i * 0.15)
+      osc.stop(ctx.currentTime + i * 0.15 + 0.2)
+    })
+  } catch (e) {
+    logger.warn('[提醒] 音效播放失败', { error: e instanceof Error ? e.message : String(e) })
+  }
+}
+
+function dismissReminder(index: number) {
+  logger.info('[提醒] 用户关闭提醒', { id: activeReminders.value[index]?.id })
+  activeReminders.value.splice(index, 1)
+}
+
 const appChangelogHtml = computed(() => {
   const content = changelogContent.replace(/^# 更新日志\n*/, '')
   const lines = content.split('\n')
@@ -416,7 +458,6 @@ const RELEASES_URL = 'https://github.com/XueWerY/earth-survival-diary/releases'
 const updateStatusText = computed(() => {
   switch (updateStatus.value) {
     case 'checking': return '正在检查更新...'
-    case 'available': return '发现新版本，请前往下载'
     case 'error': return '更新检查失败'
     case 'no-update': return '已是最新版本'
     default: return ''
@@ -425,12 +466,37 @@ const updateStatusText = computed(() => {
 
 let updateNoUpdateTimer: ReturnType<typeof setTimeout> | null = null
 
-const handleUpdateDownload = () => {
-  logger.info('[App] 用户点击前往下载，关闭更新对话框')
-  updateDialogVisible.value = false
+const openReleasesUrl = () => {
+  logger.info('[App] 用户点击更新链接')
   if (window.electronAPI?.openExternal) {
     window.electronAPI.openExternal(RELEASES_URL)
   }
+}
+
+const versionChecksStarted = ref(false)
+
+const startVersionChecks = () => {
+  if (versionChecksStarted.value) return
+  versionChecksStarted.value = true
+  logger.info('[更新] 开始版本检测')
+
+  if (window.electronAPI?.checkVersionUpdate && authStore.user?.id) {
+    window.electronAPI.checkVersionUpdate(authStore.user.id).then(async (result) => {
+      if (result.isUpdated) {
+        try {
+          await setSystemStateField('version', result.newVersion)
+          logger.info('[App] 检测到版本更新，已同步版本到前端', { oldVersion: result.oldVersion, newVersion: result.newVersion })
+        } catch (e) {
+          logger.warn('[App] 同步版本到前端失败', { error: e instanceof Error ? e.message : String(e) })
+        }
+        showAppChangelogDialog.value = true
+      }
+    }).catch(e => {
+      console.error('[App] 版本更新检测失败:', e)
+    })
+  }
+
+  setupUpdateStatusListener()
 }
 
 const setupUpdateStatusListener = () => {
@@ -594,32 +660,20 @@ const scheduleMissionReminders = async () => {
     }
 
     const timerState = focusStore.timerState
-    if (timerState) {
+    if (timerState && timerState.type === 'pomodoro') {
       const now = Date.now()
       const elapsedSinceStart = Math.floor((now - timerState.startTimestamp) / 1000)
-      if (timerState.type === 'pomodoro') {
-        const totalSeconds = timerState.targetDuration * 60
-        const remaining = Math.max(0, totalSeconds - Math.max(0, elapsedSinceStart))
-        if (remaining > 0) {
-          reminders.push({
-            id: 'focus-pomodoro',
-            name: '专注完成',
-            body: '专注完成，请放松一下吧',
-            triggerTime: new Date(now + remaining * 1000).toISOString(),
-            repeatStrategy: 'none'
-          })
-          logger.info('[提醒] 专注提醒已加入调度', { name: '专注完成' })
-        }
-      } else {
-        const nextHourIndex = Math.floor(Math.max(0, elapsedSinceStart) / 3600) + 1
+      const totalSeconds = timerState.targetDuration * 60
+      const remaining = Math.max(0, totalSeconds - Math.max(0, elapsedSinceStart))
+      if (remaining > 0) {
         reminders.push({
-          id: 'focus-stopwatch',
-          name: '专注提醒',
-          body: `您已经专注${nextHourIndex}个小时了，要劳逸结合哦~`,
-          triggerTime: new Date(timerState.startTimestamp + nextHourIndex * 3600 * 1000).toISOString(),
-          repeatStrategy: 'hourly'
+          id: 'focus-pomodoro',
+          name: '专注完成',
+          body: '专注完成，请放松一下吧',
+          triggerTime: new Date(now + remaining * 1000).toISOString(),
+          repeatStrategy: 'none'
         })
-        logger.info('[提醒] 专注提醒已加入调度', { name: '专注提醒' })
+        logger.info('[提醒] 专注提醒已加入调度', { name: '专注完成' })
       }
     }
 
@@ -679,6 +733,67 @@ const countdownCategories = ref<any[]>([])
 provide('countdownMilestones', countdownMilestones)
 provide('countdownCategories', countdownCategories)
 
+const guideVisible = ref(false)
+const guideCurrentIndex = ref(0)
+const guideCompleted = ref(false)
+const guideRunning = ref(false)
+
+const startGuide = () => {
+  if (focusStore.timerState) {
+    ElMessage.warning('请先停止专注')
+    logger.info('[引导] 检测到正在专注，已阻止启动引导')
+    return
+  }
+  guideCurrentIndex.value = 0
+  guideVisible.value = true
+  guideRunning.value = true
+  if (route.path !== guideSteps[0].route) {
+    router.push(guideSteps[0].route)
+  }
+  logger.info('[引导] 新手引导已启动')
+}
+
+const closeGuide = async () => {
+  guideVisible.value = false
+  guideCompleted.value = true
+  guideRunning.value = false
+  try {
+    await setSystemStateField('guideCompleted', true)
+  } catch {}
+  logger.info('[引导] 新手引导已完成')
+  startVersionChecks()
+}
+
+const handleGuidePrev = () => {
+  if (guideCurrentIndex.value <= 0) return
+  const prevIdx = guideCurrentIndex.value - 1
+  const prevRoute = guideSteps[prevIdx].route
+  if (prevRoute !== route.path) {
+    router.push(prevRoute)
+  }
+  guideCurrentIndex.value = prevIdx
+}
+
+const handleGuideNext = () => {
+  const nextIdx = guideCurrentIndex.value + 1
+  if (nextIdx >= guideSteps.length) {
+    closeGuide()
+    return
+  }
+  const nextRoute = guideSteps[nextIdx].route
+  if (nextRoute !== route.path) {
+    router.push(nextRoute)
+  }
+  guideCurrentIndex.value = nextIdx
+}
+
+const handleGuideSkip = () => {
+  closeGuide()
+}
+
+provide('startGuide', startGuide)
+provide('guideVisible', guideVisible)
+
 const initializeData = async () => {
   if (isInitializing.value) {
     logger.debug('[App] 初始化正在进行中，跳过重复调用')
@@ -715,6 +830,22 @@ const initializeData = async () => {
     logger.info('[App] 数据初始化完成')
 
     scheduleMissionReminders()
+
+    try {
+      const isCompleted = await getSystemStateField('guideCompleted')
+      guideCompleted.value = isCompleted === true
+      if (!guideCompleted.value) {
+        guideRunning.value = true
+        setTimeout(() => {
+          startGuide()
+        }, 800)
+      }
+    } catch {
+      guideRunning.value = true
+      setTimeout(() => {
+        startGuide()
+      }, 800)
+    }
   } catch (error) {
     logger.error('[App] 初始化数据失败:', { error: error instanceof Error ? error.message : String(error) })
   } finally {
@@ -1062,27 +1193,22 @@ onMounted(async () => {
     scheduleMissionReminders()
   }
 
+  // 注册提醒 IPC 监听
+  if (window.electronAPI?.onShowReminder) {
+    window.electronAPI.onShowReminder((reminder: ReminderItem) => {
+      logger.info('[提醒] 收到提醒', { id: reminder.id, name: reminder.name })
+      activeReminders.value.push(reminder)
+      playReminderSound()
+    })
+  }
+
   // 先初始化认证状态
   await authStore.init()
 
   // 如果已登录，初始化数据
   if (authStore.isAuthenticated) {
     await initializeData()
-
-    // 版本更新检测 - 非阻塞，在数据初始化完成后静默检测
-    if (window.electronAPI?.checkVersionUpdate && authStore.user?.id) {
-      window.electronAPI.checkVersionUpdate(authStore.user.id).then(result => {
-        if (result.isUpdated) {
-          logger.info('[App] 检测到版本更新', { oldVersion: result.oldVersion, newVersion: result.newVersion })
-          showAppChangelogDialog.value = true
-        }
-      }).catch(e => {
-        console.error('[App] 版本更新检测失败:', e)
-      })
-    }
-
-    // 注册版本更新状态监听器（替代原有的独立子窗口）
-    setupUpdateStatusListener()
+    startVersionChecks()
   }
 
   // 初始化导航栏拖拽滑动
@@ -1427,36 +1553,54 @@ onUnmounted(() => {
   font-size: 14px;
 }
 
-/* 版本更新对话框样式 */
-:deep(.update-dialog .el-dialog__header) {
-  margin-right: 0;
-  padding: 20px 20px 0;
+.update-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 3000;
+  width: 380px;
+  background: rgba(20, 16, 55, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  animation: changelogSlideIn 0.3s ease-out;
 }
 
-:deep(.update-dialog .el-dialog__title) {
-  color: #fff;
-  font-size: 17px;
+.update-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.update-panel-title {
+  color: #f0c040;
+  font-size: 16px;
   font-weight: 600;
 }
 
-:deep(.update-dialog .el-dialog__body) {
-  padding: 24px 20px 12px;
+.update-panel-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.2s;
 }
 
-:deep(.update-dialog .el-dialog__footer) {
-  padding: 12px 20px 20px;
-  border-top: none;
-  display: flex;
-  justify-content: center;
+.update-panel-close:hover {
+  color: rgba(255, 255, 255, 0.9);
 }
 
-.update-dialog-body {
-  text-align: center;
-}
-
-.update-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
+.update-panel-body {
+  padding: 16px 20px 18px;
 }
 
 .update-status {
@@ -1473,10 +1617,16 @@ onUnmounted(() => {
   color: rgba(100, 255, 100, 0.8);
 }
 
-.update-version {
-  font-size: 13px;
-  color: rgba(100, 200, 255, 0.85);
-  margin-top: 8px;
+.update-link {
+  color: rgba(100, 200, 255, 0.9);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(100, 200, 255, 0.3);
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.update-link:hover {
+  color: rgba(100, 200, 255, 1);
+  border-bottom-color: rgba(100, 200, 255, 0.6);
 }
 
 .update-message {
@@ -1486,14 +1636,172 @@ onUnmounted(() => {
   word-break: break-all;
 }
 
-.changelog-dialog :deep(.el-dialog__header) { position: relative; display: flex; justify-content: center; }
-.changelog-dialog :deep(.el-dialog__headerbtn) { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); }
-.changelog-body { max-height: 60vh; overflow-y: auto; padding: 4px 16px 4px 8px; }
-.changelog-body::-webkit-scrollbar { width: 4px; }
-.changelog-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
-.changelog-body::-webkit-scrollbar-track { background: transparent; }
-.changelog-body :deep(.cl-version) { color: #f0c040; font-size: 15px; font-weight: 600; margin: 16px 0 8px; padding: 6px 0 6px 12px; border-left: 3px solid #f0c040; background: linear-gradient(90deg, rgba(240,192,64,0.06) 0%, transparent 100%); border-radius: 0 4px 4px 0; }
-.changelog-body :deep(.cl-list) { margin: 0 0 4px 20px; padding: 0; list-style: none; color: rgba(255,255,255,0.75); }
-.changelog-body :deep(.cl-list li) { font-size: 13px; line-height: 1.8; padding: 2px 0; position: relative; padding-left: 16px; }
-.changelog-body :deep(.cl-list li)::before { content: '•'; position: absolute; left: 0; color: rgba(255,255,255,0.25); font-size: 10px; top: 6px; }
+.reminder-stack {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 2900;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 12px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.reminder-stack::-webkit-scrollbar {
+  display: none;
+}
+
+.reminder-panel {
+  position: relative;
+  width: 320px;
+  flex-shrink: 0;
+  background: rgba(20, 16, 55, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  animation: changelogSlideIn 0.3s ease-out;
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+.reminder-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 4px;
+}
+
+.reminder-panel-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.reminder-panel-close {
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: all 0.2s;
+}
+
+.reminder-panel-close:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.reminder-panel-content {
+  padding: 2px 14px 10px;
+}
+
+.reminder-panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f0c040;
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+
+.reminder-panel-subtitle {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+
+.reminder-panel-body {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.4;
+}
+
+.changelog-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 3000;
+  width: 480px;
+  max-height: 55vh;
+  background: rgba(20, 16, 55, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  animation: changelogSlideIn 0.3s ease-out;
+}
+
+@keyframes changelogSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) translateX(0);
+  }
+}
+
+.changelog-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.changelog-panel-title {
+  color: #f0c040;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.changelog-panel-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.changelog-panel-close:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.changelog-panel-body {
+  overflow-y: auto;
+  padding: 8px 16px 12px 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+.changelog-panel-body::-webkit-scrollbar { width: 4px; }
+.changelog-panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+.changelog-panel-body::-webkit-scrollbar-track { background: transparent; }
+.changelog-panel-body :deep(.cl-version) { color: #f0c040; font-size: 14px; font-weight: 600; margin: 14px 0 6px; padding: 5px 0 5px 10px; border-left: 3px solid #f0c040; background: linear-gradient(90deg, rgba(240,192,64,0.06) 0%, transparent 100%); border-radius: 0 4px 4px 0; }
+.changelog-panel-body :deep(.cl-list) { margin: 0 0 4px 16px; padding: 0; list-style: none; color: rgba(255,255,255,0.75); }
+.changelog-panel-body :deep(.cl-list li) { font-size: 12px; line-height: 1.7; padding: 2px 0; position: relative; padding-left: 14px; }
+.changelog-panel-body :deep(.cl-list li)::before { content: '•'; position: absolute; left: 0; color: rgba(255,255,255,0.25); font-size: 10px; top: 5px; }
 </style>

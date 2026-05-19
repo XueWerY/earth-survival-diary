@@ -711,120 +711,27 @@ function createProdServer(options = {}) {
     } catch (e) { console.error('Get stats error:', e); res.status(500).json({ error: '获取统计失败' }) }
   })
 
-  // ============ Notes API ============
-
-  async function getUserNoteNotebooks(userId) {
-    return readJson(getDataPath('note', userId, 'notebooks'), [])
-  }
-  async function setUserNoteNotebooks(userId, nbs) {
-    writeJson(getDataPath('note', userId, 'notebooks'), nbs)
-  }
-  async function getUserNotes(userId) {
-    return readJson(getDataPath('note', userId, 'notes'), [])
-  }
-  async function setUserNotes(userId, notes) {
-    writeJson(getDataPath('note', userId, 'notes'), notes)
-  }
-
-  /** GET /api/notes-notebooks (auth) => 200 {notebooks:[]} */
-  app.get('/api/notes-notebooks', authMiddleware, async (req, res) => {
-    try {
-      const nbs = await getUserNoteNotebooks(req.userId)
-      nbs.sort((a, b) => (a.order || 0) - (b.order || 0))
-      res.json({ notebooks: nbs })
-    } catch (e) { console.error('Get note notebooks error:', e); res.status(500).json({ error: '获取笔记本失败' }) }
-  })
-
-  /** POST /api/notes-notebooks (auth) body:{name} => 200 {notebook} */
-  app.post('/api/notes-notebooks', authMiddleware, async (req, res) => {
-    try {
-      const { name } = req.body
-      const nbs = await getUserNoteNotebooks(req.userId)
-      const newNb = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), name, order: nbs.length, created_at: new Date().toISOString() }
-      nbs.push(newNb)
-      await setUserNoteNotebooks(req.userId, nbs)
-      res.json({ notebook: newNb })
-    } catch (e) { console.error('Add note notebook error:', e); res.status(500).json({ error: '添加笔记本失败' }) }
-  })
-
-  /** PUT /api/notes-notebooks/:id (auth) body:{name?} => 200 {notebook} */
-  app.put('/api/notes-notebooks/:id', authMiddleware, async (req, res) => {
-    try {
-      const { id } = req.params; const { name } = req.body
-      const nbs = await getUserNoteNotebooks(req.userId)
-      const idx = nbs.findIndex(nb => nb.id === id)
-      if (idx === -1) return res.status(404).json({ error: '笔记本不存在' })
-      if (name !== undefined) nbs[idx].name = name
-      await setUserNoteNotebooks(req.userId, nbs)
-      res.json({ notebook: nbs[idx] })
-    } catch (e) { console.error('Update note notebook error:', e); res.status(500).json({ error: '更新笔记本失败' }) }
-  })
-
-  /** DELETE /api/notes-notebooks/:id (auth) => 200 {success:true} */
-  app.delete('/api/notes-notebooks/:id', authMiddleware, async (req, res) => {
-    try {
-      const { id } = req.params
-      const nbs = await getUserNoteNotebooks(req.userId)
-      const notes = await getUserNotes(req.userId)
-      await setUserNoteNotebooks(req.userId, nbs.filter(nb => nb.id !== id))
-      await setUserNotes(req.userId, notes.filter(n => n.notebookId !== id))
-      res.json({ success: true })
-    } catch (e) { console.error('Delete note notebook error:', e); res.status(500).json({ error: '删除笔记本失败' }) }
-  })
-
-  /** GET /api/notes (auth) ?notebookId=xxx => 200 {notes:[]} */
-  app.get('/api/notes', authMiddleware, async (req, res) => {
-    try {
-      const { notebookId } = req.query
-      let notes = await getUserNotes(req.userId)
-      if (notebookId) notes = notes.filter(n => n.notebookId === notebookId)
-      res.json({ notes })
-    } catch (e) { console.error('Get notes error:', e); res.status(500).json({ error: '获取笔记失败' }) }
-  })
-
-  /** POST /api/notes (auth) body:{notebookId,title,content} => 200 {note} */
-  app.post('/api/notes', authMiddleware, async (req, res) => {
-    try {
-      const { notebookId, title, content } = req.body
-      const notes = await getUserNotes(req.userId)
-      const now = new Date().toISOString()
-      const newNote = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), notebookId, title: title || '无标题', content: content || '', created_at: now, updated_at: now }
-      notes.unshift(newNote)
-      await setUserNotes(req.userId, notes)
-      res.json({ note: newNote })
-    } catch (e) { console.error('Add note error:', e); res.status(500).json({ error: '创建笔记失败' }) }
-  })
-
-  /** PUT /api/notes/:id (auth) body:{title?,content?} => 200 {note} */
-  app.put('/api/notes/:id', authMiddleware, async (req, res) => {
-    try {
-      const { id } = req.params; const { title, content } = req.body
-      const notes = await getUserNotes(req.userId)
-      const idx = notes.findIndex(n => n.id === id)
-      if (idx === -1) return res.status(404).json({ error: '笔记不存在' })
-      if (title !== undefined) notes[idx].title = title
-      if (content !== undefined) notes[idx].content = content
-      notes[idx].updated_at = new Date().toISOString()
-      await setUserNotes(req.userId, notes)
-      res.json({ note: notes[idx] })
-    } catch (e) { console.error('Update note error:', e); res.status(500).json({ error: '更新笔记失败' }) }
-  })
-
-  /** DELETE /api/notes/:id (auth) => 200 {success:true} */
-  app.delete('/api/notes/:id', authMiddleware, async (req, res) => {
-    try {
-      const { id } = req.params
-      const notes = await getUserNotes(req.userId)
-      await setUserNotes(req.userId, notes.filter(n => n.id !== id))
-      res.json({ success: true })
-    } catch (e) { console.error('Delete note error:', e); res.status(500).json({ error: '删除笔记失败' }) }
-  })
-
   // ============ Data API (type/key based) ============
 
   /** GET /api/data/:type/:key (auth) => 200 {success:true, data:any} */
   app.get('/api/data/:type/:key', authMiddleware, async (req, res) => {
-    try { const data = await getUserKV(req.userId, req.params.type, req.params.key); res.json({ success: true, data: data || null }) }
+    try {
+      let data = await getUserKV(req.userId, req.params.type, req.params.key)
+      if (req.params.type === 'system' && req.params.key === 'state') {
+        if (!data || data.guideCompleted === undefined) {
+          const legacyPath = path.join(DATA_DIR, req.userId, 'system', 'guideState.json')
+          const legacy = readJson(legacyPath)
+          if (legacy && legacy.guideCompleted !== undefined) {
+            if (!data) data = {}
+            data.guideCompleted = legacy.guideCompleted
+            await setUserKV(req.userId, 'system', 'state', data)
+            try { fs.unlinkSync(legacyPath) } catch {}
+            console.log(`[Data] 引导状态已从 guideState.json 迁移到 state.json: ${req.userId}`)
+          }
+        }
+      }
+      res.json({ success: true, data: data || null })
+    }
     catch (e) { console.error('Get data error:', e); res.status(500).json({ success: false, error: '获取数据失败' }) }
   })
 
@@ -883,9 +790,6 @@ function createProdServer(options = {}) {
         // 课程表
         courses: await getUserKV(userId, 'course', 'courses'),
         course_recorded_courses: await getUserKV(userId, 'course', 'recorded-courses'),
-        // 笔记
-        notebooks: await getUserNoteNotebooks(userId),
-        notes: await getUserNotes(userId),
         // 我的
         profile: await getUserProfile(userId),
         login_info: await getUserSession(userId),
@@ -903,7 +807,7 @@ function createProdServer(options = {}) {
   /** POST /api/import body:{各模块数据} => 200 {success} - 导入数据（登录后可导入到当前账号，未登录时从user_index获取账号信息） */
   app.post('/api/import', async (req, res) => {
     try {
-      const { user_index, tasks, focus_favorites, focus_records, lists, missions, countdown_categories, countdowns, courses, course_recorded_courses, notebooks, notes, profile, login_info, settings, system_state } = req.body
+      const { user_index, tasks, focus_favorites, focus_records, lists, missions, countdown_categories, countdowns, courses, course_recorded_courses, profile, login_info, settings, system_state } = req.body
 
       // 尝试从token获取用户信息（可选，不要求必须登录）
       let userId = req.userId
@@ -942,8 +846,6 @@ function createProdServer(options = {}) {
       if (countdowns !== undefined) await setUserKV(userId, 'countdown', 'countdowns', countdowns)
       if (courses !== undefined) await setUserKV(userId, 'course', 'courses', courses)
       if (course_recorded_courses !== undefined) await setUserKV(userId, 'course', 'recorded-courses', course_recorded_courses)
-      if (notebooks) await setUserNoteNotebooks(userId, notebooks)
-      if (notes) await setUserNotes(userId, notes)
       if (profile) await setUserProfile(userId, profile)
       if (login_info) await setUserSession(userId, login_info)
       if (settings) await setUserSettings(userId, settings)
@@ -970,8 +872,6 @@ function createProdServer(options = {}) {
         if (PROTECTED_KEYS.includes(key)) continue
         if (key === 'lists') await setUserMissionLists(userId, [])
         else if (key === 'missions') await setUserMissions(userId, [])
-        else if (key === 'notebooks') await setUserNoteNotebooks(userId, [])
-        else if (key === 'notes') await setUserNotes(userId, [])
         else if (key === 'tasks') await setUserTasks(userId, [])
         else if (key === 'focus_favorites') await setUserKV(userId, 'focus', 'favorites', [])
         else if (key === 'focus_records') await setUserKV(userId, 'focus', 'records', [])

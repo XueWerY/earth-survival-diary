@@ -122,6 +122,8 @@ export interface SystemState {
   currentPage?: string
   statsActiveTab?: string
   session?: { token: string }
+  guideCompleted?: boolean
+  version?: string
 }
 
 async function loadSystemState(): Promise<SystemState> {

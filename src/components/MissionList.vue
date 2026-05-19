@@ -64,7 +64,7 @@
           </div>
         </div>
       </div>
-      <div class="op-nav-scroll-wrapper" ref="opNavRef" v-show="showGroupNav">
+      <div class="op-nav-scroll-wrapper" ref="opNavRef" v-show="showGroupNav" :style="isGuideActive ? { pointerEvents: 'none', opacity: '0.4' } : {}">
         <div class="op-nav-inner">
           <div class="op-nav-item" :ref="setOpNavItemRef" @click="handleOpenEditList">编辑清单</div>
           <div class="op-nav-item" :ref="setOpNavItemRef" @click="handleAddList">添加清单</div>
@@ -90,9 +90,9 @@
           <div v-else class="today-missions">
             <div v-for="mission in todayIncompleteMissions" :key="mission.id" class="mission-card">
               <div class="mission-header">
-                <el-checkbox :model-value="mission.completed" @change="handleMissionComplete(mission)" />
+                <el-checkbox :model-value="mission.completed" @change="handleMissionComplete(mission)" :disabled="isGuideActive" />
                 <div class="mission-name" :style="{ color: getPriorityColor(mission.priority) }">{{ mission.name }}</div>
-                <div class="mission-actions">
+                <div v-if="!isGuideActive" class="mission-actions">
                   <el-button class="mission-icon-btn" text size="small" @click.stop="handleEditMission(mission)" title="编辑"><el-icon><Edit /></el-icon></el-button>
                   <el-button class="mission-icon-btn" text size="small" @click.stop="openChildFormMove(mission)" title="移动"><el-icon><Switch /></el-icon></el-button>
                   <el-button class="mission-icon-btn mission-icon-btn-delete" text size="small" @click.stop="deleteMission(mission.id)" title="删除"><el-icon><Delete /></el-icon></el-button>
@@ -126,7 +126,7 @@
                     {{ getRemainingTime(mission)?.text }}
                   </span>
                 </div>
-                <div v-if="mission.checklist.length > 0" class="checklist-items-always">
+                <div v-if="mission.checklist.length > 0" class="checklist-items-always" :style="isGuideActive ? { pointerEvents: 'none', opacity: '0.7' } : {}">
                   <div v-for="item in mission.checklist" :key="item.id" class="checklist-item" :class="{ completed: item.completed, 'drag-over': dragOverItemId === item.id }"
                        @dragover.prevent="onChecklistDragOver($event, mission.id, item.id)"
                        @drop="onChecklistDrop(mission.id, item.id)"
@@ -144,7 +144,7 @@
                     </template>
                     <span v-else class="check-text" @click.stop="startEditChecklistItem(mission.id, item)">{{ item.text }}</span>
                   </div>
-                  <div class="checklist-add-row">
+                  <div class="checklist-add-row" :style="isGuideActive ? { pointerEvents: 'none', opacity: '0.7' } : {}">
                     <el-input
                       v-if="addingChecklist[mission.id]"
                       v-model="newChecklistText[mission.id]"
@@ -173,8 +173,8 @@
                         @blur="finishEditNotes"
                       />
                     </div>
-                    <div v-else-if="mission.notes" class="mission-notes-content" @dblclick.stop="startEditNotes(mission)">{{ mission.notes }}</div>
-                    <div v-else class="mission-notes-placeholder" @dblclick.stop="startEditNotes(mission)">双击添加备注</div>
+                    <div v-else-if="mission.notes" class="mission-notes-content" @dblclick.stop="!isGuideActive && startEditNotes(mission)">{{ mission.notes }}</div>
+                    <div v-else class="mission-notes-placeholder" @dblclick.stop="!isGuideActive && startEditNotes(mission)">双击添加备注</div>
               </div>
             </div>
           </div>
@@ -187,9 +187,9 @@
           <div v-else class="smart-missions">
             <div v-for="mission in expiredMissions" :key="mission.id" class="mission-card expired-card">
               <div class="mission-header">
-                <el-checkbox :model-value="mission.completed" @change="handleMissionComplete(mission)" />
+                <el-checkbox :model-value="mission.completed" @change="handleMissionComplete(mission)" :disabled="isGuideActive" />
                 <div class="mission-name" :style="{ color: getPriorityColor(mission.priority) }">{{ mission.name }}</div>
-                <div class="mission-actions">
+                <div v-if="!isGuideActive" class="mission-actions">
                   <el-button class="mission-icon-btn" text size="small" @click.stop="handleEditMission(mission)" title="编辑"><el-icon><Edit /></el-icon></el-button>
                   <el-button class="mission-icon-btn" text size="small" @click.stop="openChildFormMove(mission)" title="移动"><el-icon><Switch /></el-icon></el-button>
                   <el-button class="mission-icon-btn mission-icon-btn-delete" text size="small" @click.stop="deleteMission(mission.id)" title="删除"><el-icon><Delete /></el-icon></el-button>
@@ -227,7 +227,7 @@
                     {{ getOverduePreciseTime(mission) }}
                   </span>
                 </div>
-                <div v-if="mission.checklist.length > 0" class="checklist-items-always">
+                <div v-if="mission.checklist.length > 0" class="checklist-items-always" :style="isGuideActive ? { pointerEvents: 'none', opacity: '0.7' } : {}">
                   <div v-for="item in mission.checklist" :key="item.id" class="checklist-item" :class="{ completed: item.completed, 'drag-over': dragOverItemId === item.id }"
                        @dragover.prevent="onChecklistDragOver($event, mission.id, item.id)"
                        @drop="onChecklistDrop(mission.id, item.id)"
@@ -245,7 +245,7 @@
                     </template>
                     <span v-else class="check-text" @click.stop="startEditChecklistItem(mission.id, item)">{{ item.text }}</span>
                   </div>
-                  <div class="checklist-add-row">
+                  <div class="checklist-add-row" :style="isGuideActive ? { pointerEvents: 'none', opacity: '0.7' } : {}">
                     <el-input
                       v-if="addingChecklist[mission.id]"
                       v-model="newChecklistText[mission.id]"
@@ -274,8 +274,8 @@
                         @blur="finishEditNotes"
                       />
                     </div>
-                    <div v-else-if="mission.notes" class="mission-notes-content" @dblclick.stop="startEditNotes(mission)">{{ mission.notes }}</div>
-                    <div v-else class="mission-notes-placeholder" @dblclick.stop="startEditNotes(mission)">双击添加备注</div>
+                    <div v-else-if="mission.notes" class="mission-notes-content" @dblclick.stop="!isGuideActive && startEditNotes(mission)">{{ mission.notes }}</div>
+                    <div v-else class="mission-notes-placeholder" @dblclick.stop="!isGuideActive && startEditNotes(mission)">双击添加备注</div>
               </div>
             </div>
           </div>
@@ -288,9 +288,9 @@
           <div v-else class="smart-missions">
             <div v-for="mission in futureMissions" :key="mission.id" class="mission-card future-card">
               <div class="mission-header">
-                <el-checkbox :model-value="mission.completed" @change="handleMissionComplete(mission)" />
+                <el-checkbox :model-value="mission.completed" @change="handleMissionComplete(mission)" :disabled="isGuideActive" />
                 <div class="mission-name" :style="{ color: getPriorityColor(mission.priority) }">{{ mission.name }}</div>
-                <div class="mission-actions">
+                <div v-if="!isGuideActive" class="mission-actions">
                   <el-button class="mission-icon-btn" text size="small" @click.stop="handleEditMission(mission)" title="编辑"><el-icon><Edit /></el-icon></el-button>
                   <el-button class="mission-icon-btn" text size="small" @click.stop="openChildFormMove(mission)" title="移动"><el-icon><Switch /></el-icon></el-button>
                   <el-button class="mission-icon-btn mission-icon-btn-delete" text size="small" @click.stop="deleteMission(mission.id)" title="删除"><el-icon><Delete /></el-icon></el-button>
@@ -328,7 +328,7 @@
                     {{ getRemainingTime(mission)?.text }}
                   </span>
                 </div>
-                <div v-if="mission.checklist.length > 0" class="checklist-items-always">
+                <div v-if="mission.checklist.length > 0" class="checklist-items-always" :style="isGuideActive ? { pointerEvents: 'none', opacity: '0.7' } : {}">
                   <div v-for="item in mission.checklist" :key="item.id" class="checklist-item" :class="{ completed: item.completed, 'drag-over': dragOverItemId === item.id }"
                        @dragover.prevent="onChecklistDragOver($event, mission.id, item.id)"
                        @drop="onChecklistDrop(mission.id, item.id)"
@@ -346,7 +346,7 @@
                     </template>
                     <span v-else class="check-text" @click.stop="startEditChecklistItem(mission.id, item)">{{ item.text }}</span>
                   </div>
-                  <div class="checklist-add-row">
+                  <div class="checklist-add-row" :style="isGuideActive ? { pointerEvents: 'none', opacity: '0.7' } : {}">
                     <el-input
                       v-if="addingChecklist[mission.id]"
                       v-model="newChecklistText[mission.id]"
@@ -375,8 +375,8 @@
                         @blur="finishEditNotes"
                       />
                     </div>
-                    <div v-else-if="mission.notes" class="mission-notes-content" @dblclick.stop="startEditNotes(mission)">{{ mission.notes }}</div>
-                    <div v-else class="mission-notes-placeholder" @dblclick.stop="startEditNotes(mission)">双击添加备注</div>
+                    <div v-else-if="mission.notes" class="mission-notes-content" @dblclick.stop="!isGuideActive && startEditNotes(mission)">{{ mission.notes }}</div>
+                    <div v-else class="mission-notes-placeholder" @dblclick.stop="!isGuideActive && startEditNotes(mission)">双击添加备注</div>
               </div>
             </div>
           </div>
@@ -389,9 +389,9 @@
           <div v-else class="mission-list">
             <div v-for="mission in currentGroupMissions" :key="mission.id" class="mission-card">
               <div class="mission-header">
-                <el-checkbox :model-value="mission.completed" @change="handleMissionComplete(mission)" />
+                <el-checkbox :model-value="mission.completed" @change="handleMissionComplete(mission)" :disabled="isGuideActive" />
                 <div class="mission-name" :style="{ color: getPriorityColor(mission.priority) }">{{ mission.name }}</div>
-                <div class="mission-actions">
+                <div v-if="!isGuideActive" class="mission-actions">
                   <el-button class="mission-icon-btn" text size="small" @click.stop="handleEditMission(mission)" title="编辑"><el-icon><Edit /></el-icon></el-button>
                   <el-button class="mission-icon-btn" text size="small" @click.stop="openChildFormMove(mission)" title="移动"><el-icon><Switch /></el-icon></el-button>
                   <el-button class="mission-icon-btn mission-icon-btn-delete" text size="small" @click.stop="deleteMission(mission.id)" title="删除"><el-icon><Delete /></el-icon></el-button>
@@ -422,7 +422,7 @@
                     {{ getRemainingTime(mission)?.text }}
                   </span>
                 </div>
-                <div v-if="mission.checklist.length > 0" class="checklist-items-always">
+                <div v-if="mission.checklist.length > 0" class="checklist-items-always" :style="isGuideActive ? { pointerEvents: 'none', opacity: '0.7' } : {}">
                   <div v-for="item in mission.checklist" :key="item.id" class="checklist-item" :class="{ completed: item.completed, 'drag-over': dragOverItemId === item.id }"
                        @dragover.prevent="onChecklistDragOver($event, mission.id, item.id)"
                        @drop="onChecklistDrop(mission.id, item.id)"
@@ -440,7 +440,7 @@
                     </template>
                     <span v-else class="check-text" @click.stop="startEditChecklistItem(mission.id, item)">{{ item.text }}</span>
                   </div>
-                  <div class="checklist-add-row">
+                  <div class="checklist-add-row" :style="isGuideActive ? { pointerEvents: 'none', opacity: '0.7' } : {}">
                     <el-input
                       v-if="addingChecklist[mission.id]"
                       v-model="newChecklistText[mission.id]"
@@ -469,8 +469,8 @@
                         @blur="finishEditNotes"
                       />
                     </div>
-                    <div v-else-if="mission.notes" class="mission-notes-content" @dblclick.stop="startEditNotes(mission)">{{ mission.notes }}</div>
-                    <div v-else class="mission-notes-placeholder" @dblclick.stop="startEditNotes(mission)">双击添加备注</div>
+                    <div v-else-if="mission.notes" class="mission-notes-content" @dblclick.stop="!isGuideActive && startEditNotes(mission)">{{ mission.notes }}</div>
+                    <div v-else class="mission-notes-placeholder" @dblclick.stop="!isGuideActive && startEditNotes(mission)">双击添加备注</div>
               </div>
             </div>
           </div>
@@ -572,6 +572,7 @@ import { logger } from '../lib/logger'
 const missionStore = useMissionStore()
 
 const refreshReminders = inject<() => void>('refreshReminders', () => {})
+const isGuideActive = inject('guideVisible', ref(false))
 
 const currentListId = ref<string>('')
 const currentGroupId = ref<string>('')

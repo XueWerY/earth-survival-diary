@@ -70,12 +70,14 @@
                 clearable
                 maxlength="50"
                 show-word-limit
+                :disabled="isGuideActive"
             />
             <el-input
                 v-model="focusNotes"
                 placeholder="添加备注（可选）"
                 size="large"
                 clearable
+                :disabled="isGuideActive"
                 maxlength="200"
                 style="margin-top: 12px"
             />
@@ -213,7 +215,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, onActivated, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onActivated, watch, inject } from 'vue'
 import { ElMessage } from 'element-plus'
 import { VideoPlay, Star, Delete } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
@@ -225,6 +227,8 @@ import { logger } from '../lib/logger'
 const emit = defineEmits<{
   (e: 'fullscreen-change', fullscreen: boolean): void
 }>()
+
+const isGuideActive = inject('guideVisible', ref(false))
 
 const focusStore = useFocusStore()
 const taskStore = useTaskStore()

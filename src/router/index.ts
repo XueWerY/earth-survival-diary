@@ -5,7 +5,6 @@ import FocusTimer from '../components/FocusTimer.vue'
 import MissionList from '../components/MissionList.vue'
 import CountdownList from '../components/CountdownList.vue'
 import CourseSchedule from '../components/CourseSchedule.vue'
-import NotesPage from '../components/NotesPage.vue'
 import StatisticsPage from '../components/StatisticsPage.vue'
 import ProfilePage from '../components/ProfilePage.vue'
 
@@ -16,7 +15,6 @@ const routes = [
   { path: '/mission', name: 'mission', component: MissionList },
   { path: '/countdown', name: 'countdown', component: CountdownList },
   { path: '/course', name: 'course', component: CourseSchedule },
-  { path: '/notes', name: 'notes', component: NotesPage },
   { path: '/statistics', name: 'statistics', component: StatisticsPage },
   { path: '/profile', name: 'profile', component: ProfilePage },
 ]

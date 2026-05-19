@@ -30,7 +30,7 @@
     </div>
 
     <div class="ops-nav-area">
-      <div class="ops-nav-scroll-wrapper" ref="opsNavRef">
+      <div class="ops-nav-scroll-wrapper" ref="opsNavRef" :style="isGuideActive ? { pointerEvents: 'none', opacity: '0.4' } : {}">
         <div class="ops-nav-inner">
           <div class="ops-item" :ref="setOpsNavItemRef" @click="handleEditCurrentCategory">
             <span class="ops-icon">✏️</span>
@@ -372,6 +372,7 @@ const CATEGORY_KEY = ['countdown', 'categories'] as const
 
 const milestones = inject<Ref<Milestone[]>>('countdownMilestones', ref<Milestone[]>([]))
 const categories = inject<Ref<Category[]>>('countdownCategories', ref<Category[]>([...DEFAULT_CATEGORIES]))
+const isGuideActive = inject('guideVisible', ref(false))
 const currentCategory = ref('')
 
 const categoryNavRef = ref<HTMLElement>()

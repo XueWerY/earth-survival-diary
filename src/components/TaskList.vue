@@ -8,10 +8,11 @@
       <LunarDatePicker
           v-model="selectedDateValue"
           placeholder="选择日期"
+          :disabled="isGuideActive"
       />
 
       <!-- 记录足迹按钮 -->
-      <el-button type="primary" @click="handleAddTask">
+      <el-button type="primary" @click="handleAddTask" :disabled="isGuideActive">
         <el-icon><Plus /></el-icon>
         记录足迹
       </el-button>
@@ -25,7 +26,7 @@
               :description="emptyText"
               :image-size="120"
           />
-          <el-button type="primary" @click="handleAddTask" class="empty-add-btn">
+          <el-button type="primary" @click="handleAddTask" class="empty-add-btn" :disabled="isGuideActive">
             <el-icon><Plus /></el-icon>
             记录足迹
           </el-button>
@@ -54,7 +55,7 @@
                       <span class="item-desc">{{ generateTaskDescription(task) }}</span>
                     </div>
                     <div v-if="task.notes" class="item-notes">{{ task.notes }}</div>
-                    <div class="item-actions">
+                    <div v-if="!isGuideActive" class="item-actions">
                       <el-button
                           type="primary"
                           :icon="Edit"
@@ -92,7 +93,7 @@
                       <span class="item-desc">{{ generateTaskDescription(task) }}</span>
                     </div>
                     <div v-if="task.notes" class="item-notes">{{ task.notes }}</div>
-                    <div class="item-actions">
+                    <div v-if="!isGuideActive" class="item-actions">
                       <el-button
                           type="primary"
                           :icon="Edit"
@@ -130,7 +131,7 @@
                       <span class="item-desc">{{ generateTaskDescription(task) }}</span>
                     </div>
                     <div v-if="task.notes" class="item-notes">{{ task.notes }}</div>
-                    <div class="item-actions">
+                    <div v-if="!isGuideActive" class="item-actions">
                       <el-button
                           type="primary"
                           :icon="Edit"
@@ -183,7 +184,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, inject } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Edit, Delete } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
@@ -200,6 +201,8 @@ dayjs.locale('zh-cn')
 const emit = defineEmits<{
   (e: 'fullscreen-change', fullscreen: boolean): void
 }>()
+
+const isGuideActive = inject('guideVisible', ref(false))
 
 const taskStore = useTaskStore()
 
