@@ -20,83 +20,42 @@
 
     <!-- 已登录且数据加载完成，显示主界面 -->
     <template v-else>
-      <!-- 顶部导航栏 -->
-      <nav class="top-nav" :class="{ 'nav-hidden': isFocusFullscreen }">
-        <div class="nav-scroll-container" ref="navScrollContainer">
-          <div class="nav-menu">
-            <div
-                class="nav-item"
-                :class="{ active: isActive('footprint') }"
-                :ref="setNavItemRef"
-                @click="navigateTo('/footprint')"
-            >
-              <span class="nav-label">足迹</span>
-            </div>
-            <div
-                class="nav-item"
-                :class="{ active: isActive('focus') }"
-                :ref="setNavItemRef"
-                @click="navigateTo('/focus')"
-            >
-              <span class="nav-label">专注</span>
-            </div>
-            <div
-                class="nav-item"
-                :class="{ active: isActive('mission') }"
-                :ref="setNavItemRef"
-                @click="navigateTo('/mission')"
-            >
-              <span class="nav-label">清单</span>
-            </div>
-            <div
-                class="nav-item"
-                :class="{ active: isActive('countdown') }"
-                :ref="setNavItemRef"
-                @click="navigateTo('/countdown')"
-            >
-              <span class="nav-label">倒数日</span>
-            </div>
-            <div
-                class="nav-item"
-                :class="{ active: isActive('course') }"
-                :ref="setNavItemRef"
-                @click="navigateTo('/course')"
-            >
-              <span class="nav-label">课程表</span>
-            </div>
-            <div
-                class="nav-item"
-                :class="{ active: isActive('statistics') }"
-                :ref="setNavItemRef"
-                @click="navigateTo('/statistics')"
-            >
-              <span class="nav-label">统计</span>
-            </div>
-            <div
-                class="nav-item"
-                :class="{ active: isActive('profile') }"
-                :ref="setNavItemRef"
-                @click="navigateTo('/profile')"
-            >
-              <span class="nav-label">我的</span>
-            </div>
-          </div>
-          <div class="scroll-shadow-left" :class="{ 'shadow-hidden': !showLeftShadow }"></div>
-          <div class="scroll-shadow-right" :class="{ 'shadow-hidden': !showRightShadow }"></div>
+      <!-- 主导航栏 - Electron 端在顶部 -->
+      <div v-if="isElectron" class="main-nav-bar" :class="{ 'nav-hidden': isFocusFullscreen }">
+        <div class="nav-items-scroll" ref="navScrollRef">
+          <button
+            v-for="m in MODULES"
+            :key="m"
+            class="nav-item"
+            :class="{ active: pageNav.currentModule.value === m }"
+            @click="navigateTo(m)"
+            :title="MODULE_LABELS[m]"
+          >
+            <span class="nav-item-icon">{{ MODULE_ICONS[m] }}</span>
+            <span class="nav-item-label">{{ MODULE_LABELS[m] }}</span>
+          </button>
         </div>
-      </nav>
+      </div>
+
+      
 
       <!-- 主内容区域 -->
       <main class="main-content">
         <div class="panel-wrapper">
           <router-view v-slot="{ Component }">
-            <component
-              :is="Component"
-              :key="`${String($route.name)}-${userKey}`"
-              @fullscreen-change="handleFullscreenFromRoute"
-              @logout="handleLogout"
-              @refreshData="handleRefreshData"
-            />
+            <template v-if="Component">
+              <component
+                :is="Component"
+                :key="`${String($route.name)}-${userKey}`"
+                @fullscreen-change="handleFullscreenFromRoute"
+                @logout="handleLogout"
+                @refreshData="handleRefreshData"
+                @profile-updated="handleProfileUpdated"
+              />
+            </template>
+            <div v-else class="empty-state">
+              <p>组件未找到: {{ $route.name }}</p>
+            </div>
           </router-view>
         </div>
       </main>
@@ -156,15 +115,31 @@
           </div>
         </div>
       </div>
+
+      <!-- 主导航栏 - Android 端在底部 -->
+      <div v-if="!isElectron" class="main-nav-bar nav-bar-bottom" :class="{ 'nav-hidden': isFocusFullscreen }">
+        <div class="nav-items-scroll" ref="navScrollRefMobile">
+          <button
+            v-for="m in MODULES"
+            :key="m"
+            class="nav-item"
+            :class="{ active: pageNav.currentModule.value === m }"
+            @click="navigateTo(m)"
+            :title="MODULE_LABELS[m]"
+          >
+            <span class="nav-item-icon">{{ MODULE_ICONS[m] }}</span>
+            <span class="nav-item-label">{{ MODULE_LABELS[m] }}</span>
+          </button>
+        </div>
+      </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed, nextTick, provide } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick, provide, onErrorCaptured } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import AuthPage from './components/AuthPage.vue'
-import { initCourseAutoRecord } from './composables/useCourseAutoRecord'
+import AuthPage from './components/auth/AuthPage.vue'
 import { useTaskStore } from './stores/taskStore'
 import { useMissionStore } from './stores/missionStore'
 import { useAuthStore } from './stores/authStore'
@@ -172,10 +147,11 @@ import { useSettingsStore } from './stores/settingsStore'
 import { useFocusStore } from './stores/focusStore'
 import { getData, setData, preloadData, clearCache, getSystemStateField, setSystemStateField } from './services/storageService'
 import { logger } from './lib/logger'
+import { usePageNav, MODULES, MODULE_ICONS, MODULE_LABELS, MODULE_ROUTES } from './composables/usePageNav'
 import dayjs from 'dayjs'
 // @ts-expect-error - Vite raw import
 import changelogContent from '../CHANGELOG.md?raw'
-import GuideOverlay from './components/GuideOverlay.vue'
+import GuideOverlay from './components/common/overlay/GuideOverlay.vue'
 import { guideSteps } from './data/guideSteps'
 import { ElMessage } from 'element-plus'
 
@@ -185,10 +161,35 @@ const route = useRoute()
 const VALID_ROUTES = ['footprint', 'focus', 'mission', 'countdown', 'course', 'statistics', 'profile']
 const MAX_SCHEDULE_DELAY = 20 * 24 * 3600 * 1000
 
-const isActive = (name: string) => route.name === name
+const pageNav = usePageNav()
 
-const navigateTo = (path: string) => {
-  router.push(path)
+const isElectron = computed(() => typeof window !== 'undefined' && !!(window as any).electronAPI)
+
+const navScrollRef = ref<HTMLElement | null>(null)
+const navScrollRefMobile = ref<HTMLElement | null>(null)
+
+const scrollNavToActive = () => {
+  nextTick(() => {
+    const container = navScrollRef.value || navScrollRefMobile.value
+    if (!container) return
+    const activeItem = container.querySelector('.nav-item.active') as HTMLElement
+    if (!activeItem) return
+    const containerWidth = container.clientWidth
+    const itemLeft = activeItem.offsetLeft
+    const itemWidth = activeItem.offsetWidth
+    container.scrollTo({ left: itemLeft - containerWidth / 2 + itemWidth / 2, behavior: 'smooth' })
+  })
+}
+
+watch(() => pageNav.currentModule.value, scrollNavToActive)
+
+const navigateTo = (module: string) => {
+  if (module === pageNav.currentModule.value) {
+    pageNav.setNavPath([module])
+  } else {
+    pageNav.setNavContext({ segments: [], plusVisible: false, plusOnClick: null, goModuleHome: () => {} })
+    router.push(MODULE_ROUTES[module])
+  }
 }
 
 const taskStore = useTaskStore()
@@ -196,159 +197,6 @@ const missionStore = useMissionStore()
 const authStore = useAuthStore()
 const settingsStore = useSettingsStore()
 const focusStore = useFocusStore()
-
-const navScrollContainer = ref<HTMLElement>()
-const navItems = ref<HTMLElement[]>([])
-const showLeftShadow = ref(false)
-const showRightShadow = ref(false)
-const isNavOverflow = ref(false)
-const setNavItemRef = (el: any) => {
-  if (el) {
-    navItems.value.push(el)
-  }
-}
-
-const scrollNavToCenter = () => {
-  nextTick(() => {
-    const container = navScrollContainer.value
-    if (!container) return
-    
-    const containerWidth = container.clientWidth
-    const scrollWidth = container.scrollWidth
-    
-    // 如果内容宽度小于等于容器宽度，居中由CSS控制
-    if (scrollWidth <= containerWidth) {
-      container.scrollLeft = 0
-      return
-    }
-    
-    // 找到当前激活的导航项
-    const activeIndex = navItems.value.findIndex(
-      item => item.classList.contains('active')
-    )
-    
-    if (activeIndex === -1) return
-    
-    const activeItem = navItems.value[activeIndex]
-    const itemOffsetLeft = activeItem.offsetLeft
-    const itemWidth = activeItem.offsetWidth
-    
-    const scrollTarget = itemOffsetLeft - (containerWidth / 2) + (itemWidth / 2)
-    
-    container.scrollTo({
-      left: scrollTarget,
-      behavior: 'smooth'
-    })
-  })
-}
-
-let isNavDragging = false
-let navDragStartX = 0
-let navDragScrollLeft = 0
-
-const checkNavOverflow = () => {
-  const el = navScrollContainer.value
-  if (!el) return
-  isNavOverflow.value = el.scrollWidth > el.clientWidth
-  updateNavShadows()
-}
-
-const updateNavShadows = () => {
-  const el = navScrollContainer.value
-  if (!el) return
-  isNavOverflow.value = el.scrollWidth > el.clientWidth
-  const { scrollLeft, scrollWidth, clientWidth } = el
-  showLeftShadow.value = scrollLeft > 2
-  showRightShadow.value = scrollLeft < scrollWidth - clientWidth - 2
-}
-
-const initNavDrag = () => {
-  const el = navScrollContainer.value
-  if (!el) return
-
-  // 拦截非左键的默认行为（中键自动滚动、右键菜单等）
-  el.addEventListener('mousedown', (e) => {
-    if (e.button !== 0) {
-      e.preventDefault()
-      e.stopPropagation()
-    }
-  }, { capture: true })
-
-  el.addEventListener('mousedown', (e) => {
-    if (e.button === 0) {
-      isNavDragging = true
-      navDragStartX = e.pageX
-      navDragScrollLeft = el.scrollLeft
-      el.style.cursor = 'grabbing'
-      el.style.userSelect = 'none'
-    }
-  })
-
-  window.addEventListener('mousemove', (e) => {
-    if (!isNavDragging) return
-    e.preventDefault()
-    const x = e.pageX
-    const walk = navDragStartX - x
-    const newScroll = navDragScrollLeft + walk
-    const maxScroll = el.scrollWidth - el.clientWidth
-    el.scrollLeft = Math.max(0, Math.min(maxScroll, newScroll))
-    updateNavShadows()
-  })
-
-  const endDrag = () => {
-    if (!isNavDragging) return
-    isNavDragging = false
-    el.style.cursor = ''
-    el.style.userSelect = ''
-    updateNavShadows()
-  }
-
-  window.addEventListener('mouseup', endDrag)
-  window.addEventListener('mouseleave', endDrag)
-
-  let touchStartX = 0
-  let touchScrollLeft = 0
-  let isTouchDragging = false
-
-  el.addEventListener('touchstart', (e) => {
-    touchStartX = e.touches[0].pageX
-    touchScrollLeft = el.scrollLeft
-    isTouchDragging = true
-  }, { passive: true })
-
-  el.addEventListener('touchmove', (e) => {
-    if (!isTouchDragging) return
-    const x = e.touches[0].pageX
-    const walk = touchStartX - x
-    const newScroll = touchScrollLeft + walk
-    const maxScroll = el.scrollWidth - el.clientWidth
-    el.scrollLeft = Math.max(0, Math.min(maxScroll, newScroll))
-    updateNavShadows()
-  }, { passive: true })
-
-  el.addEventListener('touchend', () => {
-    isTouchDragging = false
-    updateNavShadows()
-  })
-
-  el.addEventListener('scroll', updateNavShadows, { passive: true })
-
-  // 禁用右键菜单
-  el.addEventListener('contextmenu', (e) => {
-    e.preventDefault()
-  })
-
-  checkNavOverflow()
-  window.addEventListener('resize', () => {
-    checkNavOverflow()
-    scrollNavToCenter()
-  })
-  
-  // 初始化后滚动到当前激活项 - 增加延迟确保DOM完全渲染
-  setTimeout(() => {
-    scrollNavToCenter()
-  }, 300)
-}
 
 // 星星画布显示条件
 const showStarCanvas = computed(() => {
@@ -359,6 +207,11 @@ const showStarCanvas = computed(() => {
 const dataInitialized = ref(false)
 const isInitializing = ref(false)
 const userKey = ref(0)
+
+onErrorCaptured((err, instance, info) => {
+  logger.error('[App] onErrorCaptured 捕获错误', { error: err instanceof Error ? err.message : String(err), info })
+  return false
+})
 
 // 认证成功处理
 const handleAuthSuccess = () => {
@@ -391,11 +244,29 @@ const handleRefreshData = async () => {
   clearCache()
   dataInitialized.value = false
   isInitializing.value = false
-  // 更新用户标识，强制 keep-alive 组件重新渲染
   userKey.value++
-  // 等待 DOM 更新后重新加载数据
   await nextTick()
   await initializeData()
+}
+
+const handleProfileUpdated = async () => {
+  logger.info('[App] 个人资料更新，同步倒数日数据')
+  await preloadCountdownData()
+}
+
+const cleanUpCourseAutoRecordedTasks = async () => {
+  try {
+    const taskStore = useTaskStore()
+    const courseTasks = taskStore.tasks.filter((t: any) => t.category === 'course')
+    if (courseTasks.length > 0) {
+      for (const t of courseTasks) {
+        await taskStore.deleteTask(t.id)
+      }
+      logger.info('[App] 已清理课程自动记录的足迹数据', { count: courseTasks.length })
+    }
+  } catch (e) {
+    logger.error('[App] 清理课程足迹数据失败', { error: e instanceof Error ? e.message : String(e) })
+  }
 }
 
 const showAppChangelogDialog = ref(false)
@@ -806,11 +677,15 @@ const initializeData = async () => {
 
     try {
       const savedPage = await getSystemStateField('currentPage')
+      logger.debug('[App] initializeData savedPage', { savedPage })
       if (savedPage && VALID_ROUTES.includes(savedPage)) {
-        router.replace(`/${savedPage}`)
+        logger.debug('[App] initializeData router.replace 开始', { currentPage: route.name, savedPage })
+        await router.replace(`/${savedPage}`)
+        logger.debug('[App] initializeData router.replace 完成', { currentPage: route.name })
         logger.debug('[App] 恢复路由状态:', { page: savedPage })
       }
-    } catch {
+    } catch (e) {
+      logger.warn('[App] initializeData 路由恢复失败', { error: e })
       logger.debug('[App] 恢复失败，使用默认路由')
     }
 
@@ -825,9 +700,10 @@ const initializeData = async () => {
       preloadCourseData(),
     ])
 
-    logger.debug('[App] 并行加载完成，初始化课程自动记录...')
-    await initCourseAutoRecordFromStorage()
+    logger.debug('[App] 并行加载完成')
     logger.info('[App] 数据初始化完成')
+
+    cleanUpCourseAutoRecordedTasks()
 
     scheduleMissionReminders()
 
@@ -849,6 +725,7 @@ const initializeData = async () => {
   } catch (error) {
     logger.error('[App] 初始化数据失败:', { error: error instanceof Error ? error.message : String(error) })
   } finally {
+    logger.debug('[App] initializeData 设置 dataInitialized = true', { navPath: pageNav.navPath.value, route: route.name })
     dataInitialized.value = true
     logger.debug('[App] dataInitialized 已设置为 true')
   }
@@ -1031,7 +908,7 @@ const preloadCountdownData = async () => {
         category: 'holiday',
         description: holiday.description,
         countMode: 'countdown',
-        pinned: true,
+        pinned: false,
         isSystem: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -1055,10 +932,11 @@ const preloadCountdownData = async () => {
   if (systemIdx === -1) {
     milestonesArr.unshift({
       id: SYSTEM_MILESTONE_ID,
-      name: '已使用地球 Online 生存日记',
+      name: '使用地球 Online 生存日记',
       targetDate: registrationDay,
       category: 'anniversary',
       description: '记录你在这个宇宙中的旅程',
+      countMode: 'countup',
       pinned: true,
       isSystem: true,
       createdAt: startDate,
@@ -1116,11 +994,18 @@ const preloadCourseData = async () => {
 // 监听路由变化，保存到系统状态
 watch(
   () => route.name,
-  async (newName) => {
+  async (newName, oldName) => {
+    logger.debug('[App] route watch 触发', { oldName, newName, currentModule: pageNav.currentModule.value, navPath: [...pageNav.navPath.value] })
     if (newName && typeof newName === 'string' && VALID_ROUTES.includes(newName)) {
+      if (pageNav.currentModule.value !== newName) {
+        logger.debug('[App] route watch 模块变化，设置 navPath', { from: pageNav.currentModule.value, to: newName })
+        pageNav.setNavPath([newName])
+        pageNav.setNavContext({ segments: [], plusVisible: false, plusOnClick: null, goModuleHome: () => {} })
+      } else {
+        logger.debug('[App] route watch 模块未变化，跳过 navPath 设置', { module: newName })
+      }
       await setSystemStateField('currentPage', newName)
     }
-    scrollNavToCenter()
   }
 )
 watch(
@@ -1170,22 +1055,6 @@ interface Meteor {
   angle: number
 }
 
-// 初始化课程自动记录功能
-const initCourseAutoRecordFromStorage = async () => {
-  try {
-    const savedCourses = await getData<any[]>('course', 'courses')
-
-    if (savedCourses) {
-      const settingsStore = useSettingsStore()
-      await settingsStore.loadSettings()
-      const semesterStartDate = settingsStore.settings.course?.semesterStartDate || null
-      await initCourseAutoRecord(savedCourses, semesterStartDate)
-    }
-  } catch (e) {
-    logger.error('Failed to init course auto record:', { error: e instanceof Error ? e.message : String(e) })
-  }
-}
-
 onMounted(async () => {
 
   // 注册倒数日刷新回调
@@ -1210,15 +1079,6 @@ onMounted(async () => {
     await initializeData()
     startVersionChecks()
   }
-
-  // 初始化导航栏拖拽滑动
-  initNavDrag()
-  updateNavShadows()
-
-  // 滚动到当前激活的导航项
-  nextTick(() => {
-    scrollNavToCenter()
-  })
 
   const canvas = starCanvas.value
   if (!canvas) return
@@ -1379,13 +1239,13 @@ onUnmounted(() => {
 }
 
 .kicked-out-content h2 {
-  color: #fff;
+  color: var(--chalk-white);
   margin: 0 0 12px 0;
   font-size: 22px;
 }
 
 .kicked-out-content p {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--chalk-white-60);
   margin: 0 0 24px 0;
   font-size: 14px;
 }
@@ -1404,108 +1264,79 @@ onUnmounted(() => {
   display: none;
 }
 
-/* 顶部导航栏 */
-.top-nav {
+/* 主导航栏 */
+.main-nav-bar {
   position: relative;
   z-index: 20;
-  width: 100%;
-  height: 56px;
-  background: rgba(15, 12, 41, 0.6);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  display: flex;
-  flex-direction: row;
-  align-items: center;
   flex-shrink: 0;
-  overflow: visible;
-  transition: opacity 0.3s, height 0.3s, margin 0.3s;
+  background: rgba(255, 255, 255, 0.03);
+  transition: opacity 0.3s, height 0.3s;
+  overflow: hidden;
 }
 
-.top-nav.nav-hidden {
+.main-nav-bar.nav-hidden {
   opacity: 0;
   height: 0;
-  margin-top: -56px;
+  min-height: 0;
   pointer-events: none;
 }
 
-.nav-scroll-container {
-  flex: 1;
-  position: relative;
-  overflow-x: auto;
-  overflow-y: hidden;
-  cursor: grab;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  -webkit-user-select: none;
-  user-select: none;
-  display: flex;
+.nav-bar-bottom {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: auto;
 }
 
-.nav-scroll-container::-webkit-scrollbar {
-  display: none;
-}
-
-.nav-menu {
-  padding: 6px 8px;
-  display: flex;
-  flex-direction: row;
-  gap: 4px;
-  align-items: center;
-  width: max-content;
-  margin: 0 auto;
-}
-
-.scroll-shadow-left,
-.scroll-shadow-right {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 30px;
-  pointer-events: none;
-  transition: opacity 0.3s ease;
-  z-index: 5;
-}
-
-.scroll-shadow-left {
-  left: 0;
-  background: linear-gradient(to right, rgba(15, 12, 41, 0.8) 0%, transparent 100%);
-}
-
-.scroll-shadow-right {
-  right: 0;
-  background: linear-gradient(to left, rgba(15, 12, 41, 0.8) 0%, transparent 100%);
-}
-
-.shadow-hidden {
-  opacity: 0;
-}
-
-.nav-item {
-  position: relative;
+.nav-items-scroll {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  padding: 4px 12px;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.nav-items-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 12px;
-  border-radius: 6px;
-  color: rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--chalk-white-60);
   cursor: pointer;
-  transition: all 0.2s ease;
+  font-size: 13px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s;
 }
 
 .nav-item:hover {
-  color: #fff;
   background: rgba(255, 255, 255, 0.08);
+  color: var(--chalk-white-85);
 }
 
 .nav-item.active {
-  color: #fff;
-  background: rgba(102, 126, 234, 0.2);
+  background: rgba(102, 126, 234, 0.15);
+  color: var(--chalk-white);
+  font-weight: 600;
 }
 
-.nav-label {
-  font-size: 13px;
-  font-weight: 500;
-  white-space: nowrap;
+.nav-item-icon {
+  font-size: 16px;
+}
+
+/* 顶部页面导航栏 - 已废弃，保留以兼容旧引用 */
+.page-nav-bar {
+  display: none;
 }
 
 .main-content {
@@ -1549,7 +1380,7 @@ onUnmounted(() => {
 }
 
 .loading-text {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--chalk-white-60);
   font-size: 14px;
 }
 
@@ -1579,7 +1410,7 @@ onUnmounted(() => {
 }
 
 .update-panel-title {
-  color: #f0c040;
+  color: var(--chalk-amber);
   font-size: 16px;
   font-weight: 600;
 }
@@ -1587,7 +1418,7 @@ onUnmounted(() => {
 .update-panel-close {
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--chalk-muted);
   font-size: 22px;
   cursor: pointer;
   padding: 0 4px;
@@ -1596,7 +1427,7 @@ onUnmounted(() => {
 }
 
 .update-panel-close:hover {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--chalk-white-90);
 }
 
 .update-panel-body {
@@ -1606,7 +1437,7 @@ onUnmounted(() => {
 .update-status {
   font-size: 15px;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--chalk-white-85);
 }
 
 .update-status.update-error {
@@ -1631,7 +1462,7 @@ onUnmounted(() => {
 
 .update-message {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--chalk-muted);
   margin-top: 8px;
   word-break: break-all;
 }
@@ -1683,7 +1514,7 @@ onUnmounted(() => {
 .reminder-panel-close {
   background: rgba(255, 255, 255, 0.08);
   border: none;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--chalk-muted);
   font-size: 14px;
   cursor: pointer;
   width: 24px;
@@ -1698,7 +1529,7 @@ onUnmounted(() => {
 
 .reminder-panel-close:hover {
   background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+  color: var(--chalk-white);
 }
 
 .reminder-panel-content {
@@ -1708,7 +1539,7 @@ onUnmounted(() => {
 .reminder-panel-title {
   font-size: 14px;
   font-weight: 600;
-  color: #f0c040;
+  color: var(--chalk-amber);
   margin-bottom: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1718,7 +1549,7 @@ onUnmounted(() => {
 
 .reminder-panel-subtitle {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--chalk-subtle);
   margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1728,7 +1559,7 @@ onUnmounted(() => {
 
 .reminder-panel-body {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--chalk-white-60);
   line-height: 1.4;
 }
 
@@ -1770,7 +1601,7 @@ onUnmounted(() => {
 }
 
 .changelog-panel-title {
-  color: #f0c040;
+  color: var(--chalk-amber);
   font-size: 16px;
   font-weight: 600;
 }
@@ -1778,7 +1609,7 @@ onUnmounted(() => {
 .changelog-panel-close {
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--chalk-muted);
   font-size: 22px;
   cursor: pointer;
   padding: 0 4px;
@@ -1787,7 +1618,7 @@ onUnmounted(() => {
 }
 
 .changelog-panel-close:hover {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--chalk-white-90);
 }
 
 .changelog-panel-body {
@@ -1800,8 +1631,8 @@ onUnmounted(() => {
 .changelog-panel-body::-webkit-scrollbar { width: 4px; }
 .changelog-panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
 .changelog-panel-body::-webkit-scrollbar-track { background: transparent; }
-.changelog-panel-body :deep(.cl-version) { color: #f0c040; font-size: 14px; font-weight: 600; margin: 14px 0 6px; padding: 5px 0 5px 10px; border-left: 3px solid #f0c040; background: linear-gradient(90deg, rgba(240,192,64,0.06) 0%, transparent 100%); border-radius: 0 4px 4px 0; }
-.changelog-panel-body :deep(.cl-list) { margin: 0 0 4px 16px; padding: 0; list-style: none; color: rgba(255,255,255,0.75); }
+.changelog-panel-body :deep(.cl-version) { color: var(--chalk-amber); font-size: 14px; font-weight: 600; margin: 14px 0 6px; padding: 5px 0 5px 10px; border-left: 3px solid #f0c040; background: linear-gradient(90deg, rgba(240,192,64,0.06) 0%, transparent 100%); border-radius: 0 4px 4px 0; }
+.changelog-panel-body :deep(.cl-list) { margin: 0 0 4px 16px; padding: 0; list-style: none; color: var(--chalk-white-75); }
 .changelog-panel-body :deep(.cl-list li) { font-size: 12px; line-height: 1.7; padding: 2px 0; position: relative; padding-left: 14px; }
 .changelog-panel-body :deep(.cl-list li)::before { content: '•'; position: absolute; left: 0; color: rgba(255,255,255,0.25); font-size: 10px; top: 5px; }
 </style>

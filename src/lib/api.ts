@@ -1,6 +1,11 @@
 // API 客户端 - 所有请求通过后端代理
+// 在 Capacitor (无 Electron) 环境下使用本地 localStorage 存储
+
+import * as fs from './fileStore'
 
 const API_BASE = '/api'
+
+const isCapacitor = typeof window !== 'undefined' && !(window as any).electronAPI
 
 // 获取存储的 token
 export function getToken(): string | null {
@@ -16,11 +21,22 @@ export function setToken(token: string | null) {
     }
 }
 
+function getUserId(): string | null {
+    const token = getToken()
+    if (!token) return null
+    if (isCapacitor) return fs.fsGetUserIdFromToken(token)
+    return null
+}
+
 // 通用请求函数
 async function request<T>(
     endpoint: string,
     options: RequestInit = {}
 ): Promise<T> {
+    if (isCapacitor) {
+        return capacitorRequest<T>(endpoint, options)
+    }
+
     const token = getToken()
 
     const headers: Record<string, string> = {
@@ -46,6 +62,154 @@ async function request<T>(
     }
 
     return data
+}
+
+// Capacitor 环境下的本地请求处理
+async function capacitorRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const token = getToken()
+    const parts = endpoint.split('/').filter(Boolean)
+    let body: any = {}
+    try { if (options.body) body = JSON.parse(options.body as string) } catch {}
+
+    // 提取 user ID
+    const userId = getUserId()
+
+    // ====== Auth APIs (无需认证) ======
+    if (endpoint === '/auth/signup' && options.method === 'POST') {
+        const result = await fs.fsSignUp(body.email, body.password, body.nickname)
+        if (result.session?.access_token) setToken(result.session.access_token)
+        return result as unknown as T
+    }
+    if (endpoint === '/auth/signin' && options.method === 'POST') {
+        const result = await fs.fsSignIn(body.email, body.password)
+        if (result.session?.access_token) setToken(result.session.access_token)
+        return result as unknown as T
+    }
+    if (endpoint === '/auth/signout' && options.method === 'POST') {
+        await fs.fsSignOut(token)
+        return { success: true } as unknown as T
+    }
+    if (endpoint === '/auth/account' && options.method === 'DELETE') {
+        await fs.fsDeleteAccount(token)
+        return { success: true } as unknown as T
+    }
+
+    // ====== Auth APIs ======
+    if (endpoint === '/auth/user' && !options.method) {
+        if (!token) throw Object.assign(new Error('未登录'), { response: { data: { error: '未登录' } } })
+        const result = await fs.fsGetUser(token)
+        return result as unknown as T
+    }
+    if (endpoint === '/auth/users') {
+        return await fs.fsGetUsers() as unknown as T
+    }
+    if (endpoint === '/auth/settings' && !options.method) {
+        return await fs.fsGetAppSettings() as unknown as T
+    }
+    if (endpoint === '/auth/settings' && options.method === 'POST') {
+        return await fs.fsUpdateAppSetting(body.key, body.value) as unknown as T
+    }
+
+    // ====== 需要认证的 APIs ======
+    if (!userId) throw Object.assign(new Error('未登录'), { response: { data: { error: '未登录' } } })
+
+    // Profile
+    if (endpoint === '/profile' && !options.method) {
+        return await fs.fsGetProfile(userId) as unknown as T
+    }
+    if (endpoint === '/profile' && options.method === 'PUT') {
+        return await fs.fsUpdateProfile(userId, body) as unknown as T
+    }
+
+    // Tasks
+    if (endpoint === '/tasks' && !options.method) {
+        return await fs.fsGetTasks(userId) as unknown as T
+    }
+    if (endpoint === '/tasks' && options.method === 'POST') {
+        return await fs.fsAddTask(userId, body) as unknown as T
+    }
+    const taskMatch = endpoint.match(/^\/tasks\/([^/]+)$/)
+    if (taskMatch) {
+        if (options.method === 'PUT') return await fs.fsUpdateTask(userId, taskMatch[1], body) as unknown as T
+        if (options.method === 'DELETE') return await fs.fsDeleteTask(userId, taskMatch[1]) as unknown as T
+    }
+
+    // Mission Lists
+    if (endpoint === '/mission-lists' && !options.method) {
+        return await fs.fsGetMissionLists(userId) as unknown as T
+    }
+    if (endpoint === '/mission-lists' && options.method === 'POST') {
+        return await fs.fsAddMissionList(userId, body) as unknown as T
+    }
+    if (endpoint === '/mission-lists/reorder' && options.method === 'PUT') {
+        return await fs.fsReorderMissionLists(userId, body.orders) as unknown as T
+    }
+    const listMatch = endpoint.match(/^\/mission-lists\/([^/]+)$/)
+    if (listMatch) {
+        if (options.method === 'PUT') return await fs.fsUpdateMissionList(userId, listMatch[1], body) as unknown as T
+        if (options.method === 'DELETE') return await fs.fsDeleteMissionList(userId, listMatch[1]) as unknown as T
+    }
+    const groupMatch = endpoint.match(/^\/mission-lists\/([^/]+)\/groups\/([^/]+)$/)
+    if (groupMatch) {
+        if (options.method === 'PUT') return await fs.fsUpdateMissionGroup(userId, groupMatch[1], groupMatch[2], body) as unknown as T
+        if (options.method === 'DELETE') return await fs.fsDeleteMissionGroup(userId, groupMatch[1], groupMatch[2]) as unknown as T
+    }
+    const groupAddMatch = endpoint.match(/^\/mission-lists\/([^/]+)\/groups$/)
+    if (groupAddMatch && options.method === 'POST') {
+        return await fs.fsAddMissionGroup(userId, groupAddMatch[1], body) as unknown as T
+    }
+    const groupReorderMatch = endpoint.match(/^\/mission-lists\/([^/]+)\/groups\/reorder$/)
+    if (groupReorderMatch && options.method === 'PUT') {
+        return await fs.fsReorderGroups(userId, groupReorderMatch[1], body.orders) as unknown as T
+    }
+
+    // Missions
+    const missionQuery = endpoint.startsWith('/missions?')
+    if (missionQuery) {
+        const params = new URLSearchParams(endpoint.substring(endpoint.indexOf('?')))
+        return await fs.fsGetMissions(userId, params.get('listId') || undefined) as unknown as T
+    }
+    if (endpoint === '/missions' && !options.method) {
+        return await fs.fsGetMissions(userId) as unknown as T
+    }
+    if (endpoint === '/missions' && options.method === 'POST') {
+        return await fs.fsAddMission(userId, body) as unknown as T
+    }
+    const missionMatch = endpoint.match(/^\/missions\/([^/]+)$/)
+    if (missionMatch) {
+        if (options.method === 'PUT') return await fs.fsUpdateMission(userId, missionMatch[1], body) as unknown as T
+        if (options.method === 'DELETE') return await fs.fsDeleteMission(userId, missionMatch[1]) as unknown as T
+    }
+
+    // Stats
+    if (endpoint === '/stats') {
+        return await fs.fsGetStats(userId) as unknown as T
+    }
+
+    // Settings
+    if (endpoint === '/settings' && !options.method) {
+        return await fs.fsGetSettings(userId) as unknown as T
+    }
+    if (endpoint === '/settings' && options.method === 'PUT') {
+        return await fs.fsUpdateSettings(userId, body) as unknown as T
+    }
+
+    // Data API
+    const dataGetMatch = endpoint.match(/^\/data\/([^/]+)\/(.+)$/)
+    if (dataGetMatch) {
+        if (!options.method) {
+            const data = await fs.fsGetData(userId, dataGetMatch[1], dataGetMatch[2])
+            return { success: true, data } as unknown as T
+        }
+        if (options.method === 'POST') {
+            return await fs.fsSetData(userId, dataGetMatch[1], dataGetMatch[2], body.data) as unknown as T
+        }
+        if (options.method === 'DELETE') {
+            return await fs.fsDeleteData(userId, dataGetMatch[1], dataGetMatch[2]) as unknown as T
+        }
+    }
+
+    throw new Error(`Capacitor: 未实现的 API 端点: ${options.method || 'GET'} ${endpoint}`)
 }
 
 // ============ 认证 API ============

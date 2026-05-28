@@ -1,14 +1,25 @@
 // 统一数据存储服务 - 支持用户隔离的 YAML 后端存储
+// 在 Capacitor (无 Electron) 环境下使用本地 localStorage 存储
 
 import { logger } from '../lib/logger'
+import * as fs from '../lib/fileStore'
 
 const API_BASE = '/api'
+
+const isCapacitor = typeof window !== 'undefined' && !(window as any).electronAPI
 
 const cache = new Map<string, any>()
 const pendingRequests = new Map<string, Promise<any>>()
 
 function getAuthToken(): string | null {
   return localStorage.getItem('auth_token')
+}
+
+function getUserId(): string | null {
+  const token = getAuthToken()
+  if (!token) return null
+  if (isCapacitor) return fs.fsGetUserIdFromToken(token)
+  return null
 }
 
 function cacheKey(type: string, key: string): string {
@@ -19,6 +30,14 @@ export async function getData<T>(type: string, key: string): Promise<T | null> {
   const ck = cacheKey(type, key)
   if (cache.has(ck)) {
     return cache.get(ck) as T
+  }
+
+  if (isCapacitor) {
+    const userId = getUserId()
+    if (!userId) return null
+    const data = await fs.fsGetData<T>(userId, type, key)
+    cache.set(ck, data)
+    return data
   }
 
   if (pendingRequests.has(ck)) {
@@ -57,6 +76,13 @@ export async function setData<T>(type: string, key: string, data: T): Promise<bo
   const ck = cacheKey(type, key)
   cache.set(ck, data)
 
+  if (isCapacitor) {
+    const userId = getUserId()
+    if (!userId) return false
+    await fs.fsSetData(userId, type, key, data)
+    return true
+  }
+
   const token = getAuthToken()
   const headers: Record<string, string> = {
     'Content-Type': 'application/json'
@@ -82,6 +108,13 @@ export async function setData<T>(type: string, key: string, data: T): Promise<bo
 export async function deleteData(type: string, key: string): Promise<boolean> {
   const ck = cacheKey(type, key)
   cache.delete(ck)
+
+  if (isCapacitor) {
+    const userId = getUserId()
+    if (!userId) return false
+    await fs.fsDeleteData(userId, type, key)
+    return true
+  }
 
   const token = getAuthToken()
   const headers: Record<string, string> = {

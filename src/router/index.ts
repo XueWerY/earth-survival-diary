@@ -1,12 +1,12 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { logger } from '../lib/logger'
-import TaskList from '../components/TaskList.vue'
-import FocusTimer from '../components/FocusTimer.vue'
-import MissionList from '../components/MissionList.vue'
-import CountdownList from '../components/CountdownList.vue'
-import CourseSchedule from '../components/CourseSchedule.vue'
-import StatisticsPage from '../components/StatisticsPage.vue'
-import ProfilePage from '../components/ProfilePage.vue'
+import TaskList from '../components/footprint/TaskList.vue'
+import FocusTimer from '../components/focus/FocusTimer.vue'
+import MissionList from '../components/mission/MissionList.vue'
+import CountdownList from '../components/countdown/CountdownList.vue'
+import CourseSchedule from '../components/course/CourseSchedule.vue'
+import StatisticsPage from '../components/statistics/StatisticsPage.vue'
+import ProfilePage from '../components/profile/ProfilePage.vue'
 
 const routes = [
   { path: '/', redirect: '/footprint' },

@@ -36,6 +36,7 @@ let serverInstance = null
 
 ipcMain.on('restart-app', () => { 
   debugLog('[Main] 收到重启请求')
+  closeAction = 'exit'
   app.relaunch()
   app.quit()
 })
@@ -206,8 +207,8 @@ async function startServer() {
 
 function createWindow(url) {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: 1280,
+    height: 720,
     title: '地球 Online 生存日记',
     webPreferences: {
       nodeIntegration: false,
@@ -278,7 +279,7 @@ function setupTray() {
   const contextMenu = Menu.buildFromTemplate([
     { label: '打开', click: () => { if (mainWindow) { mainWindow.show(); mainWindow.setSkipTaskbar(false); mainWindow.focus() } } },
     { type: 'separator' },
-    { label: '退出', click: () => { closeAction = 'exit'; app.quit() } }
+    { label: '退出', click: () => { closeAction = 'exit'; cancelAllReminderTimers(); if (serverInstance) { try { serverInstance.close() } catch (e) {} }; app.exit(0) } }
   ])
   appTray.setContextMenu(contextMenu)
   debugLog('[Main] 系统托盘已创建')

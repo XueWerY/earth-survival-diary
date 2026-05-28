@@ -2,9 +2,10 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import dayjs from 'dayjs'
 import * as api from '../lib/api'
+import { logger } from '../lib/logger'
 
 // 重复策略
-export type RepeatStrategy = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom_days' | 'weekdays'
+export type RepeatStrategy = 'none' | 'daily' | 'custom_days' | 'weekly_select' | 'monthly_last_day' | 'lunar_date'
 
 // 结束重复策略
 export type RepeatEndStrategy = 'never' | 'date' | 'count'
@@ -69,6 +70,16 @@ export interface MissionList {
   createdAt: string
 }
 
+// 文件夹（客户端抽象层，包裹清单）
+export interface MissionFolder {
+  id: string
+  name: string
+  type: 'smart' | 'custom'
+  color: string
+  listIds: string[]
+  order: number
+}
+
 // 优先级配置
 export const PRIORITIES = [
   { value: 'none', label: '⚪ 无', color: '#909399' },
@@ -81,11 +92,10 @@ export const PRIORITIES = [
 export const REPEAT_STRATEGIES = [
   { value: 'none', label: '不重复' },
   { value: 'daily', label: '每天' },
-  { value: 'weekdays', label: '工作日（周一到周五）' },
-  { value: 'weekly', label: '每周' },
-  { value: 'monthly', label: '每月' },
-  { value: 'yearly', label: '每年' },
-  { value: 'custom_days', label: '每隔n天' }
+  { value: 'custom_days', label: '每隔 N 天' },
+  { value: 'weekly_select', label: '每周选择' },
+  { value: 'monthly_last_day', label: '每月最后一天' },
+  { value: 'lunar_date', label: '农历' },
 ] as const
 
 // 结束重复策略配置
@@ -108,9 +118,25 @@ export const DEFAULT_GROUP_COLORS = [
   '#fa709a', '#fee140', '#a8edea', '#d299c2'
 ]
 
+// 扩展颜色库（40色，用于文件夹/清单/分组颜色选择器）
+export const EXTENDED_FOLDER_COLORS = [
+  '#667eea', '#764ba2', '#f093fb', '#d53a9d', '#4facfe', '#00b4db', '#43e97b', '#11998e',
+  '#fa709a', '#ee5a24', '#fee140', '#f6d365', '#a8edea', '#a18cd1', '#d299c2', '#fbc2eb',
+  '#ff6b6b', '#4ecdc4', '#26d0ce', '#45b7d1', '#2b32b2', '#96ceb4', '#e1eec3', '#fc4a1a',
+  '#f7b733', '#00b09b', '#96c93d', '#834d9b', '#d04ed6', '#2c3e50', '#3498db', '#e74c3c',
+  '#f39c12', '#1abc9c', '#9b59b6', '#e67e22', '#2ecc71', '#e91e63', '#00bcd4', '#8e44ad',
+]
+
+// 默认文件夹颜色
+export const DEFAULT_FOLDER_COLORS = [
+  '#667eea', '#f093fb', '#4facfe', '#43e97b',
+  '#fa709a', '#fee140', '#ae7ede', '#d299c2'
+]
+
 export const useMissionStore = defineStore('mission', () => {
   const lists = ref<MissionList[]>([])
   const missions = ref<Mission[]>([])
+  const folders = ref<MissionFolder[]>([])
   const isLoaded = ref(false)
 
   const LS_GROUPS_KEY = 'esd_groups_backup'
@@ -130,6 +156,33 @@ export const useMissionStore = defineStore('mission', () => {
     } catch { return null }
   }
 
+  const saveFolders = async () => {
+    try {
+      await api.setData('list/folders', folders.value)
+    } catch { /* 静默失败 */ }
+  }
+
+  const loadFolders = async () => {
+    try {
+      const result = await api.getData<MissionFolder[]>('list/folders')
+      if (result.success && result.data && Array.isArray(result.data)) {
+        folders.value = result.data
+      }
+    } catch { /* 静默失败 */ }
+  }
+
+  const ensureAllListsInFolders = async () => {
+    const customFolders = folders.value.filter(f => f.type === 'custom')
+    const allAssignedIds = new Set<string>()
+    customFolders.forEach(f => f.listIds.forEach(id => allAssignedIds.add(id)))
+    const unassigned = lists.value.filter(l => !allAssignedIds.has(l.id))
+    if (unassigned.length > 0 && customFolders.length > 0) {
+      const defaultFolder = customFolders[0]
+      defaultFolder.listIds.push(...unassigned.map(l => l.id))
+      await saveFolders()
+    }
+  }
+
   // getUserId 不再需要，保留用于未来扩展
   // const getUserId = () => {
   //   const authStore = useAuthStore()
@@ -138,11 +191,16 @@ export const useMissionStore = defineStore('mission', () => {
 
   // 加载数据
   const loadData = async () => {
-    if (isLoaded.value) return
+    if (isLoaded.value) {
+      logger.debug('[MissionStore] loadData 跳过（已加载）')
+      return
+    }
+    logger.debug('[MissionStore] loadData 开始')
 
     try {
       // 加载清单
       const { lists: dbLists } = await api.getMissionLists()
+      logger.debug('[MissionStore] loadData 获取清单', { count: dbLists?.length })
       const localBackup = loadGroupsLocal()
       lists.value = dbLists.map(db => {
         const rawGroups = (db.groups && db.groups.length > 0) ? db.groups : [{
@@ -205,14 +263,30 @@ export const useMissionStore = defineStore('mission', () => {
         updatedAt: db.updated_at || db.created_at
       }))
 
-      // 如果没有清单，创建默认清单
-      if (lists.value.length === 0) {
-        await addList('我的任务', '📋')
+      // 加载文件夹
+      await loadFolders()
+
+      // 如果没有文件夹，创建默认"我的清单"文件夹
+      if (folders.value.length === 0) {
+        const defaultFolder: MissionFolder = {
+          id: 'folder-' + Date.now(),
+          name: '我的清单',
+          type: 'custom',
+          color: '#764ba2',
+          listIds: lists.value.map(l => l.id),
+          order: 0
+        }
+        folders.value.push(defaultFolder)
+        await saveFolders()
       }
 
+      // 确保所有清单都归属到某个文件夹
+      await ensureAllListsInFolders()
+
       isLoaded.value = true
+      logger.debug('[MissionStore] loadData 完成', { listsCount: lists.value.length, missionsCount: missions.value.length, foldersCount: folders.value.length })
     } catch (error) {
-      console.error('Failed to load data:', error)
+      logger.error('[MissionStore] loadData 失败', { error })
     }
   }
 
@@ -236,6 +310,12 @@ export const useMissionStore = defineStore('mission', () => {
         createdAt: dbList.created_at
       }
       lists.value.push(newList)
+      // 添加到默认文件夹
+      const customFolders = folders.value.filter(f => f.type === 'custom')
+      if (customFolders.length > 0) {
+        customFolders[0].listIds.push(newList.id)
+        await saveFolders()
+      }
       return newList
     } catch (error) {
       console.error('Failed to add list:', error)
@@ -269,6 +349,9 @@ export const useMissionStore = defineStore('mission', () => {
       await api.deleteMissionList(id)
       missions.value = missions.value.filter(m => m.listId !== id)
       lists.value = lists.value.filter(l => l.id !== id)
+      // 从所有文件夹中移除该清单
+      folders.value.forEach(f => { f.listIds = f.listIds.filter(lid => lid !== id) })
+      await saveFolders()
     } catch (error) {
       console.error('Failed to delete list:', error)
     }
@@ -307,6 +390,60 @@ export const useMissionStore = defineStore('mission', () => {
     } catch (error) {
       console.error('Failed to reorder lists:', error)
     }
+  }
+
+  // ========== 文件夹操作（客户端层） ==========
+
+  const addFolder = async (name: string, color: string): Promise<MissionFolder> => {
+    const newFolder: MissionFolder = {
+      id: 'folder-' + Date.now(),
+      name,
+      type: 'custom',
+      color: color || DEFAULT_FOLDER_COLORS[folders.value.length % DEFAULT_FOLDER_COLORS.length],
+      listIds: [],
+      order: folders.value.filter(f => f.type === 'custom').length
+    }
+    folders.value.push(newFolder)
+    await saveFolders()
+    return newFolder
+  }
+
+  const updateFolder = async (id: string, updates: { name?: string; color?: string }) => {
+    const folder = folders.value.find(f => f.id === id)
+    if (!folder) return
+    if (updates.name !== undefined) folder.name = updates.name
+    if (updates.color !== undefined) folder.color = updates.color
+    await saveFolders()
+  }
+
+  const deleteFolder = async (id: string) => {
+    const folder = folders.value.find(f => f.id === id)
+    if (!folder || folder.type === 'smart') return
+    folders.value = folders.value.filter(f => f.id !== id)
+    await saveFolders()
+  }
+
+  const addListToFolder = async (folderId: string, listId: string) => {
+    const folder = folders.value.find(f => f.id === folderId)
+    if (!folder) return
+    if (!folder.listIds.includes(listId)) {
+      folder.listIds.push(listId)
+      await saveFolders()
+    }
+  }
+
+  const removeListFromFolder = async (folderId: string, listId: string) => {
+    const folder = folders.value.find(f => f.id === folderId)
+    if (!folder) return
+    folder.listIds = folder.listIds.filter(id => id !== listId)
+    await saveFolders()
+  }
+
+  const getListsInFolder = (folderId: string): MissionList[] => {
+    if (folderId === 'smart') return [] // smart lists are virtual
+    const folder = folders.value.find(f => f.id === folderId)
+    if (!folder) return []
+    return lists.value.filter(l => folder.listIds.includes(l.id))
   }
 
   // ========== 清单内分组操作 ==========
@@ -782,12 +919,14 @@ export const useMissionStore = defineStore('mission', () => {
   const reset = () => {
     lists.value = []
     missions.value = []
+    folders.value = []
     isLoaded.value = false
   }
 
   return {
     lists,
     missions,
+    folders,
     isLoaded,
     loadData,
     addList,
@@ -795,6 +934,12 @@ export const useMissionStore = defineStore('mission', () => {
     deleteList,
     moveListUp,
     moveListDown,
+    addFolder,
+    updateFolder,
+    deleteFolder,
+    addListToFolder,
+    removeListFromFolder,
+    getListsInFolder,
     addGroupToList,
     updateGroupInList,
     deleteGroupFromList,

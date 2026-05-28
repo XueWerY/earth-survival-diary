@@ -1,7 +1,7 @@
 {
   "name": "earth-survival-diary",
   "private": true,
-  "version": "2026.5.19-6",
+  "version": "2026.5.28-6",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -10,6 +10,10 @@
     "publish-release": "node scripts/build-tools.cjs publish-release"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/filesystem": "^8.1.2",
     "@element-plus/icons-vue": "^2.3.2",
     "cors": "^2.8.5",
     "dayjs": "^1.11.20",

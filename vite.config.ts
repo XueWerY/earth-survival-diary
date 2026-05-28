@@ -4,6 +4,7 @@ import fs from 'fs'
 import path from 'path'
 
 export default defineConfig({
+  base: './',
   plugins: [vue(), {
     name: 'version-inline',
     resolveId(id) {

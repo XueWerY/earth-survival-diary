@@ -14,6 +14,8 @@ export interface Task {
   duration: number // in minutes
   notes?: string
   category?: string
+  createdAt?: string
+  isDiary?: boolean
 }
 
 // 转换数据库任务到前端任务
@@ -26,7 +28,9 @@ const dbToTask = (dbTask: api.Task): Task => ({
   completed: dbTask.completed,
   duration: dbTask.duration,
   notes: dbTask.notes || undefined,
-  category: dbTask.category || undefined
+  category: dbTask.category || undefined,
+  createdAt: dbTask.created_at,
+  isDiary: dbTask.category === 'diary'
 })
 
 export const useTaskStore = defineStore('task', () => {

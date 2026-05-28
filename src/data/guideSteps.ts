@@ -1,4 +1,4 @@
-import type { GuideStep } from '../components/GuideOverlay.vue'
+import type { GuideStep } from '../components/common/overlay/GuideOverlay.vue'
 
 export const guideSteps: GuideStep[] = [
   // ==================== 足迹 ====================
