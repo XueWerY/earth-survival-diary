@@ -748,6 +748,9 @@ const handleConfirmAction = () => {
   background: rgba(255, 255, 255, 0.03);
   z-index: 20;
   min-height: 40px;
+  width: 80%;
+  margin: 8px auto 16px auto;
+  border-radius: 8px;
 }
 
 .breadcrumb-module {

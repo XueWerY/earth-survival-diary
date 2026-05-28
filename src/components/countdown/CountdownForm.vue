@@ -1,95 +1,89 @@
 <template>
-  <el-dialog
-      v-model="dialogVisible"
-      :title="isEdit ? '编辑倒数日' : '添加倒数日'"
-      width="500px"
-      class="countdown-form-dialog"
-      @close="resetForm"
-  >
-    <el-form :model="form" :rules="rules" ref="formRef" label-width="80px">
-      <!-- 倒数日名称 -->
-      <el-form-item label="名称" prop="name">
-        <el-input v-model="form.name" placeholder="这个倒数日叫什么？" maxlength="50" show-word-limit />
-      </el-form-item>
-
-      <!-- 类型：倒数 / 正数 -->
-      <el-form-item label="类型" prop="countMode">
-        <el-radio-group v-model="form.countMode" class="count-mode-group">
-          <el-radio value="countdown">倒数日</el-radio>
-          <el-radio value="countup">正数日</el-radio>
-        </el-radio-group>
-        <p class="count-mode-hint">
-          倒数日：距离目标日期还有多久；正数日：从所选日期起已过去多少天。
-        </p>
-      </el-form-item>
-
-      <!-- 目标日期 -->
-      <el-form-item :label="form.countMode === 'countup' ? '起始日期' : '目标日期'" prop="targetDate">
-        <LunarDatePicker
-            v-model="form.targetDate"
-            :placeholder="form.countMode === 'countup' ? '选择起始日期' : '选择目标日期'"
-            full-width
-        />
-      </el-form-item>
-
-      <!-- 分类 -->
-      <el-form-item label="分类" prop="category">
-        <el-select v-model="form.category" placeholder="选择分类" style="width: 100%">
-          <el-option
-              v-for="cat in categories"
-              :key="cat.value"
-              :label="cat.label"
-              :value="cat.value"
-          >
-            <span class="category-option">
-              <span class="category-icon">{{ cat.icon }}</span>
-              <span class="category-label">{{ cat.label }}</span>
-            </span>
-          </el-option>
-        </el-select>
-      </el-form-item>
-
-      <!-- 描述 -->
-      <el-form-item label="描述">
-        <el-input
-            v-model="form.description"
-            type="textarea"
-            :rows="3"
-            placeholder="添加一些备注（可选）"
-            maxlength="200"
-            show-word-limit
-        />
-      </el-form-item>
-
-      <!-- 提醒 -->
-      <el-form-item label="提醒" v-if="form.countMode !== 'countup'">
-        <div class="reminder-row">
-          <el-select v-model="form.reminderStrategy" placeholder="选择提醒方式" style="width: 180px">
-            <el-option label="不提醒" value="none" />
-            <el-option label="准时提醒" value="on_time" />
-            <el-option label="提前提醒" value="advance" />
-          </el-select>
-          <template v-if="form.reminderStrategy === 'advance'">
-            <ReminderTimePicker v-model="reminderTime" />
-          </template>
+  <Teleport to="body">
+    <div v-if="dialogVisible" class="dialog-overlay" @click.self="dialogVisible = false">
+      <div class="dialog-container countdown-form-dialog">
+        <div class="dialog-header folder-dialog-header">
+          <span class="dialog-header-title folder-dialog-title">{{ isEdit ? '编辑倒数日' : '添加倒数日' }}</span>
         </div>
-      </el-form-item>
-    </el-form>
-
-    <template #footer>
-      <el-button @click="dialogVisible = false">取消</el-button>
-      <el-button type="primary" @click="handleSubmit">
-        {{ isEdit ? '保存' : '添加' }}
-      </el-button>
-    </template>
-  </el-dialog>
+        <div class="dialog-body">
+          <el-form :model="form" :rules="rules" ref="formRef" label-width="80px">
+            <el-form-item label="名称" prop="name">
+              <el-input v-model="form.name" placeholder="这个倒数日叫什么？" maxlength="50" />
+            </el-form-item>
+            <el-form-item label="类型" prop="countMode">
+              <el-radio-group v-model="form.countMode" class="count-mode-group">
+                <el-radio value="countdown">倒数日</el-radio>
+                <el-radio value="countup">正数日</el-radio>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item :label="form.countMode === 'countup' ? '起始日期' : '目标日期'" prop="targetDate">
+              <DateScrollPicker v-model="form.targetDate" />
+            </el-form-item>
+            <el-form-item label="分类" prop="category">
+              <el-select v-model="form.category" placeholder="选择分类" style="width: 100%">
+                <el-option
+                    v-for="cat in categories"
+                    :key="cat.value"
+                    :label="cat.label"
+                    :value="cat.value"
+                >
+                  <span class="category-option">
+                    <span class="category-icon">{{ cat.icon }}</span>
+                    <span class="category-label">{{ cat.label }}</span>
+                  </span>
+                </el-option>
+              </el-select>
+            </el-form-item>
+            <el-form-item label="描述">
+              <el-input
+                  v-model="form.description"
+                  type="textarea"
+                  :rows="2"
+                  placeholder="添加备注（可选）"
+                  maxlength="200"
+                  show-word-limit
+              />
+            </el-form-item>
+            <el-form-item label="提醒" v-if="form.countMode !== 'countup'">
+              <div class="reminder-area">
+                <el-select v-model="form.reminderStrategy" placeholder="选择提醒方式" style="width: 100%">
+                  <el-option label="不提醒" value="none" />
+                  <el-option label="准时提醒" value="on_time" />
+                  <el-option label="提前提醒" value="advance" />
+                </el-select>
+                <div v-if="form.reminderStrategy === 'advance'" class="reminder-picker-row">
+                  <ReminderTimePicker v-model="reminderTime" />
+                </div>
+              </div>
+            </el-form-item>
+            <el-form-item label="重复" v-if="form.countMode !== 'countup'">
+              <el-radio-group v-model="form.repeatStrategy">
+                <el-radio value="none">不重复</el-radio>
+                <el-radio value="yearly">重复</el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-form>
+          <div class="form-footer">
+            <button class="capsule-btn cancel-btn" @click="dialogVisible = false">
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              <span>取消</span>
+            </button>
+            <button class="capsule-btn submit-btn" @click="handleSubmit">
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
+              <span>{{ isEdit ? '保存' : '添加' }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { FormInstance } from 'element-plus'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import dayjs from 'dayjs'
-import LunarDatePicker from '../common/picker/LunarDatePicker.vue'
+import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import ReminderTimePicker from '../common/picker/ReminderTimePicker.vue'
 
 interface Milestone {
@@ -106,6 +100,7 @@ interface Milestone {
   reminderDays?: number
   reminderHours?: number
   reminderMinutes?: number
+  repeatStrategy?: string
 }
 
 interface Category {
@@ -145,7 +140,8 @@ const form = ref({
   reminderStrategy: 'none' as string,
   reminderDays: 0,
   reminderHours: 0,
-  reminderMinutes: 0
+  reminderMinutes: 0,
+  repeatStrategy: 'none' as string
 })
 
 const reminderTime = computed({
@@ -153,21 +149,19 @@ const reminderTime = computed({
   set: (v) => { form.value.reminderDays = v.days; form.value.reminderHours = v.hours; form.value.reminderMinutes = v.minutes }
 })
 
-// 表单验证规则
-const rules = {
+const rules: FormRules = {
   name: [
     { required: true, message: '请输入倒数日名称', trigger: 'blur' },
     { min: 1, max: 50, message: '名称长度在 1 到 50 个字符', trigger: 'blur' }
   ],
   targetDate: [
-    { required: true, message: '请选择目标日期', trigger: 'change' }
+    { required: true, message: '请选择日期', trigger: 'change' }
   ],
   category: [
     { required: true, message: '请选择分类', trigger: 'change' }
   ]
 }
 
-// 监听 milestone 变化，填充表单
 watch(() => props.milestone, (newVal) => {
   if (newVal) {
     form.value = {
@@ -179,15 +173,17 @@ watch(() => props.milestone, (newVal) => {
       reminderStrategy: newVal.reminderStrategy || 'none',
       reminderDays: newVal.reminderDays || 0,
       reminderHours: newVal.reminderHours || 0,
-      reminderMinutes: newVal.reminderMinutes || 0
+      reminderMinutes: newVal.reminderMinutes || 0,
+      repeatStrategy: newVal.repeatStrategy || 'none'
     }
   } else {
     form.value.targetDate = dayjs().format('YYYY-MM-DD')
     form.value.countMode = 'countdown'
+    form.value.repeatStrategy = 'none'
+    form.value.reminderStrategy = 'none'
   }
 }, { immediate: true })
 
-// 监听 defaultCategory 变化
 watch(() => props.defaultCategory, (newVal) => {
   if (newVal && !props.milestone) {
     form.value.category = newVal
@@ -201,23 +197,93 @@ const resetForm = () => {
     targetDate: dayjs().format('YYYY-MM-DD'),
     category: props.defaultCategory || 'life',
     description: '',
-    countMode: 'countdown'
+    countMode: 'countdown',
+    reminderStrategy: 'none',
+    reminderDays: 0,
+    reminderHours: 0,
+    reminderMinutes: 0,
+    repeatStrategy: 'none'
   }
 }
 
 const handleSubmit = async () => {
   if (!formRef.value) return
 
-  await formRef.value.validate((valid) => {
-    if (valid) {
-      emit('submit', { ...form.value })
-      resetForm()
-    }
-  })
+  try {
+    await formRef.value.validate()
+  } catch {
+    return
+  }
+
+  emit('submit', { ...form.value })
+  resetForm()
 }
 </script>
 
 <style scoped>
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.dialog-container {
+  background: rgba(30, 28, 52, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  max-width: 90vw;
+}
+
+.countdown-form-dialog {
+  width: 400px;
+}
+
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 16px 0;
+  flex-shrink: 0;
+}
+
+.dialog-header-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--chalk-white);
+}
+
+.folder-dialog-header {
+  justify-content: center;
+}
+
+.folder-dialog-title {
+  text-align: center;
+}
+
+.dialog-body {
+  padding: 12px 16px 16px;
+}
+
+.count-mode-group {
+  width: 100%;
+}
+
+.reminder-area {
+  width: 100%;
+}
+
+.reminder-picker-row {
+  margin-top: 8px;
+}
+
 .category-option {
   display: flex;
   align-items: center;
@@ -228,89 +294,103 @@ const handleSubmit = async () => {
   font-size: 16px;
 }
 
-.category-label {
-  flex: 1;
+.form-footer {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.count-mode-group {
-  width: 100%;
-}
-
-.count-mode-hint {
-  margin: 6px 0 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--chalk-dim);
-}
-
-.date-input-group {
+.capsule-btn {
   display: flex;
   align-items: center;
-  width: 100%;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--chalk-white-70);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  transition: all 0.2s;
 }
 
-.date-input {
-  width: 70px;
+.capsule-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--chalk-white);
 }
 
-.date-input.small {
-  width: 50px;
+.capsule-btn .capsule-icon {
+  width: 14px;
+  height: 14px;
 }
 
-.date-sep {
-  margin: 0 4px;
-  color: var(--chalk-subtle);
+.submit-btn {
+  background: rgba(102, 126, 234, 0.2);
+  border-color: rgba(102, 126, 234, 0.4);
+  color: #93c5fd;
 }
 
-/* 对话框深色主题 */
-:deep(.el-dialog) {
-  background: rgba(30, 30, 50, 0.95) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
+.submit-btn:hover {
+  background: rgba(102, 126, 234, 0.35);
+  color: var(--chalk-white);
 }
 
-:deep(.el-dialog__header) {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+:deep(.el-form-item) {
+  margin-bottom: 12px;
 }
 
-:deep(.el-dialog__title) {
-  color: var(--chalk-white-95) !important;
-}
-
-:deep(.el-dialog__headerbtn .el-dialog__close) {
-  color: var(--chalk-muted) !important;
-}
-
-:deep(.el-dialog__headerbtn:hover .el-dialog__close) {
-  color: var(--chalk-white-90) !important;
+:deep(.el-form-item:last-child) {
+  margin-bottom: 0;
 }
 
 :deep(.el-form-item__label) {
-  color: var(--chalk-white-70) !important;
+  color: var(--chalk-white-70);
 }
 
-.reminder-row { display: flex; align-items: center; gap: 8px; width: 100%; }
-.reminder-row .reminder-label { color: var(--chalk-white-60); white-space: nowrap; font-size: 13px; }
+:deep(.el-input__wrapper),
+:deep(.el-textarea__inner) {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: none !important;
+}
+
+:deep(.el-input__wrapper:hover),
+:deep(.el-textarea__inner:hover) {
+  border-color: rgba(102, 126, 234, 0.5);
+}
+
+:deep(.el-input__inner),
+:deep(.el-textarea__inner) {
+  color: var(--chalk-white-90) !important;
+}
+
+:deep(.el-input__inner::placeholder),
+:deep(.el-textarea__inner::placeholder) {
+  color: var(--chalk-subtle);
+}
 
 :deep(.el-input__count),
 :deep(.el-input__count-inner) {
   background: transparent !important;
   color: var(--chalk-subtle) !important;
 }
-</style>
 
-<style>
-.countdown-form-dialog .el-dialog {
-  width: 500px;
-  margin-left: auto;
-  margin-right: auto;
+:deep(.date-trigger) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-@media (max-width: 500px) {
-  .countdown-form-dialog .el-dialog {
-    width: 100vw;
-    margin-left: 0;
-    margin-right: 0;
-  }
+:deep(.el-radio) {
+  margin-right: 12px;
+}
+
+:deep(.el-radio__label) {
+  color: var(--chalk-white-70);
 }
 </style>

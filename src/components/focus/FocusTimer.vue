@@ -40,9 +40,8 @@
 
           <!-- 控制按钮 - 放在时钟下方 -->
           <div class="focus-control-buttons">
-            <button class="focus-ctrl-btn" :class="{ active: focusType === 'pomodoro' }" @click="focusType = 'pomodoro'" title="切换番茄钟">🍅</button>
-            <button class="focus-ctrl-btn" :class="{ active: focusType === 'stopwatch' }" @click="focusType = 'stopwatch'" title="切换正计时">⏱️</button>
-            <button class="focus-start-btn" @click="startFocus" title="开始专注">▶️ 开始</button>
+            <button class="focus-ctrl-btn" :class="{ active: focusType === 'pomodoro' }" @click="focusType = 'pomodoro'">🍅 番茄钟</button>
+            <button class="focus-ctrl-btn" :class="{ active: focusType === 'stopwatch' }" @click="focusType = 'stopwatch'">⏱️ 正计时</button>
           </div>
 
           <!-- 专注名称输入 -->
@@ -65,6 +64,10 @@
                 maxlength="200"
                 style="margin-top: 12px"
             />
+          </div>
+
+          <div class="focus-start-wrapper">
+            <button class="focus-ctrl-btn" @click="startFocus">▶️ 开始专注</button>
           </div>
 
           <!-- 常用专注 -->
@@ -148,8 +151,8 @@
 
           <!-- 操作按钮 -->
           <div class="action-buttons">
-            <el-button size="large" class="text-only-btn" @click="cancelFocus">取消</el-button>
-            <el-button type="primary" size="large" class="text-only-btn" @click="completeFocus">完成</el-button>
+            <button class="focus-ctrl-btn focus-cancel-btn" @click="cancelFocus">✕ 取消</button>
+            <button class="focus-ctrl-btn focus-complete-btn" @click="completeFocus">✓ 完成</button>
           </div>
         </div>
       </el-scrollbar>
@@ -764,14 +767,13 @@ onUnmounted(async () => {
   align-items: center;
   gap: 12px;
   margin-top: 12px;
-  margin-bottom: 24px;
+  margin-bottom: 12px;
 }
 
 .focus-ctrl-btn {
-  width: 44px;
-  height: 44px;
-  font-size: 20px;
-  border-radius: 50%;
+  padding: 10px 16px;
+  font-size: 14px;
+  border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   background: rgba(255, 255, 255, 0.05);
   color: var(--chalk-white-60);
@@ -779,6 +781,7 @@ onUnmounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   transition: all 0.2s;
 }
 
@@ -793,21 +796,14 @@ onUnmounted(async () => {
   color: var(--chalk-white);
 }
 
-.focus-start-btn {
-  padding: 10px 24px;
-  font-size: 15px;
-  font-weight: 600;
-  border-radius: 24px;
-  border: none;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-  cursor: pointer;
-  transition: all 0.2s;
+.focus-start-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
 }
 
-.focus-start-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+.focus-start-wrapper .focus-ctrl-btn {
+  border-color: rgba(102, 126, 234, 0.3);
 }
 
 /* 计时器圆环 */
@@ -1210,18 +1206,24 @@ onUnmounted(async () => {
 
 .action-buttons {
   display: flex;
-  gap: 16px;
+  gap: 12px;
 }
 
-.action-buttons .el-button {
-  padding: 12px 32px;
-  font-size: 15px;
+.focus-cancel-btn:hover {
+  background: rgba(220, 38, 38, 0.15) !important;
+  border-color: rgba(220, 38, 38, 0.4) !important;
+  color: #f87171 !important;
 }
 
-.text-only-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.focus-complete-btn {
+  border-color: rgba(102, 126, 234, 0.3);
+  color: var(--chalk-white);
+}
+
+.focus-complete-btn:hover {
+  background: rgba(102, 126, 234, 0.2) !important;
+  border-color: #667eea !important;
+  color: var(--chalk-white) !important;
 }
 
 /* 对话框深色主题 */

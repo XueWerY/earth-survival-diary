@@ -52,15 +52,28 @@
                     <div v-if="card.type === 'record' && card.record" class="period-item">
                       <div class="task-card">
                         <div class="task-card-row">
-                          <span class="task-card-name">{{ card.record.name }}</span>
-                          <div v-if="!isGuideActive" class="task-card-actions">
-                            <el-button :icon="Edit" circle size="small" class="task-card-btn" @click="handleEditTask(card.record)" />
-                            <el-button :icon="Delete" circle size="small" class="task-card-btn" @click="openDeleteConfirm(card.record.id)" />
+                          <template v-if="editingNameId === card.record.id">
+                            <textarea v-model="editingNameValue" class="inline-edit-textarea" @blur="saveNameEdit(card.record)" @keydown.escape.prevent="cancelNameEdit" rows="2" />
+                          </template>
+                          <span v-else class="task-card-name" @dblclick="startNameEdit(card.record)">{{ card.record.name }}</span>
+                          <div class="task-card-actions">
+                            <el-button :icon="Delete" circle size="small" class="task-card-btn" @click.stop="openDeleteConfirm(card.record.id)" />
                           </div>
                         </div>
-                        <span v-if="!card.record.isDiary && card.record.category !== 'diary'" class="task-card-time" v-html="getRecordTimeDisplay(card.record.startTime, card.record.endTime)"></span>
-                        <span v-else class="task-card-diary-time">创建于 {{ formatDiaryTime(card.record.createdAt) }}</span>
-                        <div v-if="card.record.notes" class="task-card-notes">{{ card.record.notes }}</div>
+                        <span v-if="card.record.isDiary || card.record.category === 'diary'" class="task-card-diary-time">创建于 {{ formatDiaryTime(card.record.createdAt) }}</span>
+                        <div v-else class="task-card-time-row">
+                          <TimePickerPopover :model-value="card.record.startTime" @update:model-value="(v: string) => updateCardTime(card.record!.id, 'startTime', v)" placeholder="开始" />
+                          <span class="time-sep">-</span>
+                          <TimePickerPopover :model-value="card.record.endTime" @update:model-value="(v: string) => updateCardTime(card.record!.id, 'endTime', v)" placeholder="结束" />
+                          <span v-if="formatDurationLabel(card.record.startTime, card.record.endTime)" class="time-duration-label">{{ formatDurationLabel(card.record.startTime, card.record.endTime) }}</span>
+                        </div>
+                        <template v-if="editingNotesId === card.record.id">
+                          <textarea v-model="editingNotesValue" class="inline-edit-textarea" @blur="saveNotesEdit(card.record)" @keydown.escape.prevent="cancelNotesEdit" rows="2" placeholder="添加备注" />
+                        </template>
+                        <template v-else>
+                          <div v-if="card.record.notes" class="task-card-notes" @dblclick="startNotesEdit(card.record)">{{ card.record.notes }}</div>
+                          <div v-else class="task-card-notes task-card-notes-placeholder" @dblclick="startNotesEdit(card.record)">双击添加备注</div>
+                        </template>
                       </div>
                     </div>
                     <div v-else-if="card.type === 'mission' && card.mission" class="period-item">
@@ -86,15 +99,28 @@
                     <div v-if="card.type === 'record' && card.record" class="period-item">
                       <div class="task-card">
                         <div class="task-card-row">
-                          <span class="task-card-name">{{ card.record.name }}</span>
-                          <div v-if="!isGuideActive" class="task-card-actions">
-                            <el-button :icon="Edit" circle size="small" class="task-card-btn" @click="handleEditTask(card.record)" />
-                            <el-button :icon="Delete" circle size="small" class="task-card-btn" @click="openDeleteConfirm(card.record.id)" />
+                          <template v-if="editingNameId === card.record.id">
+                            <textarea v-model="editingNameValue" class="inline-edit-textarea" @blur="saveNameEdit(card.record)" @keydown.escape.prevent="cancelNameEdit" rows="2" />
+                          </template>
+                          <span v-else class="task-card-name" @dblclick="startNameEdit(card.record)">{{ card.record.name }}</span>
+                          <div class="task-card-actions">
+                            <el-button :icon="Delete" circle size="small" class="task-card-btn" @click.stop="openDeleteConfirm(card.record.id)" />
                           </div>
                         </div>
-                        <span v-if="!card.record.isDiary && card.record.category !== 'diary'" class="task-card-time" v-html="getRecordTimeDisplay(card.record.startTime, card.record.endTime)"></span>
-                        <span v-else class="task-card-diary-time">创建于 {{ formatDiaryTime(card.record.createdAt) }}</span>
-                        <div v-if="card.record.notes" class="task-card-notes">{{ card.record.notes }}</div>
+                        <span v-if="card.record.isDiary || card.record.category === 'diary'" class="task-card-diary-time">创建于 {{ formatDiaryTime(card.record.createdAt) }}</span>
+                        <div v-else class="task-card-time-row">
+                          <TimePickerPopover :model-value="card.record.startTime" @update:model-value="(v: string) => updateCardTime(card.record!.id, 'startTime', v)" placeholder="开始" />
+                          <span class="time-sep">-</span>
+                          <TimePickerPopover :model-value="card.record.endTime" @update:model-value="(v: string) => updateCardTime(card.record!.id, 'endTime', v)" placeholder="结束" />
+                          <span v-if="formatDurationLabel(card.record.startTime, card.record.endTime)" class="time-duration-label">{{ formatDurationLabel(card.record.startTime, card.record.endTime) }}</span>
+                        </div>
+                        <template v-if="editingNotesId === card.record.id">
+                          <textarea v-model="editingNotesValue" class="inline-edit-textarea" @blur="saveNotesEdit(card.record)" @keydown.escape.prevent="cancelNotesEdit" rows="2" placeholder="添加备注" />
+                        </template>
+                        <template v-else>
+                          <div v-if="card.record.notes" class="task-card-notes" @dblclick="startNotesEdit(card.record)">{{ card.record.notes }}</div>
+                          <div v-else class="task-card-notes task-card-notes-placeholder" @dblclick="startNotesEdit(card.record)">双击添加备注</div>
+                        </template>
                       </div>
                     </div>
                     <div v-else-if="card.type === 'mission' && card.mission" class="period-item">
@@ -120,15 +146,28 @@
                     <div v-if="card.type === 'record' && card.record" class="period-item">
                       <div class="task-card">
                         <div class="task-card-row">
-                          <span class="task-card-name">{{ card.record.name }}</span>
-                          <div v-if="!isGuideActive" class="task-card-actions">
-                            <el-button :icon="Edit" circle size="small" class="task-card-btn" @click="handleEditTask(card.record)" />
-                            <el-button :icon="Delete" circle size="small" class="task-card-btn" @click="openDeleteConfirm(card.record.id)" />
+                          <template v-if="editingNameId === card.record.id">
+                            <textarea v-model="editingNameValue" class="inline-edit-textarea" @blur="saveNameEdit(card.record)" @keydown.escape.prevent="cancelNameEdit" rows="2" />
+                          </template>
+                          <span v-else class="task-card-name" @dblclick="startNameEdit(card.record)">{{ card.record.name }}</span>
+                          <div class="task-card-actions">
+                            <el-button :icon="Delete" circle size="small" class="task-card-btn" @click.stop="openDeleteConfirm(card.record.id)" />
                           </div>
                         </div>
-                        <span v-if="!card.record.isDiary && card.record.category !== 'diary'" class="task-card-time" v-html="getRecordTimeDisplay(card.record.startTime, card.record.endTime)"></span>
-                        <span v-else class="task-card-diary-time">创建于 {{ formatDiaryTime(card.record.createdAt) }}</span>
-                        <div v-if="card.record.notes" class="task-card-notes">{{ card.record.notes }}</div>
+                        <span v-if="card.record.isDiary || card.record.category === 'diary'" class="task-card-diary-time">创建于 {{ formatDiaryTime(card.record.createdAt) }}</span>
+                        <div v-else class="task-card-time-row">
+                          <TimePickerPopover :model-value="card.record.startTime" @update:model-value="(v: string) => updateCardTime(card.record!.id, 'startTime', v)" placeholder="开始" />
+                          <span class="time-sep">-</span>
+                          <TimePickerPopover :model-value="card.record.endTime" @update:model-value="(v: string) => updateCardTime(card.record!.id, 'endTime', v)" placeholder="结束" />
+                          <span v-if="formatDurationLabel(card.record.startTime, card.record.endTime)" class="time-duration-label">{{ formatDurationLabel(card.record.startTime, card.record.endTime) }}</span>
+                        </div>
+                        <template v-if="editingNotesId === card.record.id">
+                          <textarea v-model="editingNotesValue" class="inline-edit-textarea" @blur="saveNotesEdit(card.record)" @keydown.escape.prevent="cancelNotesEdit" rows="2" placeholder="添加备注" />
+                        </template>
+                        <template v-else>
+                          <div v-if="card.record.notes" class="task-card-notes" @dblclick="startNotesEdit(card.record)">{{ card.record.notes }}</div>
+                          <div v-else class="task-card-notes task-card-notes-placeholder" @dblclick="startNotesEdit(card.record)">双击添加备注</div>
+                        </template>
                       </div>
                     </div>
                     <div v-else-if="card.type === 'mission' && card.mission" class="period-item">
@@ -200,7 +239,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, inject, onMounted, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Edit, Delete, Close } from '@element-plus/icons-vue'
+import { Delete, Close } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
 import { useTaskStore, type Task } from '../../stores/taskStore'
@@ -211,6 +250,7 @@ import TaskForm from './TaskForm.vue'
 import MissionCard from '../mission/MissionCard.vue'
 import MoveMissionPage from '../mission/MoveMissionPage.vue'
 import InlineLunarDatePicker from '../common/picker/InlineLunarDatePicker.vue'
+import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
 import { logger } from '../../lib/logger'
 import { chalk } from '../../lib/chalk'
@@ -230,6 +270,49 @@ const pageNav = usePageNav()
 const countdownMilestones = inject<Ref<any[]>>('countdownMilestones', ref<any[]>([]))
 
 const datePickerRef = ref<InstanceType<typeof InlineLunarDatePicker> | null>(null)
+
+const editingNameId = ref<string | null>(null)
+const editingNameValue = ref('')
+const editingNotesId = ref<string | null>(null)
+const editingNotesValue = ref('')
+
+const startNameEdit = (record: Task) => {
+  editingNameId.value = record.id
+  editingNameValue.value = record.name
+}
+
+const saveNameEdit = async (record: Task) => {
+  const trimmed = editingNameValue.value.trim()
+  if (trimmed && trimmed !== record.name) {
+    await taskStore.updateTask(record.id, { name: trimmed })
+  }
+  editingNameId.value = null
+}
+
+const cancelNameEdit = () => {
+  editingNameId.value = null
+}
+
+const startNotesEdit = (record: Task) => {
+  editingNotesId.value = record.id
+  editingNotesValue.value = record.notes || ''
+}
+
+const saveNotesEdit = async (record: Task) => {
+  const trimmed = editingNotesValue.value.trim()
+  if (trimmed !== (record.notes || '')) {
+    await taskStore.updateTask(record.id, { notes: trimmed || undefined })
+  }
+  editingNotesId.value = null
+}
+
+const cancelNotesEdit = () => {
+  editingNotesId.value = null
+}
+
+const updateCardTime = (id: string, field: 'startTime' | 'endTime', value: string) => {
+  taskStore.updateTask(id, { [field]: value })
+}
 
 onMounted(() => {
   logger.debug('[TaskList] onMounted', { navPath: pageNav.navPath.value })
@@ -564,7 +647,6 @@ const onMissionComplete = () => {}
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.03);
 }
 
 .header-actions {
@@ -644,17 +726,27 @@ const onMissionComplete = () => {}
   min-height: 0;
 }
 
+.footprint-content :deep(.el-scrollbar__wrap) {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.footprint-content :deep(.el-scrollbar__wrap::-webkit-scrollbar) {
+  display: none;
+}
+.footprint-content :deep(.el-scrollbar__bar) {
+  display: none !important;
+}
 .footprint-content :deep(.el-scrollbar) {
   height: 100%;
 }
-
 .footprint-content :deep(.el-scrollbar__view) {
   min-height: 100%;
 }
 
 .diary-section {
-  margin: 24px;
-  padding: 24px;
+  margin: 16px auto 0 auto;
+  padding: 0 0 16px 0;
+  width: 500px;
 }
 
 .diary-header {
@@ -702,7 +794,7 @@ const onMissionComplete = () => {}
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 600px;
+  max-width: 500px;
   width: 100%;
   margin-left: auto;
   margin-right: auto;
@@ -751,7 +843,7 @@ const onMissionComplete = () => {}
 .period-items {
   display: flex;
   flex-direction: column;
-  max-width: 600px;
+  max-width: 500px;
   width: 100%;
   margin: 0 auto;
   gap: 8px;
@@ -767,7 +859,7 @@ const onMissionComplete = () => {}
   padding-top: 20px;
   border-top: 1px dashed rgba(255, 255, 255, 0.15);
   width: 100%;
-  max-width: 600px;
+  max-width: 500px;
   margin-left: auto;
   margin-right: auto;
 }
@@ -1268,19 +1360,6 @@ const onMissionComplete = () => {}
   min-width: 0;
 }
 
-.task-card-time {
-  font-size: 13px;
-  color: var(--chalk-blue);
-  font-weight: 500;
-  margin-top: 6px;
-}
-
-.task-card-diary-time {
-  font-size: 12px;
-  color: var(--chalk-subtle);
-  margin-top: 6px;
-}
-
 .task-card-actions {
   display: flex;
   align-items: center;
@@ -1305,11 +1384,92 @@ const onMissionComplete = () => {}
   color: var(--chalk-white-85);
 }
 
+.task-card-time {
+  font-size: 13px;
+  color: var(--chalk-blue);
+  font-weight: 500;
+  margin-top: 6px;
+}
+
+.task-card-diary-time {
+  font-size: 12px;
+  color: var(--chalk-white-60);
+  margin-top: 6px;
+}
+
 .task-card-notes {
   font-size: 12px;
   color: var(--chalk-subtle);
   margin-top: 6px;
   line-height: 1.4;
+}
+
+.task-card-notes-placeholder {
+  cursor: pointer;
+  font-style: italic;
+  opacity: 0.4;
+  user-select: none;
+}
+
+.task-card-notes-placeholder:hover {
+  opacity: 0.7;
+}
+
+.task-card-time-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.task-card-time-row :deep(.time-btn) {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  width: auto;
+  height: auto;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--chalk-white-85);
+}
+
+.task-card-time-row :deep(.time-btn:hover) {
+  border: none;
+  color: var(--chalk-white);
+}
+
+.time-sep {
+  color: var(--chalk-white-60);
+  flex-shrink: 0;
+}
+
+.time-duration-label {
+  color: var(--chalk-white-60);
+  font-size: 12px;
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.inline-edit-textarea {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(102, 126, 234, 0.4);
+  border-radius: 6px;
+  color: var(--chalk-white);
+  padding: 6px 10px;
+  font-size: 14px;
+  resize: vertical;
+  font-family: inherit;
+  outline: none;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+
+.inline-edit-textarea:focus {
+  border-color: #667eea;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .task-card-time :deep(span) { margin-left: 6px; }

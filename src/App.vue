@@ -29,7 +29,6 @@
             class="nav-item"
             :class="{ active: pageNav.currentModule.value === m }"
             @click="navigateTo(m)"
-            :title="MODULE_LABELS[m]"
           >
             <span class="nav-item-icon">{{ MODULE_ICONS[m] }}</span>
             <span class="nav-item-label">{{ MODULE_LABELS[m] }}</span>
@@ -125,7 +124,6 @@
             class="nav-item"
             :class="{ active: pageNav.currentModule.value === m }"
             @click="navigateTo(m)"
-            :title="MODULE_LABELS[m]"
           >
             <span class="nav-item-icon">{{ MODULE_ICONS[m] }}</span>
             <span class="nav-item-label">{{ MODULE_LABELS[m] }}</span>
@@ -505,7 +503,16 @@ const scheduleMissionReminders = async () => {
           if (cm.countMode === 'countup') continue
           if (!cm.targetDate) continue
 
-          let triggerTime = dayjs(cm.targetDate + 'T00:00:00')
+          let nextDate: dayjs.Dayjs
+          if (cm.repeatStrategy === 'yearly') {
+            const occ = getNextOccurrence(cm.targetDate, 'yearly', undefined, today)
+            if (!occ) continue
+            nextDate = occ
+          } else {
+            nextDate = dayjs(cm.targetDate)
+          }
+
+          let triggerTime = dayjs(nextDate.format('YYYY-MM-DD') + 'T00:00:00')
           if (cm.reminderStrategy === 'advance') {
             const offsetMinutes = (cm.reminderDays || 0) * 1440 + (cm.reminderHours || 0) * 60 + (cm.reminderMinutes || 0)
             triggerTime = triggerTime.subtract(offsetMinutes, 'minute')
@@ -867,7 +874,8 @@ const preloadCountdownData = async () => {
       reminderStrategy: m.reminderStrategy || 'none',
       reminderDays: m.reminderDays || 0,
       reminderHours: m.reminderHours || 0,
-      reminderMinutes: m.reminderMinutes || 0
+      reminderMinutes: m.reminderMinutes || 0,
+      repeatStrategy: m.repeatStrategy || 'none'
     }))
   }
 
@@ -897,6 +905,7 @@ const preloadCountdownData = async () => {
         milestonesArr[idx].reminderDays = 1
         milestonesArr[idx].reminderHours = 0
         milestonesArr[idx].reminderMinutes = 0
+        milestonesArr[idx].repeatStrategy = 'yearly'
         milestonesArr[idx].updatedAt = new Date().toISOString()
       }
       existingIds.delete(holidayId)
@@ -915,7 +924,8 @@ const preloadCountdownData = async () => {
         reminderStrategy: 'advance',
         reminderDays: 1,
         reminderHours: 0,
-        reminderMinutes: 0
+        reminderMinutes: 0,
+        repeatStrategy: 'yearly'
       })
     }
   }
@@ -939,6 +949,7 @@ const preloadCountdownData = async () => {
       countMode: 'countup',
       pinned: true,
       isSystem: true,
+      repeatStrategy: 'yearly',
       createdAt: startDate,
       updatedAt: new Date().toISOString()
     })
@@ -958,6 +969,7 @@ const preloadCountdownData = async () => {
       name: '我的生日',
       targetDate: `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
       category: 'birthday', description: '', pinned: true, isSystem: true,
+      repeatStrategy: 'yearly',
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       reminderStrategy: 'advance', reminderDays: 1, reminderHours: 0, reminderMinutes: 0
     })
@@ -968,7 +980,7 @@ const preloadCountdownData = async () => {
     const bDate = `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     const bm = milestonesArr[bIdx]
     if (bm.targetDate !== bDate || !bm.reminderStrategy) {
-      milestonesArr[bIdx] = { ...bm, targetDate: bDate, reminderStrategy: bm.reminderStrategy || 'advance', reminderDays: bm.reminderDays || 1, reminderHours: bm.reminderHours || 0, reminderMinutes: bm.reminderMinutes || 0, updatedAt: new Date().toISOString() }
+      milestonesArr[bIdx] = { ...bm, targetDate: bDate, reminderStrategy: bm.reminderStrategy || 'advance', reminderDays: bm.reminderDays || 1, reminderHours: bm.reminderHours || 0, reminderMinutes: bm.reminderMinutes || 0, repeatStrategy: 'yearly', updatedAt: new Date().toISOString() }
     }
   }
 
@@ -1272,6 +1284,9 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.03);
   transition: opacity 0.3s, height 0.3s;
   overflow: hidden;
+  width: 500px;
+  margin: 16px auto;
+  border-radius: 10px;
 }
 
 .main-nav-bar.nav-hidden {
@@ -1305,18 +1320,19 @@ onUnmounted(() => {
 
 .nav-item {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 2px;
+  padding: 6px 10px;
   border-radius: 8px;
   border: none;
   background: transparent;
   color: var(--chalk-white-60);
   cursor: pointer;
-  font-size: 13px;
   white-space: nowrap;
   flex-shrink: 0;
   transition: all 0.15s;
+  min-width: 52px;
 }
 
 .nav-item:hover {
@@ -1325,13 +1341,19 @@ onUnmounted(() => {
 }
 
 .nav-item.active {
-  background: rgba(102, 126, 234, 0.15);
+  background: transparent;
   color: var(--chalk-white);
   font-weight: 600;
 }
 
 .nav-item-icon {
-  font-size: 16px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.nav-item-label {
+  font-size: 12px;
+  line-height: 1;
 }
 
 /* 顶部页面导航栏 - 已废弃，保留以兼容旧引用 */

@@ -11,25 +11,28 @@
         <span class="year-month">{{ currentYear }}年{{ currentMonth }}月</span>
       </div>
       <div v-if="showHeaderActions" class="header-right">
-        <button class="icon-btn" title="跳转日期" @click="showDatePicker = true">
+        <button class="icon-btn" @click="showDatePicker = true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
             <line x1="16" y1="2" x2="16" y2="6"></line>
             <line x1="8" y1="2" x2="8" y2="6"></line>
             <line x1="3" y1="10" x2="21" y2="10"></line>
           </svg>
+          <span>跳转日期</span>
         </button>
-        <button class="icon-btn add-btn" title="添加足迹" @click="emit('addFootprint')">
+        <button class="icon-btn add-btn" @click="emit('addFootprint')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
+          <span>添加足迹</span>
         </button>
-        <button class="icon-btn diary-btn" title="添加日记" @click="emit('addDiary')">
+        <button class="icon-btn diary-btn" @click="emit('addDiary')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
           </svg>
+          <span>添加日记</span>
         </button>
       </div>
     </div>
@@ -352,7 +355,7 @@ defineExpose({ openDatePicker: () => { showDatePicker.value = true } })
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0;
+  gap: 4px;
 }
 
 .year-month {
@@ -362,18 +365,20 @@ defineExpose({ openDatePicker: () => { showDatePicker.value = true } })
 }
 
 .icon-btn {
-  width: 32px;
   height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: none;
+  gap: 4px;
+  padding: 0 8px;
   border: none;
-  color: var(--chalk-white-70);
+  background: transparent;
+  color: var(--chalk-white-60);
   cursor: pointer;
   border-radius: 8px;
   transition: all 0.2s;
   flex-shrink: 0;
+  font-size: 12px;
 }
 
 .icon-btn:hover {
@@ -392,8 +397,8 @@ defineExpose({ openDatePicker: () => { showDatePicker.value = true } })
 }
 
 .icon-svg {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
 }
 
 .weekdays {

@@ -279,7 +279,7 @@ watch(() => props.visible, (val) => {
   if (val !== undefined) {
     dialogVisible.value = val
   }
-})
+}, { immediate: true })
 
 function openDialog() {
   if (props.visible !== undefined) {
