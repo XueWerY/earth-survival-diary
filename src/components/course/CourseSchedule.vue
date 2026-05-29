@@ -1,210 +1,148 @@
 <template>
   <div class="course-container">
-    <!-- 顶部日期导航区 -->
-    <div class="top-nav-area">
-      <div class="date-nav-scroll-wrapper" ref="dateNavRef">
-        <div class="date-nav-inner">
-          <div
-              v-for="(day, index) in weekDays"
-              :key="index"
-              class="nav-item"
-              :class="{
-                active: selectedDay === index,
-                today: isToday(index)
-              }"
-              :ref="setDayNavItemRef"
-              @click="selectDay(index)"
-          >
-            <span class="nav-day-name">{{ day.name }}</span>
-            <span class="nav-day-date">{{ day.date }}</span>
-            <span class="nav-count">{{ getDayCourseCount(index) }}</span>
-            <el-dropdown
-                trigger="click"
-                @command="(cmd: string) => handleDayCommand(cmd, index)"
-                @click.stop
-            >
-              <el-button type="info" size="small" text :icon="MoreFilled" class="nav-more" @click.stop />
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="add-course">添加课程</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </div>
-        </div>
-      </div>
-
-      <!-- 周信息区 -->
-      <div class="week-info-bar">
-        <div class="week-nav">
-          <el-button :icon="ArrowLeft" circle size="small" @click="prevWeek" />
+    <div class="course-inner">
+      <div class="week-area">
+        <el-button :icon="ArrowLeft" circle size="small" class="week-nav-btn" @click="prevWeek" :disabled="displayWeekNumber <= 1" />
+        <div class="week-info">
           <span class="week-number">第{{ displayWeekNumber }}周</span>
           <span class="week-date">{{ weekDateRange }}</span>
-          <el-button :icon="ArrowRight" circle size="small" @click="nextWeek" />
         </div>
-        <div class="week-progress">
-          <div class="progress-bar">
-            <div class="progress-fill" :style="{ width: weekProgress + '%' }"></div>
+        <el-button :icon="ArrowRight" circle size="small" class="week-nav-btn" @click="nextWeek" :disabled="displayWeekNumber >= totalWeeks" />
+      </div>
+
+      <div class="course-grid-wrapper">
+        <div class="course-grid" :style="{ gridTemplateColumns: gridColumns }">
+          <template v-for="cell in gridCells" :key="cell.key">
+            <div v-if="cell.type === 'corner'" class="period-header-cell" :style="{ gridRow: cell.gridRow, gridColumn: cell.gridColumn }"></div>
+            <div v-else-if="cell.type === 'day-header'" class="day-header-cell" :class="{ today: cell.day!.isToday }" :style="{ gridRow: cell.gridRow, gridColumn: cell.gridColumn }">
+              <span class="dh-name">{{ cell.day!.name }}</span>
+              <span class="dh-date">{{ cell.day!.date }}</span>
+            </div>
+            <div v-else-if="cell.type === 'period-label'" class="period-label-cell" :style="{ gridRow: cell.gridRow, gridColumn: cell.gridColumn }">
+              <span class="pl-name">{{ cell.period!.name }}</span>
+              <span class="pl-start">{{ cell.period!.start }}</span>
+              <span class="pl-end">{{ cell.period!.end }}</span>
+            </div>
+            <div v-else-if="cell.type === 'course'" class="grid-cell has-course" :style="{ gridRow: cell.gridRow, gridColumn: cell.gridColumn }" @click="handleEditCourse(cell.course!)">
+              <div class="course-card" :class="{ 'full-week-card': cell.course!.dayOfWeek && cell.course!.dayOfWeek.length === 7 }">
+                <div class="card-name" :style="{ color: cell.course!.color }">{{ cell.course!.name }}</div>
+                <div class="card-meta">
+                  <span v-if="cell.course!.location" class="card-location">{{ cell.course!.location }}</span>
+                  <span v-if="cell.course!.teacher" class="card-teacher">{{ cell.course!.teacher }}</span>
+                </div>
+                <div v-if="cell.course!.note" class="card-note">{{ cell.course!.note }}</div>
+                <div v-if="showNonCurrentWeekCourses && !cell.isCurrentWeek && cell.course!.weeks && cell.course!.weeks.length > 0" class="card-weeks">第{{ formatWeeks(cell.course!.weeks) }}周</div>
+              </div>
+              <div v-if="cell.overlapCount && cell.overlapCount > 0" class="overlap-badge">+{{ cell.overlapCount }}</div>
+            </div>
+            <div v-else-if="cell.type === 'break-transition'" class="break-transition-cell" :style="{ gridRow: cell.gridRow, gridColumn: cell.gridColumn }">
+              <span class="break-label">{{ cell.breakLabel }}</span>
+            </div>
+            <div v-else-if="cell.type === 'empty'" class="grid-cell" :style="{ gridRow: cell.gridRow, gridColumn: cell.gridColumn }" @click="handleCellClick(cell.dayIndex!, cell.period!)">
+              <div class="cell-empty"><span class="cell-plus">+</span></div>
+            </div>
+          </template>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- 课程弹窗 -->
+  <Teleport to="body">
+    <div v-if="dialogVisible" class="dialog-overlay" @click.self="closeDialog">
+      <div class="dialog-container course-form-dialog">
+        <div class="dialog-header folder-dialog-header">
+          <span class="dialog-header-title folder-dialog-title">{{ editingCourse ? '编辑课程' : '添加课程' }}</span>
+        </div>
+        <div class="dialog-body">
+          <el-form :model="courseForm" :rules="courseRules" ref="courseFormRef" label-width="90px" class="course-form">
+            <el-form-item label="课程名称" prop="name">
+              <el-input v-model="courseForm.name" placeholder="输入课程名称" maxlength="30" show-word-limit />
+            </el-form-item>
+            <el-form-item label="上课时间">
+              <div class="time-area">
+                <div class="time-day-row">
+                  <el-checkbox v-for="d in DAY_CHECKBOXES" :key="d.value" :model-value="courseForm.dayOfWeek.includes(d.value)" @change="(val: boolean) => toggleDayOfWeek(d.value, val)" class="day-checkbox">{{ d.label }}</el-checkbox>
+                </div>
+                <div class="time-periods-row">
+                  <el-checkbox v-for="p in periods" :key="p.id" :model-value="courseForm.periodIds.includes(p.id)" @change="(val: boolean) => togglePeriod(p.id, val)" class="period-checkbox">{{ p.name }}</el-checkbox>
+                </div>
+                <div class="time-range-row">
+                  <span class="time-range-text">{{ computedTimeRange }}</span>
+                </div>
+              </div>
+            </el-form-item>
+            <el-form-item label="上课地点">
+              <el-input v-model="courseForm.location" placeholder="教室/地点（可选）" maxlength="30" />
+            </el-form-item>
+            <el-form-item label="授课教师">
+              <el-input v-model="courseForm.teacher" placeholder="教师姓名（可选）" maxlength="20" />
+            </el-form-item>
+            <el-form-item label="课程颜色">
+              <div class="color-section">
+                <div class="color-grid">
+                  <div v-for="c in EXTENDED_COLORS" :key="c" class="color-swatch" :class="{ selected: courseForm.color === c }" :style="{ background: c }" @click="courseForm.color = c"></div>
+                </div>
+                <div class="color-custom">
+                  <span class="color-custom-label">自定义</span>
+                  <el-input v-model="courseForm.color" placeholder="#667eea" size="small" class="color-custom-input" />
+                </div>
+              </div>
+            </el-form-item>
+            <el-form-item label="上课周次">
+              <div class="weeks-setting">
+                <el-checkbox v-model="allWeeks">每周都有</el-checkbox>
+                <div v-if="!allWeeks" class="week-selector">
+                  <el-checkbox-group v-model="courseForm.weeks">
+                    <el-checkbox v-for="w in maxWeeks" :key="w" :value="w">第{{ w }}周</el-checkbox>
+                  </el-checkbox-group>
+                </div>
+              </div>
+            </el-form-item>
+            <el-form-item label="备注">
+              <el-input v-model="courseForm.note" type="textarea" :rows="2" placeholder="添加备注（可选）" maxlength="100" show-word-limit />
+            </el-form-item>
+          </el-form>
+          <div class="form-footer">
+            <button v-if="editingCourse" class="capsule-btn delete-btn" @click="handleDeleteCourseClick()">
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+              <span>删除</span>
+            </button>
+            <button class="capsule-btn cancel-btn" @click="closeDialog">
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              <span>取消</span>
+            </button>
+            <button class="capsule-btn submit-btn" @click="handleCourseFormSubmit">
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
+              <span>{{ editingCourse ? '保存' : '添加' }}</span>
+            </button>
           </div>
-          <span class="progress-text">共{{ totalWeeks }}周</span>
         </div>
       </div>
     </div>
+  </Teleport>
 
-    <!-- 主内容区 -->
-    <div class="main-content">
-      <template v-if="!isFormMode">
-        <div class="content-wrapper">
-          <!-- 课程列表区 -->
-          <div class="content-body">
-            <el-scrollbar>
-              <!-- 空状态 -->
-              <el-empty
-                  v-if="currentDayCourses.length === 0"
-                  :description="`周${['一', '二', '三', '四', '五', '六', '日'][selectedDay]}暂无课程`"
-                  :image-size="120"
-              />
-
-              <!-- 课程列表 -->
-              <div v-else class="course-list">
-                <div
-                    v-for="course in currentDayCourses"
-                    :key="course.id"
-                    class="course-card"
-                    @click="handleEditCourse(course)"
-                >
-                  <div class="course-time">
-                    <span class="time-start">{{ course.startTime }}</span>
-                    <span class="time-sep">-</span>
-                    <span class="time-end">{{ course.endTime }}</span>
-                  </div>
-                  <div class="course-content">
-                    <div class="course-name" :style="{ color: course.color }">{{ course.name }}</div>
-                    <div class="course-meta">
-                      <span v-if="course.location" class="meta-item">
-                        <el-icon><Location /></el-icon>
-                        {{ course.location }}
-                      </span>
-                      <span v-if="course.teacher" class="meta-item">
-                        <el-icon><User /></el-icon>
-                        {{ course.teacher }}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </el-scrollbar>
-          </div>
+  <!-- 删除课程确认弹窗 -->
+  <Teleport to="body">
+    <div v-if="showDeleteCourseConfirm" class="confirm-top-overlay" @click.self="showDeleteCourseConfirm = false">
+      <div class="confirm-dialog-box">
+        <div class="dialog-icon"><el-icon class="icon-warning"><Warning /></el-icon></div>
+        <h3 class="dialog-title">删除确认</h3>
+        <p class="dialog-message">确定要删除这门课程吗？</p>
+        <div class="dialog-actions">
+          <el-button type="default" @click="showDeleteCourseConfirm = false">取消</el-button>
+          <el-button type="danger" @click="confirmDeleteCourse">确认删除</el-button>
         </div>
-      </template>
-
-      <template v-else>
-        <!-- 添加/编辑课程界面 -->
-        <div class="course-form-page">
-          <div class="form-page-header">
-            <h2 class="form-page-title">{{ editingCourse ? '编辑课程' : '添加课程' }}</h2>
-          </div>
-          <div class="form-page-body">
-            <el-scrollbar>
-              <div class="form-container">
-                <el-form :model="courseForm" :rules="courseRules" ref="courseFormRef" label-width="80px" class="course-form">
-                  <el-form-item label="课程名称" prop="name">
-                    <el-input v-model="courseForm.name" placeholder="输入课程名称" maxlength="30" show-word-limit />
-                  </el-form-item>
-
-                  <el-form-item label="上课时间" required>
-                    <div class="time-row">
-                      <el-select v-model="courseForm.dayOfWeek" placeholder="选择星期" style="width: 120px">
-                        <el-option v-for="day in WEEKDAYS" :key="day.value" :label="day.label" :value="day.value" />
-                      </el-select>
-                      <el-time-select
-                          v-model="courseForm.startTime"
-                          placeholder="开始时间"
-                          :max-time="courseForm.endTime"
-                          start="08:00"
-                          step="00:05"
-                          end="20:40"
-                          style="width: 110px"
-                      />
-                      <span class="time-sep-text">至</span>
-                      <el-time-select
-                          v-model="courseForm.endTime"
-                          placeholder="结束时间"
-                          :min-time="courseForm.startTime"
-                          start="08:00"
-                          step="00:05"
-                          end="20:40"
-                          style="width: 110px"
-                      />
-                    </div>
-                  </el-form-item>
-
-                  <el-form-item label="上课地点">
-                    <el-input v-model="courseForm.location" placeholder="教室/地点（可选）" maxlength="30" />
-                  </el-form-item>
-
-                  <el-form-item label="授课教师">
-                    <el-input v-model="courseForm.teacher" placeholder="教师姓名（可选）" maxlength="20" />
-                  </el-form-item>
-
-                  <el-form-item label="课程颜色">
-                    <div class="color-picker">
-                      <div
-                          v-for="color in COLORS"
-                          :key="color"
-                          class="color-option"
-                          :class="{ active: courseForm.color === color }"
-                          :style="{ backgroundColor: color }"
-                          @click="courseForm.color = color"
-                      />
-                    </div>
-                  </el-form-item>
-
-                  <el-form-item label="上课周次">
-                    <div class="weeks-setting">
-                      <el-checkbox v-model="allWeeks">每周都有</el-checkbox>
-                      <div v-if="!allWeeks" class="week-selector">
-                        <el-checkbox-group v-model="courseForm.weeks">
-                          <el-checkbox v-for="w in maxWeeks" :key="w" :value="w">第{{ w }}周</el-checkbox>
-                        </el-checkbox-group>
-                      </div>
-                    </div>
-                  </el-form-item>
-
-                  <el-form-item label="备注">
-                    <el-input
-                        v-model="courseForm.note"
-                        type="textarea"
-                        :rows="2"
-                        placeholder="添加备注（可选）"
-                        maxlength="100"
-                        show-word-limit
-                    />
-                  </el-form-item>
-                </el-form>
-
-                <div class="form-actions">
-                  <el-button v-if="editingCourse" type="danger" @click="handleDeleteCourse">删除</el-button>
-                  <div class="form-actions-right">
-                    <el-button @click="isFormMode = false">取消</el-button>
-                    <el-button type="primary" @click="handleCourseFormSubmit">
-                      {{ editingCourse ? '保存' : '添加' }}
-                    </el-button>
-                  </div>
-                </div>
-              </div>
-            </el-scrollbar>
-          </div>
-        </div>
-      </template>
+      </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, onBeforeUpdate } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, ArrowRight, Location, User, MoreFilled } from '@element-plus/icons-vue'
+import { ref, computed, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
+import { ArrowLeft, ArrowRight, Warning } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { getData, setData } from '../../services/storageService'
 import { useSettingsStore } from '../../stores/settingsStore'
@@ -214,9 +152,8 @@ import { logger } from '../../lib/logger'
 interface Course {
   id: string
   name: string
-  dayOfWeek: number
-  startTime: string
-  endTime: string
+  dayOfWeek: number[]
+  periodIds: number[]
   location: string
   teacher: string
   color: string
@@ -226,110 +163,143 @@ interface Course {
   updatedAt: string
 }
 
-const COLORS = [
-  '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
-  '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'
+interface Period {
+  id: number
+  name: string
+  start: string
+  end: string
+}
+
+interface GridCellItem {
+  type: 'corner' | 'day-header' | 'period-label' | 'empty' | 'course' | 'break-transition'
+  gridRow: string
+  gridColumn: string
+  key: string
+  day?: { name: string; date: string; dayOfWeek: number; isToday: boolean }
+  period?: Period
+  course?: Course
+  dayIndex?: number
+  overlapCount?: number
+  breakLabel?: string
+  isCurrentWeek?: boolean
+}
+
+const EXTENDED_COLORS = [
+  '#667eea', '#764ba2', '#f093fb', '#d53a9d', '#4facfe', '#00b4db', '#43e97b', '#11998e',
+  '#fa709a', '#ee5a24', '#fee140', '#f6d365', '#a8edea', '#a18cd1', '#d299c2', '#fbc2eb',
+  '#ff6b6b', '#4ecdc4', '#26d0ce', '#45b7d1', '#2b32b2', '#96ceb4', '#e1eec3', '#fc4a1a',
+  '#f7b733', '#00b09b', '#96c93d', '#834d9b', '#d04ed6', '#2c3e50', '#3498db', '#e74c3c',
+  '#f39c12', '#1abc9c', '#9b59b6', '#e67e22', '#2ecc71', '#e91e63', '#00bcd4', '#8e44ad',
 ]
 
-const DAY_COLORS = [
-  '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
-  '#8b5cf6', '#06b6d4', '#ec4899',
+const DAY_CHECKBOXES = [
+  { value: 1, label: '周一' }, { value: 2, label: '周二' }, { value: 3, label: '周三' },
+  { value: 4, label: '周四' }, { value: 5, label: '周五' }, { value: 6, label: '周六' }, { value: 0, label: '周日' }
 ]
 
-const WEEKDAYS = [
-  { value: 1, label: '周一' },
-  { value: 2, label: '周二' },
-  { value: 3, label: '周三' },
-  { value: 4, label: '周四' },
-  { value: 5, label: '周五' },
-  { value: 6, label: '周六' },
-  { value: 0, label: '周日' }
-]
+const DAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
-const STORAGE_KEY = ['course', 'courses'] as const
+function formatWeeks(weeks: number[]): string {
+  if (!weeks || weeks.length === 0) return ''
+  const sorted = [...weeks].sort((a, b) => a - b)
+  const ranges: string[] = []
+  let start = sorted[0]
+  let end = sorted[0]
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i] === end + 1) {
+      end = sorted[i]
+    } else {
+      ranges.push(start === end ? `${start}` : `${start}-${end}`)
+      start = sorted[i]
+      end = sorted[i]
+    }
+  }
+  ranges.push(start === end ? `${start}` : `${start}-${end}`)
+  return ranges.join(',')
+}
+
+const COURSES_KEY = 'course' as const
+const COURSES_SUB = 'courses' as const
 
 const courses = ref<Course[]>([])
-const selectedDay = ref(0)
 
-const dateNavRef = ref<HTMLElement>()
-const dateNavItemsRef = ref<HTMLElement[]>([])
-
-const clearNavRefs = () => {
-  dateNavItemsRef.value = []
-}
-
-const setDayNavItemRef = (el: any) => {
-  if (el) dateNavItemsRef.value.push(el)
-}
-
-const scrollToCenter = (container: HTMLElement, target: HTMLElement) => {
-  if (!container || !target) return
-  const containerWidth = container.clientWidth
-  const containerRect = container.getBoundingClientRect()
-  const targetRect = target.getBoundingClientRect()
-  const targetCenterInContainer = targetRect.left - containerRect.left + container.scrollLeft + (targetRect.width / 2)
-  container.scrollTo({ left: Math.max(0, targetCenterInContainer - (containerWidth / 2)), behavior: 'smooth' })
-}
-
-const scrollDateNavToActive = () => {
-  nextTick(() => {
-    const container = dateNavRef.value as HTMLElement
-    if (!container) return
-    const activeItem = dateNavItemsRef.value.find(item => item.classList.contains('active')) as HTMLElement || container.querySelector('.nav-item.active') as HTMLElement
-    if (activeItem) scrollToCenter(container, activeItem)
-  })
-}
-
-let isDateNavDragging = false
-let dateNavDragStartX = 0
-let dateNavDragScrollLeft = 0
-let isDateNavDragInitialized = false
-
-const initDateNavDrag = () => {
-  if (isDateNavDragInitialized) return
-  isDateNavDragInitialized = true
-  const el = dateNavRef.value
-  if (!el) return
-  el.addEventListener('mousedown', (e: MouseEvent) => { if (e.button === 0) { isDateNavDragging = true; dateNavDragStartX = e.pageX; dateNavDragScrollLeft = el.scrollLeft; el.style.cursor = 'grabbing'; el.style.userSelect = 'none' } })
-  window.addEventListener('mousemove', (e: MouseEvent) => { if (!isDateNavDragging) return; e.preventDefault(); const walk = dateNavDragStartX - e.pageX; el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, dateNavDragScrollLeft + walk)) })
-  const endDrag = () => { if (!isDateNavDragging) return; isDateNavDragging = false; el.style.cursor = ''; el.style.userSelect = '' }
-  window.addEventListener('mouseup', endDrag); window.addEventListener('mouseleave', endDrag)
-  el.addEventListener('touchstart', (e: TouchEvent) => { dateNavDragStartX = e.touches[0].pageX; dateNavDragScrollLeft = el.scrollLeft }, { passive: true })
-  el.addEventListener('touchmove', (e: TouchEvent) => { const walk = dateNavDragStartX - e.touches[0].pageX; el.scrollLeft = Math.max(0, Math.min(el.scrollWidth - el.clientWidth, dateNavDragScrollLeft + walk)) }, { passive: true })
-}
-
-// 全局设置
 const settingsStore = useSettingsStore()
 const pageNav = usePageNav()
 const semesterStartDate = computed(() => settingsStore.settings.course?.semesterStartDate || '')
 const totalWeeks = computed(() => settingsStore.settings.course?.totalWeeks || 20)
+const firstPeriodStart = computed(() => settingsStore.settings.course?.firstPeriodStart || '08:00')
+const periodDuration = computed(() => settingsStore.settings.course?.periodDuration || 45)
+const breakDuration = computed(() => settingsStore.settings.course?.breakDuration || 10)
+const breakMode = computed(() => settingsStore.settings.course?.breakMode || 'uniform')
+const customBreakDurations = computed(() => settingsStore.settings.course?.customBreakDurations || [])
+const lunchBreakMinutes = computed(() => settingsStore.settings.course?.lunchBreakMinutes ?? 120)
+const dinnerBreakMinutes = computed(() => settingsStore.settings.course?.dinnerBreakMinutes ?? 90)
+const showWeekend = computed(() => settingsStore.settings.course?.showWeekend !== false)
+const showNonCurrentWeekCourses = computed(() => settingsStore.settings.course?.showNonCurrentWeekCourses !== false)
+const periodCountPerSession = computed(() => settingsStore.settings.course?.periodCountPerSession || { morning: 4, afternoon: 4, evening: 2 })
 
-// 表单相关
-const isFormMode = ref(false)
-const editingCourse = ref<Course | null>(null)
-const courseFormRef = ref()
-const courseForm = ref({
-  name: '',
-  dayOfWeek: 1,
-  startTime: '08:00',
-  endTime: '09:00',
-  location: '',
-  teacher: '',
-  color: COLORS[0],
-  weeks: [] as number[],
-  note: ''
+const periods = computed<Period[]>(() => {
+  const start = firstPeriodStart.value
+  const dur = periodDuration.value
+  const brk = breakDuration.value
+  const mode = breakMode.value
+  const customBks = customBreakDurations.value
+  const lunch = lunchBreakMinutes.value
+  const dinner = dinnerBreakMinutes.value
+  const counts = periodCountPerSession.value
+  const result: Period[] = []
+  let currentStart = start
+  let idCounter = 1
+  let customGapIdx = 0
+
+  for (let i = 0; i < counts.morning; i++) {
+    const end = addMinutes(currentStart, dur)
+    result.push({ id: idCounter++, name: `第${idCounter - 1}节`, start: currentStart, end })
+    if (i < counts.morning - 1) {
+      currentStart = addMinutes(end, mode === 'custom' ? (customBks[customGapIdx] ?? brk) : brk)
+      customGapIdx++
+    } else {
+      currentStart = addMinutes(end, brk)
+    }
+  }
+
+  if (counts.morning > 0 && counts.afternoon > 0) {
+    currentStart = addMinutes(result[result.length - 1].end, lunch)
+  } else if (counts.morning === 0 && counts.afternoon > 0) {
+    currentStart = start
+  }
+
+  for (let i = 0; i < counts.afternoon; i++) {
+    const end = addMinutes(currentStart, dur)
+    result.push({ id: idCounter++, name: `第${idCounter - 1}节`, start: currentStart, end })
+    if (i < counts.afternoon - 1) {
+      currentStart = addMinutes(end, mode === 'custom' ? (customBks[customGapIdx] ?? brk) : brk)
+      customGapIdx++
+    } else {
+      currentStart = addMinutes(end, brk)
+    }
+  }
+
+  if (counts.afternoon > 0 && counts.evening > 0) {
+    currentStart = addMinutes(result[result.length - 1].end, dinner)
+  } else if (counts.afternoon === 0 && counts.evening > 0) {
+    currentStart = start
+  }
+
+  for (let i = 0; i < counts.evening; i++) {
+    const end = addMinutes(currentStart, dur)
+    result.push({ id: idCounter++, name: `第${idCounter - 1}节`, start: currentStart, end })
+    if (i < counts.evening - 1) {
+      currentStart = addMinutes(end, mode === 'custom' ? (customBks[customGapIdx] ?? brk) : brk)
+      customGapIdx++
+    } else {
+      currentStart = addMinutes(end, brk)
+    }
+  }
+
+  return result
 })
-const allWeeks = ref(true)
 
-const courseRules = {
-  name: [
-    { required: true, message: '请输入课程名称', trigger: 'blur' }
-  ]
-}
-
-const maxWeeks = computed(() => totalWeeks.value || 25)
-
-// 当前周
 const currentWeekStart = ref(getMondayOfWeek(dayjs()))
 
 function getMondayOfWeek(date: dayjs.Dayjs): dayjs.Dayjs {
@@ -340,11 +310,6 @@ function getMondayOfWeek(date: dayjs.Dayjs): dayjs.Dayjs {
 
 const displayWeekNumber = computed(() => getWeekNumber(currentWeekStart.value))
 
-const weekProgress = computed(() => {
-  const current = displayWeekNumber.value
-  return Math.min((current / totalWeeks.value) * 100, 100)
-})
-
 const weekDateRange = computed(() => {
   const start = currentWeekStart.value
   const end = start.add(6, 'day')
@@ -352,50 +317,19 @@ const weekDateRange = computed(() => {
 })
 
 const weekDays = computed(() => {
-  const names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
-  return Array.from({ length: 7 }, (_, i) => {
+  const today = dayjs()
+  const count = showWeekend.value ? 7 : 5
+  return Array.from({ length: count }, (_, i) => {
     const date = currentWeekStart.value.add(i, 'day')
     return {
-      name: names[i],
-      date: date.format('D'),
+      name: DAY_NAMES[i],
+      date: date.format('DD'),
       fullDate: date.format('YYYY-MM-DD'),
-      dayOfWeek: i === 6 ? 0 : i + 1
+      dayOfWeek: i === 6 ? 0 : i + 1,
+      isToday: today.format('YYYY-MM-DD') === date.format('YYYY-MM-DD')
     }
   })
 })
-
-const currentDayTitle = computed(() => {
-  const day = weekDays.value[selectedDay.value]
-  return `${day.name} (${currentWeekStart.value.add(selectedDay.value, 'day').format('M月D日')})`
-})
-
-const currentDayCourses = computed(() => {
-  const dayOfWeek = selectedDay.value === 6 ? 0 : selectedDay.value + 1
-  const weekNum = displayWeekNumber.value
-
-  return courses.value
-      .filter(course => {
-        if (course.dayOfWeek !== dayOfWeek) return false
-        if (course.weeks && course.weeks.length > 0) {
-          return course.weeks.includes(weekNum)
-        }
-        return true
-      })
-      .sort((a, b) => a.startTime.localeCompare(b.startTime))
-})
-
-function getDayCourseCount(dayIndex: number): number {
-  const dayOfWeek = dayIndex === 6 ? 0 : dayIndex + 1
-  const weekNum = displayWeekNumber.value
-
-  return courses.value.filter(course => {
-    if (course.dayOfWeek !== dayOfWeek) return false
-    if (course.weeks && course.weeks.length > 0) {
-      return course.weeks.includes(weekNum)
-    }
-    return true
-  }).length
-}
 
 function getWeekNumber(date: dayjs.Dayjs): number {
   if (!semesterStartDate.value) {
@@ -404,81 +338,289 @@ function getWeekNumber(date: dayjs.Dayjs): number {
     const diff = getMondayOfWeek(date).diff(mondayOfFirstWeek, 'week')
     return Math.max(1, diff + 1)
   }
-
   const startDate = getMondayOfWeek(dayjs(semesterStartDate.value))
   const diff = getMondayOfWeek(date).diff(startDate, 'week')
   return Math.max(1, diff + 1)
 }
 
-function isToday(dayIndex: number): boolean {
-  const today = dayjs()
-  const dayDate = currentWeekStart.value.add(dayIndex, 'day')
-  return today.format('YYYY-MM-DD') === dayDate.format('YYYY-MM-DD')
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + m
 }
 
+function addMinutes(time: string, minutes: number): string {
+  const total = timeToMinutes(time) + minutes
+  const h = Math.floor(total / 60) % 24
+  const m = total % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+function findClosestPeriod(time: string): number {
+  const minutes = timeToMinutes(time)
+  let best = periods.value.length > 0 ? periods.value[0].id : 1
+  let bestDiff = Infinity
+  for (const p of periods.value) {
+    const diff = Math.abs(minutes - timeToMinutes(p.start))
+    if (diff < bestDiff) { bestDiff = diff; best = p.id }
+  }
+  return best
+}
+
+function findPeriodsForTimeRange(startTime: string, endTime: string): number[] {
+  if (periods.value.length === 0) return []
+  const startP = findClosestPeriod(startTime)
+  const endP = findClosestPeriod(endTime)
+  const minP = Math.min(startP, endP)
+  const maxP = Math.max(startP, endP)
+  const ids: number[] = []
+  for (let i = minP; i <= maxP; i++) ids.push(i)
+  return ids
+}
+
+function getPeriodById(id: number): Period | undefined {
+  return periods.value.find(p => p.id === id)
+}
+
+const gridColumns = computed(() => {
+  const dayCount = showWeekend.value ? 7 : 5
+  return `70px repeat(${dayCount}, 1fr)`
+})
+
+const totalDayCount = computed(() => showWeekend.value ? 7 : 5)
+const gridCells = computed<GridCellItem[]>(() => {
+  const cells: GridCellItem[] = []
+  const weekNum = displayWeekNumber.value
+  const days = weekDays.value
+  const ps = periods.value
+  const dayCount = totalDayCount.value
+  const fullSpan = dayCount + 1
+
+  cells.push({ type: 'corner', gridRow: '1', gridColumn: '1', key: 'corner' })
+  days.forEach((d, di) => {
+    cells.push({ type: 'day-header', gridRow: '1', gridColumn: (di + 2).toString(), key: `dh-${di}`, day: d })
+  })
+
+  interface CourseLayout {
+    course: Course
+    periods: number[]
+    dayIndices: number[]
+    allDays: boolean
+    isCurrentWeek: boolean
+  }
+  const layouts: CourseLayout[] = []
+  for (const course of courses.value) {
+    if (!showNonCurrentWeekCourses.value && course.weeks && course.weeks.length > 0 && !course.weeks.includes(weekNum)) continue
+    if (!course.dayOfWeek || course.dayOfWeek.length === 0) continue
+    const pIds = (course.periodIds || []).slice().sort((a, b) => a - b)
+    if (pIds.length === 0) continue
+    const dayIndices = course.dayOfWeek.map(dw => dw === 0 ? 6 : dw - 1).sort((a, b) => a - b)
+    const validDayIndices = dayIndices.filter(di => di < dayCount)
+    if (validDayIndices.length === 0) continue
+    const allVisibleDays = validDayIndices.length === dayCount
+    const isCurrentWeek = !course.weeks || course.weeks.length === 0 || course.weeks.includes(weekNum)
+    layouts.push({ course, periods: pIds, dayIndices: validDayIndices, allDays: allVisibleDays, isCurrentWeek })
+  }
+
+  layouts.sort((a, b) => {
+    if (a.isCurrentWeek && !b.isCurrentWeek) return -1
+    if (!a.isCurrentWeek && b.isCurrentWeek) return 1
+    return 0
+  })
+
+  const occupied = new Set<string>()
+  const counts = periodCountPerSession.value
+  let transitionRowsBefore = 0
+
+  ps.forEach((period, pi) => {
+    if (pi === counts.morning && counts.morning > 0 && counts.afternoon > 0) {
+      cells.push({
+        type: 'break-transition',
+        gridRow: (pi + 2 + transitionRowsBefore).toString(),
+        gridColumn: `1 / span ${fullSpan}`,
+        key: 'lunch-break',
+        breakLabel: '午休'
+      })
+      transitionRowsBefore++
+    }
+
+    if (pi === counts.morning + counts.afternoon && counts.afternoon > 0 && counts.evening > 0) {
+      cells.push({
+        type: 'break-transition',
+        gridRow: (pi + 2 + transitionRowsBefore).toString(),
+        gridColumn: `1 / span ${fullSpan}`,
+        key: 'dinner-break',
+        breakLabel: '晚休'
+      })
+      transitionRowsBefore++
+    }
+
+    const baseRow = pi + 2 + transitionRowsBefore
+    const row = baseRow.toString()
+    const cellKey = `pl-${period.id}`
+    if (occupied.has(cellKey)) return
+
+    const fullWeekLayout = layouts.find(l => l.allDays && l.periods.includes(period.id) && l.periods[0] === period.id)
+    if (fullWeekLayout) {
+      const rowSpan = fullWeekLayout.periods.length
+      let effectiveRowSpan = rowSpan
+      const periodEnd = pi + rowSpan - 1
+      if (pi < counts.morning && periodEnd >= counts.morning && counts.morning > 0 && counts.afternoon > 0) effectiveRowSpan++
+      if (pi < counts.morning + counts.afternoon && periodEnd >= counts.morning + counts.afternoon && counts.afternoon > 0 && counts.evening > 0) effectiveRowSpan++
+      for (let r = 0; r < rowSpan; r++) {
+        occupied.add(`pl-${ps[pi + r]?.id}`)
+        for (let c = 0; c < dayCount; c++) {
+          occupied.add(`c-${pi + r}-${c}`)
+        }
+      }
+      const overlapping = layouts.filter(l =>
+        l !== fullWeekLayout && l.periods.some(pid => fullWeekLayout.periods.includes(pid))
+      )
+      cells.push({
+        type: 'course',
+        gridRow: `${row} / span ${effectiveRowSpan}`,
+        gridColumn: `1 / span ${fullSpan}`,
+        key: `course-full-${fullWeekLayout.course.id}-${pi}`,
+        course: fullWeekLayout.course,
+        overlapCount: overlapping.length,
+        isCurrentWeek: fullWeekLayout.isCurrentWeek
+      })
+    } else {
+      cells.push({ type: 'period-label', gridRow: row, gridColumn: '1', key: `pl-${period.id}`, period })
+
+      days.forEach((day, di) => {
+        const cKey = `c-${pi}-${di}`
+        if (occupied.has(cKey)) return
+
+        const layout = layouts.find(l => {
+          if (l.allDays) return false
+          if (!l.periods.includes(period.id)) return false
+          if (!l.dayIndices.includes(di)) return false
+          return period.id === l.periods[0]
+        })
+
+        if (layout) {
+          const rowSpan = layout.periods.length
+          let effectiveRowSpan = rowSpan
+          const periodEnd = pi + rowSpan - 1
+          if (pi < counts.morning && periodEnd >= counts.morning && counts.morning > 0 && counts.afternoon > 0) effectiveRowSpan++
+          if (pi < counts.morning + counts.afternoon && periodEnd >= counts.morning + counts.afternoon && counts.afternoon > 0 && counts.evening > 0) effectiveRowSpan++
+          for (let r = 0; r < rowSpan; r++) {
+            for (let c = 0; c < layout.dayIndices.length; c++) {
+              occupied.add(`c-${pi + r}-${layout.dayIndices[c]}`)
+            }
+          }
+          const cellOverlapping = layouts.filter(l =>
+            l !== layout && !l.allDays &&
+            l.periods.some(pid => layout.periods.includes(pid)) &&
+            l.dayIndices.some(di2 => layout.dayIndices.includes(di2))
+          )
+          cells.push({
+            type: 'course',
+            gridRow: `${row} / span ${effectiveRowSpan}`,
+            gridColumn: (di + 2).toString(),
+            key: `course-${layout.course.id}-${pi}-${di}`,
+            course: layout.course,
+            overlapCount: cellOverlapping.length,
+            isCurrentWeek: layout.isCurrentWeek
+          })
+        } else {
+          cells.push({
+            type: 'empty',
+            gridRow: row,
+            gridColumn: (di + 2).toString(),
+            key: `empty-${pi}-${di}`,
+            dayIndex: di,
+            period
+          })
+        }
+      })
+    }
+  })
+
+  return cells
+})
+
 function prevWeek() {
-  const newWeek = displayWeekNumber.value - 1
-  if (newWeek >= 1) {
+  if (displayWeekNumber.value > 1) {
     currentWeekStart.value = currentWeekStart.value.subtract(7, 'day')
-    logger.info('[课程表] 切换周数', { week: newWeek })
+    logger.info('[课程表] 切换上一周', { week: displayWeekNumber.value })
   }
 }
 
 function nextWeek() {
-  const newWeek = displayWeekNumber.value + 1
-  if (newWeek <= totalWeeks.value) {
+  if (displayWeekNumber.value < totalWeeks.value) {
     currentWeekStart.value = currentWeekStart.value.add(7, 'day')
-    logger.info('[课程表] 切换周数', { week: newWeek })
+    logger.info('[课程表] 切换下一周', { week: displayWeekNumber.value })
   }
 }
 
-function selectDay(index: number) {
-  selectedDay.value = index
-  logger.info('[课程表] 切换日期', { day: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][index] })
-  if (isFormMode.value) {
-    isFormMode.value = false
+// ===== 课程弹窗 =====
+const dialogVisible = ref(false)
+const editingCourse = ref<Course | null>(null)
+const courseFormRef = ref()
+const courseForm = ref({
+  name: '',
+  dayOfWeek: [1] as number[],
+  periodIds: [] as number[],
+  location: '',
+  teacher: '',
+  color: EXTENDED_COLORS[0],
+  weeks: [] as number[],
+  note: ''
+})
+const allWeeks = ref(true)
+
+const computedTimeRange = computed(() => {
+  if (courseForm.value.periodIds.length === 0) return '未选择节次'
+  const sorted = [...courseForm.value.periodIds].sort((a, b) => a - b)
+  const first = getPeriodById(sorted[0])
+  const last = getPeriodById(sorted[sorted.length - 1])
+  if (first && last) return `${first.start} - ${last.end}`
+  return '未选择节次'
+})
+
+function toggleDayOfWeek(day: number, checked: boolean) {
+  if (checked) {
+    if (!courseForm.value.dayOfWeek.includes(day)) courseForm.value.dayOfWeek = [...courseForm.value.dayOfWeek, day]
+  } else {
+    courseForm.value.dayOfWeek = courseForm.value.dayOfWeek.filter(d => d !== day)
   }
-  scrollDateNavToActive()
 }
 
-function handleDayCommand(command: string, dayIndex: number) {
-  if (command === 'add-course') {
-    handleAddCourse(dayIndex)
+function togglePeriod(periodId: number, checked: boolean) {
+  if (checked) {
+    if (!courseForm.value.periodIds.includes(periodId)) courseForm.value.periodIds = [...courseForm.value.periodIds, periodId]
+  } else {
+    courseForm.value.periodIds = courseForm.value.periodIds.filter(id => id !== periodId)
   }
 }
 
-const openFormMode = () => {
-  isFormMode.value = true
-}
+const courseRules = { name: [{ required: true, message: '请输入课程名称', trigger: 'blur' }] }
+const maxWeeks = computed(() => totalWeeks.value || 25)
 
-function handleAddCourse(dayIndex?: number) {
-  if (dayIndex !== undefined) {
-    selectedDay.value = dayIndex
-  }
+function handleCellClick(dayIndex: number, period: Period) {
+  const dayOfWeek = dayIndex === 6 ? 0 : dayIndex + 1
   editingCourse.value = null
-  const defaultDayOfWeek = selectedDay.value === 6 ? 0 : selectedDay.value + 1
   courseForm.value = {
     name: '',
-    dayOfWeek: defaultDayOfWeek,
-    startTime: '08:00',
-    endTime: '09:00',
+    dayOfWeek: [dayOfWeek],
+    periodIds: [period.id],
     location: '',
     teacher: '',
-    color: COLORS[Math.floor(Math.random() * COLORS.length)],
+    color: EXTENDED_COLORS[Math.floor(Math.random() * EXTENDED_COLORS.length)],
     weeks: [],
     note: ''
   }
   allWeeks.value = true
-  openFormMode()
+  dialogVisible.value = true
 }
 
 function handleEditCourse(course: Course) {
   editingCourse.value = { ...course }
   courseForm.value = {
     name: course.name,
-    dayOfWeek: course.dayOfWeek,
-    startTime: course.startTime,
-    endTime: course.endTime,
+    dayOfWeek: [...(course.dayOfWeek || [])],
+    periodIds: [...(course.periodIds || [])],
     location: course.location,
     teacher: course.teacher,
     color: course.color,
@@ -486,7 +628,12 @@ function handleEditCourse(course: Course) {
     note: course.note
   }
   allWeeks.value = !course.weeks || course.weeks.length === 0
-  openFormMode()
+  dialogVisible.value = true
+}
+
+function closeDialog() {
+  dialogVisible.value = false
+  editingCourse.value = null
 }
 
 async function handleCourseFormSubmit() {
@@ -494,502 +641,265 @@ async function handleCourseFormSubmit() {
   await courseFormRef.value.validate((valid: boolean) => {
     if (!valid) return
     if (editingCourse.value) {
-      const index = courses.value.findIndex(c => c.id === editingCourse.value!.id)
-      if (index > -1) {
-        courses.value[index] = {
-          ...courses.value[index],
-          ...courseForm.value,
-          weeks: allWeeks.value ? [] : courseForm.value.weeks,
+      const idx = courses.value.findIndex(c => c.id === editingCourse.value!.id)
+      if (idx > -1) {
+        const updated = {
+          ...courses.value[idx],
+          name: courseForm.value.name,
+          dayOfWeek: [...courseForm.value.dayOfWeek],
+          periodIds: [...courseForm.value.periodIds],
+          location: courseForm.value.location,
+          teacher: courseForm.value.teacher,
+          color: courseForm.value.color,
+          weeks: allWeeks.value ? [] : [...courseForm.value.weeks],
+          note: courseForm.value.note,
           updatedAt: new Date().toISOString()
         }
-        logger.info('[课程表] 编辑课程', { id: editingCourse.value.id, name: courseForm.value.name })
+        courses.value[idx] = updated
         ElMessage.success('课程已更新')
+        logger.info('[课程表] 编辑课程', { id: editingCourse.value.id, name: courseForm.value.name })
       }
     } else {
       const newCourse: Course = {
         id: Date.now().toString(),
         name: courseForm.value.name,
-        dayOfWeek: courseForm.value.dayOfWeek,
-        startTime: courseForm.value.startTime,
-        endTime: courseForm.value.endTime,
+        dayOfWeek: [...courseForm.value.dayOfWeek],
+        periodIds: [...courseForm.value.periodIds],
         location: courseForm.value.location,
         teacher: courseForm.value.teacher,
         color: courseForm.value.color,
-        weeks: allWeeks.value ? [] : courseForm.value.weeks,
+        weeks: allWeeks.value ? [] : [...courseForm.value.weeks],
         note: courseForm.value.note,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }
-      courses.value.push(newCourse)
-      logger.info('[课程表] 添加课程', { name: courseForm.value.name })
+      courses.value = [...courses.value, newCourse]
       ElMessage.success('课程已添加')
+      logger.info('[课程表] 添加课程', { name: courseForm.value.name })
     }
-    saveData()
-    isFormMode.value = false
+    saveCourses()
+    closeDialog()
   })
 }
 
-async function handleDeleteCourse() {
-  try {
-    await ElMessageBox.confirm('确定要删除这门课程吗？', '删除确认', {
-      type: 'warning'
-    })
-    if (editingCourse.value) {
-      const index = courses.value.findIndex(c => c.id === editingCourse.value!.id)
-      if (index > -1) {
-        courses.value.splice(index, 1)
-        await saveData()
-        logger.info('[课程表] 删除课程', { id: editingCourse.value.id, name: editingCourse.value.name })
-        ElMessage.success('课程已删除')
-      }
-    }
-    isFormMode.value = false
-  } catch {
-    // 取消删除
-  }
+const showDeleteCourseConfirm = ref(false)
+const pendingDeleteCourseId = ref<string | null>(null)
+
+function handleDeleteCourseClick() {
+  if (!editingCourse.value) return
+  pendingDeleteCourseId.value = editingCourse.value.id
+  showDeleteCourseConfirm.value = true
 }
 
-async function saveData() {
-  await setData(STORAGE_KEY[0], STORAGE_KEY[1], courses.value)
+async function confirmDeleteCourse() {
+  const id = pendingDeleteCourseId.value
+  if (!id) return
+  courses.value = courses.value.filter(c => c.id !== id)
+  showDeleteCourseConfirm.value = false
+  pendingDeleteCourseId.value = null
+  closeDialog()
+  await saveCourses()
+  ElMessage.success('课程已删除')
+  logger.info('[课程表] 删除课程', { id })
 }
 
-async function loadData() {
+// ===== 持久化 =====
+async function saveCourses() {
+  const ok = await setData(COURSES_KEY, COURSES_SUB, courses.value)
+  if (!ok) logger.error('[课程表] 保存课程失败')
+}
+
+async function loadCourses() {
   try {
-    const saved = await getData<Course[]>(STORAGE_KEY[0], STORAGE_KEY[1])
-    if (saved) {
+    const saved = await getData<Course[]>(COURSES_KEY, COURSES_SUB)
+    if (saved && Array.isArray(saved)) {
       courses.value = saved.map(c => ({
         id: c.id || Date.now().toString(),
         name: c.name || '未命名课程',
-        dayOfWeek: c.dayOfWeek ?? 1,
-        startTime: c.startTime || '08:00',
-        endTime: c.endTime || '09:00',
+        dayOfWeek: Array.isArray(c.dayOfWeek) ? c.dayOfWeek : (c.dayOfWeek != null ? [c.dayOfWeek] : [1]),
+        periodIds: Array.isArray((c as any).periodIds) && (c as any).periodIds.length > 0
+          ? (c as any).periodIds
+          : ((c as any).startTime && (c as any).endTime ? findPeriodsForTimeRange((c as any).startTime, (c as any).endTime) : []),
         location: c.location || '',
         teacher: c.teacher || '',
-        color: c.color || COLORS[0],
-        weeks: c.weeks || [],
+        color: c.color || EXTENDED_COLORS[0],
+        weeks: Array.isArray(c.weeks) ? c.weeks : [],
         note: c.note || '',
         createdAt: c.createdAt || new Date().toISOString(),
         updatedAt: c.updatedAt || new Date().toISOString()
       }))
+      logger.info('[课程表] 加载课程', { count: courses.value.length })
     }
   } catch (e) {
-    console.error('Failed to load courses:', e)
+    logger.error('[课程表] 加载课程失败', e)
     courses.value = []
   }
 }
 
 onMounted(async () => {
-  if (pageNav.navPath.value.length === 0) {
-    pageNav.setNavPath(['course'])
-  }
+  if (pageNav.navPath.value.length === 0) pageNav.setNavPath(['course'])
   pageNav.setNavContext({
     segments: [],
     plusVisible: false,
     plusOnClick: null,
     goModuleHome: () => { pageNav.setNavPath(['course']) }
   })
-
   await settingsStore.loadSettings()
-  await loadData()
-
-  const today = dayjs().day()
-  selectedDay.value = today === 0 ? 6 : today - 1
-
-  nextTick(() => {
-    initDateNavDrag()
-  })
+  await loadCourses()
 })
 
-onBeforeUpdate(() => clearNavRefs())
+
 </script>
 
 <style scoped>
-.course-container {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: transparent;
-  position: relative;
+.course-container { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.course-inner { display: flex; flex-direction: column; align-items: center; padding: 16px 0; gap: 16px; height: 100%; }
+
+.week-area { display: flex; align-items: center; justify-content: center; gap: 16px; width: 500px; flex-shrink: 0; }
+.week-nav-btn { flex-shrink: 0; }
+.week-nav-btn:deep(.el-icon) { color: var(--chalk-white-75); }
+.week-info { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.week-number { font-size: 16px; font-weight: 600; color: var(--chalk-white); }
+.week-date { font-size: 13px; color: var(--chalk-muted); }
+
+.course-grid-wrapper { width: 80%; flex: 1; overflow: auto; scrollbar-width: none; -ms-overflow-style: none; }
+.course-grid-wrapper::-webkit-scrollbar { display: none; }
+.course-grid { display: grid; gap: 2px; min-width: 0; grid-auto-rows: 64px; }
+
+.period-header-cell { min-height: 52px; background: rgba(255,255,255,0.02); border-radius: 4px; }
+
+.day-header-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px 4px; border-radius: 4px; background: rgba(255,255,255,0.03); min-height: 52px; }
+.day-header-cell.today { background: rgba(102,126,234,0.12); }
+.dh-name { font-size: 12px; color: var(--chalk-white-60); }
+.day-header-cell.today .dh-name { color: var(--chalk-blue); }
+.dh-date { font-size: 14px; font-weight: 600; color: var(--chalk-white); margin-top: 1px; }
+
+.period-label-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px 6px; background: rgba(255,255,255,0.02); border-radius: 4px; cursor: default; transition: background 0.15s; }
+.period-label-cell:hover { background: rgba(255,255,255,0.06); }
+.pl-name { font-size: 13px; color: var(--chalk-white-75); font-weight: 500; }
+.pl-start, .pl-end { font-size: 11px; color: var(--chalk-subtle); }
+
+.grid-cell { border-radius: 4px; background: rgba(255,255,255,0.02); cursor: pointer; transition: background 0.15s; padding: 2px; display: flex; align-items: stretch; min-height: 0; }
+.grid-cell:hover { background: rgba(255,255,255,0.05); }
+.grid-cell.has-course { background: rgba(255,255,255,0.04); }
+
+.cell-empty { flex: 1; display: flex; align-items: center; justify-content: center; }
+.cell-plus { font-size: 20px; color: var(--chalk-muted); opacity: 0; transition: opacity 0.15s; }
+.grid-cell:hover .cell-plus { opacity: 1; }
+
+.course-card { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 4px 6px; border-radius: 3px; background: rgba(255,255,255,0.06); overflow: hidden; cursor: pointer; transition: background 0.15s; }
+.course-card:hover { background: rgba(255,255,255,0.1); }
+.course-card.full-week-card { align-items: center; justify-content: center; }
+.card-name { font-size: 12px; font-weight: 600; word-break: break-all; line-height: 1.3; }
+.card-meta { display: flex; gap: 4px; margin-top: 2px; flex-wrap: wrap; }
+.full-week-card .card-meta { justify-content: center; }
+.card-location, .card-teacher { font-size: 10px; color: var(--chalk-white-60); word-break: break-all; line-height: 1.3; }
+.card-note { font-size: 10px; color: var(--chalk-subtle); margin-top: 2px; word-break: break-all; line-height: 1.3; }
+
+.has-course { position: relative; }
+.overlap-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: rgba(255, 165, 0, 0.85);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 4px;
+  border-radius: 3px;
+  line-height: 16px;
+  pointer-events: none;
+  z-index: 2;
 }
 
-/* 顶部日期导航区 */
-.top-nav-area {
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  flex-shrink: 0;
-}
-
-.date-nav-scroll-wrapper {
-  height: 56px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  -webkit-overflow-scrolling: touch;
-}
-
-.date-nav-scroll-wrapper::-webkit-scrollbar {
-  display: none;
-}
-
-.date-nav-inner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 8px 16px;
-  white-space: nowrap;
-  width: max-content;
-  min-width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  user-select: none;
-  position: relative;
-  height: 40px;
-}
-
-.nav-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.nav-item.active {
-  background: rgba(102, 126, 234, 0.2);
-}
-
-.nav-item.active .nav-day-name {
-  color: var(--chalk-white);
-  font-weight: 500;
-}
-
-.nav-item.today .nav-day-name {
-  color: var(--chalk-blue);
-}
-
-.nav-day-name {
-  font-size: 14px;
-  color: var(--chalk-white-75);
-  white-space: nowrap;
-}
-
-.nav-day-date {
-  font-size: 12px;
-  color: var(--chalk-muted);
-  white-space: nowrap;
-}
-
-.nav-count {
-  font-size: 11px;
-  color: var(--chalk-dim);
-  padding: 2px 6px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.1);
-  min-width: 20px;
-  text-align: center;
-}
-
-.nav-more {
-  opacity: 0;
-  transition: opacity 0.2s;
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-}
-
-.nav-item:hover .nav-more {
-  opacity: 1;
-}
-
-/* 周信息条 */
-.week-info-bar {
-  padding: 8px 16px 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.week-nav {
+.break-transition-cell {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  background: rgba(255, 255, 255, 0.015);
+  border-radius: 4px;
+  min-height: 24px;
 }
 
-.week-number {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--chalk-white);
-}
-
-.week-date {
-  font-size: 12px;
-  color: var(--chalk-muted);
-}
-
-.week-progress {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-  max-width: 400px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.progress-bar {
-  flex: 1;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #10b981);
-  border-radius: 2px;
-  transition: width 0.3s;
-}
-
-.progress-text {
-  font-size: 11px;
-  color: var(--chalk-muted);
-  white-space: nowrap;
-}
-
-/* 主内容区 */
-.main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.content-wrapper {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-  max-width: 1200px;
-  width: 100%;
-  margin: 0 auto;
-}
-
-@media (max-width: 1240px) {
-  .content-wrapper {
-    max-width: none;
-  }
-}
-
-.content-body {
-  flex: 1;
-  overflow: hidden;
-}
-
-.course-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 20px 24px;
-}
-
-/* 课程卡片 */
-.course-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 8px;
-  border-left: 4px solid transparent;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.course-card:hover {
-  background: rgba(255, 255, 255, 0.06);
-  transform: translateX(4px);
-}
-
-.course-time {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-width: 60px;
-}
-
-.time-start, .time-end {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--chalk-white);
-}
-
-.time-sep {
+.break-label {
   font-size: 12px;
   color: var(--chalk-subtle);
-  margin: 2px 0;
+  letter-spacing: 2px;
 }
 
-.course-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+.card-weeks {
+  font-size: 10px;
+  color: var(--chalk-orange);
+  margin-top: 2px;
+  word-break: break-all;
+  line-height: 1.3;
 }
 
-.course-name {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
+/* 弹窗 */
+.dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+.dialog-container { background: rgba(30,28,52,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; }
+.course-form-dialog { width: 420px; }
 
-.course-meta {
-  display: flex;
-  gap: 16px;
-}
+.dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 0; flex-shrink: 0; }
+.dialog-header-title { font-size: 16px; font-weight: 600; color: var(--chalk-white); }
+.folder-dialog-header { justify-content: center; }
+.folder-dialog-title { text-align: center; }
+.dialog-body { padding: 12px 16px 16px; overflow-y: auto; flex: 1; scrollbar-width: none; -ms-overflow-style: none; }
+.dialog-body::-webkit-scrollbar { display: none; }
 
-.meta-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--chalk-white-60);
-}
+.course-form :deep(.el-form-item) { margin-bottom: 12px; }
+.course-form :deep(.el-form-item:last-child) { margin-bottom: 0; }
+.course-form :deep(.el-form-item__label) { color: var(--chalk-white-70); }
+.course-form :deep(.el-input__wrapper) { background: rgba(255,255,255,0.05) !important; border: 1px solid rgba(255,255,255,0.1); box-shadow: none !important; }
+.course-form :deep(.el-input__wrapper:hover) { border-color: rgba(102,126,234,0.5); }
+.course-form :deep(.el-input__inner),
+.course-form :deep(.el-textarea__inner) { color: var(--chalk-white-90) !important; }
+.course-form :deep(.el-input__inner::placeholder),
+.course-form :deep(.el-textarea__inner::placeholder) { color: var(--chalk-subtle); }
+.course-form :deep(.el-textarea__inner) { background: rgba(255,255,255,0.05) !important; border: 1px solid rgba(255,255,255,0.1); box-shadow: none !important; }
+.course-form :deep(.el-textarea__inner:hover) { border-color: rgba(102,126,234,0.5); }
+.course-form :deep(.el-checkbox__label) { color: var(--chalk-white-85); }
+.course-form :deep(.el-input__count), .course-form :deep(.el-input__count-inner) { background: transparent !important; color: var(--chalk-subtle) !important; }
 
-/* 表单页面 */
-.course-form-page {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
+.time-area { display: flex; flex-direction: column; gap: 6px; }
+.time-day-row { display: flex; flex-wrap: wrap; gap: 2px; }
+.day-checkbox { margin-right: 0; }
+.day-checkbox :deep(.el-checkbox__label) { font-size: 12px; }
+.time-periods-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.period-checkbox { margin-right: 0; }
+.period-checkbox :deep(.el-checkbox__label) { font-size: 12px; }
+.time-range-row { display: flex; align-items: center; }
+.time-range-text { font-size: 12px; color: var(--chalk-muted); }
 
-.form-page-header {
-  padding: 16px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  flex-shrink: 0;
-  text-align: center;
-}
+.color-section { display: flex; flex-direction: column; gap: 8px; }
+.color-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+.color-swatch { width: 100%; aspect-ratio: 1; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: all 0.15s; box-sizing: border-box; }
+.color-swatch:hover { transform: scale(1.15); }
+.color-swatch.selected { border-color: #fff; transform: scale(1.15); box-shadow: 0 0 8px rgba(255,255,255,0.3); }
+.color-custom { display: flex; align-items: center; gap: 10px; }
+.color-custom-label { font-size: 13px; color: var(--chalk-dim); flex-shrink: 0; }
+.color-custom-input { width: 140px; }
 
-.form-page-title {
-  margin: 0;
-  font-size: 18px;
-  color: var(--chalk-white);
-  font-weight: 600;
-}
+.weeks-setting { display: flex; flex-direction: column; gap: 8px; }
+.week-selector { max-height: 120px; overflow-y: auto; padding: 8px; background: rgba(255,255,255,0.03); border-radius: 8px; scrollbar-width: none; -ms-overflow-style: none; }
+.week-selector::-webkit-scrollbar { display: none; }
+.week-selector :deep(.el-checkbox-group) { display: flex; flex-wrap: wrap; gap: 8px; }
+.week-selector :deep(.el-checkbox) { margin-right: 0; min-width: 70px; }
 
-.form-page-body {
-  flex: 1;
-  overflow: hidden;
-}
+.form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); }
+.capsule-btn { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 18px; border: 1px solid rgba(255,255,255,0.15); border-radius: 20px; background: transparent; color: var(--chalk-white-70); cursor: pointer; font-size: 13px; font-family: inherit; transition: all 0.2s; }
+.capsule-btn:hover { background: rgba(255,255,255,0.08); color: var(--chalk-white); }
+.capsule-btn .capsule-icon { width: 14px; height: 14px; }
+.submit-btn { background: rgba(102,126,234,0.2); border-color: rgba(102,126,234,0.4); color: #93c5fd; }
+.submit-btn:hover { background: rgba(102,126,234,0.35); color: var(--chalk-white); }
+.delete-btn { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.35); color: #fca5a5; }
+.delete-btn:hover { background: rgba(239,68,68,0.3); color: var(--chalk-white); }
 
-.form-container {
-  max-width: 600px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 24px;
-}
-
-.course-form :deep(.el-input__wrapper) {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: none;
-}
-
-.course-form :deep(.el-input__inner) {
-  color: var(--chalk-white);
-}
-
-.course-form :deep(.el-textarea__inner) {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: none;
-  color: var(--chalk-white);
-}
-
-.time-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.time-sep-text {
-  color: var(--chalk-muted);
-  font-size: 14px;
-}
-
-.color-picker {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.color-option {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: 2px solid transparent;
-}
-
-.color-option:hover {
-  transform: scale(1.1);
-}
-
-.color-option.active {
-  border-color: #fff;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3);
-}
-
-.weeks-setting {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.week-selector {
-  max-height: 120px;
-  overflow-y: auto;
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 8px;
-}
-
-.week-selector :deep(.el-checkbox-group) {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.week-selector :deep(.el-checkbox) {
-  margin-right: 0;
-  min-width: 70px;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 24px;
-}
-
-.form-actions-right {
-  display: flex;
-  gap: 12px;
-}
-
-/* 对话框深色主题 */
-:deep(.el-checkbox__label) {
-  color: var(--chalk-white-85) !important;
-}
+.confirm-top-overlay { position: fixed; inset: 0; z-index: 10001; background: rgba(15,12,41,0.92); display: flex; align-items: center; justify-content: center; }
+.confirm-dialog-box { background: rgba(30,28,52,0.98); border-radius: 16px; padding: 32px; width: 300px; max-width: 300px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+.icon-warning { font-size: 48px; color: var(--chalk-orange); }
+.dialog-icon { text-align: center; margin-bottom: 16px; }
+.dialog-title { text-align: center; font-size: 18px; font-weight: 600; color: var(--chalk-white); margin: 0 0 12px 0; }
+.dialog-message { text-align: center; font-size: 14px; color: var(--chalk-white-70); margin: 0 0 24px 0; line-height: 1.6; }
+.dialog-actions { display: flex; gap: 12px; justify-content: center; }
 </style>

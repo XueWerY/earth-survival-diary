@@ -367,7 +367,7 @@ const MODULE_FILE_MAP = {
   focus_records: ['focus/records.json'],
   lists: ['list/lists.json', 'list/tasks.json'],
   countdown: ['countdown/categories.json', 'countdown/countdowns.json'],
-  courses: ['course/courses.json', 'course/recorded-courses.json']
+  courses: ['course/courses.json']
 }
 
 const MODULE_GROUP_DEF = [

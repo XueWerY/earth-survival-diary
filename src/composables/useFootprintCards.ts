@@ -80,29 +80,71 @@ export function useFootprintCards(
 
   const loadCourses = async () => {
     try {
-      const courses = await getData<any[]>('course', 'courses')
+      const [courses, periods] = await Promise.all([
+        getData<any[]>('course', 'courses'),
+        getData<any[]>('course', 'periods')
+      ])
       if (courses && courses.length > 0) {
         const selDate = dayjs(selectedDateValue.value)
         const dayOfWeek = selDate.day()
         const weekNum = getWeekNumber(selDate)
+
+        const timeToMins = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
+
+        const getTimeFromPeriodIds = (periodIds: number[]): { startTime: string; endTime: string } => {
+          if (periodIds.length === 0 || !periods || periods.length === 0) return { startTime: '08:00', endTime: '09:00' }
+          const sorted = [...periodIds].sort((a, b) => a - b)
+          const firstP = periods.find((p: any) => p.id === sorted[0])
+          const lastP = periods.find((p: any) => p.id === sorted[sorted.length - 1])
+          return { startTime: firstP?.start || '08:00', endTime: lastP?.end || '09:00' }
+        }
+
+        const periodIdsFromTimeRange = (startTime: string, endTime: string): number[] => {
+          if (!periods || periods.length === 0) return []
+          const startMins = timeToMins(startTime)
+          const endMins = timeToMins(endTime)
+          let bestStart = periods[0].id
+          let bestEnd = periods[0].id
+          let bestStartDiff = Infinity
+          let bestEndDiff = Infinity
+          for (const p of periods) {
+            const diff = Math.abs(startMins - timeToMins(p.start))
+            if (diff < bestStartDiff) { bestStartDiff = diff; bestStart = p.id }
+            const diffEnd = Math.abs(endMins - timeToMins(p.end))
+            if (diffEnd < bestEndDiff) { bestEndDiff = diffEnd; bestEnd = p.id }
+          }
+          const minP = Math.min(bestStart, bestEnd)
+          const maxP = Math.max(bestStart, bestEnd)
+          const ids: number[] = []
+          for (let i = minP; i <= maxP; i++) ids.push(i)
+          return ids
+        }
+
         loadedCourses.value = courses
           .filter((c: any) => {
-            if (c.dayOfWeek !== dayOfWeek) return false
+            const days = Array.isArray(c.dayOfWeek) ? c.dayOfWeek : [c.dayOfWeek]
+            if (!days.includes(dayOfWeek)) return false
             if (c.weeks && c.weeks.length > 0) {
               return c.weeks.includes(weekNum)
             }
             return true
           })
-          .map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            startTime: c.startTime,
-            endTime: c.endTime,
-            location: c.location || '',
-            teacher: c.teacher || '',
-            color: c.color || '#3b82f6',
-            note: c.note || ''
-          }))
+          .map((c: any) => {
+            const pIds: number[] = Array.isArray(c.periodIds) && c.periodIds.length > 0
+              ? c.periodIds
+              : (c.startTime && c.endTime ? periodIdsFromTimeRange(c.startTime, c.endTime) : [])
+            const { startTime, endTime } = getTimeFromPeriodIds(pIds)
+            return {
+              id: c.id,
+              name: c.name,
+              startTime,
+              endTime,
+              location: c.location || '',
+              teacher: c.teacher || '',
+              color: c.color || '#3b82f6',
+              note: c.note || ''
+            }
+          })
       }
     } catch (e) {
       logger.warn('[足迹卡片] 加载课程数据失败', { error: e instanceof Error ? e.message : String(e) })

@@ -993,12 +993,8 @@ const preloadCountdownData = async () => {
 
 // 预加载课程表数据
 const preloadCourseData = async () => {
-  const [courses, recordedCourses] = await Promise.all([
-    getData('course', 'courses'),
-    getData('course', 'recorded-courses')
-  ])
+  const courses = await getData('course', 'courses')
   if (courses) preloadData('course', 'courses', courses)
-  if (recordedCourses) preloadData('course', 'recorded-courses', recordedCourses)
 }
 
 // 从 Redis 恢复页面状态 - 已由路由接管

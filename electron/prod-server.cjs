@@ -789,7 +789,6 @@ function createProdServer(options = {}) {
         countdowns: await getUserKV(userId, 'countdown', 'countdowns'),
         // 课程表
         courses: await getUserKV(userId, 'course', 'courses'),
-        course_recorded_courses: await getUserKV(userId, 'course', 'recorded-courses'),
         // 我的
         profile: await getUserProfile(userId),
         login_info: await getUserSession(userId),
@@ -845,7 +844,6 @@ function createProdServer(options = {}) {
       if (countdown_categories !== undefined) await setUserKV(userId, 'countdown', 'categories', countdown_categories)
       if (countdowns !== undefined) await setUserKV(userId, 'countdown', 'countdowns', countdowns)
       if (courses !== undefined) await setUserKV(userId, 'course', 'courses', courses)
-      if (course_recorded_courses !== undefined) await setUserKV(userId, 'course', 'recorded-courses', course_recorded_courses)
       if (profile) await setUserProfile(userId, profile)
       if (login_info) await setUserSession(userId, login_info)
       if (settings) await setUserSettings(userId, settings)
@@ -878,7 +876,6 @@ function createProdServer(options = {}) {
         else if (key === 'countdown_categories') await setUserKV(userId, 'countdown', 'categories', [])
         else if (key === 'countdowns') await setUserKV(userId, 'countdown', 'countdowns', [])
         else if (key === 'courses') await setUserKV(userId, 'course', 'courses', [])
-        else if (key === 'course_recorded_courses') await setUserKV(userId, 'course', 'recorded-courses', [])
         else if (key === 'settings') await setUserKV(userId, 'system', 'settings', null)
         else if (key === 'system_state') await setUserKV(userId, 'system', 'state', null)
         else if (key === 'profile') continue

@@ -13,6 +13,20 @@ export interface ExtendedUserSettings {
         semesterStartDate: string
         totalWeeks: number
         reminderMinutes: number
+        firstPeriodStart: string
+        periodDuration: number
+        breakDuration: number
+        breakMode: 'uniform' | 'custom'
+        customBreakDurations: number[]
+        showWeekend: boolean
+        showNonCurrentWeekCourses: boolean
+        lunchBreakMinutes: number
+        dinnerBreakMinutes: number
+        periodCountPerSession: {
+            morning: number
+            afternoon: number
+            evening: number
+        }
     }
     // 提醒持续显示时间（秒）
     reminderPersistDuration: number
@@ -26,7 +40,21 @@ export const defaultSettings: ExtendedUserSettings = {
     course: {
         semesterStartDate: '',
         totalWeeks: 20,
-        reminderMinutes: 5
+        reminderMinutes: 5,
+        firstPeriodStart: '08:00',
+        periodDuration: 45,
+        breakDuration: 10,
+        breakMode: 'uniform' as const,
+        customBreakDurations: [] as number[],
+        showWeekend: true,
+        showNonCurrentWeekCourses: true,
+        lunchBreakMinutes: 120,
+        dinnerBreakMinutes: 90,
+        periodCountPerSession: {
+            morning: 4,
+            afternoon: 4,
+            evening: 2
+        }
     },
     reminderPersistDuration: 30
 }
