@@ -97,6 +97,14 @@ export const guideSteps: GuideStep[] = [
     description: '在这里查看足迹和专注的统计数据。上方切换"足迹"和"专注"标签查看不同维度的图表分析。'
   },
 
+  // ==================== 工具箱 ====================
+  {
+    route: '/toolbox',
+    selector: '.tool-card-grid',
+    title: '工具箱页面 - 实用工具',
+    description: '这里汇集了社区开发者提供的小工具。点击工具卡片即可打开使用。下方还可以看到已安装的插件列表及其功能覆盖情况。'
+  },
+
   // ==================== 我的 ====================
   {
     route: '/profile',
@@ -109,11 +117,5 @@ export const guideSteps: GuideStep[] = [
     selector: '#section-about',
     title: '我的页面 - 关于与更新',
     description: '在这里查看版本号、检查更新。下方还有"新手引导"按钮，可以随时重新查看这个教程。'
-  },
-  {
-    route: '/profile',
-    selector: '#section-storage',
-    title: '我的页面 - 存储管理',
-    description: '在这里可以导出数据（备份为 JSON 文件）、导入数据（恢复备份）、查看日志、清理数据。建议定期导出备份。'
   }
 ]

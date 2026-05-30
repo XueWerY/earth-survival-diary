@@ -156,7 +156,7 @@ import { ElMessage } from 'element-plus'
 const router = useRouter()
 const route = useRoute()
 
-const VALID_ROUTES = ['footprint', 'focus', 'mission', 'countdown', 'course', 'statistics', 'profile']
+const VALID_ROUTES = ['footprint', 'focus', 'mission', 'countdown', 'course', 'statistics', 'toolbox', 'profile']
 const MAX_SCHEDULE_DELAY = 20 * 24 * 3600 * 1000
 
 const pageNav = usePageNav()

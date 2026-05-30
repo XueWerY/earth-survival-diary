@@ -33,18 +33,18 @@ export interface NavContext {
   actions?: NavAction[]
 }
 
-export const MODULES = ['footprint', 'focus', 'mission', 'countdown', 'course', 'statistics', 'profile']
+export const MODULES = ['footprint', 'focus', 'mission', 'countdown', 'course', 'statistics', 'toolbox', 'profile']
 
 export const MODULE_ICONS: Record<string, string> = {
-  footprint: '👣', focus: '🧘', mission: '📋', countdown: '⏳', course: '📖', statistics: '📊', profile: '👤'
+  footprint: '👣', focus: '🧘', mission: '📋', countdown: '⏳', course: '📖', statistics: '📊', toolbox: '🧰', profile: '👤'
 }
 
 export const MODULE_LABELS: Record<string, string> = {
-  footprint: '足迹', focus: '专注', mission: '清单', countdown: '倒数日', course: '课程表', statistics: '统计', profile: '我的'
+  footprint: '足迹', focus: '专注', mission: '清单', countdown: '倒数日', course: '课程表', statistics: '统计', toolbox: '工具箱', profile: '我的'
 }
 
 export const MODULE_ROUTES: Record<string, string> = {
-  footprint: '/footprint', focus: '/focus', mission: '/mission', countdown: '/countdown', course: '/course', statistics: '/statistics', profile: '/profile'
+  footprint: '/footprint', focus: '/focus', mission: '/mission', countdown: '/countdown', course: '/course', statistics: '/statistics', toolbox: '/toolbox', profile: '/profile'
 }
 
 const MODULE_PERSIST_KEYS: Record<string, string> = {

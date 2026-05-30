@@ -1,7 +1,7 @@
 {
   "name": "earth-survival-diary",
   "private": true,
-  "version": "2026.5.30-9",
+  "version": "2026.5.30-16",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {

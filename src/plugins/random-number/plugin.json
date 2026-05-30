@@ -1,0 +1,14 @@
+{
+  "id": "random-number",
+  "name": "随机数生成器",
+  "version": "1.0.0",
+  "description": "在指定范围内生成随机数",
+  "author": "官方",
+  "tools": {
+    "random-generator": {
+      "name": "随机数生成",
+      "description": "输入最小值和最大值，生成范围内的随机数",
+      "icon": "🎲"
+    }
+  }
+}
