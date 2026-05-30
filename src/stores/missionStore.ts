@@ -3,6 +3,16 @@ import { ref } from 'vue'
 import dayjs from 'dayjs'
 import * as api from '../lib/api'
 import { logger } from '../lib/logger'
+import { getData, setData } from '../services/storageService'
+
+export interface CompletedMissionRecord {
+  missionId: string
+  name: string
+  listId: string
+  completedDate: string
+  completedTime: string
+  priority: string
+}
 
 // 重复策略
 export type RepeatStrategy = 'none' | 'daily' | 'custom_days' | 'weekly_select' | 'monthly_last_day' | 'lunar_date'
@@ -140,6 +150,22 @@ export const useMissionStore = defineStore('mission', () => {
   const isLoaded = ref(false)
 
   const LS_GROUPS_KEY = 'esd_groups_backup'
+
+  const saveCompletedRecord = async (mission: Mission) => {
+    try {
+      const records = await getData<CompletedMissionRecord[]>('mission', 'completed') || []
+      const now = dayjs().format('HH:mm:ss')
+      records.push({
+        missionId: mission.id,
+        name: mission.name,
+        listId: mission.listId,
+        completedDate: mission.date,
+        completedTime: now,
+        priority: mission.priority
+      })
+      await setData('mission', 'completed', records)
+    } catch {}
+  }
 
   const saveGroupsLocal = () => {
     try {
@@ -745,20 +771,18 @@ export const useMissionStore = defineStore('mission', () => {
     const mission = missions.value.find(m => m.id === id)
     if (!mission) return
 
-    // 如果有检查事项，自动完成所有检查事项
+    await saveCompletedRecord(mission)
+
     if (mission.checklist.length > 0) {
       mission.checklist.forEach(item => item.completed = true)
     }
 
     if (mission.repeatStrategy !== 'none') {
-      // 重复性使命：完成一轮后自动进入下一轮
       mission.repeatCompletedCount++
       const baseDate = mission.date || dayjs().format('YYYY-MM-DD')
       const nextDate = getNextRepeatDate(baseDate, mission.repeatStrategy, mission.repeatCustomDays)
 
-      // 检查是否超过结束日期或次数
       if (isRepeatDateBeyondEndDate(nextDate, mission.repeatEndStrategy, mission.repeatEndDate, mission.repeatCount, mission.repeatCompletedCount)) {
-        // 超过结束条件，直接删除
         await deleteMission(id)
       } else {
         mission.date = nextDate
@@ -771,7 +795,6 @@ export const useMissionStore = defineStore('mission', () => {
         })
       }
     } else {
-      // 非重复性使命：直接删除
       await deleteMission(id)
     }
   }
