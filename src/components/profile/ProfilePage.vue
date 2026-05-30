@@ -37,10 +37,8 @@
             </el-form-item>
 
             <el-form-item label="生日">
-              <LunarDatePicker
+              <DateScrollPicker
                   v-model="form.birthday"
-                  placeholder="选择生日"
-                  full-width
               />
             </el-form-item>
           </el-form>
@@ -93,220 +91,6 @@
             <el-button type="danger" plain @click="handleDeleteAccount" :loading="deletingAccount">
               注销账号
             </el-button>
-          </div>
-        </div>
-
-        <div class="profile-section" id="section-focus">
-          <h3 class="section-title">专注设置</h3>
-          <p class="section-desc">配置番茄钟的默认时长。</p>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <span class="setting-label">番茄时长</span>
-              <span class="setting-desc">每个番茄钟的默认工作时长（分钟）</span>
-            </div>
-            <div class="setting-control">
-              <el-input-number
-                  v-model="focusSettings.pomodoroDuration"
-                  :min="1"
-                  :max="120"
-                  :step="5"
-                  size="default"
-                  @change="handleFocusSettingChange"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div class="profile-section" id="section-course">
-          <h3 class="section-title">课程表设置</h3>
-          <p class="section-desc">设置学期信息，用于计算当前周次。</p>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <span class="setting-label">开学日期</span>
-              <span class="setting-desc">学期第一周的周一日期</span>
-            </div>
-            <div class="setting-control">
-              <LunarDatePicker
-                  v-model="courseSettings.semesterStartDate"
-                  :show-lunar="true"
-                  @update:model-value="handleCourseSettingChange"
-              />
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <span class="setting-label">学期周数</span>
-              <span class="setting-desc">本学期总共有多少周</span>
-            </div>
-            <div class="setting-control">
-              <el-input-number
-                  v-model="courseSettings.totalWeeks"
-                  :min="1"
-                  :max="30"
-                  :step="1"
-                  size="default"
-                  @change="handleCourseWeeksChange"
-              />
-            </div>
-          </div>
-
-          <div class="setting-item course-reminder-item">
-            <div class="setting-info">
-              <span class="setting-label">提前提醒</span>
-              <span class="setting-desc">上课前多少分钟发送系统通知提醒</span>
-            </div>
-            <div class="setting-control">
-              <el-input-number
-                  v-model="courseSettings.reminderMinutes"
-                  :min="1"
-                  :max="60"
-                  :step="1"
-                  controls-position="right"
-                  size="default"
-                  @change="handleCourseReminderChange"
-              />
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <span class="setting-label">第1节开始时间</span>
-              <span class="setting-desc">每天第一节上课的时间</span>
-            </div>
-            <div class="setting-control">
-              <TimePickerPopover
-                  v-model="courseSettings.firstPeriodStart"
-                  @update:model-value="handleCourseFirstPeriodStartChange"
-              />
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <span class="setting-label">每节时长</span>
-              <span class="setting-desc">每节课持续的分钟数</span>
-            </div>
-            <div class="setting-control">
-              <el-input-number
-                  v-model="courseSettings.periodDuration"
-                  :min="15"
-                  :max="120"
-                  :step="5"
-                  size="default"
-                  @change="handleCoursePeriodDurationChange"
-              />
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <span class="setting-label">课间休息时长</span>
-              <span class="setting-desc">相邻两节课之间的休息分钟数</span>
-            </div>
-            <div class="setting-control setting-control-break">
-              <div class="break-mode-toggle">
-                <el-radio-group v-model="courseSettings.breakMode" size="default" @change="handleCourseBreakModeChange">
-                  <el-radio-button value="uniform">统一时长</el-radio-button>
-                  <el-radio-button value="custom">自由时长</el-radio-button>
-                </el-radio-group>
-              </div>
-              <el-input-number
-                  v-if="courseSettings.breakMode !== 'custom'"
-                  v-model="courseSettings.breakDuration"
-                  :min="5"
-                  :max="60"
-                  :step="5"
-                  size="default"
-                  class="setting-break-input"
-                  @change="handleCourseBreakDurationChange"
-              />
-              <el-button
-                  v-else
-                  size="default"
-                  class="setting-break-custom-btn"
-                  @click="showCustomBreakDialog = true"
-              >自定义课间休息</el-button>
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <span class="setting-label">午休时长</span>
-              <span class="setting-desc">上午最后一节到下午第一节之间的休息分钟数</span>
-            </div>
-            <div class="setting-control">
-              <el-input-number
-                  v-model="courseSettings.lunchBreakMinutes"
-                  :min="0"
-                  :max="240"
-                  :step="5"
-                  size="default"
-                  @change="handleCourseLunchBreakChange"
-              />
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <span class="setting-label">晚休时长</span>
-              <span class="setting-desc">下午最后一节到晚上第一节之间的休息分钟数</span>
-            </div>
-            <div class="setting-control">
-              <el-input-number
-                  v-model="courseSettings.dinnerBreakMinutes"
-                  :min="0"
-                  :max="240"
-                  :step="5"
-                  size="default"
-                  @change="handleCourseDinnerBreakChange"
-              />
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <span class="setting-label">显示周末</span>
-              <span class="setting-desc">在课程表中显示周六和周日</span>
-            </div>
-            <div class="setting-control">
-              <el-switch
-                  v-model="courseSettings.showWeekend"
-                  inline-prompt
-                  size="default"
-                  @change="handleCourseShowWeekendChange"
-              />
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <span class="setting-label">显示非本周课程</span>
-              <span class="setting-desc">在课程表中显示其他周的课程安排</span>
-            </div>
-            <div class="setting-control">
-              <el-switch
-                  v-model="courseSettings.showNonCurrentWeekCourses"
-                  inline-prompt
-                  size="default"
-                  @change="handleCourseShowNonCurrentWeekChange"
-              />
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <span class="setting-label">课表节数设置</span>
-              <span class="setting-desc">设置上午、下午和晚上各有多少节课</span>
-            </div>
-            <div class="setting-control">
-              <PeriodCountPicker
-                  v-model="courseSettings.periodCountPerSession"
-                  @update:model-value="handlePeriodCountChange"
-              />
-            </div>
           </div>
         </div>
 
@@ -589,55 +373,19 @@
 
   </div>
 
-  <Teleport to="body">
-    <div v-if="showCustomBreakDialog" class="dialog-overlay" @click.self="showCustomBreakDialog = false">
-      <div class="dialog-container custom-break-dialog">
-        <div class="dialog-header folder-dialog-header">
-          <span class="dialog-header-title folder-dialog-title">自由课间休息时长设置</span>
-        </div>
-        <div class="dialog-body">
-          <div v-if="customBreakGaps.length === 0" class="custom-break-empty">课表节数不足，无需设置课间休息</div>
-          <div v-for="(gap, idx) in customBreakGaps" :key="idx" class="custom-break-item">
-            <span class="custom-break-label">{{ gap.label }}</span>
-            <el-input-number
-                v-model="customBreakDurationsDraft[idx]"
-                :min="0"
-                :max="60"
-                :step="5"
-                size="small"
-                controls-position="right"
-            />
-          </div>
-          <div class="form-footer" style="margin-top: 16px;">
-            <button class="capsule-btn cancel-btn" @click="showCustomBreakDialog = false">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-              <span>取消</span>
-            </button>
-            <button class="capsule-btn submit-btn" @click="handleCustomBreakConfirm">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
-              <span>确认</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </Teleport>
-
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch, nextTick, inject } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Calendar, Lock, Timer, Setting, InfoFilled, Files, Bell, Monitor } from '@element-plus/icons-vue'
+import { Calendar, Lock, InfoFilled, Files, Monitor } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { useAuthStore } from '../../stores/authStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { usePageNav } from '../../composables/usePageNav'
 import * as api from '../../lib/api'
-import LunarDatePicker from '../common/picker/LunarDatePicker.vue'
-import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
-import PeriodCountPicker from '../common/picker/PeriodCountPicker.vue'
+import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import { logger } from '../../lib/logger'
 import appVersion from 'virtual:version'
 // @ts-expect-error - Vite raw import
@@ -922,30 +670,6 @@ const passwordForm = reactive({
   confirmPassword: ''
 })
 
-const focusSettings = ref({
-  pomodoroDuration: 25
-})
-
-const courseSettings = ref({
-  semesterStartDate: '',
-  totalWeeks: 20,
-  reminderMinutes: 5,
-  firstPeriodStart: '08:00',
-  periodDuration: 45,
-  breakDuration: 10,
-  breakMode: 'uniform' as 'uniform' | 'custom',
-  customBreakDurations: [] as number[],
-  lunchBreakMinutes: 120,
-  dinnerBreakMinutes: 90,
-  showWeekend: true,
-  showNonCurrentWeekCourses: true,
-  periodCountPerSession: {
-    morning: 4,
-    afternoon: 4,
-    evening: 2
-  }
-})
-
 const autoLaunch = ref(false)
 const closeAction = ref('minimize')
 
@@ -1045,51 +769,6 @@ const checkForUpdate = async () => {
 
 const showChangelogDialog = ref(false)
 
-const showCustomBreakDialog = ref(false)
-const customBreakDurationsDraft = ref<number[]>([])
-
-const customBreakGaps = computed(() => {
-  const counts = courseSettings.value.periodCountPerSession
-  const gaps: { label: string }[] = []
-  let absFrom = 1
-
-  const addGaps = (count: number) => {
-    if (count <= 0) return
-    const end = absFrom + count - 1
-    while (absFrom < end) {
-      gaps.push({ label: `第${absFrom}节→第${absFrom + 1}节` })
-      absFrom++
-    }
-    absFrom++
-  }
-
-  addGaps(counts.morning)
-  addGaps(counts.afternoon)
-  addGaps(counts.evening)
-
-  return gaps
-})
-
-watch(showCustomBreakDialog, (val) => {
-  if (val) {
-    const existing = courseSettings.value.customBreakDurations
-    const gapCount = customBreakGaps.value.length
-    customBreakDurationsDraft.value = Array.from(
-      { length: gapCount },
-      (_, i) => (existing && i < existing.length ? existing[i] : null) ?? courseSettings.value.breakDuration
-    )
-  }
-})
-
-const handleCustomBreakConfirm = async () => {
-  await settingsStore.updateCourseSettings({
-    customBreakDurations: [...customBreakDurationsDraft.value]
-  })
-  courseSettings.value.customBreakDurations = [...customBreakDurationsDraft.value]
-  showCustomBreakDialog.value = false
-  logger.info('[设置] 修改自定义课间休息时长', { customBreakDurations: customBreakDurationsDraft.value })
-}
-
 const changelogHtml = computed(() => {
   const content = changelogContent.replace(/^# 更新日志\n*/, '')
   const lines = content.split('\n')
@@ -1117,14 +796,6 @@ const openChangelogDialog = () => {
 const openProjectUrl = () => {
   window.electronAPI?.openExternal('https://github.com/XueWerY/earth-survival-diary')
 }
-
-const currentWeekNumber = computed(() => {
-  if (!courseSettings.value.semesterStartDate) return 1
-  const startDate = dayjs(courseSettings.value.semesterStartDate)
-  const today = dayjs()
-  const diff = today.diff(startDate, 'week')
-  return Math.max(1, diff + 1)
-})
 
 const rules: FormRules = {
   nickname: [
@@ -1351,21 +1022,6 @@ onMounted(async () => {
     phoneForm.phone = authStore.profile.phone || ''
   }
 
-  focusSettings.value.pomodoroDuration = settingsStore.settings.focus?.pomodoroDuration || 25
-  courseSettings.value.semesterStartDate = settingsStore.settings.course?.semesterStartDate || ''
-  courseSettings.value.totalWeeks = settingsStore.settings.course?.totalWeeks || 20
-  courseSettings.value.reminderMinutes = settingsStore.settings.course?.reminderMinutes || 5
-  courseSettings.value.firstPeriodStart = settingsStore.settings.course?.firstPeriodStart || '08:00'
-  courseSettings.value.periodDuration = settingsStore.settings.course?.periodDuration || 45
-  courseSettings.value.breakDuration = settingsStore.settings.course?.breakDuration || 10
-  courseSettings.value.breakMode = settingsStore.settings.course?.breakMode || 'uniform'
-  courseSettings.value.customBreakDurations = settingsStore.settings.course?.customBreakDurations || []
-  courseSettings.value.lunchBreakMinutes = settingsStore.settings.course?.lunchBreakMinutes ?? 120
-  courseSettings.value.dinnerBreakMinutes = settingsStore.settings.course?.dinnerBreakMinutes ?? 90
-  courseSettings.value.showWeekend = settingsStore.settings.course?.showWeekend !== false
-  courseSettings.value.showNonCurrentWeekCourses = settingsStore.settings.course?.showNonCurrentWeekCourses !== false
-  courseSettings.value.periodCountPerSession = settingsStore.settings.course?.periodCountPerSession || { morning: 4, afternoon: 4, evening: 2 }
-
   loadSystemSettings()
   loadSizes()
 
@@ -1385,8 +1041,6 @@ onMounted(async () => {
 const navItems = [
   { key: 'profile', name: '个人信息', id: 'section-profile', icon: Calendar },
   { key: 'security', name: '账号安全', id: 'section-security', icon: Lock },
-  { key: 'focus', name: '专注设置', id: 'section-focus', icon: Timer },
-  { key: 'course', name: '课程表设置', id: 'section-course', icon: Setting },
   { key: 'system', name: '系统设置', id: 'section-system', icon: Monitor },
   { key: 'about', name: '关于', id: 'section-about', icon: InfoFilled },
   { key: 'storage', name: '存储管理', id: 'section-storage', icon: Files }
@@ -1607,73 +1261,6 @@ watch(() => form.nickname, () => {
 watch(() => form.birthday, () => {
   autoSaveProfile()
 })
-
-const handleFocusSettingChange = async (val: number) => {
-  await settingsStore.updateFocusSettings({ pomodoroDuration: val })
-  logger.info('[设置] 修改专注时长', { pomodoroDuration: val })
-}
-
-const handleCourseSettingChange = async (val: string) => {
-  await settingsStore.updateCourseSettings({ semesterStartDate: val })
-  logger.info('[设置] 修改开学日期', { semesterStartDate: val })
-}
-
-const handleCourseWeeksChange = async (val: number) => {
-  await settingsStore.updateCourseSettings({ totalWeeks: val })
-  logger.info('[设置] 修改学期周数', { totalWeeks: val })
-}
-
-const handleCourseReminderChange = async (val: number) => {
-  await settingsStore.updateCourseSettings({ reminderMinutes: val })
-  logger.info('[设置] 修改课程提醒', { reminderMinutes: val })
-}
-
-const handleCourseFirstPeriodStartChange = async (val: string) => {
-  await settingsStore.updateCourseSettings({ firstPeriodStart: val })
-  logger.info('[设置] 修改第1节开始时间', { firstPeriodStart: val })
-}
-
-const handleCoursePeriodDurationChange = async (val: number) => {
-  await settingsStore.updateCourseSettings({ periodDuration: val })
-  logger.info('[设置] 修改每节时长', { periodDuration: val })
-}
-
-const handleCourseBreakDurationChange = async (val: number) => {
-  await settingsStore.updateCourseSettings({ breakDuration: val })
-  logger.info('[设置] 修改课间休息时长', { breakDuration: val })
-}
-
-const handleCourseBreakModeChange = async (val: string) => {
-  await settingsStore.updateCourseSettings({ breakMode: val as 'uniform' | 'custom' })
-  courseSettings.value.breakMode = val as 'uniform' | 'custom'
-  logger.info('[设置] 修改课间休息模式', { breakMode: val })
-}
-
-const handleCourseLunchBreakChange = async (val: number) => {
-  await settingsStore.updateCourseSettings({ lunchBreakMinutes: val })
-  logger.info('[设置] 修改午休时长', { lunchBreakMinutes: val })
-}
-
-const handleCourseDinnerBreakChange = async (val: number) => {
-  await settingsStore.updateCourseSettings({ dinnerBreakMinutes: val })
-  logger.info('[设置] 修改晚休时长', { dinnerBreakMinutes: val })
-}
-
-const handleCourseShowWeekendChange = async (val: boolean) => {
-  await settingsStore.updateCourseSettings({ showWeekend: val })
-  logger.info('[设置] 修改显示周末', { showWeekend: val })
-}
-
-const handleCourseShowNonCurrentWeekChange = async (val: boolean) => {
-  await settingsStore.updateCourseSettings({ showNonCurrentWeekCourses: val })
-  logger.info('[设置] 修改显示非本周课程', { showNonCurrentWeekCourses: val })
-}
-
-const handlePeriodCountChange = async (val: { morning: number; afternoon: number; evening: number }) => {
-  courseSettings.value.periodCountPerSession = val
-  await settingsStore.updateCourseSettings({ periodCountPerSession: val })
-  logger.info('[设置] 修改课表节数设置', val)
-}
 </script>
 
 <style scoped>
@@ -1734,15 +1321,28 @@ const handlePeriodCountChange = async (val: { morning: number; afternoon: number
 .profile-content {
   flex: 1;
   overflow: hidden;
-  max-width: 800px;
+  max-width: 500px;
   width: 100%;
   margin: 0 auto;
 }
 
-@media (max-width: 840px) {
+@media (max-width: 540px) {
   .profile-content {
     max-width: none;
   }
+}
+
+.profile-content :deep(.el-scrollbar__wrap) {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.profile-content :deep(.el-scrollbar__wrap::-webkit-scrollbar) {
+  display: none;
+}
+
+.profile-content :deep(.el-scrollbar__bar) {
+  display: none !important;
 }
 
 .profile-section {

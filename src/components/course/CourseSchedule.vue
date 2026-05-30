@@ -13,7 +13,11 @@
       <div class="course-grid-wrapper">
         <div class="course-grid" :style="{ gridTemplateColumns: gridColumns }">
           <template v-for="cell in gridCells" :key="cell.key">
-            <div v-if="cell.type === 'corner'" class="period-header-cell" :style="{ gridRow: cell.gridRow, gridColumn: cell.gridColumn }"></div>
+            <div v-if="cell.type === 'corner'" class="period-header-cell corner-cell" :style="{ gridRow: cell.gridRow, gridColumn: cell.gridColumn }">
+              <button class="corner-settings-btn" title="课程表设置" @click="showCourseSettings = true">
+                <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+              </button>
+            </div>
             <div v-else-if="cell.type === 'day-header'" class="day-header-cell" :class="{ today: cell.day!.isToday }" :style="{ gridRow: cell.gridRow, gridColumn: cell.gridColumn }">
               <span class="dh-name">{{ cell.day!.name }}</span>
               <span class="dh-date">{{ cell.day!.date }}</span>
@@ -137,10 +141,242 @@
       </div>
     </div>
   </Teleport>
+
+  <!-- 课程表设置弹窗 -->
+  <Teleport to="body">
+    <div v-if="showCourseSettings" class="dialog-overlay" @click.self="cancelCourseSettings">
+      <div class="dialog-container course-settings-dialog">
+        <div class="dialog-header folder-dialog-header">
+          <span class="dialog-header-title folder-dialog-title">课程表设置</span>
+        </div>
+        <div class="dialog-body">
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">开学日期</span>
+              <span class="setting-desc">学期第一周的周一日期</span>
+            </div>
+            <div class="setting-control">
+              <DateScrollPicker
+                  v-model="courseSettingsDraft.semesterStartDate"
+              />
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">学期周数</span>
+              <span class="setting-desc">本学期总共有多少周</span>
+            </div>
+            <div class="setting-control">
+              <el-input-number
+                  v-model="courseSettingsDraft.totalWeeks"
+                  :min="1"
+                  :max="30"
+                  :step="1"
+                  size="default"
+              />
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">提前提醒</span>
+              <span class="setting-desc">上课前多少分钟发送系统通知提醒</span>
+            </div>
+            <div class="setting-control">
+              <el-input-number
+                  v-model="courseSettingsDraft.reminderMinutes"
+                  :min="1"
+                  :max="60"
+                  :step="1"
+                  controls-position="right"
+                  size="default"
+              />
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">第1节开始时间</span>
+              <span class="setting-desc">每天第一节上课的时间</span>
+            </div>
+            <div class="setting-control">
+              <TimePickerPopover
+                  v-model="courseSettingsDraft.firstPeriodStart"
+              />
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">每节时长</span>
+              <span class="setting-desc">每节课持续的分钟数</span>
+            </div>
+            <div class="setting-control">
+              <el-input-number
+                  v-model="courseSettingsDraft.periodDuration"
+                  :min="15"
+                  :max="120"
+                  :step="5"
+                  size="default"
+              />
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">课间休息时长</span>
+              <span class="setting-desc">相邻两节课之间的休息分钟数</span>
+            </div>
+            <div class="setting-control setting-control-break">
+              <div class="break-mode-toggle">
+                <el-radio-group v-model="courseSettingsDraft.breakMode" size="default">
+                  <el-radio-button value="uniform">统一时长</el-radio-button>
+                  <el-radio-button value="custom">自由时长</el-radio-button>
+                </el-radio-group>
+              </div>
+              <el-input-number
+                  v-if="courseSettingsDraft.breakMode !== 'custom'"
+                  v-model="courseSettingsDraft.breakDuration"
+                  :min="5"
+                  :max="60"
+                  :step="5"
+                  size="default"
+              />
+              <el-button
+                  v-else
+                  size="default"
+                  class="setting-break-custom-btn"
+                  @click="showCourseCustomBreakDialog = true"
+              >自定义课间休息</el-button>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">午休时长</span>
+              <span class="setting-desc">上午最后一节到下午第一节之间的休息分钟数</span>
+            </div>
+            <div class="setting-control">
+              <el-input-number
+                  v-model="courseSettingsDraft.lunchBreakMinutes"
+                  :min="0"
+                  :max="240"
+                  :step="5"
+                  size="default"
+              />
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">晚休时长</span>
+              <span class="setting-desc">下午最后一节到晚上第一节之间的休息分钟数</span>
+            </div>
+            <div class="setting-control">
+              <el-input-number
+                  v-model="courseSettingsDraft.dinnerBreakMinutes"
+                  :min="0"
+                  :max="240"
+                  :step="5"
+                  size="default"
+              />
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">显示周末</span>
+              <span class="setting-desc">在课程表中显示周六和周日</span>
+            </div>
+            <div class="setting-control">
+              <el-switch
+                  v-model="courseSettingsDraft.showWeekend"
+                  inline-prompt
+                  size="default"
+              />
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">显示非本周课程</span>
+              <span class="setting-desc">在课程表中显示其他周的课程安排</span>
+            </div>
+            <div class="setting-control">
+              <el-switch
+                  v-model="courseSettingsDraft.showNonCurrentWeekCourses"
+                  inline-prompt
+                  size="default"
+              />
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">课表节数设置</span>
+              <span class="setting-desc">设置上午、下午和晚上各有多少节课</span>
+            </div>
+            <div class="setting-control">
+              <PeriodCountPicker
+                  v-model="courseSettingsDraft.periodCountPerSession"
+              />
+            </div>
+          </div>
+
+          <div class="form-footer">
+            <button class="capsule-btn cancel-btn" @click="cancelCourseSettings">
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              <span>取消</span>
+            </button>
+            <button class="capsule-btn submit-btn" @click="confirmCourseSettings">
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
+              <span>确认</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- 自由课间休息时长设置弹窗 -->
+  <Teleport to="body">
+    <div v-if="showCourseCustomBreakDialog" class="dialog-overlay" @click.self="showCourseCustomBreakDialog = false" style="z-index: 10000;">
+      <div class="dialog-container custom-break-dialog">
+        <div class="dialog-header folder-dialog-header">
+          <span class="dialog-header-title folder-dialog-title">自由课间休息时长设置</span>
+        </div>
+        <div class="dialog-body">
+          <div v-if="courseCustomBreakGaps.length === 0" class="custom-break-empty">课表节数不足，无需设置课间休息</div>
+          <div v-for="(gap, idx) in courseCustomBreakGaps" :key="idx" class="custom-break-item">
+            <span class="custom-break-label">{{ gap.label }}</span>
+            <el-input-number
+                v-model="courseCustomBreakDurationsDraft[idx]"
+                :min="0"
+                :max="60"
+                :step="5"
+                size="small"
+                controls-position="right"
+            />
+          </div>
+          <div class="form-footer" style="margin-top: 16px;">
+            <button class="capsule-btn cancel-btn" @click="showCourseCustomBreakDialog = false">
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              <span>取消</span>
+            </button>
+            <button class="capsule-btn submit-btn" @click="confirmCourseCustomBreak">
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
+              <span>确认</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowRight, Warning } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
@@ -148,6 +384,9 @@ import { getData, setData } from '../../services/storageService'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { usePageNav } from '../../composables/usePageNav'
 import { logger } from '../../lib/logger'
+import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
+import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
+import PeriodCountPicker from '../common/picker/PeriodCountPicker.vue'
 
 interface Course {
   id: string
@@ -703,6 +942,115 @@ async function confirmDeleteCourse() {
   logger.info('[课程表] 删除课程', { id })
 }
 
+const showCourseSettings = ref(false)
+const showCourseCustomBreakDialog = ref(false)
+
+const courseSettingsDraft = ref({
+  semesterStartDate: '',
+  totalWeeks: 20,
+  reminderMinutes: 5,
+  firstPeriodStart: '08:00',
+  periodDuration: 45,
+  breakDuration: 10,
+  breakMode: 'uniform' as 'uniform' | 'custom',
+  customBreakDurations: [] as number[],
+  lunchBreakMinutes: 120,
+  dinnerBreakMinutes: 90,
+  showWeekend: true,
+  showNonCurrentWeekCourses: true,
+  periodCountPerSession: {
+    morning: 4,
+    afternoon: 4,
+    evening: 2
+  }
+})
+
+const courseCustomBreakDurationsDraft = ref<number[]>([])
+
+const courseCustomBreakGaps = computed(() => {
+  const counts = courseSettingsDraft.value.periodCountPerSession
+  const gaps: { label: string }[] = []
+  let absFrom = 1
+
+  const addGaps = (count: number) => {
+    if (count <= 0) return
+    const end = absFrom + count - 1
+    while (absFrom < end) {
+      gaps.push({ label: `第${absFrom}节→第${absFrom + 1}节` })
+      absFrom++
+    }
+    absFrom++
+  }
+
+  addGaps(counts.morning)
+  addGaps(counts.afternoon)
+  addGaps(counts.evening)
+
+  return gaps
+})
+
+function initCourseSettingsDraft() {
+  courseSettingsDraft.value.semesterStartDate = settingsStore.settings.course?.semesterStartDate || ''
+  courseSettingsDraft.value.totalWeeks = settingsStore.settings.course?.totalWeeks || 20
+  courseSettingsDraft.value.reminderMinutes = settingsStore.settings.course?.reminderMinutes || 5
+  courseSettingsDraft.value.firstPeriodStart = settingsStore.settings.course?.firstPeriodStart || '08:00'
+  courseSettingsDraft.value.periodDuration = settingsStore.settings.course?.periodDuration || 45
+  courseSettingsDraft.value.breakDuration = settingsStore.settings.course?.breakDuration || 10
+  courseSettingsDraft.value.breakMode = settingsStore.settings.course?.breakMode || 'uniform'
+  courseSettingsDraft.value.customBreakDurations = settingsStore.settings.course?.customBreakDurations || []
+  courseSettingsDraft.value.lunchBreakMinutes = settingsStore.settings.course?.lunchBreakMinutes ?? 120
+  courseSettingsDraft.value.dinnerBreakMinutes = settingsStore.settings.course?.dinnerBreakMinutes ?? 90
+  courseSettingsDraft.value.showWeekend = settingsStore.settings.course?.showWeekend !== false
+  courseSettingsDraft.value.showNonCurrentWeekCourses = settingsStore.settings.course?.showNonCurrentWeekCourses !== false
+  courseSettingsDraft.value.periodCountPerSession = settingsStore.settings.course?.periodCountPerSession || { morning: 4, afternoon: 4, evening: 2 }
+}
+
+function cancelCourseSettings() {
+  showCourseSettings.value = false
+}
+
+async function confirmCourseSettings() {
+  await settingsStore.updateCourseSettings({
+    semesterStartDate: courseSettingsDraft.value.semesterStartDate,
+    totalWeeks: courseSettingsDraft.value.totalWeeks,
+    reminderMinutes: courseSettingsDraft.value.reminderMinutes,
+    firstPeriodStart: courseSettingsDraft.value.firstPeriodStart,
+    periodDuration: courseSettingsDraft.value.periodDuration,
+    breakDuration: courseSettingsDraft.value.breakDuration,
+    breakMode: courseSettingsDraft.value.breakMode,
+    customBreakDurations: courseSettingsDraft.value.customBreakDurations,
+    lunchBreakMinutes: courseSettingsDraft.value.lunchBreakMinutes,
+    dinnerBreakMinutes: courseSettingsDraft.value.dinnerBreakMinutes,
+    showWeekend: courseSettingsDraft.value.showWeekend,
+    showNonCurrentWeekCourses: courseSettingsDraft.value.showNonCurrentWeekCourses,
+    periodCountPerSession: courseSettingsDraft.value.periodCountPerSession
+  })
+  logger.info('[设置] 修改课程表设置')
+  showCourseSettings.value = false
+}
+
+function confirmCourseCustomBreak() {
+  courseSettingsDraft.value.customBreakDurations = [...courseCustomBreakDurationsDraft.value]
+  showCourseCustomBreakDialog.value = false
+}
+
+watch(showCourseSettings, (val) => {
+  if (val) {
+    initCourseSettingsDraft()
+  }
+})
+
+watch(showCourseCustomBreakDialog, (val) => {
+  if (val) {
+    const existing = courseSettingsDraft.value.customBreakDurations
+    const gapCount = courseCustomBreakGaps.value.length
+    courseCustomBreakDurationsDraft.value = Array.from(
+      { length: gapCount },
+      (_, i) => (existing && i < existing.length ? existing[i] : null) ?? courseSettingsDraft.value.breakDuration
+    )
+  }
+})
+
 // ===== 持久化 =====
 async function saveCourses() {
   const ok = await setData(COURSES_KEY, COURSES_SUB, courses.value)
@@ -902,4 +1250,42 @@ onMounted(async () => {
 .dialog-title { text-align: center; font-size: 18px; font-weight: 600; color: var(--chalk-white); margin: 0 0 12px 0; }
 .dialog-message { text-align: center; font-size: 14px; color: var(--chalk-white-70); margin: 0 0 24px 0; line-height: 1.6; }
 .dialog-actions { display: flex; gap: 12px; justify-content: center; }
+
+.dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+.dialog-container { background: rgba(30,28,52,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; }
+.course-settings-dialog { width: 500px; }
+.dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 0; flex-shrink: 0; }
+.dialog-header-title { font-size: 16px; font-weight: 600; color: var(--chalk-white); }
+.folder-dialog-header { justify-content: center; }
+.folder-dialog-title { text-align: center; }
+
+.dialog-body { padding: 12px 16px 16px; overflow-y: auto; flex: 1; scrollbar-width: none; -ms-overflow-style: none; }
+.dialog-body::-webkit-scrollbar { display: none; }
+
+.setting-item { display: flex; align-items: center; justify-content: space-between; padding: 16px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; gap: 16px; margin-bottom: 8px; }
+.setting-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.setting-label { font-size: 14px; font-weight: 500; color: #fff; }
+.setting-desc { font-size: 12px; color: rgba(255, 255, 255, 0.5); }
+.setting-control { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
+
+.corner-cell { display: flex; align-items: center; justify-content: center; padding: 0; }
+.corner-settings-btn { padding: 4px; min-width: auto; border: none; background: transparent; color: #fff; }
+.corner-settings-btn .capsule-icon { width: 16px; height: 16px; }
+.corner-settings-btn:hover { background: transparent; }
+
+.form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); }
+.capsule-btn { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 18px; border: 1px solid rgba(255,255,255,0.15); border-radius: 20px; background: transparent; color: var(--chalk-white-70); cursor: pointer; font-size: 13px; font-family: inherit; transition: all 0.2s; }
+.capsule-btn:hover { background: rgba(255,255,255,0.08); color: var(--chalk-white); }
+.capsule-btn .capsule-icon { width: 14px; height: 14px; }
+.submit-btn { background: rgba(102,126,234,0.2); border-color: rgba(102,126,234,0.4); color: #93c5fd; }
+.submit-btn:hover { background: rgba(102,126,234,0.35); color: var(--chalk-white); }
+
+.break-mode-toggle { display: flex; align-items: center; }
+.setting-break-custom-btn { white-space: nowrap; }
+
+.custom-break-dialog { width: 420px; }
+.custom-break-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.custom-break-item:last-child { border-bottom: none; }
+.custom-break-label { font-size: 13px; color: rgba(255,255,255,0.8); }
+.custom-break-empty { text-align: center; color: rgba(255,255,255,0.5); padding: 20px 0; font-size: 14px; }
 </style>

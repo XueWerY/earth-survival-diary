@@ -67,7 +67,11 @@
           </div>
 
           <div class="focus-start-wrapper">
-            <button class="focus-ctrl-btn" @click="startFocus">▶️ 开始专注</button>
+            <button class="focus-ctrl-btn settings-trigger-btn" @click="showFocusSettings = true">
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+              <span>设置</span>
+            </button>
+            <button class="focus-ctrl-btn focus-start-btn" @click="startFocus">▶️ 开始专注</button>
           </div>
 
           <!-- 常用专注 -->
@@ -171,6 +175,44 @@
         <el-button type="primary" @click="saveAsFavorite">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 专注设置弹窗 -->
+    <Teleport to="body">
+      <div v-if="showFocusSettings" class="dialog-overlay" @click.self="cancelFocusSettings">
+        <div class="dialog-container focus-settings-dialog">
+          <div class="dialog-header folder-dialog-header">
+            <span class="dialog-header-title folder-dialog-title">专注设置</span>
+          </div>
+          <div class="dialog-body">
+            <div class="setting-item">
+              <div class="setting-info">
+                <span class="setting-label">番茄时长</span>
+                <span class="setting-desc">每个番茄钟的默认工作时长（分钟）</span>
+              </div>
+              <div class="setting-control">
+                <el-input-number
+                    v-model="focusSettingsDraft.pomodoroDuration"
+                    :min="1"
+                    :max="120"
+                    :step="5"
+                    size="default"
+                />
+              </div>
+            </div>
+            <div class="form-footer">
+              <button class="capsule-btn cancel-btn" @click="cancelFocusSettings">
+                <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                <span>取消</span>
+              </button>
+              <button class="capsule-btn submit-btn" @click="confirmFocusSettings">
+                <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
+                <span>确认</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -221,6 +263,28 @@ const localPomodoroDuration = ref(settingsStore.settings.focus?.pomodoroDuration
 // 保存常用
 const showSaveFavorite = ref(false)
 const lastCompletedFocus = ref<{ name: string; notes: string; type: FocusType; targetDuration: number } | null>(null)
+
+const showFocusSettings = ref(false)
+const focusSettingsDraft = ref({
+  pomodoroDuration: 25
+})
+
+const cancelFocusSettings = () => {
+  showFocusSettings.value = false
+}
+
+const confirmFocusSettings = async () => {
+  await settingsStore.updateFocusSettings({ pomodoroDuration: focusSettingsDraft.value.pomodoroDuration })
+  localPomodoroDuration.value = focusSettingsDraft.value.pomodoroDuration
+  logger.info('[设置] 修改专注时长', { pomodoroDuration: focusSettingsDraft.value.pomodoroDuration })
+  showFocusSettings.value = false
+}
+
+watch(showFocusSettings, (val) => {
+  if (val) {
+    focusSettingsDraft.value.pomodoroDuration = settingsStore.settings.focus?.pomodoroDuration || 25
+  }
+})
 
 const timeChars = ref<string[]>([])
 const prevTimeChars = ref<string[]>([])
@@ -1225,6 +1289,41 @@ onUnmounted(async () => {
   border-color: #667eea !important;
   color: var(--chalk-white) !important;
 }
+
+.settings-trigger-btn {
+  margin-right: 12px;
+  white-space: nowrap;
+  gap: 6px;
+}
+
+.settings-trigger-btn .capsule-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+.dialog-container { background: rgba(30,28,52,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; }
+.focus-settings-dialog { width: 400px; }
+
+.dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 0; flex-shrink: 0; }
+.dialog-header-title { font-size: 16px; font-weight: 600; color: var(--chalk-white); }
+.folder-dialog-header { justify-content: center; }
+.folder-dialog-title { text-align: center; }
+.dialog-body { padding: 12px 16px 16px; overflow-y: auto; flex: 1; scrollbar-width: none; -ms-overflow-style: none; }
+.dialog-body::-webkit-scrollbar { display: none; }
+
+.setting-item { display: flex; align-items: center; justify-content: space-between; padding: 16px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; gap: 16px; }
+.setting-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.setting-label { font-size: 14px; font-weight: 500; color: #fff; }
+.setting-desc { font-size: 12px; color: rgba(255, 255, 255, 0.5); }
+.setting-control { flex-shrink: 0; }
+
+.form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); }
+.capsule-btn { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 18px; border: 1px solid rgba(255,255,255,0.15); border-radius: 20px; background: transparent; color: var(--chalk-white-70); cursor: pointer; font-size: 13px; font-family: inherit; transition: all 0.2s; }
+.capsule-btn:hover { background: rgba(255,255,255,0.08); color: var(--chalk-white); }
+.capsule-btn .capsule-icon { width: 14px; height: 14px; }
+.submit-btn { background: rgba(102,126,234,0.2); border-color: rgba(102,126,234,0.4); color: #93c5fd; }
+.submit-btn:hover { background: rgba(102,126,234,0.35); color: var(--chalk-white); }
 
 /* 对话框深色主题 */
 .duration-unit {

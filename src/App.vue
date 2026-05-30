@@ -185,6 +185,7 @@ const navigateTo = (module: string) => {
   if (module === pageNav.currentModule.value) {
     pageNav.setNavPath([module])
   } else {
+    pageNav.setNavPath([module])
     pageNav.setNavContext({ segments: [], plusVisible: false, plusOnClick: null, goModuleHome: () => {} })
     router.push(MODULE_ROUTES[module])
   }
