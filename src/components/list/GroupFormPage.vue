@@ -53,7 +53,7 @@ const handleSubmit = () => {
   const name = formName.value.trim()
   if (!name) return
   const color = formColor.value.trim() || EXTENDED_FOLDER_COLORS[0]
-  emit('submit', { name, color })
+  emit('submit', { name, color, listId: props.listId, groupId: props.group?.id })
 }
 
 const cancel = () => {
