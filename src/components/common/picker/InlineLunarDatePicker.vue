@@ -18,18 +18,21 @@
             <line x1="8" y1="2" x2="8" y2="6"></line>
             <line x1="3" y1="10" x2="21" y2="10"></line>
           </svg>
+          <span class="btn-text">跳转日期</span>
         </button>
         <button class="icon-capsule-btn add-btn" @click="emit('addFootprint')" title="添加足迹">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
+          <span class="btn-text">记录足迹</span>
         </button>
         <button class="icon-capsule-btn diary-btn" @click="emit('addDiary')" title="添加日记">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
           </svg>
+          <span class="btn-text">写日记</span>
         </button>
       </div>
     </div>
@@ -379,6 +382,23 @@ defineExpose({ openDatePicker: () => { showDatePicker.value = true } })
 .icon-svg {
   width: 14px;
   height: 14px;
+}
+
+.btn-text {
+  display: none;
+  font-size: 13px;
+}
+
+@media (min-width: 500px) {
+  .icon-capsule-btn {
+    width: auto;
+    padding: 0 14px;
+    gap: 4px;
+  }
+
+  .btn-text {
+    display: inline;
+  }
 }
 
 .weekdays {
