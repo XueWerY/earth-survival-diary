@@ -1,8 +1,8 @@
 <template>
-  <div class="mission-container">
-    <div v-if="showBreadcrumb" class="mission-breadcrumb-bar">
-      <button class="breadcrumb-module" @click="pageNav.setNavPath(['mission'])" title="回到清单首页">📋</button>
-      <div class="breadcrumb-scroll">
+  <div class="list-container">
+    <div v-if="showBreadcrumb" class="list-breadcrumb-bar">
+      <button class="breadcrumb-module" @click="pageNav.setNavPath(['list'])" title="回到清单首页">📋</button>
+      <div class="breadcrumb-scroll" ref="breadcrumbScrollRef">
         <template v-for="(seg, idx) in localBreadcrumbSegments" :key="idx">
           <span v-if="seg.dropdownItems" class="breadcrumb-sep clickable" @click.stop="openSegmentDropdown(seg, $event)">></span>
           <span v-else class="breadcrumb-sep">></span>
@@ -27,13 +27,13 @@
     <div class="main-content" @click="closeDropdown">
       <el-scrollbar>
 
-        <div v-if="isMissionRoot" class="card-grid card-grid-root" :class="isElectron ? 'grid-4cols' : 'grid-2cols'">
-          <div class="folder-card has-actions" @click="pageNav.setNavPath(['mission', 'smart'])">
+        <div v-if="isTaskRoot" class="card-grid card-grid-root" :class="isElectron ? 'grid-4cols' : 'grid-2cols'">
+          <div class="folder-card has-actions" @click="pageNav.setNavPath(['list', 'smart'])">
             <div class="folder-card-icon smart-icon-bg"><el-icon><List /></el-icon></div>
             <span class="folder-card-name">智能清单</span>
             <span class="folder-card-count">{{ smartListCount }}个清单</span>
           </div>
-          <div v-for="folder in sortedFolders" :key="folder.id" class="folder-card has-actions" @click="pageNav.setNavPath(['mission', 'custom', folder.id])">
+          <div v-for="folder in sortedFolders" :key="folder.id" class="folder-card has-actions" @click="pageNav.setNavPath(['list', 'custom', folder.id])">
             <div class="card-top-actions" @click.stop>
               <button class="card-icon-btn" title="编辑文件夹" @click="handleEditFolder(folder)"><el-icon><Edit /></el-icon></button>
               <button class="card-icon-btn danger" title="删除文件夹" @click="handleDeleteFolder(folder)"><el-icon><Delete /></el-icon></button>
@@ -45,36 +45,36 @@
         </div>
 
         <template v-else-if="isSmartOverview">
-          <div class="card-grid">
-            <div class="folder-card" @click="pageNav.setNavPath(['mission', 'smart', 'today'])">
+          <div class="card-grid" :class="!isElectron ? 'grid-2cols' : ''">
+            <div class="folder-card" @click="pageNav.setNavPath(['list', 'smart', 'today'])">
               <div class="folder-card-icon today-icon-bg"><el-icon><Calendar /></el-icon></div>
               <span class="folder-card-name">今天</span>
-              <span class="folder-card-count">{{ todayMissionsCount }}个任务</span>
+              <span class="folder-card-count">{{ todayTasksCount }}个任务</span>
             </div>
-            <div class="folder-card" @click="pageNav.setNavPath(['mission', 'smart', 'expired'])">
+            <div class="folder-card" @click="pageNav.setNavPath(['list', 'smart', 'expired'])">
               <div class="folder-card-icon expired-icon-bg"><el-icon><Clock /></el-icon></div>
               <span class="folder-card-name">已过期</span>
-              <span class="folder-card-count">{{ expiredMissionsCount }}个任务</span>
+              <span class="folder-card-count">{{ expiredTasksCount }}个任务</span>
             </div>
-            <div class="folder-card" @click="pageNav.setNavPath(['mission', 'smart', 'future'])">
+            <div class="folder-card" @click="pageNav.setNavPath(['list', 'smart', 'future'])">
               <div class="folder-card-icon future-icon-bg"><el-icon><Timer /></el-icon></div>
               <span class="folder-card-name">未来七天</span>
-              <span class="folder-card-count">{{ futureMissionsCount }}个任务</span>
+              <span class="folder-card-count">{{ futureTasksCount }}个任务</span>
             </div>
           </div>
         </template>
 
         <template v-else-if="isSmartDetail">
-          <el-empty v-if="smartDetailMissions.length === 0" :description="smartDetailEmptyText" :image-size="120" />
-          <div v-else :class="[smartDetailIsToday ? 'today-missions' : 'smart-missions', isElectron ? 'grid-2cols' : 'grid-1cols']">
-              <MissionCard v-for="mission in smartDetailMissions" :key="mission.id" :mission="mission" :context="smartDetailCardContext" @delete="deleteMission" />
+          <el-empty v-if="smartDetailTasks.length === 0" :description="smartDetailEmptyText" :image-size="120" />
+          <div v-else :class="[smartDetailIsToday ? 'today-lists' : 'smart-lists', isElectron ? 'grid-2cols' : '']">
+              <TaskCard v-for="list in smartDetailTasks" :key="list.id" :list="list" :context="smartDetailCardContext" @delete="deleteTask" />
             </div>
         </template>
 
         <template v-else-if="isCustomOverview">
           <el-empty v-if="sortedFolders.length === 0" description="还没有自定义文件夹" :image-size="120" />
-          <div v-else class="card-grid">
-            <div v-for="folder in sortedFolders" :key="folder.id" class="folder-card has-actions" @click="pageNav.setNavPath(['mission', 'custom', folder.id])">
+          <div v-else class="card-grid" :class="!isElectron ? 'grid-2cols' : ''">
+            <div v-for="folder in sortedFolders" :key="folder.id" class="folder-card has-actions" @click="pageNav.setNavPath(['list', 'custom', folder.id])">
               <div class="card-top-actions" @click.stop>
                 <button class="card-icon-btn" title="编辑文件夹" @click="handleEditFolder(folder)"><el-icon><Edit /></el-icon></button>
                 <button class="card-icon-btn danger" title="删除文件夹" @click="handleDeleteFolder(folder)"><el-icon><Delete /></el-icon></button>
@@ -88,8 +88,8 @@
 
         <template v-else-if="isFolderView">
           <el-empty v-if="folderLists.length === 0" description="该文件夹下还没有清单" :image-size="120" />
-          <div v-else class="card-grid">
-            <div v-for="list in sortedFolderLists" :key="list.id" class="folder-card has-actions" @click="pageNav.setNavPath(['mission', 'custom', currentFolderIdFromPath, list.id])">
+          <div v-else class="card-grid" :class="!isElectron ? 'grid-2cols' : ''">
+            <div v-for="list in sortedFolderLists" :key="list.id" class="folder-card has-actions" @click="pageNav.setNavPath(['list', 'custom', currentFolderIdFromPath, list.id])">
               <div class="card-top-actions" @click.stop>
                 <button class="card-icon-btn" title="编辑清单" @click="handleEditListCard(list)"><el-icon><Edit /></el-icon></button>
                 <button class="card-icon-btn danger" title="删除清单" @click="handleDeleteListCard(list)"><el-icon><Delete /></el-icon></button>
@@ -98,15 +98,15 @@
                 <el-icon><Folder /></el-icon>
               </div>
               <span class="folder-card-name">{{ list.name }}</span>
-              <span class="folder-card-count">{{ getListGroupCount(list.id) }}个分组{{ getListMissionCount(list.id) }}个任务</span>
+              <span class="folder-card-count">{{ getListGroupCount(list.id) }}个分组{{ getListTaskCount(list.id) }}个任务</span>
             </div>
           </div>
         </template>
 
         <template v-else-if="isListView">
           <el-empty v-if="currentGroups.length === 0" description="还没有分组" :image-size="120" />
-          <div v-else class="card-grid">
-            <div v-for="group in currentSortedGroups" :key="group.id" class="folder-card has-actions" @click="pageNav.setNavPath(['mission', 'custom', currentFolderIdFromPath, currentListIdFromPath, group.id])">
+          <div v-else class="card-grid" :class="!isElectron ? 'grid-2cols' : ''">
+            <div v-for="group in currentSortedGroups" :key="group.id" class="folder-card has-actions" @click="pageNav.setNavPath(['list', 'custom', currentFolderIdFromPath, currentListIdFromPath, group.id])">
               <div class="card-top-actions" @click.stop>
                 <button class="card-icon-btn" title="编辑分组" @click="handleEditGroupCard(group)"><el-icon><Edit /></el-icon></button>
                 <button v-if="!isDefaultGroup(group.id)" class="card-icon-btn danger" title="删除分组" @click="handleDeleteGroupCard(group)"><el-icon><Delete /></el-icon></button>
@@ -115,15 +115,15 @@
                 <el-icon><Folder /></el-icon>
               </div>
               <span class="folder-card-name">{{ group.name }}</span>
-              <span class="folder-card-count">{{ getGroupMissionCount(group.id) }} 个任务</span>
+              <span class="folder-card-count">{{ getGroupTaskCount(group.id) }} 个任务</span>
             </div>
           </div>
         </template>
 
         <template v-else-if="isGroupTasksView">
-          <el-empty v-if="currentGroupMissions.length === 0" description="暂无任务" :image-size="120" />
-          <div v-else class="mission-list" :class="isElectron ? 'grid-2cols' : 'grid-1cols'">
-            <MissionCard v-for="mission in currentGroupMissions" :key="mission.id" :mission="mission" context="custom-list" @delete="deleteMission" />
+          <el-empty v-if="currentGroupTasks.length === 0" description="暂无任务" :image-size="120" />
+          <div v-else class="list-list" :class="isElectron ? 'grid-2cols' : ''">
+            <TaskCard v-for="list in currentGroupTasks" :key="list.id" :list="list" context="custom-list" @delete="deleteTask" />
           </div>
         </template>
 
@@ -191,14 +191,14 @@
     </div>
   </div>
 
-  <Teleport v-if="showMissionDialog" to="body">
-    <div class="dialog-overlay mission-dialog-overlay" @click.self="closeMissionDialog">
-      <div class="dialog-container folder-color-dialog mission-add-dialog">
+  <Teleport v-if="showTaskDialog" to="body">
+    <div class="dialog-overlay list-dialog-overlay" @click.self="closeTaskDialog">
+      <div class="dialog-container folder-color-dialog list-add-dialog">
         <div class="dialog-header folder-dialog-header">
           <span class="dialog-header-title folder-dialog-title">添加任务</span>
         </div>
         <div class="dialog-body">
-          <MissionForm :list-id="missionDialogListId" :group-id="missionDialogGroupId" @submit="onMissionSubmit" @cancel="closeMissionDialog" />
+          <TaskForm :list-id="listDialogListId" :group-id="listDialogGroupId" @submit="onTaskSubmit" @cancel="closeTaskDialog" />
         </div>
       </div>
     </div>
@@ -211,7 +211,7 @@
         <el-button class="dialog-close-btn" text @click="closeMoveDialog"><el-icon><Close /></el-icon></el-button>
       </div>
       <div class="dialog-body">
-        <MoveMissionPage :mission-id="moveMissionId" @submit="onMoveSubmit" @cancel="closeMoveDialog" />
+        <MoveTaskPage :list-id="moveTaskId" @submit="onMoveSubmit" @cancel="closeMoveDialog" />
       </div>
     </div>
   </div>
@@ -235,17 +235,17 @@ import { ElMessage } from 'element-plus'
 import { Calendar, Clock, Timer, Close, Warning, Edit, Plus as PlusIcon, Delete, List, Folder, Check } from '@element-plus/icons-vue'
 import ListFormPage from './ListFormPage.vue'
 import GroupFormPage from './GroupFormPage.vue'
-import MissionForm from './MissionForm.vue'
-import MissionCard from './MissionCard.vue'
-import MoveMissionPage from './MoveMissionPage.vue'
+import TaskForm from './TaskForm.vue'
+import TaskCard from './TaskCard.vue'
+import MoveTaskPage from './MoveTaskPage.vue'
 import dayjs from 'dayjs'
-import { useMissionStore, DEFAULT_FOLDER_COLORS, EXTENDED_FOLDER_COLORS, type Mission, type MissionList, type MissionGroup, type MissionFolder } from '../../stores/missionStore'
+import { useListStore, DEFAULT_FOLDER_COLORS, EXTENDED_FOLDER_COLORS, type Task, type ListPage, type TaskGroup, type TaskFolder } from '../../stores/listStore'
 import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem } from '../../composables/usePageNav'
 import { logger } from '../../lib/logger'
 
 const pageNav = usePageNav()
 
-const missionStore = useMissionStore()
+const listStore = useListStore()
 
 const refreshReminders = inject<() => void>('refreshReminders', () => {})
 const isGuideActive = inject('guideVisible', ref(false))
@@ -266,62 +266,62 @@ const scrollBreadcrumbToEnd = () => {
   })
 }
 
-const isMissionRoot = computed(() => {
-  const result = navPath.value.length === 1 && navPath.value[0] === 'mission'
-  logger.debug('[MissionList] isMissionRoot 计算', { navPath: [...navPath.value], result })
+const isTaskRoot = computed(() => {
+  const result = navPath.value.length === 1 && navPath.value[0] === 'list'
+  logger.debug('[ListPage] isTaskRoot 计算', { navPath: [...navPath.value], result })
   return result
 })
-const isSmartOverview = computed(() => navPath.value.length === 2 && navPath.value[0] === 'mission' && navPath.value[1] === 'smart')
-const isSmartDetail = computed(() => navPath.value.length === 3 && navPath.value[0] === 'mission' && navPath.value[1] === 'smart')
-const isCustomOverview = computed(() => navPath.value.length === 2 && navPath.value[0] === 'mission' && navPath.value[1] === 'custom')
-const isFolderView = computed(() => navPath.value.length === 3 && navPath.value[0] === 'mission' && navPath.value[1] === 'custom')
-const isListView = computed(() => navPath.value.length === 4 && navPath.value[0] === 'mission' && navPath.value[1] === 'custom')
-const isGroupTasksView = computed(() => navPath.value.length === 5 && navPath.value[0] === 'mission' && navPath.value[1] === 'custom')
-const isAtSmartDetail = computed(() => navPath.value.length >= 3 && navPath.value[0] === 'mission' && navPath.value[1] === 'smart')
+const isSmartOverview = computed(() => navPath.value.length === 2 && navPath.value[0] === 'list' && navPath.value[1] === 'smart')
+const isSmartDetail = computed(() => navPath.value.length === 3 && navPath.value[0] === 'list' && navPath.value[1] === 'smart')
+const isCustomOverview = computed(() => navPath.value.length === 2 && navPath.value[0] === 'list' && navPath.value[1] === 'custom')
+const isFolderView = computed(() => navPath.value.length === 3 && navPath.value[0] === 'list' && navPath.value[1] === 'custom')
+const isListView = computed(() => navPath.value.length === 4 && navPath.value[0] === 'list' && navPath.value[1] === 'custom')
+const isGroupTasksView = computed(() => navPath.value.length === 5 && navPath.value[0] === 'list' && navPath.value[1] === 'custom')
+const isAtSmartDetail = computed(() => navPath.value.length >= 3 && navPath.value[0] === 'list' && navPath.value[1] === 'smart')
 
 function computeBreadcrumbSegments(): BreadcrumbSegment[] {
   const segments: BreadcrumbSegment[] = []
   const path = pageNav.navPath.value
 
-  if (path.length < 2 || path[0] !== 'mission') return segments
+  if (path.length < 2 || path[0] !== 'list') return segments
 
   const buildFolderDropdownItems = (): DropdownItem[] => {
     const items: DropdownItem[] = []
     const isSmart = path[1] === 'smart'
     items.push({
       id: 'smart', name: '智能清单', color: '#667eea', current: isSmart,
-      onSelect: () => pageNav.setNavPath(['mission', 'smart'])
+      onSelect: () => pageNav.setNavPath(['list', 'smart'])
     })
     for (const f of sortedFolders.value) {
       const isCurrent = path[1] === 'custom' && path[2] === f.id
       items.push({
         id: f.id, name: f.name, color: f.color, current: isCurrent,
-        onSelect: () => pageNav.setNavPath(['mission', 'custom', f.id])
+        onSelect: () => pageNav.setNavPath(['list', 'custom', f.id])
       })
     }
     return items
   }
 
   const buildSmartItemsDropdown = (currentType: string): DropdownItem[] => [
-    { id: 'today', name: '今天', color: '#22c55e', current: currentType === 'today', onSelect: () => pageNav.setNavPath(['mission', 'smart', 'today']) },
-    { id: 'expired', name: '已过期', color: '#ef4444', current: currentType === 'expired', onSelect: () => pageNav.setNavPath(['mission', 'smart', 'expired']) },
-    { id: 'future', name: '未来七天', color: '#3b82f6', current: currentType === 'future', onSelect: () => pageNav.setNavPath(['mission', 'smart', 'future']) },
+    { id: 'today', name: '今天', color: '#22c55e', current: currentType === 'today', onSelect: () => pageNav.setNavPath(['list', 'smart', 'today']) },
+    { id: 'expired', name: '已过期', color: '#ef4444', current: currentType === 'expired', onSelect: () => pageNav.setNavPath(['list', 'smart', 'expired']) },
+    { id: 'future', name: '未来七天', color: '#3b82f6', current: currentType === 'future', onSelect: () => pageNav.setNavPath(['list', 'smart', 'future']) },
   ]
 
   const buildListsDropdown = (folderId: string, currentListId: string): DropdownItem[] => {
-    const rawLists = folderId ? missionStore.getListsInFolder(folderId) : []
+    const rawLists = folderId ? listStore.getListsInFolder(folderId) : []
     return [...rawLists].sort((a, b) => a.order - b.order).map(l => ({
       id: l.id, name: l.name, color: l.color, current: l.id === currentListId,
-      onSelect: () => pageNav.setNavPath(['mission', 'custom', folderId, l.id])
+      onSelect: () => pageNav.setNavPath(['list', 'custom', folderId, l.id])
     }))
   }
 
   const buildGroupsDropdown = (folderId: string, listId: string, currentGroupId: string): DropdownItem[] => {
-    const rawList = listId ? missionStore.lists.find(l => l.id === listId) : undefined
+    const rawList = listId ? listStore.taskLists.find(l => l.id === listId) : undefined
     const rawGroups = rawList?.groups || []
     return [...rawGroups].sort((a, b) => a.order - b.order).map(g => ({
       id: g.id, name: g.name, color: g.color, current: g.id === currentGroupId,
-      onSelect: () => pageNav.setNavPath(['mission', 'custom', folderId, listId, g.id])
+      onSelect: () => pageNav.setNavPath(['list', 'custom', folderId, listId, g.id])
     }))
   }
 
@@ -330,7 +330,7 @@ function computeBreadcrumbSegments(): BreadcrumbSegment[] {
       label: '智能清单',
       color: '#667eea',
       clickable: true,
-      onClick: () => pageNav.setNavPath(['mission', 'smart']),
+      onClick: () => pageNav.setNavPath(['list', 'smart']),
       dropdownItems: buildFolderDropdownItems()
     })
     if (path.length >= 3) {
@@ -341,7 +341,7 @@ function computeBreadcrumbSegments(): BreadcrumbSegment[] {
         label: smartNames[type] || '',
         color: smartColors[type] || '',
         clickable: true,
-        onClick: () => pageNav.setNavPath(['mission', 'smart', type]),
+        onClick: () => pageNav.setNavPath(['list', 'smart', type]),
         dropdownItems: buildSmartItemsDropdown(type)
       })
     }
@@ -351,7 +351,7 @@ function computeBreadcrumbSegments(): BreadcrumbSegment[] {
         label: '自定义清单',
         color: '#667eea',
         clickable: true,
-        onClick: () => pageNav.setNavPath(['mission', 'custom']),
+        onClick: () => pageNav.setNavPath(['list', 'custom']),
         dropdownItems: buildFolderDropdownItems()
       })
     } else if (path.length >= 3) {
@@ -360,20 +360,20 @@ function computeBreadcrumbSegments(): BreadcrumbSegment[] {
         label: folder?.name || '自定义清单',
         color: folder?.color || '#667eea',
         clickable: true,
-        onClick: () => pageNav.setNavPath(['mission', 'custom', path[2]]),
+        onClick: () => pageNav.setNavPath(['list', 'custom', path[2]]),
         dropdownItems: buildFolderDropdownItems()
       })
       if (path.length >= 4) {
-        const list = missionStore.lists.find(l => l.id === path[3])
+        const list = listStore.taskLists.find(l => l.id === path[3])
         segments.push({
           label: list?.name || '',
           color: list?.color || '',
           clickable: true,
-          onClick: () => pageNav.setNavPath(['mission', 'custom', path[2], path[3]]),
+          onClick: () => pageNav.setNavPath(['list', 'custom', path[2], path[3]]),
           dropdownItems: buildListsDropdown(path[2], path[3])
         })
         if (path.length >= 5) {
-          const listForGroup = missionStore.lists.find(l => l.id === path[3])
+          const listForGroup = listStore.taskLists.find(l => l.id === path[3])
           const group = listForGroup?.groups.find(g => g.id === path[4])
           segments.push({
             label: group?.name || '',
@@ -394,17 +394,17 @@ const localBreadcrumbSegments = ref<BreadcrumbSegment[]>([])
 
 const showBreadcrumb = computed(() => {
   const path = navPath.value
-  const result = path.length >= 1 && path[0] === 'mission'
-  logger.debug('[MissionList] showBreadcrumb 计算', { path: [...path], result })
+  const result = path.length >= 1 && path[0] === 'list'
+  logger.debug('[ListPage] showBreadcrumb 计算', { path: [...path], result })
   return result
 })
 
 const plusAction = computed(() => {
-  if (isMissionRoot.value) return handleAddFolder
+  if (isTaskRoot.value) return handleAddFolder
   if (isFolderView.value) return handleAddList
   if (isCustomOverview.value) return handleAddFolder
   if (isListView.value) return handleAddGroupToCurrent
-  if (isGroupTasksView.value) return handleOpenAddMissionAtCurrent
+  if (isGroupTasksView.value) return handleOpenAddTaskAtCurrent
   return null
 })
 
@@ -443,68 +443,68 @@ const closeDropdown = () => {
 }
 
 const currentFolderIdFromPath = computed(() => {
-  if (navPath.value.length >= 3 && navPath.value[0] === 'mission' && navPath.value[1] === 'custom') return navPath.value[2]
+  if (navPath.value.length >= 3 && navPath.value[0] === 'list' && navPath.value[1] === 'custom') return navPath.value[2]
   return ''
 })
 const currentListIdFromPath = computed(() => {
-  if (navPath.value.length >= 4 && navPath.value[0] === 'mission' && navPath.value[1] === 'custom') return navPath.value[3]
+  if (navPath.value.length >= 4 && navPath.value[0] === 'list' && navPath.value[1] === 'custom') return navPath.value[3]
   return ''
 })
 const currentGroupIdFromPath = computed(() => {
-  if (navPath.value.length >= 5 && navPath.value[0] === 'mission' && navPath.value[1] === 'custom') return navPath.value[4]
+  if (navPath.value.length >= 5 && navPath.value[0] === 'list' && navPath.value[1] === 'custom') return navPath.value[4]
   return ''
 })
 
 const currentListIdForDialog = computed(() => currentListIdFromPath.value)
 
-const missionDialogListId = computed(() => currentListIdFromPath.value)
-const missionDialogGroupId = computed(() => currentGroupIdFromPath.value)
+const listDialogListId = computed(() => currentListIdFromPath.value)
+const listDialogGroupId = computed(() => currentGroupIdFromPath.value)
 
-const lists = computed(() => missionStore.lists)
-const folders = computed(() => missionStore.folders)
+const lists = computed(() => listStore.lists)
+const folders = computed(() => listStore.folders)
 const sortedLists = computed(() => [...lists.value].sort((a, b) => a.order - b.order))
 const sortedFolders = computed(() => [...folders.value].filter(f => f.type === 'custom').sort((a, b) => a.order - b.order))
 
 const folderLists = computed(() => {
   const fid = currentFolderIdFromPath.value
   if (!fid) return []
-  return missionStore.getListsInFolder(fid)
+  return listStore.getListsInFolder(fid)
 })
 const sortedFolderLists = computed(() => [...folderLists.value].sort((a, b) => a.order - b.order))
 
-const currentList = computed(() => lists.value.find(l => l.id === currentListIdFromPath.value))
+const currentList = computed(() => listStore.taskLists.find(l => l.id === currentListIdFromPath.value))
 const currentGroups = computed(() => {
   if (!currentList.value?.groups) return []
   return [...currentList.value.groups].sort((a, b) => a.order - b.order)
 })
 const currentSortedGroups = computed(() => currentGroups.value)
 
-watch([navPath, sortedFolders, () => missionStore.lists], () => {
-  logger.debug('[MissionList] breadcrumb watch 触发', { navPath: [...navPath.value], foldersCount: sortedFolders.value.length, listsCount: missionStore.lists?.length })
+watch([navPath, sortedFolders, () => listStore.lists], () => {
+  logger.debug('[ListPage] breadcrumb watch 触发', { navPath: [...navPath.value], foldersCount: sortedFolders.value.length, listsCount: listStore.lists?.length })
   localBreadcrumbSegments.value = computeBreadcrumbSegments()
-  logger.debug('[MissionList] breadcrumb watch 结果', { segments: localBreadcrumbSegments.value })
+  logger.debug('[ListPage] breadcrumb watch 结果', { segments: localBreadcrumbSegments.value })
   closeDropdown()
   scrollBreadcrumbToEnd()
 }, { immediate: true, deep: true })
 
 const smartListCount = computed(() => 3)
 
-const getFolderListCount = (folderId: string) => missionStore.getListsInFolder(folderId).length
+const getFolderListCount = (folderId: string) => listStore.getListsInFolder(folderId).length
 
 const todayDate = computed(() => dayjs().format('YYYY-MM-DD'))
-const todayMissions = computed(() => {
+const todayTasks = computed(() => {
   const po = { high: 0, medium: 1, low: 2, none: 3 }
-  return missionStore.missions.filter(m => m.date === todayDate.value).sort((a, b) => {
-    if (!a.startTime && b.startTime) return 1; if (a.startTime && !b.startTime) return -1
-    if (!a.startTime && !b.startTime) return po[a.priority] - po[b.priority]
-    const tc = a.startTime.localeCompare(b.startTime); if (tc !== 0) return tc
+  return listStore.lists.filter(m => m.date === todayDate.value).sort((a, b) => {
+    if (!a.endTime && b.endTime) return 1; if (a.endTime && !b.endTime) return -1
+    if (!a.endTime && !b.endTime) return po[a.priority] - po[b.priority]
+    const tc = a.endTime.localeCompare(b.endTime); if (tc !== 0) return tc
     return po[a.priority] - po[b.priority]
   })
 })
-const todayIncompleteMissions = computed(() => todayMissions.value.filter(m => !m.completed))
-const todayMissionsCount = computed(() => todayIncompleteMissions.value.length)
+const todayIncompleteTasks = computed(() => todayTasks.value.filter(m => !m.completed))
+const todayTasksCount = computed(() => todayIncompleteTasks.value.length)
 
-const isMissionOverdue = (m: Mission) => {
+const isTaskOverdue = (m: Task) => {
   if (!m.date || m.completed) return false
   const md = dayjs(m.date)
   let targetTime = md
@@ -512,22 +512,22 @@ const isMissionOverdue = (m: Mission) => {
   else { targetTime = md.endOf('day') }
   return targetTime.isBefore(dayjs())
 }
-const expiredMissions = computed(() => missionStore.missions.filter(m => !m.completed && isMissionOverdue(m)))
-const expiredMissionsCount = computed(() => expiredMissions.value.length)
-const futureMissions = computed(() => missionStore.missions.filter(m => !m.completed && m.date && dayjs(m.date).isAfter(dayjs(), 'day') && dayjs(m.date).isBefore(dayjs().add(8, 'day'))))
-const futureMissionsCount = computed(() => futureMissions.value.length)
+const expiredTasks = computed(() => listStore.lists.filter(m => !m.completed && isTaskOverdue(m)))
+const expiredTasksCount = computed(() => expiredTasks.value.length)
+const futureTasks = computed(() => listStore.lists.filter(m => !m.completed && m.date && dayjs(m.date).isAfter(dayjs(), 'day') && dayjs(m.date).isBefore(dayjs().add(8, 'day'))))
+const futureTasksCount = computed(() => futureTasks.value.length)
 
-const smartDetailMissions = computed(() => {
+const smartDetailTasks = computed(() => {
   if (!isSmartDetail.value) return []
   const type = navPath.value[2]
-  if (type === 'today') return todayIncompleteMissions.value
-  if (type === 'expired') return expiredMissions.value
-  if (type === 'future') return futureMissions.value
+  if (type === 'today') return todayIncompleteTasks.value
+  if (type === 'expired') return expiredTasks.value
+  if (type === 'future') return futureTasks.value
   return []
 })
-const smartDetailIsToday = computed(() => navPath.value.length === 3 && navPath.value[0] === 'mission' && navPath.value[1] === 'smart' && navPath.value[2] === 'today')
-const smartDetailIsExpired = computed(() => navPath.value.length === 3 && navPath.value[0] === 'mission' && navPath.value[1] === 'smart' && navPath.value[2] === 'expired')
-const smartDetailIsFuture = computed(() => navPath.value.length === 3 && navPath.value[0] === 'mission' && navPath.value[1] === 'smart' && navPath.value[2] === 'future')
+const smartDetailIsToday = computed(() => navPath.value.length === 3 && navPath.value[0] === 'list' && navPath.value[1] === 'smart' && navPath.value[2] === 'today')
+const smartDetailIsExpired = computed(() => navPath.value.length === 3 && navPath.value[0] === 'list' && navPath.value[1] === 'smart' && navPath.value[2] === 'expired')
+const smartDetailIsFuture = computed(() => navPath.value.length === 3 && navPath.value[0] === 'list' && navPath.value[1] === 'smart' && navPath.value[2] === 'future')
 const smartDetailCardContext = computed(() => smartDetailIsToday.value ? 'today' : 'default')
 const smartDetailEmptyText = computed(() => {
   if (smartDetailIsToday.value) return '今天没有任务，好好休息吧'
@@ -535,10 +535,10 @@ const smartDetailEmptyText = computed(() => {
   return '未来七天没有任务'
 })
 
-const currentGroupMissions = computed(() => {
+const currentGroupTasks = computed(() => {
   if (!currentGroupIdFromPath.value) return []
   const po = { high: 0, medium: 1, low: 2, none: 3 }
-  return missionStore.missions.filter(m => m.groupId === currentGroupIdFromPath.value && !m.completed).sort((a, b) => {
+  return listStore.lists.filter(m => m.groupId === currentGroupIdFromPath.value && !m.completed).sort((a, b) => {
     if (!a.date && b.date) return 1; if (a.date && !b.date) return -1
     if (!a.date && !b.date) return po[a.priority] - po[b.priority]
     const dc = dayjs(a.date).valueOf() - dayjs(b.date).valueOf(); if (dc !== 0) return dc
@@ -546,9 +546,9 @@ const currentGroupMissions = computed(() => {
   })
 })
 
-const getListMissionCount = (listId: string) => missionStore.missions.filter(m => m.listId === listId && !m.completed).length
-const getListGroupCount = (listId: string) => lists.value.find(l => l.id === listId)?.groups.length || 0
-const getGroupMissionCount = (groupId: string) => missionStore.missions.filter(m => m.groupId === groupId && !m.completed).length
+const getListTaskCount = (listId: string) => listStore.lists.filter(m => m.listId === listId && !m.completed).length
+const getListGroupCount = (listId: string) => listStore.taskLists.find(l => l.id === listId)?.groups.length || 0
+const getGroupTaskCount = (groupId: string) => listStore.lists.filter(m => m.groupId === groupId && !m.completed).length
 
 const isDefaultGroup = (groupId: string) => {
   if (!currentList.value) return false
@@ -556,37 +556,37 @@ const isDefaultGroup = (groupId: string) => {
   return sorted.length > 0 && sorted[0].id === groupId
 }
 
-const initMissionState = async () => {
-  logger.debug('[MissionList] initMissionState 开始', { navPath: pageNav.navPath.value })
+const initTaskState = async () => {
+  logger.debug('[ListPage] initTaskState 开始', { navPath: pageNav.navPath.value })
   const currentPath = pageNav.navPath.value
   if (currentPath.length > 1) {
-    logger.debug('[MissionList] initMissionState 已有深层路径，跳过恢复', { currentPath })
+    logger.debug('[ListPage] initTaskState 已有深层路径，跳过恢复', { currentPath })
     return
   }
-  const restoredPath = await restoreModuleNavPath('mission')
-  logger.debug('[MissionList] initMissionState 恢复的路径', { restoredPath, currentNavPath: currentPath })
+  const restoredPath = await restoreModuleNavPath('list')
+  logger.debug('[ListPage] initTaskState 恢复的路径', { restoredPath, currentNavPath: currentPath })
   if (restoredPath.length > 1) {
     pageNav.setNavPath(restoredPath)
-    logger.debug('[MissionList] initMissionState 已恢复深度路径', { navPath: pageNav.navPath.value })
+    logger.debug('[ListPage] initTaskState 已恢复深度路径', { navPath: pageNav.navPath.value })
   } else {
-    logger.debug('[MissionList] initMissionState 无需恢复', { navPath: pageNav.navPath.value })
+    logger.debug('[ListPage] initTaskState 无需恢复', { navPath: pageNav.navPath.value })
   }
 }
 
 onMounted(async () => {
-  logger.debug('[MissionList] onMounted 开始', { navPath: pageNav.navPath.value, isLoaded: missionStore.isLoaded })
-  if (pageNav.navPath.value.length === 0 || pageNav.navPath.value[0] !== 'mission') {
-    logger.debug('[MissionList] onMounted guard触发：navPath为空或非mission，设为[mission]', { prev: pageNav.navPath.value })
-    pageNav.setNavPath(['mission'])
-    logger.debug('[MissionList] onMounted guard后 navPath', { navPath: pageNav.navPath.value })
+  logger.debug('[ListPage] onMounted 开始', { navPath: pageNav.navPath.value, isLoaded: listStore.isLoaded })
+  if (pageNav.navPath.value.length === 0 || pageNav.navPath.value[0] !== 'list') {
+    logger.debug('[ListPage] onMounted guard触发：navPath为空或非list，设为[list]', { prev: pageNav.navPath.value })
+    pageNav.setNavPath(['list'])
+    logger.debug('[ListPage] onMounted guard后 navPath', { navPath: pageNav.navPath.value })
   } else {
-    logger.debug('[MissionList] onMounted guard未触发：navPath已是mission', { navPath: pageNav.navPath.value })
+    logger.debug('[ListPage] onMounted guard未触发：navPath已是list', { navPath: pageNav.navPath.value })
   }
-  logger.debug('[MissionList] onMounted 调用 loadData 前', { isLoaded: missionStore.isLoaded })
-  await missionStore.loadData()
-  logger.debug('[MissionList] onMounted loadData 完成', { isLoaded: missionStore.isLoaded, listsCount: missionStore.lists?.length })
-  await initMissionState()
-  logger.debug('[MissionList] onMounted 结束', { navPath: pageNav.navPath.value, showBreadcrumb: showBreadcrumb.value, isMissionRoot: isMissionRoot.value })
+  logger.debug('[ListPage] onMounted 调用 loadData 前', { isLoaded: listStore.isLoaded })
+  await listStore.loadData()
+  logger.debug('[ListPage] onMounted loadData 完成', { isLoaded: listStore.isLoaded, listsCount: listStore.lists?.length })
+  await initTaskState()
+  logger.debug('[ListPage] onMounted 结束', { navPath: pageNav.navPath.value, showBreadcrumb: showBreadcrumb.value, isTaskRoot: isTaskRoot.value })
 })
 
 const showFolderDialog = ref(false)
@@ -595,15 +595,15 @@ const folderFormColor = ref(DEFAULT_FOLDER_COLORS[0])
 
 const showListDialog = ref(false)
 const showGroupDialog = ref(false)
-const showMissionDialog = ref(false)
+const showTaskDialog = ref(false)
 const showMoveDialog = ref(false)
 const showConfirmDialog = ref(false)
 
-const dialogFolder = ref<MissionFolder | null>(null)
-const dialogList = ref<MissionList | null>(null)
-const dialogGroup = ref<MissionGroup | null>(null)
+const dialogFolder = ref<TaskFolder | null>(null)
+const dialogList = ref<ListPage | null>(null)
+const dialogGroup = ref<TaskGroup | null>(null)
 
-const moveMissionId = ref('')
+const moveTaskId = ref('')
 const confirmDialogTitle = ref('')
 const confirmDialogMessage = ref('')
 let pendingConfirmAction: (() => void) | null = null
@@ -613,62 +613,62 @@ let pendingConfirmAction: (() => void) | null = null
 const handleAddFolder = () => { dialogFolder.value = null; folderFormName.value = ''; folderFormColor.value = DEFAULT_FOLDER_COLORS[0]; showFolderDialog.value = true }
 const handleAddList = () => { dialogList.value = null; showListDialog.value = true }
 
-const handleEditFolder = (folder: MissionFolder) => { dialogFolder.value = folder; folderFormName.value = folder.name; folderFormColor.value = folder.color; showFolderDialog.value = true }
+const handleEditFolder = (folder: TaskFolder) => { dialogFolder.value = folder; folderFormName.value = folder.name; folderFormColor.value = folder.color; showFolderDialog.value = true }
 
-const handleDeleteFolder = (folder: MissionFolder) => {
+const handleDeleteFolder = (folder: TaskFolder) => {
   confirmDialogTitle.value = '删除文件夹'
   confirmDialogMessage.value = `确定要删除文件夹「${folder.name}」吗？`
   pendingConfirmAction = async () => {
-    await missionStore.deleteFolder(folder.id)
+    await listStore.deleteFolder(folder.id)
     ElMessage.success('文件夹已删除')
-    if (pageNav.navPath.value[0] === 'mission' && pageNav.navPath.value[1] === 'custom' && pageNav.navPath.value[2] === folder.id) {
-      pageNav.setNavPath(['mission', 'custom'])
+    if (pageNav.navPath.value[0] === 'list' && pageNav.navPath.value[1] === 'custom' && pageNav.navPath.value[2] === folder.id) {
+      pageNav.setNavPath(['list', 'custom'])
     }
   }
   showConfirmDialog.value = true
 }
 
-const handleEditListCard = (list: MissionList) => { dialogList.value = list; showListDialog.value = true }
+const handleEditListCard = (list: ListPage) => { dialogList.value = list; showListDialog.value = true }
 
-const handleDeleteListCard = (list: MissionList) => {
-  const missionCount = getListMissionCount(list.id)
+const handleDeleteListCard = (list: ListPage) => {
+  const listCount = getListTaskCount(list.id)
   confirmDialogTitle.value = '删除清单'
-  confirmDialogMessage.value = `确定要删除清单「${list.name}」吗？${missionCount > 0 ? `该清单下有 ${missionCount} 个任务，将一起被删除。` : ''}`
+  confirmDialogMessage.value = `确定要删除清单「${list.name}」吗？${listCount > 0 ? `该清单下有 ${listCount} 个任务，将一起被删除。` : ''}`
   pendingConfirmAction = async () => {
-    await missionStore.deleteList(list.id)
+    await listStore.deleteList(list.id)
     ElMessage.success('清单已删除')
     if (pageNav.navPath.value.length >= 4 && pageNav.navPath.value[3] === list.id) {
       const folderId = pageNav.navPath.value[2]
-      pageNav.setNavPath(['mission', 'custom', folderId])
+      pageNav.setNavPath(['list', 'custom', folderId])
     }
   }
   showConfirmDialog.value = true
 }
 
 const handleAddGroupToCurrent = () => { dialogGroup.value = null; showGroupDialog.value = true }
-const handleEditGroupCard = (group: MissionGroup) => { dialogGroup.value = group; showGroupDialog.value = true }
+const handleEditGroupCard = (group: TaskGroup) => { dialogGroup.value = group; showGroupDialog.value = true }
 
-const handleDeleteGroupCard = (group: MissionGroup) => {
+const handleDeleteGroupCard = (group: TaskGroup) => {
   confirmDialogTitle.value = '删除分组'
   confirmDialogMessage.value = `确定要删除分组「${group.name}」吗？`
   pendingConfirmAction = async () => {
     const listId = currentListIdFromPath.value
     if (!listId) return
-    await missionStore.deleteGroupFromList(listId, group.id)
+    await listStore.deleteGroupFromList(listId, group.id)
     ElMessage.success('分组已删除')
   }
   showConfirmDialog.value = true
 }
 
-const handleOpenAddMissionAtCurrent = () => {
+const handleOpenAddTaskAtCurrent = () => {
   const listId = currentListIdFromPath.value
   const groupId = currentGroupIdFromPath.value
-  if (listId && groupId) { showMissionDialog.value = true }
+  if (listId && groupId) { showTaskDialog.value = true }
 }
 
-const deleteMission = async (mission: Mission) => {
-  const hadReminder = mission.reminderStrategy !== 'none' && mission.date
-  await missionStore.deleteMission(mission.id)
+const deleteTask = async (list: Task) => {
+  const hadReminder = list.reminderStrategy !== 'none' && list.date
+  await listStore.deleteTask(list.id)
   ElMessage.success('任务已删除')
   if (hadReminder) refreshReminders()
 }
@@ -676,8 +676,8 @@ const deleteMission = async (mission: Mission) => {
 const closeFolderDialog = () => { showFolderDialog.value = false; dialogFolder.value = null }
 const closeListDialog = () => { showListDialog.value = false; dialogList.value = null }
 const closeGroupDialog = () => { showGroupDialog.value = false; dialogGroup.value = null }
-const closeMissionDialog = () => { showMissionDialog.value = false }
-const closeMoveDialog = () => { showMoveDialog.value = false; moveMissionId.value = '' }
+const closeTaskDialog = () => { showTaskDialog.value = false }
+const closeMoveDialog = () => { showMoveDialog.value = false; moveTaskId.value = '' }
 const closeConfirmDialog = () => { showConfirmDialog.value = false; pendingConfirmAction = null }
 
 const onFolderFormSubmit = async () => {
@@ -685,10 +685,10 @@ const onFolderFormSubmit = async () => {
   if (!name) return
   const color = folderFormColor.value.trim() || DEFAULT_FOLDER_COLORS[0]
   if (dialogFolder.value) {
-    await missionStore.updateFolder(dialogFolder.value.id, { name, color })
+    await listStore.updateFolder(dialogFolder.value.id, { name, color })
     ElMessage.success('文件夹已更新')
   } else {
-    await missionStore.addFolder(name, color)
+    await listStore.addFolder(name, color)
     ElMessage.success('文件夹已创建')
   }
   closeFolderDialog()
@@ -696,10 +696,10 @@ const onFolderFormSubmit = async () => {
 
 const onListSubmit = (data: Record<string, unknown>) => {
   if (dialogList.value) {
-    missionStore.updateList(dialogList.value.id, { name: data.name as string, color: data.color as string })
+    listStore.updateList(dialogList.value.id, { name: data.name as string, color: data.color as string })
     ElMessage.success('清单已更新')
   } else {
-    missionStore.addList(data.name as string, data.color as string)
+    listStore.addList(data.name as string, data.color as string)
     ElMessage.success('清单已创建')
   }
   closeListDialog()
@@ -707,25 +707,36 @@ const onListSubmit = (data: Record<string, unknown>) => {
 
 const onGroupSubmit = (data: Record<string, unknown>) => {
   if (dialogGroup.value) {
-    missionStore.updateGroupInList(data.listId as string, data.groupId as string, { name: data.name as string, color: data.color as string })
+    listStore.updateGroupInList(data.listId as string, data.groupId as string, { name: data.name as string, color: data.color as string })
     ElMessage.success('分组已更新')
   } else {
-    missionStore.addGroupToList(data.listId as string, data.name as string, data.color as string)
+    listStore.addGroupToList(data.listId as string, data.name as string, data.color as string)
     ElMessage.success('分组已创建')
   }
   closeGroupDialog()
 }
 
-const onMissionSubmit = async (data: Record<string, unknown>) => {
+const onTaskSubmit = async (data: Record<string, unknown>) => {
   const hasReminder = data.reminderStrategy !== 'none' && data.date
-  await missionStore.addMission({ ...data, listId: data.listId || currentListIdFromPath.value, groupId: data.groupId || currentGroupIdFromPath.value } as any)
+  const reminder = data.reminder as { days: number; hours: number; minutes: number } | undefined
+  await listStore.addTask({
+    ...data,
+    listId: (data.listId || currentListIdFromPath.value) as string,
+    groupId: (data.groupId || currentGroupIdFromPath.value) as string,
+    endTime: data.time as string || '',
+    repeatCount: data.repeatEndCount as number || 1,
+    reminderStrategy: (reminder ? 'advance' : 'none') as any,
+    reminderDays: reminder?.days ?? 0,
+    reminderHours: reminder?.hours ?? 0,
+    reminderMinutes: reminder?.minutes ?? 0,
+  } as any)
   ElMessage.success('任务已添加')
-  closeMissionDialog()
+  closeTaskDialog()
   if (hasReminder) refreshReminders()
 }
 
 const onMoveSubmit = async (data: Record<string, unknown>) => {
-  await missionStore.updateMission(moveMissionId.value, { listId: data.listId as string, groupId: data.groupId as string })
+  await listStore.updateTask(moveTaskId.value, { listId: data.listId as string, groupId: data.groupId as string })
   ElMessage.success('任务已移动')
   closeMoveDialog()
 }
@@ -737,9 +748,9 @@ const handleConfirmAction = () => {
 </script>
 
 <style scoped>
-.mission-container { display: flex; flex-direction: column; height: 100%; position: relative; }
+.list-container { display: flex; flex-direction: column; height: 100%; position: relative; }
 
-.mission-breadcrumb-bar {
+.list-breadcrumb-bar {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -900,7 +911,8 @@ const handleConfirmAction = () => {
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; width: 80%; margin: 0 auto; }
 .card-grid-root { width: 80%; }
 .card-grid-root.grid-4cols { grid-template-columns: repeat(4, 1fr); }
-.card-grid-root.grid-2cols { grid-template-columns: 1fr; }
+.card-grid-root.grid-2cols { grid-template-columns: repeat(2, 1fr); }
+.card-grid.grid-2cols { grid-template-columns: repeat(2, 1fr); }
 .folder-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 16px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; cursor: pointer; transition: all 0.2s; position: relative; }
 .folder-card:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(102, 126, 234, 0.3); transform: translateY(-2px); }
 .folder-card-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; background: rgba(102, 126, 234, 0.6); }
@@ -920,19 +932,19 @@ const handleConfirmAction = () => {
 
 .folder-card.has-actions { padding-top: 44px; }
 
-.mission-list, .today-missions, .smart-missions { width: 80%; margin: 0 auto; column-count: 2; column-gap: 8px; }
-.mission-list.grid-1cols, .today-missions.grid-1cols, .smart-missions.grid-1cols { column-count: 1; }
-.mission-list :deep(.mission-card), .today-missions :deep(.mission-card), .smart-missions :deep(.mission-card) { break-inside: avoid; margin-bottom: 8px; }
+.list-list, .today-lists, .smart-lists { width: 80%; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }
+.list-list.grid-2cols, .today-lists.grid-2cols, .smart-lists.grid-2cols { display: block; column-count: 2; column-gap: 8px; }
+.list-list.grid-2cols :deep(.list-card), .today-lists.grid-2cols :deep(.list-card), .smart-lists.grid-2cols :deep(.list-card) { break-inside: avoid; margin-bottom: 8px; }
 
 :deep(.el-empty__description) { color: var(--chalk-muted); }
 
 .dialog-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; overflow-y: auto; }
-.mission-dialog-overlay { flex-direction: column; justify-content: flex-start; align-items: center; padding: 20px 0; }
-.mission-dialog-overlay::before { content: none; }
-.mission-dialog-overlay::after { content: none; }
+.list-dialog-overlay { flex-direction: column; justify-content: flex-start; align-items: center; padding: 20px 0; }
+.list-dialog-overlay::before { content: none; }
+.list-dialog-overlay::after { content: none; }
 
 .dialog-container { background: rgba(30, 28, 52, 0.98); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); width: 210px; max-width: 90vw; max-height: 90vh; display: flex; flex-direction: column; }
-.mission-add-dialog { max-height: none; margin-top: auto; margin-bottom: auto; }
+.list-add-dialog { max-height: none; margin-top: auto; margin-bottom: auto; }
 .confirm-dialog-container { width: 380px; text-align: center; padding: 32px; }
 .dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 0; flex-shrink: 0; }
 .dialog-header-title { font-size: 16px; font-weight: 600; color: var(--chalk-white); }

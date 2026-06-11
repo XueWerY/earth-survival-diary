@@ -5,7 +5,7 @@ import { getPluginPageOverride } from '../lib/pluginLoader'
 
 const defaultTaskList = () => import('../components/footprint/TaskList.vue')
 const defaultFocusTimer = () => import('../components/focus/FocusTimer.vue')
-const defaultMissionList = () => import('../components/mission/MissionList.vue')
+const defaultListPage = () => import('../components/list/ListPage.vue')
 const defaultCountdownList = () => import('../components/countdown/CountdownList.vue')
 const defaultCourseSchedule = () => import('../components/course/CourseSchedule.vue')
 const defaultStatisticsPage = () => import('../components/statistics/StatisticsPage.vue')
@@ -15,7 +15,7 @@ const defaultProfilePage = () => import('../components/profile/ProfilePage.vue')
 const pageComponentNames: Record<string, string> = {
   footprint: 'TaskList',
   focus: 'FocusTimer',
-  mission: 'MissionList',
+  list: 'ListPage',
   countdown: 'CountdownList',
   course: 'CourseSchedule',
   statistics: 'StatisticsPage',
@@ -26,7 +26,7 @@ const pageComponentNames: Record<string, string> = {
 const defaultLoaders: Record<string, () => Promise<any>> = {
   footprint: defaultTaskList,
   focus: defaultFocusTimer,
-  mission: defaultMissionList,
+  list: defaultListPage,
   countdown: defaultCountdownList,
   course: defaultCourseSchedule,
   statistics: defaultStatisticsPage,
@@ -54,7 +54,7 @@ const routes = [
   { path: '/', redirect: '/footprint' },
   { path: '/footprint', name: 'footprint', component: resolveComponent('footprint') },
   { path: '/focus', name: 'focus', component: resolveComponent('focus') },
-  { path: '/mission', name: 'mission', component: resolveComponent('mission') },
+  { path: '/list', name: 'list', component: resolveComponent('list') },
   { path: '/countdown', name: 'countdown', component: resolveComponent('countdown') },
   { path: '/course', name: 'course', component: resolveComponent('course') },
   { path: '/statistics', name: 'statistics', component: resolveComponent('statistics') },

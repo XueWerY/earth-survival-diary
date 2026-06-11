@@ -3,60 +3,59 @@
     <div v-if="dialogVisible" class="dialog-overlay" @click.self="dialogVisible = false">
       <div class="dialog-container countdown-form-dialog">
         <div class="dialog-header folder-dialog-header">
-          <span class="dialog-header-title folder-dialog-title">{{ isEdit ? '编辑倒数日' : '添加倒数日' }}</span>
+          <span class="dialog-header-title folder-dialog-title">{{ reminderOnly ? '编辑提醒策略' : (isEdit ? '编辑倒数日' : '添加倒数日') }}</span>
         </div>
         <div class="dialog-body">
           <el-form :model="form" :rules="rules" ref="formRef" label-width="80px">
-            <el-form-item label="名称" prop="name">
-              <el-input v-model="form.name" placeholder="这个倒数日叫什么？" maxlength="50" />
-            </el-form-item>
-            <el-form-item label="类型" prop="countMode">
-              <el-radio-group v-model="form.countMode" class="count-mode-group">
-                <el-radio value="countdown">倒数日</el-radio>
-                <el-radio value="countup">正数日</el-radio>
-              </el-radio-group>
-            </el-form-item>
-            <el-form-item :label="form.countMode === 'countup' ? '起始日期' : '目标日期'" prop="targetDate">
-              <DateScrollPicker v-model="form.targetDate" />
-            </el-form-item>
-            <el-form-item label="分类" prop="category">
-              <el-select v-model="form.category" placeholder="选择分类" style="width: 100%">
-                <el-option
-                    v-for="cat in categories"
-                    :key="cat.value"
-                    :label="cat.label"
-                    :value="cat.value"
-                >
-                  <span class="category-option">
-                    <span class="category-icon">{{ cat.icon }}</span>
-                    <span class="category-label">{{ cat.label }}</span>
-                  </span>
-                </el-option>
-              </el-select>
-            </el-form-item>
-            <el-form-item label="描述">
-              <el-input
-                  v-model="form.description"
-                  type="textarea"
-                  :rows="2"
-                  placeholder="添加备注（可选）"
-                  maxlength="200"
-                  show-word-limit
-              />
-            </el-form-item>
+            <template v-if="!reminderOnly">
+              <el-form-item label="名称" prop="name">
+                <el-input v-model="form.name" placeholder="这个倒数日叫什么？" maxlength="50" />
+              </el-form-item>
+              <el-form-item label="类型" prop="countMode">
+                <el-radio-group v-model="form.countMode" class="count-mode-group">
+                  <el-radio value="countdown">倒数日</el-radio>
+                  <el-radio value="countup">正数日</el-radio>
+                </el-radio-group>
+              </el-form-item>
+              <el-form-item :label="form.countMode === 'countup' ? '起始日期' : '目标日期'" prop="targetDate">
+                <DateScrollPicker v-model="form.targetDate" style="width: 130px" />
+              </el-form-item>
+              <el-form-item label="分类" prop="category">
+                <el-select v-model="form.category" placeholder="选择分类" style="width: 90px">
+                  <el-option
+                      v-for="cat in categories"
+                      :key="cat.value"
+                      :label="cat.label"
+                      :value="cat.value"
+                  >
+                    <span class="category-option">
+                      <span class="category-icon">{{ cat.icon }}</span>
+                      <span class="category-label">{{ cat.label }}</span>
+                    </span>
+                  </el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item label="描述">
+                <el-input
+                    v-model="form.description"
+                    type="textarea"
+                    :rows="2"
+                    placeholder="添加备注（可选）"
+                />
+              </el-form-item>
+            </template>
             <el-form-item label="提醒" v-if="form.countMode !== 'countup'">
               <div class="reminder-area">
-                <el-select v-model="form.reminderStrategy" placeholder="选择提醒方式" style="width: 100%">
-                  <el-option label="不提醒" value="none" />
-                  <el-option label="准时提醒" value="on_time" />
-                  <el-option label="提前提醒" value="advance" />
-                </el-select>
-                <div v-if="form.reminderStrategy === 'advance'" class="reminder-picker-row">
-                  <ReminderTimePicker v-model="reminderTime" />
+                <el-radio-group v-model="reminderEnabled">
+                  <el-radio :value="true">提醒</el-radio>
+                  <el-radio :value="false">不提醒</el-radio>
+                </el-radio-group>
+                <div v-if="reminderEnabled" class="reminder-picker-row">
+                  <ReminderTimePicker v-model="reminderTime" style="width: 170px" />
                 </div>
               </div>
             </el-form-item>
-            <el-form-item label="重复" v-if="form.countMode !== 'countup'">
+            <el-form-item label="重复" v-if="form.countMode !== 'countup' && !reminderOnly">
               <el-radio-group v-model="form.repeatStrategy">
                 <el-radio value="none">不重复</el-radio>
                 <el-radio value="yearly">重复</el-radio>
@@ -115,6 +114,7 @@ const props = defineProps<{
   milestone: Milestone | null
   categories: Category[]
   defaultCategory?: string
+  reminderOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -130,6 +130,8 @@ const dialogVisible = computed({
 const formRef = ref<FormInstance>()
 
 const isEdit = computed(() => !!props.milestone)
+
+const reminderEnabled = ref(false)
 
 const form = ref({
   name: '',
@@ -176,11 +178,13 @@ watch(() => props.milestone, (newVal) => {
       reminderMinutes: newVal.reminderMinutes || 0,
       repeatStrategy: newVal.repeatStrategy || 'none'
     }
+    reminderEnabled.value = newVal.reminderStrategy === 'on_time' || newVal.reminderStrategy === 'advance'
   } else {
     form.value.targetDate = dayjs().format('YYYY-MM-DD')
     form.value.countMode = 'countdown'
     form.value.repeatStrategy = 'none'
     form.value.reminderStrategy = 'none'
+    reminderEnabled.value = false
   }
 }, { immediate: true })
 
@@ -204,18 +208,48 @@ const resetForm = () => {
     reminderMinutes: 0,
     repeatStrategy: 'none'
   }
+  reminderEnabled.value = false
 }
 
 const handleSubmit = async () => {
   if (!formRef.value) return
 
-  try {
-    await formRef.value.validate()
-  } catch {
+  if (!props.reminderOnly) {
+    try {
+      await formRef.value.validate()
+    } catch {
+      return
+    }
+  }
+
+  if (props.reminderOnly) {
+    const data: Partial<Milestone> = {}
+    if (!reminderEnabled.value) {
+      data.reminderStrategy = 'none'
+    } else if (form.value.reminderDays === 0 && form.value.reminderHours === 0 && form.value.reminderMinutes === 0) {
+      data.reminderStrategy = 'on_time'
+    } else {
+      data.reminderStrategy = 'advance'
+      data.reminderDays = form.value.reminderDays
+      data.reminderHours = form.value.reminderHours
+      data.reminderMinutes = form.value.reminderMinutes
+    }
+    emit('submit', data)
+    resetForm()
     return
   }
 
-  emit('submit', { ...form.value })
+  const data: Partial<Milestone> = { ...form.value }
+  if (data.countMode !== 'countup') {
+    if (!reminderEnabled.value) {
+      data.reminderStrategy = 'none'
+    } else if (data.reminderDays === 0 && data.reminderHours === 0 && data.reminderMinutes === 0) {
+      data.reminderStrategy = 'on_time'
+    } else {
+      data.reminderStrategy = 'advance'
+    }
+  }
+  emit('submit', data)
   resetForm()
 }
 </script>
@@ -243,7 +277,7 @@ const handleSubmit = async () => {
 }
 
 .countdown-form-dialog {
-  width: 400px;
+  width: 300px;
 }
 
 .dialog-header {

@@ -25,9 +25,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
   scheduleReminders: (reminders, persistDuration) => ipcRenderer.invoke('schedule-reminders', reminders, persistDuration),
   cancelAllReminders: () => ipcRenderer.invoke('cancel-all-reminders'),
   getReminderPersistDuration: () => ipcRenderer.invoke('get-reminder-persist-duration'),
+      getAllReminders: () => ipcRenderer.invoke('get-all-reminders'),
   onShowReminder: (callback) => ipcRenderer.on('show-reminder', (_event, data) => callback(data)),
   setAutoLaunch: (enable) => ipcRenderer.invoke('set-auto-launch', enable),
   getAutoLaunch: () => ipcRenderer.invoke('get-auto-launch'),
   setCloseAction: (action) => ipcRenderer.invoke('set-close-action', action),
-  getCloseAction: () => ipcRenderer.invoke('get-close-action')
+  getCloseAction: () => ipcRenderer.invoke('get-close-action'),
+
+  // 文件管理器
+  getDataDirPath: () => ipcRenderer.invoke('get-data-dir-path'),
+  getLogDirPath: () => ipcRenderer.invoke('get-log-dir-path'),
+  readDirectory: (dirPath) => ipcRenderer.invoke('read-directory', dirPath),
+  deleteFilePath: (filePath) => ipcRenderer.invoke('delete-file-path', filePath),
+  renameFilePath: (oldPath, newPath) => ipcRenderer.invoke('rename-file-path', oldPath, newPath),
+  readTextFilePath: (filePath) => ipcRenderer.invoke('read-text-file-path', filePath),
+
+  // 局域网传输
+  startLanServer: (data) => ipcRenderer.invoke('start-lan-server', data),
+  stopLanServer: () => ipcRenderer.invoke('stop-lan-server'),
+  fetchLanData: (url) => ipcRenderer.invoke('fetch-lan-data', url)
 })

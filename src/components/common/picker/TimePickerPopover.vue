@@ -1,75 +1,80 @@
 <template>
-  <el-popover
-    ref="popoverRef"
-    placement="bottom"
-    :width="popoverWidth"
-    trigger="click"
-    :teleported="true"
-    :show-arrow="false"
-    popper-class="time-picker-popover"
-    @after-enter="onPopoverAfterEnter"
-  >
-    <template #reference>
-      <div class="time-btn">
-        {{ displayTime }}
-      </div>
-    </template>
-    <div class="drum-picker">
-      <div class="drum-container">
-        <div class="drum-scroll-wrapper">
-          <div
-            ref="hourScrollRef"
-            class="drum-scroll"
-            @scroll="onHourScroll"
-            @scrollend="onHourScrollEnd"
-          >
-            <div class="drum-spacer"></div>
-            <div
-              v-for="h in hours"
-              :key="h"
-              class="drum-item"
-              :class="{ 'drum-item-selected': currentHour === h }"
-              @click="selectHour(h)"
-            >
-              {{ String(h).padStart(2, '0') }}
+  <div class="time-picker-wrapper">
+    <div class="time-btn" @click="open">
+      {{ displayTime }}
+    </div>
+    <Teleport to="body">
+      <div v-if="visible" class="time-picker-overlay" @mousedown.self="cancel">
+        <div class="drum-picker">
+          <div class="drum-container">
+            <div class="drum-scroll-wrapper">
+              <div
+                ref="hourScrollRef"
+                class="drum-scroll"
+                @scroll="onHourScroll"
+                @scrollend="onHourScrollEnd"
+              >
+                <div class="drum-spacer"></div>
+                <div
+                  v-for="h in hours"
+                  :key="h"
+                  class="drum-item"
+                  :class="{ 'drum-item-selected': currentHour === h }"
+                  @click="selectHour(h)"
+                >
+                  {{ String(h).padStart(2, '0') }}
+                </div>
+                <div class="drum-spacer"></div>
+              </div>
+              <div class="drum-col-sep">:</div>
+              <div
+                ref="minuteScrollRef"
+                class="drum-scroll"
+                @scroll="onMinuteScroll"
+                @scrollend="onMinuteScrollEnd"
+              >
+                <div class="drum-spacer"></div>
+                <div
+                  v-for="m in minutes"
+                  :key="m"
+                  class="drum-item"
+                  :class="{ 'drum-item-selected': currentMinute === m }"
+                  @click="selectMinute(m)"
+                >
+                  {{ String(m).padStart(2, '0') }}
+                </div>
+                <div class="drum-spacer"></div>
+              </div>
             </div>
-            <div class="drum-spacer"></div>
           </div>
-          <div class="drum-col-sep">:</div>
-          <div
-            ref="minuteScrollRef"
-            class="drum-scroll"
-            @scroll="onMinuteScroll"
-            @scrollend="onMinuteScrollEnd"
-          >
-            <div class="drum-spacer"></div>
-            <div
-              v-for="m in minutes"
-              :key="m"
-              class="drum-item"
-              :class="{ 'drum-item-selected': currentMinute === m }"
-              @click="selectMinute(m)"
-            >
-              {{ String(m).padStart(2, '0') }}
-            </div>
-            <div class="drum-spacer"></div>
+          <div class="drum-actions">
+            <button class="icon-capsule-btn" @click="cancel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+              <span>取消</span>
+            </button>
+            <button class="icon-capsule-btn primary" @click="confirm">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              <span>确定</span>
+            </button>
           </div>
         </div>
       </div>
-      <div class="drum-actions">
-        <el-button size="small" @click="cancel">取消</el-button>
-        <el-button size="small" type="primary" @click="confirm">确定</el-button>
-      </div>
-    </div>
-  </el-popover>
+    </Teleport>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick, computed } from 'vue'
+import { ref, watch, nextTick, computed, onBeforeUnmount } from 'vue'
 
 const props = defineProps<{
   modelValue: string
   offsetMinutes?: number
+  placeholder?: string
 }>()
 
 const emit = defineEmits<{
@@ -83,14 +88,10 @@ const currentHour = ref(0)
 const currentMinute = ref(0)
 const hourScrollRef = ref<HTMLElement>()
 const minuteScrollRef = ref<HTMLElement>()
-const popoverRef = ref()
+const visible = ref(false)
 
 const ITEM_HEIGHT = 40
 const SCROLL_OFFSET = 40
-
-const popoverWidth = computed(() => {
-  return 200
-})
 
 function getCurrentTime(): string {
   const now = new Date()
@@ -107,7 +108,11 @@ function getTargetTime(offsetMin: number): { hour: number; minute: number } {
   return { hour: Math.floor(clamped / 60), minute: clamped % 60 }
 }
 
-const displayTime = computed(() => props.modelValue || getCurrentTime())
+const displayTime = computed(() => {
+  if (props.modelValue) return props.modelValue
+  if (props.placeholder) return props.placeholder
+  return getCurrentTime()
+})
 
 function parseTime(time: string) {
   if (!time || !time.includes(':')) {
@@ -122,14 +127,17 @@ function parseTime(time: string) {
 
 watch(() => props.modelValue, (val) => parseTime(val), { immediate: true })
 
-function onPopoverAfterEnter() {
+function open() {
+  visible.value = true
   const offset = props.offsetMinutes ?? 0
   const { hour, minute } = getTargetTime(offset)
   currentHour.value = hour
   currentMinute.value = minute
-  requestAnimationFrame(() => {
-    scrollToHour(hour)
-    scrollToMinute(minute)
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      scrollToHour(hour)
+      scrollToMinute(minute)
+    })
   })
 }
 
@@ -197,26 +205,31 @@ function confirm() {
   const h = String(currentHour.value).padStart(2, '0')
   const m = String(currentMinute.value).padStart(2, '0')
   emit('update:modelValue', `${h}:${m}`)
-  popoverRef.value?.hide()
+  visible.value = false
 }
 
 function cancel() {
   parseTime(props.modelValue)
-  popoverRef.value?.hide()
+  visible.value = false
 }
 
-onMounted(() => {
-  nextTick(() => {
-    parseTime(props.modelValue)
-    scrollToHour(currentHour.value)
-    scrollToMinute(currentMinute.value)
-  })
-})
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && visible.value) {
+    cancel()
+  }
+}
 
-defineExpose({ popoverRef })
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', onKeydown)
+  onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+}
 </script>
 
 <style scoped>
+.time-picker-wrapper {
+  display: inline-block;
+}
+
 .drum-picker {
   display: flex;
   flex-direction: column;
@@ -224,11 +237,8 @@ defineExpose({ popoverRef })
 }
 
 .drum-container {
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 12px;
   padding: 4px 12px;
   width: 100%;
-  overflow: hidden;
 }
 
 .drum-scroll-wrapper {
@@ -287,8 +297,46 @@ defineExpose({ popoverRef })
 
 .drum-actions {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   margin-top: 14px;
+}
+
+.icon-capsule-btn {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 12px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--chalk-white-60);
+  cursor: pointer;
+  border-radius: 16px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  font-size: 12px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.icon-capsule-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--chalk-white);
+}
+
+.icon-capsule-btn.primary {
+  background: rgba(102, 126, 234, 0.2);
+  color: var(--chalk-primary);
+}
+
+.icon-capsule-btn.primary:hover {
+  background: rgba(102, 126, 234, 0.35);
+  color: var(--chalk-primary);
+}
+
+.icon-svg {
+  width: 14px;
+  height: 14px;
 }
 
 .time-btn {
@@ -309,13 +357,33 @@ defineExpose({ popoverRef })
 }
 
 .time-btn:hover {
-  border-color: rgba(102, 126, 234, 0.5);
+  border-color: rgba(255, 255, 255, 0.1);
 }
-</style>
 
-<style>
-.time-picker-popover {
-  left: 50% !important;
-  transform: translateX(-50%) !important;
+.time-btn:focus,
+.time-btn:focus-visible,
+.time-btn:active {
+  outline: none;
+}
+
+.time-picker-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20000;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.time-picker-overlay > .drum-picker {
+  background: rgba(30, 28, 52, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 </style>

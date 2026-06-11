@@ -90,28 +90,28 @@ function createProdServer(options = {}) {
     writeJson(getDataPath('profile', userId), profile)
   }
 
-  // Tasks
-  async function getUserTasks(userId) {
+  // Tasks (footprint)
+  async function getUserFootprintTasks(userId) {
     return readJson(getDataPath('footprint', userId), [])
   }
-  async function setUserTasks(userId, tasks) {
+  async function setUserFootprintTasks(userId, tasks) {
     writeJson(getDataPath('footprint', userId), tasks)
   }
 
-  // Mission lists
-  async function getUserMissionLists(userId) {
+  // List checklists
+  async function getUserListChecklists(userId) {
     return readJson(getDataPath('list', userId, 'lists'), [])
   }
-  async function setUserMissionLists(userId, lists) {
-    writeJson(getDataPath('list', userId, 'lists'), lists)
+  async function setUserListChecklists(userId, taskLists) {
+    writeJson(getDataPath('list', userId, 'lists'), taskLists)
   }
 
-  // Missions
-  async function getUserMissions(userId) {
+  // List tasks
+  async function getUserListTasks(userId) {
     return readJson(getDataPath('list', userId, 'tasks'), [])
   }
-  async function setUserMissions(userId, missions) {
-    writeJson(getDataPath('list', userId, 'tasks'), missions)
+  async function setUserListTasks(userId, lists) {
+    writeJson(getDataPath('list', userId, 'tasks'), lists)
   }
 
   // Settings
@@ -436,7 +436,7 @@ function createProdServer(options = {}) {
 
   /** GET /api/tasks (auth) => 200 {tasks:Task[]} */
   app.get('/api/tasks', authMiddleware, async (req, res) => {
-    try { const tasks = await getUserTasks(req.userId); res.json({ tasks }) }
+    try { const tasks = await getUserFootprintTasks(req.userId); res.json({ tasks }) }
     catch (e) { console.error('Get tasks error:', e); res.status(500).json({ error: '获取任务失败' }) }
   })
 
@@ -444,10 +444,10 @@ function createProdServer(options = {}) {
   app.post('/api/tasks', authMiddleware, async (req, res) => {
     try {
       const { name, date, startTime, endTime, notes, category } = req.body
-      const tasks = await getUserTasks(req.userId)
+      const tasks = await getUserFootprintTasks(req.userId)
       const newTask = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), name, date, startTime: startTime || null, endTime: endTime || null, duration: 0, completed: false, notes: notes || null, category: category || null, created_at: new Date().toISOString() }
       tasks.unshift(newTask)
-      await setUserTasks(req.userId, tasks)
+      await setUserFootprintTasks(req.userId, tasks)
       res.json({ task: newTask })
     } catch (e) { console.error('Add task error:', e); res.status(500).json({ error: '添加任务失败' }) }
   })
@@ -456,7 +456,7 @@ function createProdServer(options = {}) {
   app.put('/api/tasks/:id', authMiddleware, async (req, res) => {
     try {
       const { id } = req.params; const updates = req.body
-      const tasks = await getUserTasks(req.userId)
+      const tasks = await getUserFootprintTasks(req.userId)
       const taskIndex = tasks.findIndex(t => t.id === id)
       if (taskIndex === -1) return res.status(404).json({ error: '任务不存在' })
       const task = tasks[taskIndex]
@@ -467,7 +467,7 @@ function createProdServer(options = {}) {
       if (updates.notes !== undefined) task.notes = updates.notes || null
       if (updates.category !== undefined) task.category = updates.category || null
       if (updates.completed !== undefined) task.completed = updates.completed
-      await setUserTasks(req.userId, tasks)
+      await setUserFootprintTasks(req.userId, tasks)
       res.json({ task })
     } catch (e) { console.error('Update task error:', e); res.status(500).json({ error: '更新任务失败' }) }
   })
@@ -476,238 +476,241 @@ function createProdServer(options = {}) {
   app.delete('/api/tasks/:id', authMiddleware, async (req, res) => {
     try {
       const { id } = req.params
-      const tasks = await getUserTasks(req.userId)
+      const tasks = await getUserFootprintTasks(req.userId)
       const taskIndex = tasks.findIndex(t => t.id === id)
       if (taskIndex !== -1) tasks.splice(taskIndex, 1)
-      await setUserTasks(req.userId, tasks)
+      await setUserFootprintTasks(req.userId, tasks)
       res.json({ success: true })
     } catch (e) { console.error('Delete task error:', e); res.status(500).json({ error: '删除任务失败' }) }
   })
 
-  // ============ Mission Lists API ============
+  // ============ Lists API ============
 
-  /** GET /api/mission-lists (auth) => 200 {lists:MissionList[]} */
-  app.get('/api/mission-lists', authMiddleware, async (req, res) => {
+  /** GET /api/list-lists (auth) => 200 {lists:List[]} */
+  app.get('/api/list-lists', authMiddleware, async (req, res) => {
     try {
-      let lists = await getUserMissionLists(req.userId)
+      let lists = await getUserListChecklists(req.userId)
       lists = lists.map(list => { if (!list.groups || list.groups.length === 0) list.groups = [{ id: `${list.id}-default`, name: '默认分组', color: '#667eea', order: 0 }]; return list }).sort((a, b) => (a.order || 0) - (b.order || 0))
       res.json({ lists })
-    } catch (e) { console.error('Get mission lists error:', e); res.status(500).json({ error: '获取使命列表失败' }) }
+    } catch (e) { console.error('Get list lists error:', e); res.status(500).json({ error: '获取清单列表失败' }) }
   })
 
-  /** POST /api/mission-lists (auth) body:{name,icon?} => 200 {list} */
-  app.post('/api/mission-lists', authMiddleware, async (req, res) => {
+  /** POST /api/list-lists (auth) body:{name,icon?} => 200 {list} */
+  app.post('/api/list-lists', authMiddleware, async (req, res) => {
     try {
       const { name, icon } = req.body
-      const lists = await getUserMissionLists(req.userId)
+      const lists = await getUserListChecklists(req.userId)
       const listId = Date.now().toString(36) + Math.random().toString(36).substr(2, 6)
       const groupId = Date.now().toString()
       const newList = { id: listId, name, icon: icon || '📋', groups: [{ id: groupId, name: '默认分组', color: '#667eea', order: 0 }], created_at: new Date().toISOString() }
       lists.push(newList)
-      await setUserMissionLists(req.userId, lists)
+      await setUserListChecklists(req.userId, lists)
       res.json({ list: newList })
-    } catch (e) { console.error('Add mission list error:', e); res.status(500).json({ error: '添加使命列表失败' }) }
+    } catch (e) { console.error('Add list list error:', e); res.status(500).json({ error: '添加清单列表失败' }) }
   })
 
-  /** PUT /api/mission-lists/reorder (auth) body:{orders:[{id,order}]} => 200 {lists} */
-  app.put('/api/mission-lists/reorder', authMiddleware, async (req, res) => {
+  /** PUT /api/list-lists/reorder (auth) body:{orders:[{id,order}]} => 200 {lists} */
+  app.put('/api/list-lists/reorder', authMiddleware, async (req, res) => {
     try {
       const { orders } = req.body
-      const lists = await getUserMissionLists(req.userId)
+      const lists = await getUserListChecklists(req.userId)
       orders.forEach(({ id, order }) => { const i = lists.findIndex(l => l.id === id); if (i !== -1) lists[i].order = order })
       lists.sort((a, b) => a.order - b.order)
-      await setUserMissionLists(req.userId, lists)
+      await setUserListChecklists(req.userId, lists)
       res.json({ lists })
-    } catch (e) { console.error('Reorder mission lists error:', e); res.status(500).json({ error: '更新使命列表顺序失败' }) }
+    } catch (e) { console.error('Reorder list lists error:', e); res.status(500).json({ error: '更新清单列表顺序失败' }) }
   })
 
-  /** PUT /api/mission-lists/:id (auth) body:{name?,icon?,order?} => 200 {list} */
-  app.put('/api/mission-lists/:id', authMiddleware, async (req, res) => {
+  /** PUT /api/list-lists/:id (auth) body:{name?,icon?,order?} => 200 {list} */
+  app.put('/api/list-lists/:id', authMiddleware, async (req, res) => {
     try {
       const { id } = req.params; const { name, icon, order } = req.body
-      const lists = await getUserMissionLists(req.userId)
+      const lists = await getUserListChecklists(req.userId)
       const listIndex = lists.findIndex(l => l.id === id)
-      if (listIndex === -1) return res.status(404).json({ error: '使命列表不存在' })
+      if (listIndex === -1) return res.status(404).json({ error: '清单列表不存在' })
       if (name !== undefined) lists[listIndex].name = name
       if (icon !== undefined) lists[listIndex].icon = icon
       if (order !== undefined) lists[listIndex].order = order
-      await setUserMissionLists(req.userId, lists)
+      await setUserListChecklists(req.userId, lists)
       res.json({ list: lists[listIndex] })
-    } catch (e) { console.error('Update mission list error:', e); res.status(500).json({ error: '更新使命列表失败' }) }
+    } catch (e) { console.error('Update list list error:', e); res.status(500).json({ error: '更新清单列表失败' }) }
   })
 
-  /** DELETE /api/mission-lists/:id (auth) => 200 {success:true} (also deletes child missions) */
-  app.delete('/api/mission-lists/:id', authMiddleware, async (req, res) => {
+  /** DELETE /api/list-lists/:id (auth) => 200 {success:true} (also deletes child lists) */
+  app.delete('/api/list-lists/:id', authMiddleware, async (req, res) => {
     try {
       const { id } = req.params
-      const lists = await getUserMissionLists(req.userId)
-      const missions = await getUserMissions(req.userId)
+      const lists = await getUserListChecklists(req.userId)
+      const listTasks = await getUserListTasks(req.userId)
       const newLists = lists.filter(l => l.id !== id)
-      const newMissions = missions.filter(m => m.list_id !== id)
-      await setUserMissionLists(req.userId, newLists)
-      await setUserMissions(req.userId, newMissions)
+      const newTasks = listTasks.filter(m => m.list_id !== id)
+      await setUserListChecklists(req.userId, newLists)
+      await setUserListTasks(req.userId, newTasks)
       res.json({ success: true })
-    } catch (e) { console.error('Delete mission list error:', e); res.status(500).json({ error: '删除使命列表失败' }) }
+    } catch (e) { console.error('Delete list list error:', e); res.status(500).json({ error: '删除清单列表失败' }) }
   })
 
-  /** PUT /api/mission-lists/:listId/groups/reorder (auth) body:{orders:[{id,order}]} => 200 {groups} */
-  app.put('/api/mission-lists/:listId/groups/reorder', authMiddleware, async (req, res) => {
+  /** PUT /api/list-lists/:listId/groups/reorder (auth) body:{orders:[{id,order}]} => 200 {groups} */
+  app.put('/api/list-lists/:listId/groups/reorder', authMiddleware, async (req, res) => {
     try {
       const { listId } = req.params; const { orders } = req.body
-      const lists = await getUserMissionLists(req.userId)
+      const lists = await getUserListChecklists(req.userId)
       const listIndex = lists.findIndex(l => l.id === listId)
-      if (listIndex === -1) return res.status(404).json({ error: '使命列表不存在' })
+      if (listIndex === -1) return res.status(404).json({ error: '清单列表不存在' })
       const list = lists[listIndex]
       list.groups = list.groups || []
       orders.forEach(({ id, order }) => { const i = list.groups.findIndex(g => g.id === id); if (i !== -1) list.groups[i].order = order })
       list.groups.sort((a, b) => a.order - b.order)
-      await setUserMissionLists(req.userId, lists)
+      await setUserListChecklists(req.userId, lists)
       res.json({ groups: list.groups })
     } catch (e) { console.error('Reorder groups error:', e); res.status(500).json({ error: '更新分组顺序失败' }) }
   })
 
-  /** POST /api/mission-lists/:listId/groups (auth) body:{name?,color?,order?} => 200 {group} */
-  app.post('/api/mission-lists/:listId/groups', authMiddleware, async (req, res) => {
+  /** POST /api/list-lists/:listId/groups (auth) body:{name?,color?,order?} => 200 {group} */
+  app.post('/api/list-lists/:listId/groups', authMiddleware, async (req, res) => {
     try {
       const { listId } = req.params; const { name, color, order } = req.body
-      const lists = await getUserMissionLists(req.userId)
+      const lists = await getUserListChecklists(req.userId)
       const listIndex = lists.findIndex(l => l.id === listId)
-      if (listIndex === -1) return res.status(404).json({ error: '使命列表不存在' })
+      if (listIndex === -1) return res.status(404).json({ error: '清单列表不存在' })
       const list = lists[listIndex]; list.groups = list.groups || []
       const newGroup = { id: Date.now().toString(), name: name || '新分组', color: color || '#667eea', order: order !== undefined ? order : list.groups.length }
       list.groups.push(newGroup)
-      await setUserMissionLists(req.userId, lists)
+      await setUserListChecklists(req.userId, lists)
       res.json({ group: newGroup })
-    } catch (e) { console.error('Add mission group error:', e); res.status(500).json({ error: '添加分组失败' }) }
+    } catch (e) { console.error('Add list group error:', e); res.status(500).json({ error: '添加分组失败' }) }
   })
 
-  /** PUT /api/mission-lists/:listId/groups/:groupId (auth) body:{name?,color?,order?} => 200 {group} */
-  app.put('/api/mission-lists/:listId/groups/:groupId', authMiddleware, async (req, res) => {
+  /** PUT /api/list-lists/:listId/groups/:groupId (auth) body:{name?,color?,order?} => 200 {group} */
+  app.put('/api/list-lists/:listId/groups/:groupId', authMiddleware, async (req, res) => {
     try {
       const { listId, groupId } = req.params; const { name, color, order } = req.body
-      const lists = await getUserMissionLists(req.userId)
+      const lists = await getUserListChecklists(req.userId)
       const listIndex = lists.findIndex(l => l.id === listId)
-      if (listIndex === -1) return res.status(404).json({ error: '使命列表不存在' })
+      if (listIndex === -1) return res.status(404).json({ error: '清单列表不存在' })
       const list = lists[listIndex]; list.groups = list.groups || []
       let groupIndex = list.groups.findIndex(g => g.id === groupId)
       if (groupIndex === -1) {
         const newGroup = { id: groupId, name: name || '默认分组', color: color || '#667eea', order: order !== undefined ? order : list.groups.length }
         list.groups.push(newGroup)
-        await setUserMissionLists(req.userId, lists)
+        await setUserListChecklists(req.userId, lists)
         return res.json({ group: newGroup })
       }
       if (name !== undefined) list.groups[groupIndex].name = name
       if (color !== undefined) list.groups[groupIndex].color = color
       if (order !== undefined) list.groups[groupIndex].order = order
-      await setUserMissionLists(req.userId, lists)
+      await setUserListChecklists(req.userId, lists)
       res.json({ group: list.groups[groupIndex] })
-    } catch (e) { console.error('Update mission group error:', e); res.status(500).json({ error: '更新分组失败' }) }
+    } catch (e) { console.error('Update list group error:', e); res.status(500).json({ error: '更新分组失败' }) }
   })
 
-  /** DELETE /api/mission-lists/:listId/groups/:groupId (auth) => 200 {success} (min 1 group enforced) */
-  app.delete('/api/mission-lists/:listId/groups/:groupId', authMiddleware, async (req, res) => {
+  /** DELETE /api/list-lists/:listId/groups/:groupId (auth) => 200 {success} (min 1 group enforced) */
+  app.delete('/api/list-lists/:listId/groups/:groupId', authMiddleware, async (req, res) => {
     try {
       const { listId, groupId } = req.params
-      const lists = await getUserMissionLists(req.userId)
+      const lists = await getUserListChecklists(req.userId)
       const listIndex = lists.findIndex(l => l.id === listId)
-      if (listIndex === -1) return res.status(404).json({ error: '使命列表不存在' })
+      if (listIndex === -1) return res.status(404).json({ error: '清单列表不存在' })
       const list = lists[listIndex]; list.groups = list.groups || []
       if (list.groups.length <= 1) return res.status(400).json({ error: '至少需要保留一个分组' })
       const groupIndex = list.groups.findIndex(g => g.id === groupId)
       if (groupIndex === -1) return res.status(404).json({ error: '分组不存在' })
       const defaultGroup = list.groups.find(g => g.id !== groupId)
       if (defaultGroup) {
-        const missions = await getUserMissions(req.userId)
-        missions.forEach(m => { if (m.list_id === listId && m.group_id === groupId) m.group_id = defaultGroup.id })
-        await setUserMissions(req.userId, missions)
+        const listTasks = await getUserListTasks(req.userId)
+        listTasks.forEach(m => { if (m.list_id === listId && m.group_id === groupId) m.group_id = defaultGroup.id })
+        await setUserListTasks(req.userId, listTasks)
       }
       list.groups.splice(groupIndex, 1)
-      await setUserMissionLists(req.userId, lists)
+      await setUserListChecklists(req.userId, lists)
       res.json({ success: true })
-    } catch (e) { console.error('Delete mission group error:', e); res.status(500).json({ error: '删除分组失败' }) }
+    } catch (e) { console.error('Delete list group error:', e); res.status(500).json({ error: '删除分组失败' }) }
   })
 
-  // ============ Missions API ============
+  // ============ List Tasks API ============
 
-  /** GET /api/missions (auth) ?listId=xxx => 200 {missions:Mission[]} */
-  app.get('/api/missions', authMiddleware, async (req, res) => {
+  /** GET /api/list-tasks (auth) ?listId=xxx => 200 {listTasks:ListTask[]} */
+  app.get('/api/list-tasks', authMiddleware, async (req, res) => {
     try {
       const { listId } = req.query
-      let missions = await getUserMissions(req.userId)
-      if (listId) missions = missions.filter(m => m.list_id === listId)
-      res.json({ missions })
-    } catch (e) { console.error('Get missions error:', e); res.status(500).json({ error: '获取使命失败' }) }
+      let listTasks = await getUserListTasks(req.userId)
+      if (listId) listTasks = listTasks.filter(m => m.list_id === listId)
+      res.json({ listTasks })
+    } catch (e) { console.error('Get list tasks error:', e); res.status(500).json({ error: '获取任务失败' }) }
   })
 
-  /** POST /api/missions (auth) body:{listId,name,targetCount?,...} => 200 {mission} */
-  app.post('/api/missions', authMiddleware, async (req, res) => {
+  /** POST /api/list-tasks (auth) body:{listId,name,targetCount?,...} => 200 {listTask} */
+  app.post('/api/list-tasks', authMiddleware, async (req, res) => {
     try {
       const data = req.body
-      const missions = await getUserMissions(req.userId)
-      const newMission = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), list_id: data.listId, name: data.name, description: data.description || null, target_count: data.targetCount || 1, current_count: 0, completed: false, group_id: data.groupId || '', date: data.date || '', start_time: data.startTime || '', end_time: data.endTime || '', repeat_strategy: data.repeatStrategy || 'none', repeat_custom_days: data.repeatCustomDays || 1, repeat_end_strategy: data.repeatEndStrategy || 'never', repeat_end_date: data.repeatEndDate || '', repeat_count: data.repeatCount || 1, repeat_completed_count: 0, priority: data.priority || 'none', checklist: data.checklist || [], completed_start_time: '', completed_end_time: '', notes: data.notes || '', reminder_strategy: data.reminderStrategy || 'none', reminder_days: data.reminderDays || 0, reminder_hours: data.reminderHours || 0, reminder_minutes: data.reminderMinutes || 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
-      missions.push(newMission)
-      await setUserMissions(req.userId, missions)
-      res.json({ mission: newMission })
-    } catch (e) { console.error('Add mission error:', e); res.status(500).json({ error: '添加使命失败' }) }
+      const listTasks = await getUserListTasks(req.userId)
+      const newTask = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), list_id: data.listId, name: data.name, description: data.description || null, target_count: data.targetCount || 1, current_count: 0, completed: false, group_id: data.groupId || '', date: data.date || '', end_time: data.endTime || '', repeat_strategy: data.repeatStrategy || 'none', repeat_custom_days: data.repeatCustomDays || 1, repeat_weekdays: data.repeatWeekdays || [], repeat_month_day: data.repeatMonthDay || 1, repeat_lunar_month: data.repeatLunarMonth || 1, repeat_lunar_day: data.repeatLunarDay || 1, repeat_end_strategy: data.repeatEndStrategy || 'never', repeat_end_date: data.repeatEndDate || '', repeat_count: data.repeatCount || 1, repeat_completed_count: 0, priority: data.priority || 'none', checklist: data.checklist || [], completed_start_time: '', completed_end_time: '', notes: data.notes || '', reminder_strategy: data.reminderStrategy || 'none', reminder_days: data.reminderDays || 0, reminder_hours: data.reminderHours || 0, reminder_minutes: data.reminderMinutes || 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+      listTasks.push(newTask)
+      await setUserListTasks(req.userId, listTasks)
+      res.json({ listTask: newTask })
+    } catch (e) { console.error('Add list task error:', e); res.status(500).json({ error: '添加任务失败' }) }
   })
 
-  /** PUT /api/missions/:id (auth) body:{...mission fields} => 200 {mission} */
-  app.put('/api/missions/:id', authMiddleware, async (req, res) => {
+  /** PUT /api/list-tasks/:id (auth) body:{...listTask fields} => 200 {listTask} */
+  app.put('/api/list-tasks/:id', authMiddleware, async (req, res) => {
     try {
       const { id } = req.params; const updates = req.body
-      const missions = await getUserMissions(req.userId)
-      const missionIndex = missions.findIndex(m => m.id === id)
-      if (missionIndex === -1) return res.status(404).json({ error: '使命不存在' })
-      const mission = missions[missionIndex]
-      if (updates.name !== undefined) mission.name = updates.name
-      if (updates.description !== undefined) mission.description = updates.description
-      if (updates.targetCount !== undefined) mission.target_count = updates.targetCount
-      if (updates.currentCount !== undefined) mission.current_count = updates.currentCount
-      if (updates.completed !== undefined) mission.completed = updates.completed
-      if (updates.groupId !== undefined) mission.group_id = updates.groupId
-      if (updates.date !== undefined) mission.date = updates.date
-      if (updates.startTime !== undefined) mission.start_time = updates.startTime
-      if (updates.endTime !== undefined) mission.end_time = updates.endTime
-      if (updates.repeatStrategy !== undefined) mission.repeat_strategy = updates.repeatStrategy
-      if (updates.repeatCustomDays !== undefined) mission.repeat_custom_days = updates.repeatCustomDays
-      if (updates.repeatEndStrategy !== undefined) mission.repeat_end_strategy = updates.repeatEndStrategy
-      if (updates.repeatEndDate !== undefined) mission.repeat_end_date = updates.repeatEndDate
-      if (updates.repeatCount !== undefined) mission.repeat_count = updates.repeatCount
-      if (updates.repeatCompletedCount !== undefined) mission.repeat_completed_count = updates.repeatCompletedCount
-      if (updates.priority !== undefined) mission.priority = updates.priority
-      if (updates.checklist !== undefined) mission.checklist = updates.checklist
-      if (updates.completedStartTime !== undefined) mission.completed_start_time = updates.completedStartTime
-      if (updates.completedEndTime !== undefined) mission.completed_end_time = updates.completedEndTime
-      if (updates.notes !== undefined) mission.notes = updates.notes
-      if (updates.reminderStrategy !== undefined) mission.reminder_strategy = updates.reminderStrategy
-      if (updates.reminderDays !== undefined) mission.reminder_days = updates.reminderDays
-      if (updates.reminderHours !== undefined) mission.reminder_hours = updates.reminderHours
-      if (updates.reminderMinutes !== undefined) mission.reminder_minutes = updates.reminderMinutes
-      mission.updated_at = new Date().toISOString()
-      await setUserMissions(req.userId, missions)
-      res.json({ mission })
-    } catch (e) { console.error('Update mission error:', e); res.status(500).json({ error: '更新使命失败' }) }
+      const listTasks = await getUserListTasks(req.userId)
+      const taskIndex = listTasks.findIndex(m => m.id === id)
+      if (taskIndex === -1) return res.status(404).json({ error: '任务不存在' })
+      const listTask = listTasks[taskIndex]
+      if (updates.name !== undefined) listTask.name = updates.name
+      if (updates.description !== undefined) listTask.description = updates.description
+      if (updates.targetCount !== undefined) listTask.target_count = updates.targetCount
+      if (updates.currentCount !== undefined) listTask.current_count = updates.currentCount
+      if (updates.completed !== undefined) listTask.completed = updates.completed
+      if (updates.groupId !== undefined) listTask.group_id = updates.groupId
+      if (updates.date !== undefined) listTask.date = updates.date
+      if (updates.endTime !== undefined) listTask.end_time = updates.endTime
+      if (updates.repeatStrategy !== undefined) listTask.repeat_strategy = updates.repeatStrategy
+      if (updates.repeatCustomDays !== undefined) listTask.repeat_custom_days = updates.repeatCustomDays
+      if (updates.repeatWeekdays !== undefined) listTask.repeat_weekdays = updates.repeatWeekdays
+      if (updates.repeatMonthDay !== undefined) listTask.repeat_month_day = updates.repeatMonthDay
+      if (updates.repeatLunarMonth !== undefined) listTask.repeat_lunar_month = updates.repeatLunarMonth
+      if (updates.repeatLunarDay !== undefined) listTask.repeat_lunar_day = updates.repeatLunarDay
+      if (updates.repeatEndStrategy !== undefined) listTask.repeat_end_strategy = updates.repeatEndStrategy
+      if (updates.repeatEndDate !== undefined) listTask.repeat_end_date = updates.repeatEndDate
+      if (updates.repeatCount !== undefined) listTask.repeat_count = updates.repeatCount
+      if (updates.repeatCompletedCount !== undefined) listTask.repeat_completed_count = updates.repeatCompletedCount
+      if (updates.priority !== undefined) listTask.priority = updates.priority
+      if (updates.checklist !== undefined) listTask.checklist = updates.checklist
+      if (updates.completedStartTime !== undefined) listTask.completed_start_time = updates.completedStartTime
+      if (updates.completedEndTime !== undefined) listTask.completed_end_time = updates.completedEndTime
+      if (updates.notes !== undefined) listTask.notes = updates.notes
+      if (updates.reminderStrategy !== undefined) listTask.reminder_strategy = updates.reminderStrategy
+      if (updates.reminderDays !== undefined) listTask.reminder_days = updates.reminderDays
+      if (updates.reminderHours !== undefined) listTask.reminder_hours = updates.reminderHours
+      if (updates.reminderMinutes !== undefined) listTask.reminder_minutes = updates.reminderMinutes
+      listTask.updated_at = new Date().toISOString()
+      await setUserListTasks(req.userId, listTasks)
+      res.json({ listTask })
+    } catch (e) { console.error('Update list task error:', e); res.status(500).json({ error: '更新任务失败' }) }
   })
 
-  /** DELETE /api/missions/:id (auth) => 200 {success:true} */
-  app.delete('/api/missions/:id', authMiddleware, async (req, res) => {
+  /** DELETE /api/list-tasks/:id (auth) => 200 {success:true} */
+  app.delete('/api/list-tasks/:id', authMiddleware, async (req, res) => {
     try {
       const { id } = req.params
-      const missions = await getUserMissions(req.userId)
-      await setUserMissions(req.userId, missions.filter(m => m.id !== id))
+      const listTasks = await getUserListTasks(req.userId)
+      await setUserListTasks(req.userId, listTasks.filter(m => m.id !== id))
       res.json({ success: true })
-    } catch (e) { console.error('Delete mission error:', e); res.status(500).json({ error: '删除使命失败' }) }
+    } catch (e) { console.error('Delete list task error:', e); res.status(500).json({ error: '删除任务失败' }) }
   })
 
   // ============ Stats API ============
 
-  /** GET /api/stats (auth) => 200 {stats:{listCount,missionCount,taskCount}} */
+  /** GET /api/stats (auth) => 200 {stats:{checklistCount,listTaskCount,footprintTaskCount}} */
   app.get('/api/stats', authMiddleware, async (req, res) => {
     try {
-      const lists = await getUserMissionLists(req.userId)
-      const missions = await getUserMissions(req.userId)
-      const tasks = await getUserTasks(req.userId)
-      res.json({ stats: { listCount: lists.length, missionCount: missions.length, taskCount: tasks.length } })
+      const checklists = await getUserListChecklists(req.userId)
+      const listTasks = await getUserListTasks(req.userId)
+      const footprintTasks = await getUserFootprintTasks(req.userId)
+      res.json({ stats: { checklistCount: checklists.length, listTaskCount: listTasks.length, footprintTaskCount: footprintTasks.length } })
     } catch (e) { console.error('Get stats error:', e); res.status(500).json({ error: '获取统计失败' }) }
   })
 
@@ -718,6 +721,16 @@ function createProdServer(options = {}) {
     try {
       let data = await getUserKV(req.userId, req.params.type, req.params.key)
       if (req.params.type === 'system' && req.params.key === 'state') {
+        // 迁移旧的 defaultsInitialized.json 到 state.json
+        const legacyDefaultsPath = path.join(DATA_DIR, req.userId, 'system', 'defaultsInitialized.json')
+        const legacyDefaults = readJson(legacyDefaultsPath)
+        if (legacyDefaults === true) {
+          if (!data) data = {}
+          data.defaultsInitialized = true
+          await setUserKV(req.userId, 'system', 'state', data)
+          try { fs.unlinkSync(legacyDefaultsPath) } catch {}
+          console.log(`[Data] defaultsInitialized 已从 defaultsInitialized.json 迁移到 state.json: ${req.userId}`)
+        }
         if (!data || data.guideCompleted === undefined) {
           const legacyPath = path.join(DATA_DIR, req.userId, 'system', 'guideState.json')
           const legacy = readJson(legacyPath)
@@ -777,13 +790,13 @@ function createProdServer(options = {}) {
         // 用户索引
         user_index: getUserIndexByEmail(userEmail),
         // 足迹
-        tasks: await getUserTasks(userId),
+        tasks: await getUserFootprintTasks(userId),
         // 专注
         focus_favorites: await getUserKV(userId, 'focus', 'favorites'),
         focus_records: await getUserKV(userId, 'focus', 'records'),
         // 清单
-        lists: await getUserMissionLists(userId),
-        missions: await getUserMissions(userId),
+        lists: await getUserListChecklists(userId),
+        listTasks: await getUserListTasks(userId),
         // 倒数日
         countdown_categories: await getUserKV(userId, 'countdown', 'categories'),
         countdowns: await getUserKV(userId, 'countdown', 'countdowns'),
@@ -806,7 +819,7 @@ function createProdServer(options = {}) {
   /** POST /api/import body:{各模块数据} => 200 {success} - 导入数据（登录后可导入到当前账号，未登录时从user_index获取账号信息） */
   app.post('/api/import', async (req, res) => {
     try {
-      const { user_index, tasks, focus_favorites, focus_records, lists, missions, countdown_categories, countdowns, courses, course_recorded_courses, profile, login_info, settings, system_state } = req.body
+      const { user_index, tasks, focus_favorites, focus_records, lists, listTasks, countdown_categories, countdowns, courses, course_recorded_courses, profile, login_info, settings, system_state } = req.body
 
       // 尝试从token获取用户信息（可选，不要求必须登录）
       let userId = req.userId
@@ -836,11 +849,11 @@ function createProdServer(options = {}) {
       // 恢复用户索引
       if (user_index && userEmail) await setUserIndex(userEmail, { ...user_index, email: userEmail })
 
-      if (tasks) await setUserTasks(userId, tasks)
+      if (tasks) await setUserFootprintTasks(userId, tasks)
       if (focus_favorites !== undefined) await setUserKV(userId, 'focus', 'favorites', focus_favorites)
       if (focus_records !== undefined) await setUserKV(userId, 'focus', 'records', focus_records)
-      if (lists) await setUserMissionLists(userId, lists)
-      if (missions) await setUserMissions(userId, missions)
+      if (lists) await setUserListChecklists(userId, lists)
+      if (listTasks) await setUserListTasks(userId, listTasks)
       if (countdown_categories !== undefined) await setUserKV(userId, 'countdown', 'categories', countdown_categories)
       if (countdowns !== undefined) await setUserKV(userId, 'countdown', 'countdowns', countdowns)
       if (courses !== undefined) await setUserKV(userId, 'course', 'courses', courses)
@@ -868,9 +881,9 @@ function createProdServer(options = {}) {
 
       for (const key of Object.keys(cleanMap)) {
         if (PROTECTED_KEYS.includes(key)) continue
-        if (key === 'lists') await setUserMissionLists(userId, [])
-        else if (key === 'missions') await setUserMissions(userId, [])
-        else if (key === 'tasks') await setUserTasks(userId, [])
+        if (key === 'lists') await setUserListChecklists(userId, [])
+        else if (key === 'listTasks') await setUserListTasks(userId, [])
+        else if (key === 'tasks') await setUserFootprintTasks(userId, [])
         else if (key === 'focus_favorites') await setUserKV(userId, 'focus', 'favorites', [])
         else if (key === 'focus_records') await setUserKV(userId, 'focus', 'records', [])
         else if (key === 'countdown_categories') await setUserKV(userId, 'countdown', 'categories', [])

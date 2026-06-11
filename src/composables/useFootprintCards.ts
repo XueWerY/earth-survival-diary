@@ -3,14 +3,14 @@ import dayjs from 'dayjs'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import { useTaskStore } from '../stores/taskStore'
 import { useSettingsStore } from '../stores/settingsStore'
-import { useRecurringMissions } from './useRecurringMissions'
+import { useRecurringTasks } from './useRecurringTasks'
 import { getData } from '../services/storageService'
 import { logger } from '../lib/logger'
-import type { Mission } from '../stores/missionStore'
+import type { Task } from '../stores/listStore'
 
 dayjs.extend(isoWeek)
 
-interface CourseInfo {
+export interface CourseInfo {
   id: string
   name: string
   startTime: string
@@ -19,6 +19,9 @@ interface CourseInfo {
   teacher: string
   color: string
   note: string
+  weeks: number[]
+  periodText: string
+  dayOfWeek: number
 }
 
 interface CountdownCard {
@@ -37,14 +40,23 @@ interface PositiveDayCard {
   sortKey: number
 }
 
-type CardItemType = 'record' | 'mission' | 'course'
+interface CountdownDisplayItem {
+  milestone: any
+  categoryIcon: string
+  countdownDays: number
+  countdownUnit: string
+  cardType: 'pinned' | 'upcoming' | 'future' | 'passed'
+  reminderLabel: string
+}
+
+type CardItemType = 'record' | 'list' | 'course'
 
 interface CardItem {
   type: CardItemType
   id: string
   sortKey: string
   record?: any
-  mission?: Mission
+  list?: Task
   course?: CourseInfo
 }
 
@@ -55,7 +67,7 @@ export function useFootprintCards(
 ) {
   const taskStore = useTaskStore()
   const settingsStore = useSettingsStore()
-  const { getMissionsForDate } = useRecurringMissions()
+  const { getTasksForDate } = useRecurringTasks()
 
   const loadedCourses = ref<CourseInfo[]>([])
 
@@ -78,21 +90,92 @@ export function useFootprintCards(
     return Math.max(1, diff + 1)
   }
 
+  const timeToMinutes = (t: string): number => {
+    const [h, m] = t.split(':').map(Number)
+    return h * 60 + m
+  }
+
+  const addMinutes = (time: string, minutes: number): string => {
+    const total = timeToMinutes(time) + minutes
+    const h = Math.floor(total / 60) % 24
+    const m = total % 60
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  }
+
+  const computePeriodsFromSettings = () => {
+    const courseSettings = settingsStore.settings.course
+    const start = courseSettings?.firstPeriodStart || '08:00'
+    const dur = courseSettings?.periodDuration || 45
+    const brk = courseSettings?.breakDuration || 10
+    const mode = courseSettings?.breakMode || 'uniform'
+    const customBks = courseSettings?.customBreakDurations || []
+    const lunch = courseSettings?.lunchBreakMinutes ?? 120
+    const dinner = courseSettings?.dinnerBreakMinutes ?? 90
+    const counts = courseSettings?.periodCountPerSession || { morning: 4, afternoon: 4, evening: 2 }
+    const result: { id: number; name: string; start: string; end: string }[] = []
+    let currentStart = start
+    let idCounter = 1
+    let customGapIdx = 0
+
+    for (let i = 0; i < counts.morning; i++) {
+      const end = addMinutes(currentStart, dur)
+      result.push({ id: idCounter++, name: `第${idCounter - 1}节`, start: currentStart, end })
+      if (i < counts.morning - 1) {
+        currentStart = addMinutes(end, mode === 'custom' ? (customBks[customGapIdx] ?? brk) : brk)
+        customGapIdx++
+      } else {
+        currentStart = addMinutes(end, brk)
+      }
+    }
+
+    if (counts.morning > 0 && counts.afternoon > 0) {
+      currentStart = addMinutes(result[result.length - 1].end, lunch)
+    } else if (counts.morning === 0 && counts.afternoon > 0) {
+      currentStart = start
+    }
+
+    for (let i = 0; i < counts.afternoon; i++) {
+      const end = addMinutes(currentStart, dur)
+      result.push({ id: idCounter++, name: `第${idCounter - 1}节`, start: currentStart, end })
+      if (i < counts.afternoon - 1) {
+        currentStart = addMinutes(end, mode === 'custom' ? (customBks[customGapIdx] ?? brk) : brk)
+        customGapIdx++
+      } else {
+        currentStart = addMinutes(end, brk)
+      }
+    }
+
+    if (counts.afternoon > 0 && counts.evening > 0) {
+      currentStart = addMinutes(result[result.length - 1].end, dinner)
+    } else if (counts.afternoon === 0 && counts.evening > 0) {
+      currentStart = start
+    }
+
+    for (let i = 0; i < counts.evening; i++) {
+      const end = addMinutes(currentStart, dur)
+      result.push({ id: idCounter++, name: `第${idCounter - 1}节`, start: currentStart, end })
+      if (i < counts.evening - 1) {
+        currentStart = addMinutes(end, mode === 'custom' ? (customBks[customGapIdx] ?? brk) : brk)
+        customGapIdx++
+      } else {
+        currentStart = addMinutes(end, brk)
+      }
+    }
+
+    return result
+  }
+
   const loadCourses = async () => {
     try {
-      const [courses, periods] = await Promise.all([
-        getData<any[]>('course', 'courses'),
-        getData<any[]>('course', 'periods')
-      ])
+      const courses = await getData<any[]>('course', 'courses')
+      const periods = computePeriodsFromSettings()
       if (courses && courses.length > 0) {
         const selDate = dayjs(selectedDateValue.value)
         const dayOfWeek = selDate.day()
         const weekNum = getWeekNumber(selDate)
 
-        const timeToMins = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
-
         const getTimeFromPeriodIds = (periodIds: number[]): { startTime: string; endTime: string } => {
-          if (periodIds.length === 0 || !periods || periods.length === 0) return { startTime: '08:00', endTime: '09:00' }
+          if (periodIds.length === 0 || periods.length === 0) return { startTime: '08:00', endTime: '09:00' }
           const sorted = [...periodIds].sort((a, b) => a - b)
           const firstP = periods.find((p: any) => p.id === sorted[0])
           const lastP = periods.find((p: any) => p.id === sorted[sorted.length - 1])
@@ -100,17 +183,17 @@ export function useFootprintCards(
         }
 
         const periodIdsFromTimeRange = (startTime: string, endTime: string): number[] => {
-          if (!periods || periods.length === 0) return []
-          const startMins = timeToMins(startTime)
-          const endMins = timeToMins(endTime)
+          if (periods.length === 0) return []
+          const startMins = timeToMinutes(startTime)
+          const endMins = timeToMinutes(endTime)
           let bestStart = periods[0].id
           let bestEnd = periods[0].id
           let bestStartDiff = Infinity
           let bestEndDiff = Infinity
           for (const p of periods) {
-            const diff = Math.abs(startMins - timeToMins(p.start))
+            const diff = Math.abs(startMins - timeToMinutes(p.start))
             if (diff < bestStartDiff) { bestStartDiff = diff; bestStart = p.id }
-            const diffEnd = Math.abs(endMins - timeToMins(p.end))
+            const diffEnd = Math.abs(endMins - timeToMinutes(p.end))
             if (diffEnd < bestEndDiff) { bestEndDiff = diffEnd; bestEnd = p.id }
           }
           const minP = Math.min(bestStart, bestEnd)
@@ -134,6 +217,11 @@ export function useFootprintCards(
               ? c.periodIds
               : (c.startTime && c.endTime ? periodIdsFromTimeRange(c.startTime, c.endTime) : [])
             const { startTime, endTime } = getTimeFromPeriodIds(pIds)
+            // 格式化节次文本
+            const sortedP = [...pIds].sort((a, b) => a - b)
+            const periodText = sortedP.length > 0
+              ? `第${sortedP[0]}${sortedP[0] !== sortedP[sortedP.length - 1] ? `-${sortedP[sortedP.length - 1]}` : ''}节`
+              : ''
             return {
               id: c.id,
               name: c.name,
@@ -142,7 +230,10 @@ export function useFootprintCards(
               location: c.location || '',
               teacher: c.teacher || '',
               color: c.color || '#3b82f6',
-              note: c.note || ''
+              note: c.note || '',
+              weeks: Array.isArray(c.weeks) ? c.weeks : [],
+              periodText,
+              dayOfWeek: c.dayOfWeek
             }
           })
       }
@@ -224,12 +315,85 @@ export function useFootprintCards(
   })
 
   /**
+   * 倒数日展示卡片（供 CountdownCard 组件使用）
+   * 综合 countdownCards 和 positiveDayCards 的筛选逻辑，返回完整 milestone 数据
+   */
+  const countdownDisplayCards: ComputedRef<CountdownDisplayItem[]> = computed(() => {
+    const selDate = dayjs(selectedDateValue.value).startOf('day')
+    const getIcon = (category: string): string => {
+      const iconMap: Record<string, string> = {
+        birthday: '🎂', anniversary: '💕', holiday: '🎉', travel: '✈️',
+        entertainment: '🎮', work: '💼', study: '📚', life: '🌟'
+      }
+      return iconMap[category] || '📌'
+    }
+    const getCardType = (m: any, selDate: dayjs.Dayjs): 'pinned' | 'upcoming' | 'future' | 'passed' => {
+      if (m.pinned) return 'pinned'
+      const target = dayjs(m.targetDate).startOf('day')
+      const days = target.diff(selDate, 'day')
+      if (days < 0) return 'passed'
+      if (days <= 7) return 'upcoming'
+      return 'future'
+    }
+    const getReminderLabel = (m: any): string => {
+      if (m.countMode === 'countup') return ''
+      if (m.reminderStrategy === 'none' || !m.reminderStrategy) return ''
+      if (m.reminderStrategy === 'on_time') return '准时提醒'
+      if (m.reminderStrategy === 'advance') {
+        const parts: string[] = []
+        if (m.reminderDays) parts.push(`${m.reminderDays}天`)
+        if (m.reminderHours) parts.push(`${m.reminderHours}小时`)
+        if (m.reminderMinutes) parts.push(`${m.reminderMinutes}分钟`)
+        return `提前${parts.join('')}`
+      }
+      return ''
+    }
+    return countdownMilestones.value
+      .filter((m: any) => {
+        if (m.countMode !== 'countup') {
+          const t = dayjs(m.targetDate).startOf('day')
+          const days = t.diff(selDate, 'day')
+          if (days < 0) return false
+          if (m.pinned) return true
+          return days === 0
+        }
+        const startDate = dayjs(m.targetDate).startOf('day')
+        const days = selDate.diff(startDate, 'day')
+        return days >= 0 && m.pinned
+      })
+      .map((m: any) => {
+        const target = dayjs(m.targetDate).startOf('day')
+        const diffDays = m.countMode === 'countup' ? selDate.diff(target, 'day') : target.diff(selDate, 'day')
+        const absDays = Math.abs(diffDays)
+        let unit: string
+        if (m.countMode === 'countup') {
+          unit = diffDays === 0 ? '今天开始' : '天'
+        } else if (diffDays > 0) {
+          unit = '天后'
+        } else if (diffDays < 0) {
+          unit = '天前'
+        } else {
+          unit = '今天'
+        }
+        return {
+          milestone: m,
+          categoryIcon: getIcon(m.category),
+          countdownDays: absDays,
+          countdownUnit: unit,
+          cardType: getCardType(m, selDate),
+          reminderLabel: getReminderLabel(m)
+        }
+      })
+      .sort((a, b) => a.countdownDays - b.countdownDays)
+  })
+
+  /**
    * 清单任务卡片
    * 条件：选中日期与任务日期相同，或在周期性任务管理系统查询到的周期内
    */
-  const missionCards = computed(() => {
+  const listCards = computed(() => {
     const today = selectedDateValue.value
-    return getMissionsForDate(today)
+    return getTasksForDate(today)
   })
 
   /**
@@ -248,17 +412,17 @@ export function useFootprintCards(
       cards.push({
         type: 'record',
         id: task.id,
-        sortKey: task.endTime || '99:99',
+        sortKey: task.endTime || (task.createdAt ? dayjs(task.createdAt).format('HH:mm') : '99:99'),
         record: task
       })
     }
 
-    for (const mission of missionCards.value) {
+    for (const list of listCards.value) {
       cards.push({
-        type: 'mission',
-        id: mission.id,
-        sortKey: mission.endTime || mission.startTime || '99:99',
-        mission
+        type: 'list',
+        id: list.id,
+        sortKey: list.endTime || list.startTime || '99:99',
+        list
       })
     }
 
@@ -305,7 +469,8 @@ export function useFootprintCards(
   return {
     countdownCards,
     positiveDayCards,
-    missionCards,
+    countdownDisplayCards,
+    listCards,
     courseCards,
     allCards,
     morningCards,

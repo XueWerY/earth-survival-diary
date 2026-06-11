@@ -1,14 +1,20 @@
 <template>
   <div v-if="modelValue" class="confirm-dialog-overlay" @click.self="handleCancel">
     <div class="confirm-dialog">
-      <div class="dialog-icon">
+      <div class="dialog-header-row">
         <el-icon class="icon-warning"><Warning /></el-icon>
+        <h3 class="dialog-title">{{ titleText }}</h3>
       </div>
-      <h3 class="dialog-title">{{ titleText }}</h3>
       <p class="dialog-message">{{ messageText }}</p>
       <div class="dialog-actions">
-        <el-button type="default" @click="handleCancel">取消</el-button>
-        <el-button type="danger" @click="handleConfirm">确认删除</el-button>
+        <button class="capsule-btn" @click="handleCancel">
+          <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          <span>取消</span>
+        </button>
+        <button class="capsule-btn capsule-confirm" @click="handleConfirm">
+          <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
+          <span>确认</span>
+        </button>
       </div>
     </div>
   </div>
@@ -66,21 +72,24 @@ const handleCancel = () => {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 300px) {
   .confirm-dialog {
-    width: 100vw;
-    max-width: 100vw;
+    width: 80vw;
+    max-width: 80vw;
     border-radius: 0;
   }
 }
 
-.dialog-icon {
-  text-align: center;
+.dialog-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   margin-bottom: 16px;
 }
 
 .icon-warning {
-  font-size: 48px;
+  font-size: 24px;
   color: var(--chalk-orange);
 }
 
@@ -89,7 +98,7 @@ const handleCancel = () => {
   font-size: 18px;
   font-weight: 600;
   color: var(--chalk-white);
-  margin: 0 0 12px 0;
+  margin: 0;
 }
 
 .dialog-message {
@@ -104,5 +113,31 @@ const handleCancel = () => {
   display: flex;
   gap: 12px;
   justify-content: center;
+}
+
+.capsule-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--chalk-white-70);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.capsule-btn .capsule-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.capsule-confirm {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
 }
 </style>

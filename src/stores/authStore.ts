@@ -69,7 +69,7 @@ export const useAuthStore = defineStore('auth', () => {
         const result = await api.signUp({
             email,
             password,
-            nickname: nickname || email.split('@')[0]
+            nickname: nickname || '地球 Online 玩家'
         })
 
         if (result.user) {

@@ -6,3 +6,14 @@ include ':capacitor-cordova-android-plugins'
 project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
 
 apply from: 'capacitor.settings.gradle'
+
+// Pre-process capacitor-cordova-android-plugins build.gradle to remove flatDir (deprecated in Gradle 8.x)
+// This runs before the project is evaluated, so the warning is never generated
+def cordovaBuildFile = file('capacitor-cordova-android-plugins/build.gradle')
+if (cordovaBuildFile.exists()) {
+    def content = cordovaBuildFile.text
+    def cleaned = content.replaceAll('flatDir\\s*\\{[^}]*\\}', '').replaceAll('\\n{3,}', '\n\n')
+    if (cleaned != content) {
+        cordovaBuildFile.text = cleaned
+    }
+}

@@ -3,7 +3,7 @@
     <div class="move-form-container">
       <el-form label-width="80px" class="form-body">
         <el-form-item label="任务名称">
-          <span class="move-mission-name">{{ missionName }}</span>
+          <span class="move-list-name">{{ listName }}</span>
         </el-form-item>
         <el-form-item label="目标清单">
           <el-select v-model="targetListId" placeholder="选择清单" style="width: 100%" @change="onListChange">
@@ -27,29 +27,29 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useMissionStore } from '../../stores/missionStore'
+import { useListStore } from '../../stores/listStore'
 
-const props = defineProps<{ missionId: string }>()
+const props = defineProps<{ listId: string }>()
 
 const emit = defineEmits<{
   (e: 'submit', data: Record<string, unknown>): void
   (e: 'cancel'): void
 }>()
 
-const missionStore = useMissionStore()
+const listStore = useListStore()
 
 const targetListId = ref('')
 const targetGroupId = ref('')
 
-const mission = computed(() => missionStore.missions.find(m => m.id === props.missionId))
-const missionName = computed(() => mission.value?.name || '')
+const list = computed(() => listStore.lists.find(m => m.id === props.listId))
+const listName = computed(() => list.value?.name || '')
 
-const allLists = computed(() => missionStore.lists.filter(l => l.id !== mission.value?.listId))
+const allLists = computed(() => listStore.taskLists.filter(l => l.id !== list.value?.listId))
 
 const targetGroups = computed(() => {
   const lid = targetListId.value
   if (!lid) return []
-  const list = missionStore.lists.find(l => l.id === lid)
+  const list = listStore.taskLists.find(l => l.id === lid)
   return list?.groups || []
 })
 
@@ -75,7 +75,7 @@ function handleSubmit() {
   max-width: 400px;
   margin: 0 auto;
 }
-.move-mission-name {
+.move-list-name {
   color: #fff;
   font-size: 14px;
 }

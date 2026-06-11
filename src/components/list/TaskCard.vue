@@ -1,56 +1,56 @@
 <template>
-  <div class="mission-card" :class="{ completed: mission.completed }">
-    <div class="mission-header">
-      <el-checkbox v-if="showCheckbox" :model-value="mission.completed" @change="handleMissionComplete(mission)" :disabled="isGuideActive" />
+  <div class="list-card" :class="{ completed: list.completed }">
+    <div class="list-header">
+      <el-checkbox v-if="showCheckbox" :model-value="list.completed" @change="handleTaskComplete(list)" :disabled="isGuideActive" />
       <template v-if="isEditingName">
         <el-input
           v-model="editingName"
           type="textarea"
           autosize
           size="small"
-          class="mission-name-input"
+          class="list-name-input"
           @keyup.enter="saveName"
           @keyup.escape="cancelEditName"
           @blur="saveName"
         />
       </template>
-      <div v-else class="mission-name" @click.stop="startEditName">{{ mission.name }}</div>
-      <button class="priority-btn" :class="'priority-' + mission.priority" :title="priorityLabel" @click.stop="cyclePriority">
+      <div v-else class="list-name" @click.stop="startEditName">{{ list.name }}</div>
+      <button class="priority-btn" :class="'priority-' + list.priority" :title="priorityLabel" @click.stop="cyclePriority">
         <el-icon><Flag /></el-icon>
       </button>
       <button class="delete-btn" title="删除任务" @click.stop="showDeleteConfirm = true">
         <el-icon><Delete /></el-icon>
       </button>
     </div>
-    <div class="mission-body">
-      <div v-if="remainingTime" class="mission-meta-line remaining-time-line">
+    <div class="list-body">
+      <div v-if="remainingTime" class="list-meta-line remaining-time-line">
         <span class="remaining-time" :class="remainingTime.type">
           {{ remainingTime.text }}
         </span>
       </div>
-      <div class="mission-meta-line" v-if="showListGroup">
+      <div class="list-meta-line" v-if="showListGroup">
         <span class="meta-item source-list clickable" @click.stop="openListGroupDialog">
-          <span class="list-dot" :style="{ background: getListColor(mission.listId) }"></span>
-          <span :style="{ color: getListColor(mission.listId) }">{{ getListName(mission.listId) }}</span>
-          <template v-if="getGroupName(mission.listId, mission.groupId)">
-            / <span :style="{ color: getGroup(mission.listId, mission.groupId)?.color }">{{ getGroupName(mission.listId, mission.groupId) }}</span>
+          <span class="list-dot" :style="{ background: getListColor(list.listId) }"></span>
+          <span :style="{ color: getListColor(list.listId) }">{{ getListName(list.listId) }}</span>
+          <template v-if="getGroupName(list.listId, list.groupId)">
+            / <span :style="{ color: getGroup(list.listId, list.groupId)?.color }">{{ getGroupName(list.listId, list.groupId) }}</span>
           </template>
         </span>
       </div>
-      <div class="mission-meta-line">
+      <div class="list-meta-line">
         <span v-if="showEndDate" class="meta-item clickable" @click.stop="openDatePicker">
           <el-icon><Calendar /></el-icon>
-          {{ mission.date || '--' }}
+          {{ list.date || '--' }}
         </span>
         <span class="meta-item clickable">
-          <TimePickerPopover :model-value="mission.endTime || '00:00'" @update:model-value="onTimePicked" />
+          <TimePickerPopover :model-value="list.endTime || '00:00'" @update:model-value="onTimePicked" />
         </span>
         <span class="meta-item reminder-label clickable" @click.stop="openReminderDialog">
           <el-icon><Bell /></el-icon>
           {{ reminderLabel }}
         </span>
       </div>
-      <div class="mission-meta-line">
+      <div class="list-meta-line">
         <span class="meta-item repeat clickable" @click.stop="openRepeatDialog">
           <el-icon><RefreshRight /></el-icon>
           {{ repeatLabel }}
@@ -60,55 +60,55 @@
         </span>
       </div>
       <slot name="extra-meta"></slot>
-      <div v-if="mission.checklist.length > 0" class="checklist-items-always" :style="isGuideActive ? { pointerEvents: 'none', opacity: '0.7' } : {}">
-        <div v-for="item in mission.checklist" :key="item.id" class="checklist-item" :class="{ completed: item.completed, 'drag-over': dragOverItemId === item.id }"
-             @dragover.prevent="onChecklistDragOver($event, mission.id, item.id)"
-             @drop="onChecklistDrop(mission.id, item.id)"
+      <div class="checklist-items-always" :style="isGuideActive ? { pointerEvents: 'none', opacity: '0.7' } : {}">
+        <div v-for="item in list.checklist" :key="item.id" class="checklist-item" :class="{ completed: item.completed, 'drag-over': dragOverItemId === item.id }"
+             @dragover.prevent="onChecklistDragOver($event, list.id, item.id)"
+             @drop="onChecklistDrop(list.id, item.id)"
              @dragleave="onChecklistDragLeave(item.id)">
           <el-icon class="checklist-drag-handle" draggable="true"
-            @dragstart="onChecklistDragStart($event, mission.id, item.id)"
+            @dragstart="onChecklistDragStart($event, list.id, item.id)"
             @dragend="dragOverItemId = null"
           ><Rank /></el-icon>
-          <el-icon class="check-icon" v-if="item.completed" @click.stop="toggleChecklistItem(mission.id, item.id, $event)"><Check /></el-icon>
-          <el-icon class="check-icon" v-else @click.stop="toggleChecklistItem(mission.id, item.id, $event)"><CircleCheck /></el-icon>
-          <template v-if="editingChecklistId === item.id && editingChecklistMissionId === mission.id">
+          <el-icon class="check-icon" v-if="item.completed" @click.stop="toggleChecklistItem(list.id, item.id, $event)"><Check /></el-icon>
+          <el-icon class="check-icon" v-else @click.stop="toggleChecklistItem(list.id, item.id, $event)"><CircleCheck /></el-icon>
+          <template v-if="editingChecklistId === item.id && editingChecklistTaskId === list.id">
             <el-input v-model="editingChecklistText" type="textarea" autosize size="small" class="checklist-edit-input"
               @keyup.escape="cancelEditChecklistItem"
               @blur="finishEditChecklistItem" />
           </template>
-          <span v-else class="check-text" @click.stop="startEditChecklistItem(mission.id, item)">{{ item.text }}</span>
+          <span v-else class="check-text" @click.stop="startEditChecklistItem(list.id, item)">{{ item.text }}</span>
         </div>
         <div class="checklist-add-row" :style="isGuideActive ? { pointerEvents: 'none', opacity: '0.7' } : {}">
           <el-input
-            v-if="addingChecklist[mission.id]"
+            v-if="addingChecklist[list.id]"
             v-model="newChecklistText"
             size="small"
             placeholder="输入后回车确认"
-            :ref="(el: any) => { if (el && addingChecklistMissionId === mission.id) { nextTick(() => { const input = (el as any).input || (el as any).textarea; if (input) input.focus() }) } }"
-            @keyup.enter="handleAddChecklist(mission.id)"
-            @keyup.escape="cancelAddChecklist(mission.id)"
-            @blur="cancelAddChecklist(mission.id)"
+            :ref="(el: any) => { if (el && addingChecklistTaskId === list.id) { nextTick(() => { const input = (el as any).input || (el as any).textarea; if (input) input.focus() }) } }"
+            @keyup.enter="handleAddChecklist(list.id)"
+            @keyup.escape="cancelAddChecklist(list.id)"
+            @blur="cancelAddChecklist(list.id)"
           />
-          <div v-else class="checklist-add-btn" @click.stop="showAddChecklist(mission.id)">
+          <div v-else class="checklist-add-btn" @click.stop="showAddChecklist(list.id)">
             <el-icon><Plus /></el-icon>
             <span>新增检查事项</span>
           </div>
         </div>
       </div>
-      <div v-if="editingNotesMissionId === mission.id" class="mission-notes-edit-wrapper">
+      <div v-if="editingNotesTaskId === list.id" class="list-notes-edit-wrapper">
         <el-input
           v-model="editingNotesText"
           type="textarea"
           autosize
           size="small"
-          class="mission-notes-edit-input"
+          class="list-notes-edit-input"
           placeholder="双击编辑备注"
           @keyup.escape="cancelEditNotes"
           @blur="finishEditNotes"
         />
       </div>
-      <div v-else-if="mission.notes" class="mission-notes-content" @dblclick.stop="!isGuideActive && startEditNotes(mission)">{{ mission.notes }}</div>
-      <div v-else class="mission-notes-placeholder" @dblclick.stop="!isGuideActive && startEditNotes(mission)">双击添加备注</div>
+      <div v-else-if="list.notes" class="list-notes-content" @dblclick.stop="!isGuideActive && startEditNotes(list)">{{ list.notes }}</div>
+      <div v-else class="list-notes-placeholder" @dblclick.stop="!isGuideActive && startEditNotes(list)">双击添加备注</div>
     </div>
 
     <DateScrollPicker v-model="datePickerValue" v-model:visible="showDatePicker" @update:model-value="onDatePicked" />
@@ -120,12 +120,12 @@
             <span class="dialog-header-title folder-dialog-title">设置提醒</span>
           </div>
           <div class="dialog-body">
-            <div class="mission-form">
+            <div class="list-form">
               <div class="form-row">
                 <span class="form-label">提醒</span>
                 <ReminderTimePicker v-model="reminderTimeValue" />
               </div>
-              <div class="mission-form-footer">
+              <div class="list-form-footer">
                 <el-button @click="showReminderDialog = false">取消</el-button>
                 <el-button type="primary" @click="saveReminder">保存</el-button>
               </div>
@@ -142,7 +142,7 @@
             <span class="dialog-header-title folder-dialog-title">设置重复</span>
           </div>
           <div class="dialog-body">
-            <div class="mission-form">
+            <div class="list-form">
               <div class="form-row">
                 <span class="form-label">重复</span>
                 <el-select v-model="repeatForm.strategy" placeholder="不重复" class="full-select" popper-class="dark-select-popper">
@@ -161,15 +161,21 @@
                     @click="toggleWeekday(i)">{{ d }}</button>
                 </div>
               </div>
+              <div class="form-row" v-if="repeatForm.strategy === 'monthly_selected_day'">
+                <span class="form-label">指定日期</span>
+                <el-input-number v-model="repeatForm.monthDay" :min="1" :max="31" class="full-input-num" />
+              </div>
               <div class="form-row" v-if="repeatForm.strategy === 'lunar_date'">
                 <span class="form-label">农历月</span>
                 <el-select v-model="repeatLunarMonth" class="full-select" popper-class="dark-select-popper">
                   <el-option v-for="(m, i) in LUNAR_MONTHS" :key="i" :label="m" :value="i + 1" />
                 </el-select>
                 <span class="form-label" style="margin-top: 10px;">农历日</span>
-                <el-input-number v-model="repeatLunarDay" :min="1" :max="30" class="full-input-num" />
+                <el-select v-model="repeatLunarDay" class="full-select" popper-class="dark-select-popper">
+                  <el-option v-for="(d, i) in LUNAR_DAYS" :key="i" :label="d" :value="i + 1" />
+                </el-select>
               </div>
-              <div class="mission-form-footer">
+              <div class="list-form-footer">
                 <el-button @click="showRepeatDialog = false">取消</el-button>
                 <el-button type="primary" @click="saveRepeat">保存</el-button>
               </div>
@@ -186,7 +192,7 @@
             <span class="dialog-header-title folder-dialog-title">结束重复</span>
           </div>
           <div class="dialog-body">
-            <div class="mission-form">
+            <div class="list-form">
               <div class="form-row">
                 <span class="form-label">结束重复</span>
                 <el-select v-model="endRepeatForm.strategy" class="full-select" popper-class="dark-select-popper">
@@ -201,7 +207,7 @@
                 <span class="form-label">重复次数</span>
                 <el-input-number v-model="endRepeatForm.count" :min="1" :max="9999" class="full-input-num" />
               </div>
-              <div class="mission-form-footer">
+              <div class="list-form-footer">
                 <el-button @click="showEndRepeatDialog = false">取消</el-button>
                 <el-button type="primary" @click="saveEndRepeat">保存</el-button>
               </div>
@@ -218,7 +224,7 @@
             <span class="dialog-header-title folder-dialog-title">所属清单分组</span>
           </div>
           <div class="dialog-body">
-            <div class="mission-form">
+            <div class="list-form">
               <div class="form-row">
                 <span class="form-label">所属清单</span>
                 <el-select v-model="listGroupForm.listId" placeholder="选择清单" class="full-select" popper-class="dark-select-popper">
@@ -235,7 +241,7 @@
                   </el-option>
                 </el-select>
               </div>
-              <div class="mission-form-footer">
+              <div class="list-form-footer">
                 <el-button @click="showListGroupDialog = false">取消</el-button>
                 <el-button type="primary" @click="saveListGroup">保存</el-button>
               </div>
@@ -248,7 +254,7 @@
     <ConfirmDialog
       v-model="showDeleteConfirm"
       title="确认删除"
-      :message="`确定要删除任务「${mission.name}」吗？`"
+      :message="`确定要删除任务「${list.name}」吗？`"
       @confirm="handleDelete"
     />
   </div>
@@ -259,7 +265,7 @@ import { ref, inject, nextTick, computed, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Calendar, RefreshRight, Check, CircleCheck, Bell, Plus, Rank, Flag, Delete } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
-import { useMissionStore, REPEAT_STRATEGIES, REPEAT_END_STRATEGIES, type Mission, type RepeatStrategy, type RepeatEndStrategy, type ReminderStrategy, type Priority } from '../../stores/missionStore'
+import { useListStore, REPEAT_STRATEGIES, REPEAT_END_STRATEGIES, type Task, type RepeatStrategy, type RepeatEndStrategy, type ReminderStrategy, type Priority } from '../../stores/listStore'
 import { logger } from '../../lib/logger'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
@@ -267,7 +273,7 @@ import ReminderTimePicker from '../common/picker/ReminderTimePicker.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
 
 const props = withDefaults(defineProps<{
-  mission: Mission
+  list: Task
   context?: 'default' | 'footprint' | 'today' | 'custom-list'
   showCheckbox?: boolean
 }>(), {
@@ -276,11 +282,11 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  (e: 'complete', mission: Mission): void
-  (e: 'delete', mission: Mission): void
+  (e: 'complete', list: Task): void
+  (e: 'delete', list: Task): void
 }>()
 
-const missionStore = useMissionStore()
+const listStore = useListStore()
 const refreshReminders = inject<() => void>('refreshReminders', () => {})
 const isGuideActive = inject('guideVisible', ref(false))
 
@@ -296,10 +302,10 @@ const isEditingName = ref(false)
 const editingName = ref('')
 
 const startEditName = () => {
-  editingName.value = props.mission.name
+  editingName.value = props.list.name
   isEditingName.value = true
   nextTick(() => {
-    const el = document.querySelector('.mission-name-input textarea') as HTMLTextAreaElement
+    const el = document.querySelector('.list-name-input textarea') as HTMLTextAreaElement
     if (el) el.focus()
   })
 }
@@ -307,9 +313,9 @@ const startEditName = () => {
 const saveName = async () => {
   if (!isEditingName.value) return
   const newName = editingName.value.trim()
-  if (newName && newName !== props.mission.name) {
-    await missionStore.updateMission(props.mission.id, { name: newName })
-    logger.info('[清单] 修改任务名称', { missionId: props.mission.id, name: newName })
+  if (newName && newName !== props.list.name) {
+    await listStore.updateTask(props.list.id, { name: newName })
+    logger.info('[清单] 修改任务名称', { listId: props.list.id, name: newName })
   }
   isEditingName.value = false
   editingName.value = ''
@@ -327,93 +333,104 @@ const priorityLabels: Record<Priority, string> = {
   'low': '低优先级'
 }
 
-const priorityLabel = computed(() => priorityLabels[props.mission.priority])
+const priorityLabel = computed(() => priorityLabels[props.list.priority])
 
 const PRIORITY_CYCLE: Priority[] = ['none', 'high', 'medium', 'low']
 
 const cyclePriority = async () => {
-  const idx = PRIORITY_CYCLE.indexOf(props.mission.priority)
+  const idx = PRIORITY_CYCLE.indexOf(props.list.priority)
   const next = PRIORITY_CYCLE[(idx + 1) % PRIORITY_CYCLE.length]
-  await missionStore.updateMission(props.mission.id, { priority: next } as any)
-  logger.info('[清单] 修改优先级', { missionId: props.mission.id, priority: next })
+  await listStore.updateTask(props.list.id, { priority: next } as any)
+  logger.info('[清单] 修改优先级', { listId: props.list.id, priority: next })
 }
 
-const handleMissionComplete = async (mission: Mission) => {
-  const hadReminder = mission.reminderStrategy !== 'none' && mission.date
-  if (mission.completed) await missionStore.uncompleteMission(mission.id)
-  else await missionStore.completeMission(mission.id)
-  emit('complete', mission)
+const handleTaskComplete = async (list: Task) => {
+  const hadReminder = list.reminderStrategy !== 'none' && list.date
+  if (list.completed) await listStore.uncompleteTask(list.id)
+  else await listStore.completeTask(list.id)
+  emit('complete', list)
   if (hadReminder) refreshReminders()
 }
 
 const handleDelete = () => {
-  emit('delete', props.mission)
+  emit('delete', props.list)
 }
 
 const getGroup = (listId: string, groupId: string) => {
-  const list = missionStore.lists.find(l => l.id === listId)
+  const list = listStore.taskLists.find(l => l.id === listId)
   if (!list) return null
   return list.groups.find(g => g.id === groupId) || null
 }
 
 const getListName = (listId: string) => {
-  const list = missionStore.lists.find(l => l.id === listId)
+  const list = listStore.taskLists.find(l => l.id === listId)
   return list?.name || '未知清单'
 }
 
 const getListColor = (listId: string) => {
-  const list = missionStore.lists.find(l => l.id === listId)
+  const list = listStore.taskLists.find(l => l.id === listId)
   return list?.color || '#409EFF'
 }
 
 const getGroupName = (listId: string, groupId: string) => {
-  const list = missionStore.lists.find(l => l.id === listId)
+  const list = listStore.taskLists.find(l => l.id === listId)
   if (!list) return ''
   const group = list.groups.find(g => g.id === groupId)
   if (!group || group.name === '默认分组') return ''
   return group.name
 }
 
-const getReminderLabel = (mission: Mission): string => {
-  if (!mission.reminderStrategy || mission.reminderStrategy === 'none') return '不提醒'
-  if (mission.reminderStrategy === 'on_time') return '准时提醒'
-  if (mission.reminderStrategy === 'advance') {
+const getReminderLabel = (list: Task): string => {
+  if (!list.reminderStrategy || list.reminderStrategy === 'none') return '不提醒'
+  if (list.reminderStrategy === 'on_time') return '准时提醒'
+  if (list.reminderStrategy === 'advance') {
     const parts: string[] = []
-    if (mission.reminderDays) parts.push(`${mission.reminderDays}天`)
-    if (mission.reminderHours) parts.push(`${mission.reminderHours}小时`)
-    if (mission.reminderMinutes) parts.push(`${mission.reminderMinutes}分钟`)
+    if (list.reminderDays) parts.push(`${list.reminderDays}天`)
+    if (list.reminderHours) parts.push(`${list.reminderHours}小时`)
+    if (list.reminderMinutes) parts.push(`${list.reminderMinutes}分钟`)
     return `提前${parts.join('')}`
   }
   return '不提醒'
 }
 
-const reminderLabel = computed(() => getReminderLabel(props.mission))
+const reminderLabel = computed(() => getReminderLabel(props.list))
 
-const getRepeatLabel = (strategy: string, missionDate?: string, customDays?: number) => {
+const LUNAR_MONTHS = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月']
+const LUNAR_DAYS = ['初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十', '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十', '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十']
+
+const getRepeatLabel = (strategy: string, listDate?: string, customDays?: number, weekdays?: number[], monthDay?: number, lunarMonth?: number, lunarDay?: number) => {
   if (strategy === 'custom_days' && customDays) return `每隔${customDays}天`
-  if (strategy === 'weekly' && missionDate) {
+  if (strategy === 'weekly' && listDate) {
     const weekDays = ['日', '一', '二', '三', '四', '五', '六']
-    const dayOfWeek = dayjs(missionDate).day()
+    const dayOfWeek = dayjs(listDate).day()
     return `每周${weekDays[dayOfWeek]}`
   }
-  if (strategy === 'monthly' && missionDate) {
-    const dayOfMonth = dayjs(missionDate).date()
+  if (strategy === 'weekly_select' && weekdays && weekdays.length > 0) {
+    const weekDays = ['一', '二', '三', '四', '五', '六', '日']
+    const labels = weekdays.map(d => weekDays[d] || '?')
+    return `每周${labels.join('、')}重复`
+  }
+  if (strategy === 'monthly' && listDate) {
+    const dayOfMonth = dayjs(listDate).date()
     return `每月${dayOfMonth}号`
   }
+  if (strategy === 'monthly_selected_day' && monthDay) return `每月${monthDay}号重复`
+  if (strategy === 'lunar_date' && lunarMonth && lunarDay) return `每年${LUNAR_MONTHS[lunarMonth - 1] || lunarMonth}${LUNAR_DAYS[lunarDay - 1] || lunarDay}重复`
+  if (strategy === 'none') return '不重复'
   return REPEAT_STRATEGIES.find(s => s.value === strategy)?.label || strategy
 }
 
-const repeatLabel = computed(() => getRepeatLabel(props.mission.repeatStrategy, props.mission.date, props.mission.repeatCustomDays))
+const repeatLabel = computed(() => getRepeatLabel(props.list.repeatStrategy, props.list.date, props.list.repeatCustomDays, props.list.repeatWeekdays, props.list.repeatMonthDay, props.list.repeatLunarMonth, props.list.repeatLunarDay))
 
-const getRepeatEndLabel = (mission: Mission) => {
-  if (!mission.repeatStrategy || mission.repeatStrategy === 'none') return null
-  if (!mission.repeatEndStrategy || mission.repeatEndStrategy === 'never') return '永不结束'
-  if (mission.repeatEndStrategy === 'date' && mission.repeatEndDate) return `至 ${dayjs(mission.repeatEndDate).format('MM月DD日')}`
-  if (mission.repeatEndStrategy === 'count' && mission.repeatCount) return `共${mission.repeatCount}次`
+const getRepeatEndLabel = (list: Task) => {
+  if (!list.repeatStrategy || list.repeatStrategy === 'none') return null
+  if (!list.repeatEndStrategy || list.repeatEndStrategy === 'never') return '永不结束'
+  if (list.repeatEndStrategy === 'date' && list.repeatEndDate) return `至 ${dayjs(list.repeatEndDate).format('MM月DD日')}`
+  if (list.repeatEndStrategy === 'count' && list.repeatCount) return `重复${list.repeatCount}次，已重复${list.repeatCompletedCount}次`
   return '永不结束'
 }
 
-const endRepeatLabel = computed(() => getRepeatEndLabel(props.mission))
+const endRepeatLabel = computed(() => getRepeatEndLabel(props.list))
 
 const formatTimeDiff = (days: number, hours: number, minutes: number, isOverdue: boolean): string => {
   const prefix = isOverdue ? '已过期' : '还剩'
@@ -425,12 +442,12 @@ const formatTimeDiff = (days: number, hours: number, minutes: number, isOverdue:
   return prefix + parts.join('')
 }
 
-const getRemainingTimeDisplay = (mission: Mission) => {
-  if (!mission.date || mission.completed) return null
+const getRemainingTimeDisplay = (list: Task) => {
+  if (!list.date || list.completed) return null
   const now = dayjs()
-  const md = dayjs(mission.date)
+  const md = dayjs(list.date)
   let targetTime = md
-  if (mission.endTime) { const [h, m] = mission.endTime.split(':').map(Number); targetTime = md.hour(h).minute(m) }
+  if (list.endTime) { const [h, m] = list.endTime.split(':').map(Number); targetTime = md.hour(h).minute(m) }
   else { targetTime = md.hour(23).minute(59) }
   const diffMinutes = targetTime.diff(now, 'minute')
   if (diffMinutes <= 0) {
@@ -450,25 +467,25 @@ const getRemainingTimeDisplay = (mission: Mission) => {
   return { text: formatTimeDiff(days, hours, minutes, false), type: 'today' }
 }
 
-const remainingTime = computed(() => getRemainingTimeDisplay(props.mission))
+const remainingTime = computed(() => getRemainingTimeDisplay(props.list))
 
 const showDatePicker = ref(false)
-const datePickerValue = ref(props.mission.date || '')
+const datePickerValue = ref(props.list.date || '')
 const showDeleteConfirm = ref(false)
 
 const openDatePicker = () => {
-  datePickerValue.value = props.mission.date || dayjs().format('YYYY-MM-DD')
+  datePickerValue.value = props.list.date || dayjs().format('YYYY-MM-DD')
   showDatePicker.value = true
 }
 
 const onDatePicked = async (dateStr: string) => {
-  await missionStore.updateMission(props.mission.id, { date: dateStr })
-  logger.info('[清单] 修改结束日期', { missionId: props.mission.id, date: dateStr })
+  await listStore.updateTask(props.list.id, { date: dateStr })
+  logger.info('[清单] 修改结束日期', { listId: props.list.id, date: dateStr })
 }
 
 const onTimePicked = async (val: string) => {
-  await missionStore.updateMission(props.mission.id, { endTime: val })
-  logger.info('[清单] 修改结束时间', { missionId: props.mission.id, endTime: val })
+  await listStore.updateTask(props.list.id, { endTime: val })
+  logger.info('[清单] 修改结束时间', { listId: props.list.id, endTime: val })
 }
 
 const showReminderDialog = ref(false)
@@ -476,9 +493,9 @@ const reminderTimeValue = ref({ days: 0, hours: 0, minutes: 15 })
 
 const openReminderDialog = () => {
   reminderTimeValue.value = {
-    days: props.mission.reminderStrategy === 'advance' ? (props.mission.reminderDays || 0) : 0,
-    hours: props.mission.reminderStrategy === 'advance' ? (props.mission.reminderHours || 0) : 0,
-    minutes: props.mission.reminderStrategy === 'advance' ? (props.mission.reminderMinutes || 0) : (props.mission.reminderStrategy === 'none' ? 0 : 15)
+    days: props.list.reminderStrategy === 'advance' ? (props.list.reminderDays || 0) : 0,
+    hours: props.list.reminderStrategy === 'advance' ? (props.list.reminderHours || 0) : 0,
+    minutes: props.list.reminderStrategy === 'advance' ? (props.list.reminderMinutes || 0) : (props.list.reminderStrategy === 'none' ? 0 : 15)
   }
   showReminderDialog.value = true
 }
@@ -486,14 +503,14 @@ const openReminderDialog = () => {
 const showRepeatDialog = ref(false)
 const repeatForm = reactive({
   strategy: 'none' as RepeatStrategy,
-  customDays: 1
+  customDays: 1,
+  monthDay: 1
 })
 const repeatWeekdays = ref<number[]>([0, 1, 2, 3, 4])
 const repeatLunarMonth = ref(1)
 const repeatLunarDay = ref(1)
 
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']
-const LUNAR_MONTHS = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月']
 
 const toggleWeekday = (idx: number) => {
   const arr = [...repeatWeekdays.value]
@@ -507,11 +524,12 @@ const toggleWeekday = (idx: number) => {
 }
 
 const openRepeatDialog = () => {
-  repeatForm.strategy = props.mission.repeatStrategy as RepeatStrategy
-  repeatForm.customDays = props.mission.repeatCustomDays || 1
-  repeatWeekdays.value = [0, 1, 2, 3, 4]
-  repeatLunarMonth.value = 1
-  repeatLunarDay.value = 1
+  repeatForm.strategy = props.list.repeatStrategy as RepeatStrategy
+  repeatForm.customDays = props.list.repeatCustomDays || 1
+  repeatForm.monthDay = props.list.repeatMonthDay || 1
+  repeatWeekdays.value = (props.list.repeatWeekdays?.length ? [...props.list.repeatWeekdays] : [0, 1, 2, 3, 4])
+  repeatLunarMonth.value = props.list.repeatLunarMonth || 1
+  repeatLunarDay.value = props.list.repeatLunarDay || 1
   showRepeatDialog.value = true
 }
 
@@ -523,9 +541,9 @@ const endRepeatForm = reactive({
 })
 
 const openEndRepeatDialog = () => {
-  endRepeatForm.strategy = (props.mission.repeatEndStrategy || 'never') as RepeatEndStrategy
-  endRepeatForm.date = props.mission.repeatEndDate || ''
-  endRepeatForm.count = props.mission.repeatCount || 1
+  endRepeatForm.strategy = (props.list.repeatEndStrategy || 'never') as RepeatEndStrategy
+  endRepeatForm.date = props.list.repeatEndDate || ''
+  endRepeatForm.count = props.list.repeatCount || 1
   showEndRepeatDialog.value = true
 }
 
@@ -536,26 +554,26 @@ const listGroupForm = reactive({
 })
 
 const availableLists = computed(() => {
-  return missionStore.lists.filter(l => !l.deleted)
+  return listStore.taskLists.filter(l => !l.deleted)
 })
 
 const availableGroups = computed(() => {
   if (!listGroupForm.listId) return []
-  const list = missionStore.lists.find(l => l.id === listGroupForm.listId)
+  const list = listStore.taskLists.find(l => l.id === listGroupForm.listId)
   if (!list) return []
   return [...list.groups].sort((a, b) => a.order - b.order)
 })
 
 const openListGroupDialog = () => {
-  listGroupForm.listId = props.mission.listId
-  listGroupForm.groupId = props.mission.groupId
+  listGroupForm.listId = props.list.listId
+  listGroupForm.groupId = props.list.groupId
   showListGroupDialog.value = true
 }
 
 const saveReminder = async () => {
   const { days, hours, minutes } = reminderTimeValue.value
   const strategy: ReminderStrategy = (days === 0 && hours === 0 && minutes === 0) ? 'none' : 'advance'
-  await missionStore.updateMission(props.mission.id, {
+  await listStore.updateTask(props.list.id, {
     reminderStrategy: strategy,
     reminderDays: days,
     reminderHours: hours,
@@ -567,16 +585,20 @@ const saveReminder = async () => {
 }
 
 const saveRepeat = async () => {
-  await missionStore.updateMission(props.mission.id, {
+  await listStore.updateTask(props.list.id, {
     repeatStrategy: repeatForm.strategy,
-    repeatCustomDays: repeatForm.strategy === 'custom_days' ? repeatForm.customDays : 1
+    repeatCustomDays: repeatForm.strategy === 'custom_days' ? repeatForm.customDays : 1,
+    repeatWeekdays: repeatForm.strategy === 'weekly_select' ? [...repeatWeekdays.value] : [],
+    repeatMonthDay: repeatForm.strategy === 'monthly_selected_day' ? repeatForm.monthDay : 1,
+    repeatLunarMonth: repeatForm.strategy === 'lunar_date' ? repeatLunarMonth.value : 1,
+    repeatLunarDay: repeatForm.strategy === 'lunar_date' ? repeatLunarDay.value : 1
   })
   showRepeatDialog.value = false
   ElMessage.success('重复策略已更新')
 }
 
 const saveEndRepeat = async () => {
-  await missionStore.updateMission(props.mission.id, {
+  await listStore.updateTask(props.list.id, {
     repeatEndStrategy: endRepeatForm.strategy,
     repeatEndDate: endRepeatForm.strategy === 'date' ? endRepeatForm.date : '',
     repeatCount: endRepeatForm.strategy === 'count' ? endRepeatForm.count : 1
@@ -586,7 +608,7 @@ const saveEndRepeat = async () => {
 }
 
 const saveListGroup = async () => {
-  await missionStore.updateMission(props.mission.id, {
+  await listStore.updateTask(props.list.id, {
     listId: listGroupForm.listId,
     groupId: listGroupForm.groupId
   })
@@ -594,53 +616,53 @@ const saveListGroup = async () => {
   ElMessage.success('所属清单分组已更新')
 }
 
-const toggleChecklistItem = (missionId: string, itemId: string, event: Event) => {
+const toggleChecklistItem = (listId: string, itemId: string, event: Event) => {
   event.stopPropagation()
-  const mission = missionStore.missions.find(m => m.id === missionId)
-  const item = mission?.checklist.find(c => c.id === itemId)
-  logger.info('[清单] 完成检查事项', { missionId, missionName: mission?.name, itemId, itemName: item?.text })
-  missionStore.toggleChecklistItem(missionId, itemId)
+  const list = listStore.lists.find(m => m.id === listId)
+  const item = list?.checklist.find(c => c.id === itemId)
+  logger.info('[清单] 完成检查事项', { listId, listName: list?.name, itemId, itemName: item?.text })
+  listStore.toggleChecklistItem(listId, itemId)
 }
 
 const addingChecklist = ref<Record<string, boolean>>({})
 const newChecklistText = ref('')
-const addingChecklistMissionId = ref<string>('')
+const addingChecklistTaskId = ref<string>('')
 
-const showAddChecklist = (missionId: string) => {
-  addingChecklist.value[missionId] = true
+const showAddChecklist = (listId: string) => {
+  addingChecklist.value[listId] = true
   newChecklistText.value = ''
-  addingChecklistMissionId.value = missionId
+  addingChecklistTaskId.value = listId
 }
 
-const cancelAddChecklist = (missionId: string) => {
-  addingChecklist.value[missionId] = false
+const cancelAddChecklist = (listId: string) => {
+  addingChecklist.value[listId] = false
   newChecklistText.value = ''
-  if (addingChecklistMissionId.value === missionId) addingChecklistMissionId.value = ''
+  if (addingChecklistTaskId.value === listId) addingChecklistTaskId.value = ''
 }
 
-const handleAddChecklist = async (missionId: string) => {
+const handleAddChecklist = async (listId: string) => {
   const text = newChecklistText.value.trim()
-  if (!text) { cancelAddChecklist(missionId); return }
-  await missionStore.addChecklistItem(missionId, text)
-  logger.info('[清单] 快速添加检查事项', { missionId, text })
-  addingChecklistMissionId.value = ''
-  cancelAddChecklist(missionId)
+  if (!text) { cancelAddChecklist(listId); return }
+  await listStore.addChecklistItem(listId, text)
+  logger.info('[清单] 快速添加检查事项', { listId, text })
+  addingChecklistTaskId.value = ''
+  cancelAddChecklist(listId)
 }
 
-const dragSourceMissionId = ref('')
+const dragSourceTaskId = ref('')
 const dragSourceItemId = ref('')
 const dragOverItemId = ref('')
 const editingChecklistId = ref('')
-const editingChecklistMissionId = ref('')
+const editingChecklistTaskId = ref('')
 const editingChecklistText = ref('')
 
-const onChecklistDragStart = (e: DragEvent, missionId: string, itemId: string) => {
-  dragSourceMissionId.value = missionId
+const onChecklistDragStart = (e: DragEvent, listId: string, itemId: string) => {
+  dragSourceTaskId.value = listId
   dragSourceItemId.value = itemId
   if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
 }
 
-const onChecklistDragOver = (_e: DragEvent, _missionId: string, itemId: string) => {
+const onChecklistDragOver = (_e: DragEvent, _listId: string, itemId: string) => {
   dragOverItemId.value = itemId
 }
 
@@ -648,24 +670,24 @@ const onChecklistDragLeave = (itemId: string) => {
   if (dragOverItemId.value === itemId) dragOverItemId.value = null
 }
 
-const onChecklistDrop = async (missionId: string, targetItemId: string) => {
+const onChecklistDrop = async (listId: string, targetItemId: string) => {
   dragOverItemId.value = null
-  const mission = missionStore.missions.find(m => m.id === missionId)
-  if (!mission) return
-  const fromIdx = mission.checklist.findIndex(c => c.id === dragSourceItemId.value)
-  const toIdx = mission.checklist.findIndex(c => c.id === targetItemId)
+  const list = listStore.lists.find(m => m.id === listId)
+  if (!list) return
+  const fromIdx = list.checklist.findIndex(c => c.id === dragSourceItemId.value)
+  const toIdx = list.checklist.findIndex(c => c.id === targetItemId)
   if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return
-  const items = [...mission.checklist]
+  const items = [...list.checklist]
   const [moved] = items.splice(fromIdx, 1)
   items.splice(toIdx, 0, moved)
-  mission.checklist = items
-  await missionStore.updateMission(missionId, { checklist: items })
-  logger.info('[清单] 拖拽排序检查事项', { missionId, fromIdx, toIdx })
+  list.checklist = items
+  await listStore.updateTask(listId, { checklist: items })
+  logger.info('[清单] 拖拽排序检查事项', { listId, fromIdx, toIdx })
 }
 
-const startEditChecklistItem = (missionId: string, item: { id: string; text: string }) => {
+const startEditChecklistItem = (listId: string, item: { id: string; text: string }) => {
   editingChecklistId.value = item.id
-  editingChecklistMissionId.value = missionId
+  editingChecklistTaskId.value = listId
   editingChecklistText.value = item.text
   nextTick(() => {
     const el = document.querySelector('.checklist-edit-input textarea') as HTMLTextAreaElement
@@ -674,66 +696,70 @@ const startEditChecklistItem = (missionId: string, item: { id: string; text: str
 }
 
 const finishEditChecklistItem = async () => {
-  const mission = missionStore.missions.find(m => m.id === editingChecklistMissionId.value)
-  if (!mission) { cancelEditChecklistItem(); return }
-  const item = mission.checklist.find(c => c.id === editingChecklistId.value)
+  const list = listStore.lists.find(m => m.id === editingChecklistTaskId.value)
+  if (!list) { cancelEditChecklistItem(); return }
+  const item = list.checklist.find(c => c.id === editingChecklistId.value)
   if (!item) { cancelEditChecklistItem(); return }
   const newText = editingChecklistText.value.trim()
-  if (newText && newText !== item.text) {
+  if (!newText) {
+    list.checklist = list.checklist.filter(c => c.id !== editingChecklistId.value)
+    await listStore.updateTask(editingChecklistTaskId.value, { checklist: list.checklist })
+    logger.info('[清单] 删除空白检查事项', { listId: editingChecklistTaskId.value, itemId: editingChecklistId.value })
+  } else if (newText !== item.text) {
     item.text = newText
-    await missionStore.updateMission(editingChecklistMissionId.value, { checklist: mission.checklist })
-    logger.info('[清单] 编辑检查事项', { missionId: editingChecklistMissionId.value, itemId: editingChecklistId.value, text: newText })
+    await listStore.updateTask(editingChecklistTaskId.value, { checklist: list.checklist })
+    logger.info('[清单] 编辑检查事项', { listId: editingChecklistTaskId.value, itemId: editingChecklistId.value, text: newText })
   }
   cancelEditChecklistItem()
 }
 
 const cancelEditChecklistItem = () => {
   editingChecklistId.value = ''
-  editingChecklistMissionId.value = ''
+  editingChecklistTaskId.value = ''
   editingChecklistText.value = ''
 }
 
-const editingNotesMissionId = ref('')
+const editingNotesTaskId = ref('')
 const editingNotesText = ref('')
 
-const startEditNotes = (mission: Mission) => {
-  editingNotesMissionId.value = mission.id
-  editingNotesText.value = mission.notes || ''
+const startEditNotes = (list: Task) => {
+  editingNotesTaskId.value = list.id
+  editingNotesText.value = list.notes || ''
   nextTick(() => {
-    const el = document.querySelector('.mission-notes-edit-input textarea') as HTMLTextAreaElement
+    const el = document.querySelector('.list-notes-edit-input textarea') as HTMLTextAreaElement
     if (el) el.focus()
   })
 }
 
 const finishEditNotes = async () => {
-  const mission = missionStore.missions.find(m => m.id === editingNotesMissionId.value)
-  if (!mission) { cancelEditNotes(); return }
+  const list = listStore.lists.find(m => m.id === editingNotesTaskId.value)
+  if (!list) { cancelEditNotes(); return }
   const newText = editingNotesText.value.trim()
-  await missionStore.updateMission(editingNotesMissionId.value, { notes: newText || undefined })
-  logger.info('[清单] 编辑备注', { missionId: editingNotesMissionId.value, notes: newText })
+  await listStore.updateTask(editingNotesTaskId.value, { notes: newText || undefined })
+  logger.info('[清单] 编辑备注', { listId: editingNotesTaskId.value, notes: newText })
   cancelEditNotes()
 }
 
 const cancelEditNotes = () => {
-  editingNotesMissionId.value = ''
+  editingNotesTaskId.value = ''
   editingNotesText.value = ''
 }
 </script>
 
 <style scoped>
-.mission-card { background: rgba(255, 255, 255, 0.05); border-radius: 10px; padding: 14px 16px; transition: all 0.2s; }
-.mission-card:hover { background: rgba(255, 255, 255, 0.08); }
-.mission-card.completed { opacity: 0.6; }
-.mission-card.completed .mission-name { text-decoration: line-through; color: var(--chalk-muted) !important; }
+.list-card { background: rgba(255, 255, 255, 0.05); border-radius: 10px; padding: 14px 16px; transition: all 0.2s; width: 100%; }
+.list-card:hover { background: rgba(255, 255, 255, 0.08); }
+.list-card.completed { opacity: 0.6; }
+.list-card.completed .list-name { text-decoration: line-through; color: var(--chalk-muted) !important; }
 
-.mission-header { display: flex; align-items: center; gap: 10px; }
-.mission-header .mission-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 500; color: var(--chalk-white); margin-bottom: 0; cursor: pointer; }
-.mission-header .mission-name:hover { opacity: 0.8; }
-.mission-name-input { flex: 1; min-width: 0; }
-.mission-name-input :deep(.el-textarea__inner) { background: rgba(255, 255, 255, 0.05) !important; border: 1px solid rgba(102, 126, 234, 0.3) !important; color: var(--chalk-white-90) !important; }
+.list-header { display: flex; align-items: center; gap: 10px; }
+.list-header .list-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 500; color: var(--chalk-white); margin-bottom: 0; cursor: pointer; }
+.list-header .list-name:hover { opacity: 0.8; }
+.list-name-input { flex: 1; min-width: 0; }
+.list-name-input :deep(.el-textarea__inner) { background: rgba(255, 255, 255, 0.05) !important; border: 1px solid rgba(102, 126, 234, 0.3) !important; color: var(--chalk-white-90) !important; }
 
-.mission-body { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
-.mission-meta-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.list-body { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.list-meta-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
 .priority-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: none; background: transparent; color: var(--chalk-muted); cursor: pointer; border-radius: 4px; transition: all 0.2s; flex-shrink: 0; }
 .priority-btn:hover { background: rgba(255,255,255,0.1); }
@@ -768,12 +794,12 @@ const cancelEditNotes = () => {
 .select-label { font-size: 14px; color: var(--chalk-white-70); font-weight: 500; }
 
 .checklist-items-always { margin-top: 4px; display: flex; flex-direction: column; gap: 4px; padding-left: 4px; }
-.mission-notes-content { margin-top: 8px; font-size: 13px; color: rgba(180, 170, 150, 0.75); line-height: 1.6; word-break: break-word; white-space: pre-wrap; }
-.mission-notes-placeholder { margin-top: 8px; font-size: 13px; color: rgba(180, 170, 150, 0.35); line-height: 1.6; word-break: break-word; white-space: pre-wrap; cursor: pointer; transition: color 0.2s; }
-.mission-notes-placeholder:hover { color: rgba(180, 170, 150, 0.55); }
-.mission-notes-edit-wrapper { margin-top: 8px; }
-.mission-notes-edit-input { flex: 1; }
-.mission-notes-edit-input :deep(.el-textarea__inner) { background: rgba(255, 255, 255, 0.05) !important; border: 1px solid rgba(102, 126, 234, 0.3) !important; color: var(--chalk-white-90) !important; }
+.list-notes-content { margin-top: 8px; font-size: 13px; color: rgba(180, 170, 150, 0.75); line-height: 1.6; word-break: break-word; white-space: pre-wrap; }
+.list-notes-placeholder { margin-top: 8px; font-size: 13px; color: rgba(180, 170, 150, 0.35); line-height: 1.6; word-break: break-word; white-space: pre-wrap; cursor: pointer; transition: color 0.2s; }
+.list-notes-placeholder:hover { color: rgba(180, 170, 150, 0.55); }
+.list-notes-edit-wrapper { margin-top: 8px; }
+.list-notes-edit-input { flex: 1; }
+.list-notes-edit-input :deep(.el-textarea__inner) { background: rgba(255, 255, 255, 0.05) !important; border: 1px solid rgba(102, 126, 234, 0.3) !important; color: var(--chalk-white-90) !important; }
 
 .checklist-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--chalk-white-70); padding: 6px 8px; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; }
 .checklist-item:hover { background: rgba(255, 255, 255, 0.05); color: var(--chalk-white-90); }
@@ -804,12 +830,12 @@ const cancelEditNotes = () => {
 .folder-dialog-title { text-align: center; }
 .dialog-body { padding: 16px 20px 20px; overflow-y: auto; }
 
-.mission-form { display: flex; flex-direction: column; gap: 14px; }
-.mission-form :deep(.el-input__wrapper) { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
-.mission-form :deep(.el-input__inner) { color: #fff; }
-.mission-form :deep(.el-input__inner::placeholder) { color: rgba(255, 255, 255, 0.4); }
-.mission-form :deep(.el-textarea__inner) { color: #fff; background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); }
-.mission-form :deep(.el-textarea__inner::placeholder) { color: rgba(255,255,255,0.4); }
+.list-form { display: flex; flex-direction: column; gap: 14px; }
+.list-form :deep(.el-input__wrapper) { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
+.list-form :deep(.el-input__inner) { color: #fff; }
+.list-form :deep(.el-input__inner::placeholder) { color: rgba(255, 255, 255, 0.4); }
+.list-form :deep(.el-textarea__inner) { color: #fff; background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); }
+.list-form :deep(.el-textarea__inner::placeholder) { color: rgba(255,255,255,0.4); }
 
 .form-row { display: flex; flex-direction: column; gap: 6px; }
 .form-label { font-size: 13px; color: var(--chalk-dim); }
@@ -817,7 +843,7 @@ const cancelEditNotes = () => {
 .full-input-num { width: 100%; }
 .full-input-num :deep(.el-input__wrapper) { width: 100%; }
 
-.mission-form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 8px; }
+.list-form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 8px; }
 
 .weekday-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .weekday-btn { padding: 6px 0; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: var(--chalk-white-70); border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.15s; }

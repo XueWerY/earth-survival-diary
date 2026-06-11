@@ -28,11 +28,6 @@ export interface FavoriteFocus {
     createdAt: string
 }
 
-// 番茄设置
-export interface FocusSettings {
-    pomodoroDuration: number // 番茄时长（分钟）
-}
-
 // 计时状态（用于持久化）
 export interface TimerState {
     name: string
@@ -49,24 +44,20 @@ export interface TimerState {
 export const useFocusStore = defineStore('focus', () => {
     const records = ref<FocusRecord[]>([])
     const favorites = ref<FavoriteFocus[]>([])
-    const settings = ref<FocusSettings>({
-        pomodoroDuration: 25 // 默认25分钟
-    })
     const timerState = ref<TimerState | null>(null) // 当前计时状态
+    const focusDisplayTime = ref('')
     const isLoaded = ref(false)
 
     // 加载数据
     const loadData = async () => {
         if (isLoaded.value) return
-        const [savedRecords, savedFavorites, savedSettings, savedTimerState] = await Promise.all([
+        const [savedRecords, savedFavorites, savedTimerState] = await Promise.all([
             getData<FocusRecord[]>('focus', 'records'),
             getData<FavoriteFocus[]>('focus', 'favorites'),
-            getData<FocusSettings>('focus', 'settings'),
             getSystemStateField('focusTimer')
         ])
         if (savedRecords) records.value = savedRecords
         if (savedFavorites) favorites.value = savedFavorites
-        if (savedSettings) settings.value = { ...settings.value, ...savedSettings }
         if (savedTimerState) timerState.value = savedTimerState
         isLoaded.value = true
     }
@@ -78,10 +69,6 @@ export const useFocusStore = defineStore('focus', () => {
 
     const saveFavorites = async () => {
         await setData('focus', 'favorites', favorites.value)
-    }
-
-    const saveSettings = async () => {
-        await setData('focus', 'settings', settings.value)
     }
 
     // 保存计时状态
@@ -142,12 +129,6 @@ export const useFocusStore = defineStore('focus', () => {
             favorites.value.splice(index, 1)
             await saveFavorites()
         }
-    }
-
-    // 更新设置
-    const updateSettings = async (newSettings: Partial<FocusSettings>) => {
-        settings.value = { ...settings.value, ...newSettings }
-        await saveSettings()
     }
 
     // 统计：今日专注次数
@@ -322,9 +303,6 @@ export const useFocusStore = defineStore('focus', () => {
     const reset = () => {
         records.value = []
         favorites.value = []
-        settings.value = {
-            pomodoroDuration: 25
-        }
         timerState.value = null
         isLoaded.value = false
     }
@@ -332,14 +310,12 @@ export const useFocusStore = defineStore('focus', () => {
     return {
         records,
         favorites,
-        settings,
         isLoaded,
         loadData,
         addRecord,
         deleteRecord,
         addFavorite,
         deleteFavorite,
-        updateSettings,
         todayFocusCount,
         todayFocusDuration,
         weeklyFocusDuration,
@@ -358,6 +334,7 @@ export const useFocusStore = defineStore('focus', () => {
         getStatsByNameByRange,
         // 计时状态持久化
         timerState,
+        focusDisplayTime,
         saveTimerState,
         clearTimerState,
         reset

@@ -217,7 +217,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, onActivated, watch, inject } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onActivated, watch, inject, provide } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Star, Delete } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
@@ -347,6 +347,7 @@ const displayTime = computed(() => {
   }
 })
 
+// 定时器 ID
 // 进度条偏移
 const progressOffset = computed(() => {
   if (focusType.value === 'pomodoro') {
@@ -361,6 +362,9 @@ const progressOffset = computed(() => {
 })
 
 watch(displayTime, (val, old) => {
+  if (timerState.value === 'running') {
+    focusStore.focusDisplayTime = val
+  }
   if (!old || timerState.value !== 'running' || focusType.value !== 'stopwatch') return
   const nc = val.split('')
   const oc = old.split('')
@@ -458,7 +462,6 @@ const startFocus = async () => {
   } else {
     elapsedSeconds.value = 0
     startStopwatch()
-    ;(window as any).__countdownRefresh?.()
   }
 }
 
@@ -512,10 +515,13 @@ const cancelFocus = async () => {
   startTimestamp.value = 0
   lastUpdateTime.value = 0
 
-  ;(window as any).__countdownRefresh?.()
+  if (focusType.value === 'pomodoro') {
+    ;(window as any).__countdownRefresh?.()
+  }
 
   // 清除 store 中的计时状态
   await focusStore.clearTimerState()
+  focusStore.focusDisplayTime = ''
 
   timeChars.value = '00:00'.split('')
 
@@ -642,10 +648,13 @@ const completeFocus = async () => {
   startTimestamp.value = 0
   lastUpdateTime.value = 0
 
-  ;(window as any).__countdownRefresh?.()
+  if (focusType.value === 'pomodoro') {
+    ;(window as any).__countdownRefresh?.()
+  }
 
   // 清除 store 中的计时状态
   await focusStore.clearTimerState()
+  focusStore.focusDisplayTime = ''
 
   timeChars.value = '00:00'.split('')
 

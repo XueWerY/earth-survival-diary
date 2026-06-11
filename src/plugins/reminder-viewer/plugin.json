@@ -1,0 +1,14 @@
+{
+  "id": "reminder-viewer",
+  "name": "提醒查看器",
+  "version": "1.0.8",
+  "description": "查看所有已调度的提醒",
+  "author": "官方",
+  "tools": {
+    "reminder-viewer": {
+      "name": "查看所有提醒",
+      "description": "按触发时间列出所有提醒",
+      "icon": "🔔"
+    }
+  }
+}

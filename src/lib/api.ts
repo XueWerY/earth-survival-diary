@@ -134,51 +134,51 @@ async function capacitorRequest<T>(endpoint: string, options: RequestInit = {}):
         if (options.method === 'DELETE') return await fs.fsDeleteTask(userId, taskMatch[1]) as unknown as T
     }
 
-    // Mission Lists
-    if (endpoint === '/mission-lists' && !options.method) {
-        return await fs.fsGetMissionLists(userId) as unknown as T
+    // Lists
+    if (endpoint === '/list-lists' && !options.method) {
+        return await fs.fsGetLists(userId) as unknown as T
     }
-    if (endpoint === '/mission-lists' && options.method === 'POST') {
-        return await fs.fsAddMissionList(userId, body) as unknown as T
+    if (endpoint === '/list-lists' && options.method === 'POST') {
+        return await fs.fsAddList(userId, body) as unknown as T
     }
-    if (endpoint === '/mission-lists/reorder' && options.method === 'PUT') {
-        return await fs.fsReorderMissionLists(userId, body.orders) as unknown as T
+    if (endpoint === '/list-lists/reorder' && options.method === 'PUT') {
+        return await fs.fsReorderLists(userId, body.orders) as unknown as T
     }
-    const listMatch = endpoint.match(/^\/mission-lists\/([^/]+)$/)
+    const listMatch = endpoint.match(/^\/list-lists\/([^/]+)$/)
     if (listMatch) {
-        if (options.method === 'PUT') return await fs.fsUpdateMissionList(userId, listMatch[1], body) as unknown as T
-        if (options.method === 'DELETE') return await fs.fsDeleteMissionList(userId, listMatch[1]) as unknown as T
+        if (options.method === 'PUT') return await fs.fsUpdateList(userId, listMatch[1], body) as unknown as T
+        if (options.method === 'DELETE') return await fs.fsDeleteList(userId, listMatch[1]) as unknown as T
     }
-    const groupMatch = endpoint.match(/^\/mission-lists\/([^/]+)\/groups\/([^/]+)$/)
+    const groupMatch = endpoint.match(/^\/list-lists\/([^/]+)\/groups\/([^/]+)$/)
     if (groupMatch) {
-        if (options.method === 'PUT') return await fs.fsUpdateMissionGroup(userId, groupMatch[1], groupMatch[2], body) as unknown as T
-        if (options.method === 'DELETE') return await fs.fsDeleteMissionGroup(userId, groupMatch[1], groupMatch[2]) as unknown as T
+        if (options.method === 'PUT') return await fs.fsUpdateGroup(userId, groupMatch[1], groupMatch[2], body) as unknown as T
+        if (options.method === 'DELETE') return await fs.fsDeleteGroup(userId, groupMatch[1], groupMatch[2]) as unknown as T
     }
-    const groupAddMatch = endpoint.match(/^\/mission-lists\/([^/]+)\/groups$/)
+    const groupAddMatch = endpoint.match(/^\/list-lists\/([^/]+)\/groups$/)
     if (groupAddMatch && options.method === 'POST') {
-        return await fs.fsAddMissionGroup(userId, groupAddMatch[1], body) as unknown as T
+        return await fs.fsAddGroup(userId, groupAddMatch[1], body) as unknown as T
     }
-    const groupReorderMatch = endpoint.match(/^\/mission-lists\/([^/]+)\/groups\/reorder$/)
+    const groupReorderMatch = endpoint.match(/^\/list-lists\/([^/]+)\/groups\/reorder$/)
     if (groupReorderMatch && options.method === 'PUT') {
         return await fs.fsReorderGroups(userId, groupReorderMatch[1], body.orders) as unknown as T
     }
 
-    // Missions
-    const missionQuery = endpoint.startsWith('/missions?')
-    if (missionQuery) {
+    // List Tasks
+    const listTaskQuery = endpoint.startsWith('/list-tasks?')
+    if (listTaskQuery) {
         const params = new URLSearchParams(endpoint.substring(endpoint.indexOf('?')))
-        return await fs.fsGetMissions(userId, params.get('listId') || undefined) as unknown as T
+        return await fs.fsGetListTasks(userId, params.get('listId') || undefined) as unknown as T
     }
-    if (endpoint === '/missions' && !options.method) {
-        return await fs.fsGetMissions(userId) as unknown as T
+    if (endpoint === '/list-tasks' && !options.method) {
+        return await fs.fsGetListTasks(userId) as unknown as T
     }
-    if (endpoint === '/missions' && options.method === 'POST') {
-        return await fs.fsAddMission(userId, body) as unknown as T
+    if (endpoint === '/list-tasks' && options.method === 'POST') {
+        return await fs.fsAddListTask(userId, body) as unknown as T
     }
-    const missionMatch = endpoint.match(/^\/missions\/([^/]+)$/)
-    if (missionMatch) {
-        if (options.method === 'PUT') return await fs.fsUpdateMission(userId, missionMatch[1], body) as unknown as T
-        if (options.method === 'DELETE') return await fs.fsDeleteMission(userId, missionMatch[1]) as unknown as T
+    const listTaskMatch = endpoint.match(/^\/list-tasks\/([^/]+)$/)
+    if (listTaskMatch) {
+        if (options.method === 'PUT') return await fs.fsUpdateListTask(userId, listTaskMatch[1], body) as unknown as T
+        if (options.method === 'DELETE') return await fs.fsDeleteListTask(userId, listTaskMatch[1]) as unknown as T
     }
 
     // Stats
@@ -363,79 +363,79 @@ export async function deleteTask(id: string): Promise<{ success: boolean }> {
     return request(`/tasks/${id}`, { method: 'DELETE' })
 }
 
-// ============ 使命列表 API ============
+// ============ 清单 API ============
 
-export interface MissionGroup {
+export interface Group {
     id: string
     name: string
     color: string
     order: number
 }
 
-export interface MissionList {
+export interface List {
     id: string
     name: string
     icon: string
     created_at: string
-    groups?: MissionGroup[]
+    groups?: Group[]
     order?: number
 }
 
-export async function getMissionLists(): Promise<{ lists: MissionList[] }> {
-    return request('/mission-lists')
+export async function getLists(): Promise<{ lists: List[] }> {
+    return request('/list-lists')
 }
 
-export async function addMissionList(name: string, icon?: string): Promise<{ list: MissionList }> {
-    return request('/mission-lists', {
+export async function addList(name: string, icon?: string): Promise<{ list: List }> {
+    return request('/list-lists', {
         method: 'POST',
         body: JSON.stringify({ name, icon })
     })
 }
 
-export async function updateMissionList(id: string, data: { name?: string; icon?: string }): Promise<{ list: MissionList }> {
-    return request(`/mission-lists/${id}`, {
+export async function updateList(id: string, data: { name?: string; icon?: string }): Promise<{ list: List }> {
+    return request(`/list-lists/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data)
     })
 }
 
-export async function deleteMissionList(id: string): Promise<{ success: boolean }> {
-    return request(`/mission-lists/${id}`, { method: 'DELETE' })
+export async function deleteList(id: string): Promise<{ success: boolean }> {
+    return request(`/list-lists/${id}`, { method: 'DELETE' })
 }
 
-export async function updateMissionGroup(listId: string, groupId: string, data: { name?: string; color?: string; order?: number }): Promise<{ group: MissionGroup }> {
-    return request(`/mission-lists/${listId}/groups/${groupId}`, {
+export async function updateGroup(listId: string, groupId: string, data: { name?: string; color?: string; order?: number }): Promise<{ group: Group }> {
+    return request(`/list-lists/${listId}/groups/${groupId}`, {
         method: 'PUT',
         body: JSON.stringify(data)
     })
 }
 
-export async function addMissionGroup(listId: string, data: { name: string; color: string; order: number }): Promise<{ group: MissionGroup }> {
-    return request(`/mission-lists/${listId}/groups`, {
+export async function addGroup(listId: string, data: { name: string; color: string; order: number }): Promise<{ group: Group }> {
+    return request(`/list-lists/${listId}/groups`, {
         method: 'POST',
         body: JSON.stringify(data)
     })
 }
 
-export async function deleteMissionGroup(listId: string, groupId: string): Promise<{ success: boolean }> {
-    return request(`/mission-lists/${listId}/groups/${groupId}`, { method: 'DELETE' })
+export async function deleteGroup(listId: string, groupId: string): Promise<{ success: boolean }> {
+    return request(`/list-lists/${listId}/groups/${groupId}`, { method: 'DELETE' })
 }
 
-export async function reorderMissionLists(orders: { id: string; order: number }[]): Promise<{ lists: MissionList[] }> {
-    return request('/mission-lists/reorder', {
+export async function reorderLists(orders: { id: string; order: number }[]): Promise<{ lists: List[] }> {
+    return request('/list-lists/reorder', {
         method: 'PUT',
         body: JSON.stringify({ orders })
     })
 }
 
-export async function reorderGroups(listId: string, orders: { id: string; order: number }[]): Promise<{ groups: MissionGroup[] }> {
-    return request(`/mission-lists/${listId}/groups/reorder`, {
+export async function reorderGroups(listId: string, orders: { id: string; order: number }[]): Promise<{ groups: Group[] }> {
+    return request(`/list-lists/${listId}/groups/reorder`, {
         method: 'PUT',
         body: JSON.stringify({ orders })
     })
 }
 
-// ============ 使命 API ============
+// ============ 任务 API ============
 
 export interface ChecklistItem {
     id: string
@@ -443,7 +443,7 @@ export interface ChecklistItem {
     completed: boolean
 }
 
-export interface Mission {
+export interface ListTask {
     id: string
     list_id: string
     name: string
@@ -455,10 +455,11 @@ export interface Mission {
     // 额外字段
     group_id?: string
     date?: string
-    start_time?: string
     end_time?: string
     repeat_strategy?: string
     repeat_custom_days?: number
+    repeat_lunar_month?: number
+    repeat_lunar_day?: number
     repeat_end_strategy?: string
     repeat_end_date?: string
     repeat_count?: number
@@ -475,22 +476,25 @@ export interface Mission {
     updated_at?: string
 }
 
-export async function getMissions(listId?: string): Promise<{ missions: Mission[] }> {
+export async function getListTasks(listId?: string): Promise<{ listTasks: ListTask[] }> {
     const query = listId ? `?listId=${listId}` : ''
-    return request(`/missions${query}`)
+    return request(`/list-tasks${query}`)
 }
 
-export interface AddMissionData {
+export interface AddListTaskData {
     listId: string
     name: string
     description?: string
     targetCount?: number
     groupId?: string
     date?: string
-    startTime?: string
     endTime?: string
     repeatStrategy?: string
     repeatCustomDays?: number
+    repeatWeekdays?: number[]
+    repeatMonthDay?: number
+    repeatLunarMonth?: number
+    repeatLunarDay?: number
     repeatEndStrategy?: string
     repeatEndDate?: string
     repeatCount?: number
@@ -503,14 +507,14 @@ export interface AddMissionData {
     reminderMinutes?: number
 }
 
-export async function addMission(data: AddMissionData): Promise<{ mission: Mission }> {
-    return request('/missions', {
+export async function addListTask(data: AddListTaskData): Promise<{ listTask: ListTask }> {
+    return request('/list-tasks', {
         method: 'POST',
         body: JSON.stringify(data)
     })
 }
 
-export interface UpdateMissionData {
+export interface UpdateListTaskData {
     name?: string
     description?: string
     targetCount?: number
@@ -518,10 +522,13 @@ export interface UpdateMissionData {
     completed?: boolean
     groupId?: string
     date?: string
-    startTime?: string
     endTime?: string
     repeatStrategy?: string
     repeatCustomDays?: number
+    repeatWeekdays?: number[]
+    repeatMonthDay?: number
+    repeatLunarMonth?: number
+    repeatLunarDay?: number
     repeatEndStrategy?: string
     repeatEndDate?: string
     repeatCount?: number
@@ -537,23 +544,23 @@ export interface UpdateMissionData {
     reminderMinutes?: number
 }
 
-export async function updateMission(id: string, data: UpdateMissionData): Promise<{ mission: Mission }> {
-    return request(`/missions/${id}`, {
+export async function updateListTask(id: string, data: UpdateListTaskData): Promise<{ listTask: ListTask }> {
+    return request(`/list-tasks/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data)
     })
 }
 
-export async function deleteMission(id: string): Promise<{ success: boolean }> {
-    return request(`/missions/${id}`, { method: 'DELETE' })
+export async function deleteListTask(id: string): Promise<{ success: boolean }> {
+    return request(`/list-tasks/${id}`, { method: 'DELETE' })
 }
 
 // ============ 统计 API ============
 
 export interface Stats {
-    listCount: number
-    missionCount: number
-    taskCount: number
+    checklistCount: number
+    listTaskCount: number
+    footprintTaskCount: number
 }
 
 export async function getStats(): Promise<{ stats: Stats }> {
@@ -626,7 +633,7 @@ export interface ExportData {
     profile?: any
     tasks?: any[]
     lists?: any[]
-    missions?: any[]
+    tasks?: any[]
     settings?: any
     notes?: any[]
     notebooks?: any[]

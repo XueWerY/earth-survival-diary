@@ -2,6 +2,7 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html, body {
@@ -23,6 +24,8 @@ body {
 }
 
 :root {
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
   --chalk-blue: #93c5fd;
   --chalk-dim: rgba(255,255,255,0.45);
   --chalk-muted: rgba(255,255,255,0.5);
@@ -125,6 +128,10 @@ body {
 .el-select-dropdown__item.hover {
   background: rgba(102, 126, 234, 0.2) !important;
   color: var(--chalk-white) !important;
+}
+
+.message-above-dialog {
+  z-index: 99999 !important;
 }
 
 .el-select-dropdown__item.selected {

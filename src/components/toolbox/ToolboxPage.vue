@@ -1,6 +1,20 @@
 <template>
   <div class="toolbox-page">
-    <div class="toolbox-content">
+    <div v-if="activeTool" class="tool-page-overlay">
+      <div class="tool-page-container">
+        <div class="tool-page-header">
+          <button class="back-btn" @click="closeTool">
+            <el-icon><ArrowLeft /></el-icon>
+            <span>返回</span>
+          </button>
+          <span class="tool-page-title">{{ activeTool.name }}</span>
+        </div>
+        <div class="tool-page-body">
+          <component :is="activeTool.component" />
+        </div>
+      </div>
+    </div>
+    <div v-else class="toolbox-content">
       <el-scrollbar>
         <div class="section" v-if="tools.length > 0">
           <div class="tool-card-grid">
@@ -31,40 +45,24 @@
             <div v-for="plugin in plugins" :key="plugin.manifest.id" class="plugin-card">
               <div class="plugin-info">
                 <span class="plugin-name">{{ plugin.manifest.name }}</span>
-                <span class="plugin-version">v{{ plugin.manifest.version }}</span>
               </div>
               <div class="plugin-meta">
                 <span class="plugin-author">{{ plugin.manifest.author }}</span>
-                <span class="plugin-desc">{{ plugin.manifest.description }}</span>
+                <span class="plugin-version">v{{ plugin.manifest.version }}</span>
+                <span v-if="plugin.tools.length > 0" class="plugin-tools-count">小工具 {{ plugin.tools.length }}个</span>
               </div>
-              <div class="plugin-capabilities">
-                <span v-if="Object.keys(plugin.pages || {}).length > 0" class="cap-tag">页面改造 {{ Object.keys(plugin.pages || {}).length }}个</span>
-                <span v-if="Object.keys(plugin.stores || {}).length > 0" class="cap-tag">存储规则 {{ Object.keys(plugin.stores || {}).length }}个</span>
-                <span v-if="plugin.tools.length > 0" class="cap-tag">小工具 {{ plugin.tools.length }}个</span>
-              </div>
+              <div class="plugin-desc">{{ plugin.manifest.description }}</div>
             </div>
           </div>
         </div>
       </el-scrollbar>
     </div>
-
-    <Teleport to="body">
-      <div v-if="activeTool" class="tool-dialog-overlay" @click.self="closeTool">
-        <div class="tool-dialog">
-          <div class="tool-dialog-header">
-            <span class="tool-dialog-title">{{ activeTool.name }}</span>
-          </div>
-          <div class="tool-dialog-body">
-            <component :is="activeTool.component" />
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, shallowRef, onMounted, defineAsyncComponent } from 'vue'
+import { ArrowLeft } from '@element-plus/icons-vue'
 import { logger } from '../../lib/logger'
 import { getAllTools, getPlugins, type ToolInfo } from '../../lib/pluginLoader'
 
@@ -147,6 +145,8 @@ function closeTool() {
   cursor: pointer;
   transition: all 0.2s;
   text-align: center;
+  display: flex;
+  flex-direction: column;
 }
 
 .tool-card:hover {
@@ -171,6 +171,7 @@ function closeTool() {
   font-size: 12px;
   margin-bottom: 8px;
   line-height: 1.4;
+  flex: 1;
 }
 
 .tool-card-plugin {
@@ -201,21 +202,26 @@ function closeTool() {
 }
 
 .plugin-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
+}
+
+@media (max-width: 768px) {
+  .plugin-list {
+    grid-template-columns: 1fr;
+  }
 }
 
 .plugin-card {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 10px;
   padding: 14px 16px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .plugin-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   margin-bottom: 4px;
 }
 
@@ -223,6 +229,7 @@ function closeTool() {
   color: var(--chalk-white);
   font-size: 14px;
   font-weight: 600;
+  word-break: break-all;
 }
 
 .plugin-version {
@@ -242,63 +249,87 @@ function closeTool() {
   font-size: 12px;
 }
 
-.plugin-desc {
-  color: var(--chalk-white-60);
+.plugin-tools-count {
+  color: var(--chalk-cyan);
   font-size: 12px;
 }
 
-.plugin-capabilities {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+.plugin-desc {
+  color: var(--chalk-white-60);
+  font-size: 12px;
+  word-break: break-all;
 }
 
-.cap-tag {
-  background: rgba(102, 126, 234, 0.15);
-  color: var(--chalk-primary);
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.tool-dialog-overlay {
-  position: fixed;
+.tool-page-overlay {
+  position: absolute;
   top: 0;
   left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.6);
-  z-index: 9999;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+}
+
+.tool-page-container {
+  width: 80%;
+  margin: 0 auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.tool-page-header {
   display: flex;
   align-items: center;
-  justify-content: center;
+  padding: 16px 0;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
-.tool-dialog {
-  background: #1a1744;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-  width: 600px;
-  max-height: 80vh;
-  overflow-y: auto;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
-}
-
-.tool-dialog-header {
+.back-btn {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 16px 20px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 4px;
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--chalk-white);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
 }
 
-.tool-dialog-title {
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.tool-page-title {
   color: var(--chalk-white);
   font-size: 16px;
   font-weight: 600;
 }
 
-.tool-dialog-body {
-  padding: 0;
+.tool-page-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 24px;
+}
+
+.tool-page-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tool-page-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tool-page-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
 }
 </style>

@@ -28,9 +28,30 @@ declare global {
       scheduleReminders: (reminders: ReminderItem[], persistDuration: number | null) => Promise<{ ok: boolean; count: number }>
       cancelAllReminders: () => Promise<{ ok: boolean }>
       getReminderPersistDuration: () => Promise<{ persistDuration: number }>
+  getAllReminders: () => Promise<any[]>
       onShowReminder: (callback: (data: ReminderItem) => void) => void
+
+      // 文件管理器
+      getDataDirPath: () => Promise<string>
+      getLogDirPath: () => Promise<string>
+      readDirectory: (dirPath: string) => Promise<FileEntry[]>
+      deleteFilePath: (filePath: string) => Promise<boolean>
+      renameFilePath: (oldPath: string, newPath: string) => Promise<boolean>
+      readTextFilePath: (filePath: string) => Promise<string>
+
+      // 局域网传输
+      startLanServer: (data: any) => Promise<{ ip: string; port: number }>
+      stopLanServer: () => Promise<boolean>
+      fetchLanData: (url: string) => Promise<any>
     }
   }
+}
+
+interface FileEntry {
+  name: string
+  path: string
+  isDirectory: boolean
+  size: number
 }
 
 interface ReminderItem {

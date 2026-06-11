@@ -1,16 +1,20 @@
 <template>
-  <div class="statistics-container">
+  <div class="statistics-container" :class="{ 'is-mobile': !isElectron }">
     <div class="stats-scroll-wrapper">
       <div class="stats-content">
         <div class="date-range-bar">
-          <div class="date-range-label">统计范围</div>
-          <DateScrollPicker v-model="startDate" class="date-picker-inline" />
-          <span class="date-separator">至</span>
-          <DateScrollPicker v-model="endDate" class="date-picker-inline" />
-          <button class="capsule-btn reset-capsule" @click="resetDateRange">
-            <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
-            <span>重置</span>
-          </button>
+          <div class="date-range-row date-range-top">
+            <div class="date-range-label">统计范围</div>
+            <button class="capsule-btn reset-capsule" @click="resetDateRange">
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+              <span>重置</span>
+            </button>
+          </div>
+          <div class="date-range-row date-range-bottom">
+            <DateScrollPicker v-model="startDate" class="date-picker-inline" />
+            <span class="date-separator">至</span>
+            <DateScrollPicker v-model="endDate" class="date-picker-inline" />
+          </div>
         </div>
 
         <div class="module-sections">
@@ -147,25 +151,21 @@
             <div class="section-stats">
               <div class="stat-item">
                 <span class="stat-label">清单数量</span>
-                <span class="stat-value">{{ missionStats.listCount }}</span>
+                <span class="stat-value">{{ listStats.listCount }}</span>
               </div>
               <div class="stat-item">
-                <span class="stat-label">任务数</span>
-                <span class="stat-value">{{ missionStats.totalCount }}</span>
+                <span class="stat-label">周期/普通任务数</span>
+                <span class="stat-value">{{ listStats.recurringCount }} / {{ listStats.nonRecurringCount }}</span>
               </div>
               <div class="stat-item">
                 <span class="stat-label">已完成</span>
-                <span class="stat-value">{{ missionStats.completedCount }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">完成率</span>
-                <span class="stat-value">{{ missionStats.completionRate }}</span>
+                <span class="stat-value">{{ listStats.completedCount }}</span>
               </div>
             </div>
-            <div class="section-trend" v-if="missionStats.priorityData.length > 0">
+            <div class="section-trend" v-if="listStats.priorityData.length > 0">
               <div class="priority-row">
                 <div
-                  v-for="p in missionStats.priorityData"
+                  v-for="p in listStats.priorityData"
                   :key="p.label"
                   class="priority-tag"
                   :style="{ borderColor: p.color }"
@@ -174,30 +174,7 @@
                 </div>
               </div>
             </div>
-            <div class="section-trend" v-if="missionStats.dailyCompletedTrend.length > 0">
-              <div class="trend-title">每日完成任务数</div>
-              <div class="trend-bars">
-                <div
-                  v-for="(item, idx) in missionStats.dailyCompletedTrend"
-                  :key="'mc'+idx"
-                  class="trend-bar-item"
-                >
-                  <div
-                    class="trend-bar-label clickable"
-                    :style="{ width: missionStats.completedLabelMaxLen + 'ch' }"
-                    @click="setRangeFromTrend(item.rangeStart, item.rangeEnd)"
-                  >{{ item.label }}</div>
-                  <div class="trend-bar-track">
-                    <div
-                      class="trend-bar-fill mission-bar-fill"
-                      :style="{ width: getBarPercent(item.value, missionStats.completedMax) + '%' }"
-                    ></div>
-                  </div>
-                  <div class="trend-bar-val">{{ item.value }}个</div>
-                </div>
-              </div>
-            </div>
-            <div class="section-empty" v-if="missionStats.totalCount === 0 && missionStats.completedCount === 0">暂无数据</div>
+            <div class="section-empty" v-if="listStats.recurringCount === 0 && listStats.nonRecurringCount === 0 && listStats.completedCount === 0">暂无数据</div>
           </div>
 
           <div class="module-section">
@@ -304,17 +281,18 @@ import dayjs from 'dayjs'
 import { useAuthStore } from '../../stores/authStore'
 import { useTaskStore } from '../../stores/taskStore'
 import { useFocusStore } from '../../stores/focusStore'
-import { useMissionStore } from '../../stores/missionStore'
+import { useListStore } from '../../stores/listStore'
 import { getData } from '../../services/storageService'
 import { usePageNav } from '../../composables/usePageNav'
 import { logger } from '../../lib/logger'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 
+const isElectron = inject<boolean>('isElectron', false)
 const pageNav = usePageNav()
 const authStore = useAuthStore()
 const taskStore = useTaskStore()
 const focusStore = useFocusStore()
-const missionStore = useMissionStore()
+const listStore = useListStore()
 
 const countdownMilestones = inject<Ref<any[]>>('countdownMilestones', ref([]))
 const countdownCategories = inject<Ref<any[]>>('countdownCategories', ref([]))
@@ -325,7 +303,7 @@ const startDate = ref(dayjs().format('YYYY-MM-DD'))
 const endDate = ref(dayjs().format('YYYY-MM-DD'))
 
 const courseList = ref<any[]>([])
-const completedMissionRecords = ref<any[]>([])
+const completedListRecords = ref<any[]>([])
 
 const initDateRange = () => {
   const profileCreatedAt = authStore.profile?.created_at
@@ -466,30 +444,10 @@ const focusStats = computed(() => {
   }
 })
 
-const missionStats = computed(() => {
-  const allCompletedRecords = completedMissionRecords.value.filter(r => {
-    if (!r.completedDate) return false
-    return r.completedDate >= startDate.value && r.completedDate <= endDate.value
-  })
-
-  const rangeMissions = missionStore.missions.filter(m => {
-    if (!m.date) return false
-    return m.date >= startDate.value && m.date <= endDate.value
-  })
-  const totalCount = rangeMissions.length
-
-  const currentlyCompleted = rangeMissions.filter(m => m.completed).length
-  const archivedCompleted = allCompletedRecords.length
-
-  const currentCompletedIds = new Set(
-    rangeMissions.filter(m => m.completed).map(m => m.id)
-  )
-  const uniqueArchivedFromRecords = allCompletedRecords.filter(
-    r => !currentCompletedIds.has(r.missionId)
-  )
-  const completedCount = currentlyCompleted + uniqueArchivedFromRecords.length
-
-  const completionRate = totalCount > 0 ? `${((completedCount / totalCount) * 100).toFixed(0)}%` : '0%'
+const listStats = computed(() => {
+  const recurringCount = listStore.lists.filter(m => m.repeatStrategy !== 'none').length
+  const nonRecurringCount = listStore.lists.filter(m => m.repeatStrategy === 'none').length
+  const completedCount = completedListRecords.value.length
 
   const priorityMap: Record<string, { label: string; color: string; count: number }> = {
     high: { label: '高', color: '#ef4444', count: 0 },
@@ -497,31 +455,22 @@ const missionStats = computed(() => {
     low: { label: '低', color: '#22c55e', count: 0 },
     none: { label: '无', color: '#909399', count: 0 }
   }
-  rangeMissions.forEach(m => {
+  listStore.lists.forEach(m => {
     const p = m.priority || 'none'
     if (priorityMap[p]) priorityMap[p].count++
   })
   const priorityData = Object.values(priorityMap).filter(p => p.count > 0)
 
-  const currentCompleted = rangeMissions.filter(m => m.completed)
-  const allCompletedForTrend: { date: string; value: number }[] = [
-    ...currentCompleted.map(m => ({ date: m.date, value: 1 })),
-    ...allCompletedRecords.map(r => ({ date: r.completedDate, value: 1 }))
-  ]
-
-  const dailyCompletedTrend = buildTrend(allCompletedForTrend, '个', false)
-
-  const listCount = missionStore.lists.length
+  const allListIds = new Set<string>()
+  listStore.folders.forEach(f => f.listIds.forEach(id => allListIds.add(id)))
+  const listCount = allListIds.size
 
   return {
     listCount,
-    totalCount,
+    recurringCount,
+    nonRecurringCount,
     completedCount,
-    completionRate,
     priorityData,
-    dailyCompletedTrend: dailyCompletedTrend.items,
-    completedMax: getTrendMax(dailyCompletedTrend.items),
-    completedLabelMaxLen: dailyCompletedTrend.maxLabelLen
   }
 })
 
@@ -616,10 +565,17 @@ const loadCourses = async () => {
   } catch {}
 }
 
-const loadCompletedMissions = async () => {
+const loadCourseCheckins = async () => {
   try {
-    const records = await getData<any[]>('mission', 'completed')
-    if (records) completedMissionRecords.value = records
+    const records = await getData<any[]>('course', 'checkins')
+    if (records) courseCheckins.value = records
+  } catch {}
+}
+
+const loadCompletedTasks = async () => {
+  try {
+    const records = await getData<any[]>('list', 'completed')
+    if (records) completedListRecords.value = records
   } catch {}
 }
 
@@ -635,7 +591,7 @@ onMounted(async () => {
   })
 
   initDateRange()
-  await Promise.all([loadCourses(), loadCompletedMissions()])
+  await Promise.all([loadCourses(), loadCompletedTasks()])
   logger.info('[统计] 统计页面挂载')
 })
 </script>
@@ -669,15 +625,27 @@ onMounted(async () => {
   padding: 24px;
 }
 
+.is-mobile .stats-content {
+  width: 100%;
+  padding: 24px 16px;
+}
+
 .date-range-bar {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 12px;
   margin-bottom: 28px;
   padding: 16px 20px;
   background: rgba(255, 255, 255, 0.03);
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
+  align-items: center;
+}
+
+.date-range-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   justify-content: center;
   flex-wrap: nowrap;
 }
@@ -692,6 +660,15 @@ onMounted(async () => {
   flex-shrink: 0;
   max-width: 130px;
   min-width: 0;
+}
+
+.is-mobile .date-picker-inline {
+  max-width: none;
+  flex: 1;
+}
+
+.is-mobile .date-picker-inline :deep(.date-trigger) {
+  max-width: none;
 }
 
 .date-picker-inline :deep(.date-trigger) {
@@ -799,6 +776,12 @@ onMounted(async () => {
   color: #a78bfa;
 }
 
+.stat-sublabel {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.3);
+  margin-top: 1px;
+}
+
 .section-trend {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   padding-top: 12px;
@@ -864,7 +847,7 @@ onMounted(async () => {
   background: linear-gradient(90deg, #f59e0b 0%, #ef4444 100%);
 }
 
-.mission-bar-fill {
+.list-bar-fill {
   background: linear-gradient(90deg, #22c55e 0%, #10b981 100%);
 }
 

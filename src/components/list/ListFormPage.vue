@@ -27,10 +27,10 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { EXTENDED_FOLDER_COLORS, type MissionList } from '../../stores/missionStore'
+import { EXTENDED_FOLDER_COLORS, type ListPage } from '../../stores/listStore'
 
 const props = defineProps<{
-  list?: MissionList | null
+  list?: ListPage | null
 }>()
 
 const emit = defineEmits<{

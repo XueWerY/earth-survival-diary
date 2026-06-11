@@ -5,8 +5,8 @@ import * as api from '../lib/api'
 import { logger } from '../lib/logger'
 import { getData, setData } from '../services/storageService'
 
-export interface CompletedMissionRecord {
-  missionId: string
+export interface CompletedListRecord {
+  taskId: string
   name: string
   listId: string
   completedDate: string
@@ -15,7 +15,7 @@ export interface CompletedMissionRecord {
 }
 
 // 重复策略
-export type RepeatStrategy = 'none' | 'daily' | 'custom_days' | 'weekly_select' | 'monthly_last_day' | 'lunar_date'
+export type RepeatStrategy = 'none' | 'daily' | 'custom_days' | 'weekly_select' | 'monthly_selected_day' | 'monthly_last_day' | 'lunar_date'
 
 // 结束重复策略
 export type RepeatEndStrategy = 'never' | 'date' | 'count'
@@ -31,7 +31,7 @@ export interface ChecklistItem {
 }
 
 // 任务分组（在清单内部）
-export interface MissionGroup {
+export interface Group {
   id: string
   name: string
   color: string
@@ -42,16 +42,19 @@ export interface MissionGroup {
 export type ReminderStrategy = 'none' | 'on_time' | 'advance'
 
 // 任务
-export interface Mission {
+export interface Task {
   id: string
   name: string
   listId: string
   groupId: string
   date: string
-  startTime: string
   endTime: string
   repeatStrategy: RepeatStrategy
   repeatCustomDays: number
+  repeatWeekdays: number[]
+  repeatMonthDay: number
+  repeatLunarMonth: number
+  repeatLunarDay: number
   repeatEndStrategy: RepeatEndStrategy
   repeatEndDate: string
   repeatCount: number
@@ -71,17 +74,17 @@ export interface Mission {
 }
 
 // 任务清单
-export interface MissionList {
+export interface List {
   id: string
   name: string
   color: string
-  groups: MissionGroup[]
+  groups: Group[]
   order: number
   createdAt: string
 }
 
 // 文件夹（客户端抽象层，包裹清单）
-export interface MissionFolder {
+export interface Folder {
   id: string
   name: string
   type: 'smart' | 'custom'
@@ -104,6 +107,7 @@ export const REPEAT_STRATEGIES = [
   { value: 'daily', label: '每天' },
   { value: 'custom_days', label: '每隔 N 天' },
   { value: 'weekly_select', label: '每周选择' },
+  { value: 'monthly_selected_day', label: '每月指定日期' },
   { value: 'monthly_last_day', label: '每月最后一天' },
   { value: 'lunar_date', label: '农历' },
 ] as const
@@ -143,33 +147,33 @@ export const DEFAULT_FOLDER_COLORS = [
   '#fa709a', '#fee140', '#ae7ede', '#d299c2'
 ]
 
-export const useMissionStore = defineStore('mission', () => {
-  const lists = ref<MissionList[]>([])
-  const missions = ref<Mission[]>([])
-  const folders = ref<MissionFolder[]>([])
+export const useListStore = defineStore('list', () => {
+  const taskLists = ref<List[]>([])
+  const lists = ref<Task[]>([])
+  const folders = ref<Folder[]>([])
   const isLoaded = ref(false)
 
   const LS_GROUPS_KEY = 'esd_groups_backup'
 
-  const saveCompletedRecord = async (mission: Mission) => {
+  const saveCompletedRecord = async (task: Task) => {
     try {
-      const records = await getData<CompletedMissionRecord[]>('mission', 'completed') || []
+      const records = await getData<CompletedListRecord[]>('list', 'completed') || []
       const now = dayjs().format('HH:mm:ss')
       records.push({
-        missionId: mission.id,
-        name: mission.name,
-        listId: mission.listId,
-        completedDate: mission.date,
+        taskId: task.id,
+        name: task.name,
+        listId: task.listId,
+        completedDate: task.date,
         completedTime: now,
-        priority: mission.priority
+        priority: task.priority
       })
-      await setData('mission', 'completed', records)
+      await setData('list', 'completed', records)
     } catch {}
   }
 
   const saveGroupsLocal = () => {
     try {
-      const data = lists.value.map(l => ({ id: l.id, groups: l.groups.map(g => ({ id: g.id, name: g.name, color: g.color, order: g.order })) }))
+      const data = taskLists.value.map(l => ({ id: l.id, groups: l.groups.map(g => ({ id: g.id, name: g.name, color: g.color, order: g.order })) }))
       localStorage.setItem(LS_GROUPS_KEY, JSON.stringify(data))
     } catch { /* 静默失败 */ }
   }
@@ -190,7 +194,7 @@ export const useMissionStore = defineStore('mission', () => {
 
   const loadFolders = async () => {
     try {
-      const result = await api.getData<MissionFolder[]>('list/folders')
+      const result = await api.getData<Folder[]>('list/folders')
       if (result.success && result.data && Array.isArray(result.data)) {
         folders.value = result.data
       }
@@ -201,7 +205,7 @@ export const useMissionStore = defineStore('mission', () => {
     const customFolders = folders.value.filter(f => f.type === 'custom')
     const allAssignedIds = new Set<string>()
     customFolders.forEach(f => f.listIds.forEach(id => allAssignedIds.add(id)))
-    const unassigned = lists.value.filter(l => !allAssignedIds.has(l.id))
+    const unassigned = taskLists.value.filter(l => !allAssignedIds.has(l.id))
     if (unassigned.length > 0 && customFolders.length > 0) {
       const defaultFolder = customFolders[0]
       defaultFolder.listIds.push(...unassigned.map(l => l.id))
@@ -218,17 +222,17 @@ export const useMissionStore = defineStore('mission', () => {
   // 加载数据
   const loadData = async () => {
     if (isLoaded.value) {
-      logger.debug('[MissionStore] loadData 跳过（已加载）')
+      logger.debug('[ListStore] loadData 跳过（已加载）')
       return
     }
-    logger.debug('[MissionStore] loadData 开始')
+    logger.debug('[ListStore] loadData 开始')
 
     try {
       // 加载清单
-      const { lists: dbLists } = await api.getMissionLists()
-      logger.debug('[MissionStore] loadData 获取清单', { count: dbLists?.length })
+      const { lists: dbLists } = await api.getLists()
+      logger.debug('[ListStore] loadData 获取清单', { count: dbLists?.length })
       const localBackup = loadGroupsLocal()
-      lists.value = dbLists.map(db => {
+      taskLists.value = dbLists.map(db => {
         const rawGroups = (db.groups && db.groups.length > 0) ? db.groups : [{
           id: `${db.id}-default`,
           name: '默认分组',
@@ -259,18 +263,21 @@ export const useMissionStore = defineStore('mission', () => {
 
       saveGroupsLocal()
 
-      // 加载使命 - 保留所有原始字段
-      const { missions: dbMissions } = await api.getMissions()
-      missions.value = dbMissions.map(db => ({
+      // 加载任务 - 保留所有原始字段
+      const { listTasks: dbTasks } = await api.getListTasks()
+      lists.value = dbTasks.map(db => ({
         id: db.id,
         name: db.name,
         listId: db.list_id,
         groupId: db.group_id || '',
         date: db.date || '',
-        startTime: db.start_time || '',
         endTime: db.end_time || '',
         repeatStrategy: (db.repeat_strategy || 'none') as RepeatStrategy,
         repeatCustomDays: db.repeat_custom_days || 1,
+        repeatWeekdays: db.repeat_weekdays || [],
+        repeatMonthDay: db.repeat_month_day || 1,
+        repeatLunarMonth: db.repeat_lunar_month || 1,
+        repeatLunarDay: db.repeat_lunar_day || 1,
         repeatEndStrategy: (db.repeat_end_strategy || 'never') as RepeatEndStrategy,
         repeatEndDate: db.repeat_end_date || '',
         repeatCount: db.repeat_count || 1,
@@ -294,12 +301,12 @@ export const useMissionStore = defineStore('mission', () => {
 
       // 如果没有文件夹，创建默认"我的清单"文件夹
       if (folders.value.length === 0) {
-        const defaultFolder: MissionFolder = {
+        const defaultFolder: Folder = {
           id: 'folder-' + Date.now(),
           name: '我的清单',
           type: 'custom',
           color: '#764ba2',
-          listIds: lists.value.map(l => l.id),
+          listIds: taskLists.value.map(l => l.id),
           order: 0
         }
         folders.value.push(defaultFolder)
@@ -310,9 +317,9 @@ export const useMissionStore = defineStore('mission', () => {
       await ensureAllListsInFolders()
 
       isLoaded.value = true
-      logger.debug('[MissionStore] loadData 完成', { listsCount: lists.value.length, missionsCount: missions.value.length, foldersCount: folders.value.length })
+      logger.debug('[ListStore] loadData 完成', { listsCount: taskLists.value.length, tasksCount: lists.value.length, foldersCount: folders.value.length })
     } catch (error) {
-      logger.error('[MissionStore] loadData 失败', { error })
+      logger.error('[ListStore] loadData 失败', { error })
     }
   }
 
@@ -321,8 +328,8 @@ export const useMissionStore = defineStore('mission', () => {
   // 添加清单
   const addList = async (name: string, icon: string) => {
     try {
-      const { list: dbList } = await api.addMissionList(name, icon)
-      const newList: MissionList = {
+      const { list: dbList } = await api.addList(name, icon)
+      const newList: List = {
         id: dbList.id,
         name: dbList.name,
         color: dbList.icon || icon,
@@ -332,10 +339,10 @@ export const useMissionStore = defineStore('mission', () => {
           color: DEFAULT_GROUP_COLORS[0],
           order: 0
         }],
-        order: lists.value.length,
+        order: taskLists.value.length,
         createdAt: dbList.created_at
       }
-      lists.value.push(newList)
+      taskLists.value.push(newList)
       // 添加到默认文件夹
       const customFolders = folders.value.filter(f => f.type === 'custom')
       if (customFolders.length > 0) {
@@ -352,14 +359,14 @@ export const useMissionStore = defineStore('mission', () => {
   // 更新清单
   const updateList = async (id: string, updates: { name?: string; color?: string }) => {
     try {
-      const { list: dbList } = await api.updateMissionList(id, {
+      const { list: dbList } = await api.updateList(id, {
         name: updates.name,
         icon: updates.color
       })
-      const index = lists.value.findIndex(l => l.id === id)
+      const index = taskLists.value.findIndex(l => l.id === id)
       if (index !== -1) {
-        lists.value[index] = {
-          ...lists.value[index],
+        taskLists.value[index] = {
+          ...taskLists.value[index],
           name: dbList.name,
           color: dbList.icon
         }
@@ -372,9 +379,9 @@ export const useMissionStore = defineStore('mission', () => {
   // 删除清单（同时删除该清单下的所有任务）
   const deleteList = async (id: string) => {
     try {
-      await api.deleteMissionList(id)
-      missions.value = missions.value.filter(m => m.listId !== id)
-      lists.value = lists.value.filter(l => l.id !== id)
+      await api.deleteList(id)
+      lists.value = lists.value.filter(m => m.listId !== id)
+      taskLists.value = taskLists.value.filter(l => l.id !== id)
       // 从所有文件夹中移除该清单
       folders.value.forEach(f => { f.listIds = f.listIds.filter(lid => lid !== id) })
       await saveFolders()
@@ -385,34 +392,34 @@ export const useMissionStore = defineStore('mission', () => {
 
   // 上移清单
   const moveListUp = async (id: string) => {
-    const index = lists.value.findIndex(l => l.id === id)
+    const index = taskLists.value.findIndex(l => l.id === id)
     if (index <= 0) return
 
-    const prevItem = lists.value[index - 1]
-    lists.value[index - 1] = lists.value[index]
-    lists.value[index] = prevItem
+    const prevItem = taskLists.value[index - 1]
+    taskLists.value[index - 1] = taskLists.value[index]
+    taskLists.value[index] = prevItem
 
     try {
-      const orders = lists.value.map((l, i) => ({ id: l.id, order: i }))
-      lists.value.forEach((l, i) => l.order = i)
-      await api.reorderMissionLists(orders)
+      const orders = taskLists.value.map((l, i) => ({ id: l.id, order: i }))
+      taskLists.value.forEach((l, i) => l.order = i)
+      await api.reorderLists(orders)
     } catch (error) {
       console.error('Failed to reorder lists:', error)
     }
   }
 
   const moveListDown = async (id: string) => {
-    const index = lists.value.findIndex(l => l.id === id)
-    if (index < 0 || index >= lists.value.length - 1) return
+    const index = taskLists.value.findIndex(l => l.id === id)
+    if (index < 0 || index >= taskLists.value.length - 1) return
 
-    const nextItem = lists.value[index + 1]
-    lists.value[index + 1] = lists.value[index]
-    lists.value[index] = nextItem
+    const nextItem = taskLists.value[index + 1]
+    taskLists.value[index + 1] = taskLists.value[index]
+    taskLists.value[index] = nextItem
 
     try {
-      const orders = lists.value.map((l, i) => ({ id: l.id, order: i }))
-      lists.value.forEach((l, i) => l.order = i)
-      await api.reorderMissionLists(orders)
+      const orders = taskLists.value.map((l, i) => ({ id: l.id, order: i }))
+      taskLists.value.forEach((l, i) => l.order = i)
+      await api.reorderLists(orders)
     } catch (error) {
       console.error('Failed to reorder lists:', error)
     }
@@ -420,8 +427,8 @@ export const useMissionStore = defineStore('mission', () => {
 
   // ========== 文件夹操作（客户端层） ==========
 
-  const addFolder = async (name: string, color: string): Promise<MissionFolder> => {
-    const newFolder: MissionFolder = {
+  const addFolder = async (name: string, color: string): Promise<Folder> => {
+    const newFolder: Folder = {
       id: 'folder-' + Date.now(),
       name,
       type: 'custom',
@@ -465,28 +472,28 @@ export const useMissionStore = defineStore('mission', () => {
     await saveFolders()
   }
 
-  const getListsInFolder = (folderId: string): MissionList[] => {
+  const getListsInFolder = (folderId: string): List[] => {
     if (folderId === 'smart') return [] // smart lists are virtual
     const folder = folders.value.find(f => f.id === folderId)
     if (!folder) return []
-    return lists.value.filter(l => folder.listIds.includes(l.id))
+    return taskLists.value.filter(l => folder.listIds.includes(l.id))
   }
 
   // ========== 清单内分组操作 ==========
 
   // 添加分组到清单
   const addGroupToList = async (listId: string, name: string, color: string) => {
-    const list = lists.value.find(l => l.id === listId)
+    const list = taskLists.value.find(l => l.id === listId)
     if (!list) return null
 
     try {
-      const { group: dbGroup } = await api.addMissionGroup(listId, {
+      const { group: dbGroup } = await api.addGroup(listId, {
         name,
         color,
         order: list.groups.length
       })
       
-      const newGroup: MissionGroup = {
+      const newGroup: Group = {
         id: dbGroup.id,
         name: dbGroup.name,
         color: dbGroup.color,
@@ -503,8 +510,8 @@ export const useMissionStore = defineStore('mission', () => {
   }
 
   // 更新清单内的分组
-  const updateGroupInList = async (listId: string, groupId: string, updates: Partial<Omit<MissionGroup, 'id'>>) => {
-    const list = lists.value.find(l => l.id === listId)
+  const updateGroupInList = async (listId: string, groupId: string, updates: Partial<Omit<Group, 'id'>>) => {
+    const list = taskLists.value.find(l => l.id === listId)
     if (!list) return
 
     const groupIndex = list.groups.findIndex(g => g.id === groupId)
@@ -513,7 +520,7 @@ export const useMissionStore = defineStore('mission', () => {
     list.groups[groupIndex] = { ...list.groups[groupIndex], ...updates }
 
     try {
-      await api.updateMissionGroup(listId, groupId, updates)
+      await api.updateGroup(listId, groupId, updates)
     } catch (error) {
       console.error('Failed to update group:', error)
     }
@@ -521,7 +528,7 @@ export const useMissionStore = defineStore('mission', () => {
 
   // 上移分组
   const moveGroupUp = async (listId: string, groupId: string) => {
-    const list = lists.value.find(l => l.id === listId)
+    const list = taskLists.value.find(l => l.id === listId)
     if (!list) return
     const index = list.groups.findIndex(g => g.id === groupId)
     if (index <= 0) return
@@ -532,16 +539,16 @@ export const useMissionStore = defineStore('mission', () => {
 
     try {
       const orders = list.groups.map(g => ({ id: g.id, order: g.order }))
-      console.log('[MissionStore] moveGroupUp 完成', { listId, groupId, fromIndex: index, toIndex: index - 1, orders })
+      console.log('[ListStore] moveGroupUp 完成', { listId, groupId, fromIndex: index, toIndex: index - 1, orders })
       await api.reorderGroups(listId, orders)
     } catch (error) {
-      console.error('[MissionStore] moveGroupUp 同步失败', error)
+      console.error('[ListStore] moveGroupUp 同步失败', error)
     }
   }
 
   // 下移分组
   const moveGroupDown = async (listId: string, groupId: string) => {
-    const list = lists.value.find(l => l.id === listId)
+    const list = taskLists.value.find(l => l.id === listId)
     if (!list) return
     const index = list.groups.findIndex(g => g.id === groupId)
     if (index < 0 || index >= list.groups.length - 1) return
@@ -552,22 +559,22 @@ export const useMissionStore = defineStore('mission', () => {
 
     try {
       const orders = list.groups.map(g => ({ id: g.id, order: g.order }))
-      console.log('[MissionStore] moveGroupDown 完成', { listId, groupId, fromIndex: index, toIndex: index + 1, orders })
+      console.log('[ListStore] moveGroupDown 完成', { listId, groupId, fromIndex: index, toIndex: index + 1, orders })
       await api.reorderGroups(listId, orders)
     } catch (error) {
-      console.error('[MissionStore] moveGroupDown 同步失败', error)
+      console.error('[ListStore] moveGroupDown 同步失败', error)
     }
   }
 
   // 删除清单内的分组（任务移到默认分组）
   const deleteGroupFromList = async (listId: string, groupId: string) => {
-    const list = lists.value.find(l => l.id === listId)
+    const list = taskLists.value.find(l => l.id === listId)
     if (!list || list.groups.length <= 1) return
 
     const defaultGroup = list.groups.find(g => g.id !== groupId)
     
     try {
-      await api.deleteMissionGroup(listId, groupId)
+      await api.deleteGroup(listId, groupId)
     } catch (error) {
       console.error('Failed to delete group:', error)
       return
@@ -577,9 +584,9 @@ export const useMissionStore = defineStore('mission', () => {
     list.groups.forEach((g, i) => { g.order = i })
     saveGroupsLocal()
 
-    // 更新使命的分组
+    // 更新任务的分组
     if (defaultGroup) {
-      missions.value.forEach(m => {
+      lists.value.forEach(m => {
         if (m.listId === listId && m.groupId === groupId) {
           m.groupId = defaultGroup.id
         }
@@ -589,14 +596,14 @@ export const useMissionStore = defineStore('mission', () => {
 
   // 获取清单内的分组列表
   const getGroupsInList = (listId: string) => {
-    const list = lists.value.find(l => l.id === listId)
+    const list = taskLists.value.find(l => l.id === listId)
     return list?.groups || []
   }
 
   // ========== 任务操作 ==========
 
   // 计算下一个重复日期
-  const getNextRepeatDate = (currentDate: string, strategy: RepeatStrategy, customDays: number = 1): string => {
+  const getNextRepeatDate = (currentDate: string, strategy: RepeatStrategy, customDays: number = 1, weekdays: number[] = [], monthDay: number = 1, lunarMonth: number = 1, lunarDay: number = 1): string => {
     const current = dayjs(currentDate)
     switch (strategy) {
       case 'daily':
@@ -609,9 +616,56 @@ export const useMissionStore = defineStore('mission', () => {
         return next.format('YYYY-MM-DD')
       }
       case 'weekly':
-        return current.add(1, 'week').format('YYYY-MM-DD')
+      case 'weekly_select': {
+        if (weekdays.length === 0) return current.add(1, 'week').format('YYYY-MM-DD')
+        const dayjsDay = current.day()
+        const currentWeekday = (dayjsDay + 6) % 7
+        const sorted = [...weekdays].sort((a, b) => a - b)
+        const nextDay = sorted.find(d => d > currentWeekday)
+        if (nextDay !== undefined) {
+          const diff = nextDay - currentWeekday
+          return current.add(diff, 'day').format('YYYY-MM-DD')
+        }
+        const diff = 7 - currentWeekday + sorted[0]
+        return current.add(diff, 'day').format('YYYY-MM-DD')
+      }
       case 'monthly':
         return current.add(1, 'month').format('YYYY-MM-DD')
+      case 'monthly_selected_day': {
+        let next = current.add(1, 'month')
+        let attempts = 0
+        while (monthDay > next.daysInMonth() && attempts < 12) {
+          next = next.add(1, 'month')
+          attempts++
+        }
+        const targetDay = Math.min(monthDay, next.daysInMonth())
+        return next.date(targetDay).format('YYYY-MM-DD')
+      }
+      case 'monthly_last_day':
+        return current.add(1, 'month').endOf('month').format('YYYY-MM-DD')
+      case 'lunar_date': {
+        try {
+          const { Lunar } = require('lunar-javascript') as any
+          const solar = require('lunar-javascript').Solar.fromYmd(current.year(), current.month() + 1, current.date())
+          const currentLunar = solar.getLunar()
+          let lunarYear = currentLunar.getYear()
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              const targetLunar = Lunar.fromYmd(lunarYear + attempt, lunarMonth, lunarDay)
+              const targetSolar = targetLunar.getSolar()
+              const targetDate = dayjs(`${targetSolar.getYear()}-${String(targetSolar.getMonth()).padStart(2, '0')}-${String(targetSolar.getDay()).padStart(2, '0')}`)
+              if (targetDate.isAfter(current)) {
+                return targetDate.format('YYYY-MM-DD')
+              }
+            } catch {}
+          }
+          const nextLunar = Lunar.fromYmd(lunarYear + 1, lunarMonth, lunarDay)
+          const nextSolar = nextLunar.getSolar()
+          return `${nextSolar.getYear()}-${String(nextSolar.getMonth()).padStart(2, '0')}-${String(nextSolar.getDay()).padStart(2, '0')}`
+        } catch {
+          return currentDate
+        }
+      }
       case 'yearly':
         return current.add(1, 'year').format('YYYY-MM-DD')
       case 'custom_days':
@@ -634,86 +688,95 @@ export const useMissionStore = defineStore('mission', () => {
   }
 
   // 添加任务
-  const addMission = async (mission: Omit<Mission, 'id' | 'createdAt' | 'updatedAt' | 'repeatCompletedCount'>) => {
+  const addTask = async (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'repeatCompletedCount'>) => {
     try {
-      const { mission: dbMission } = await api.addMission({
-        listId: mission.listId,
-        name: mission.name,
-        description: mission.notes,
-        targetCount: mission.repeatCount || 1,
-        groupId: mission.groupId,
-        date: mission.date,
-        startTime: mission.startTime,
-        endTime: mission.endTime,
-        repeatStrategy: mission.repeatStrategy,
-        repeatCustomDays: mission.repeatCustomDays,
-        repeatEndStrategy: mission.repeatEndStrategy,
-        repeatEndDate: mission.repeatEndDate,
-        repeatCount: mission.repeatCount,
-        priority: mission.priority,
-        checklist: mission.checklist,
-        notes: mission.notes,
-        reminderStrategy: mission.reminderStrategy,
-        reminderDays: mission.reminderDays,
-        reminderHours: mission.reminderHours,
-        reminderMinutes: mission.reminderMinutes
+      const { listTask: dbTask } = await api.addListTask({
+        listId: task.listId,
+        name: task.name,
+        description: task.notes,
+        targetCount: task.repeatCount || 1,
+        groupId: task.groupId,
+        date: task.date,
+        endTime: task.endTime,
+        repeatStrategy: task.repeatStrategy,
+        repeatCustomDays: task.repeatCustomDays,
+        repeatWeekdays: task.repeatWeekdays,
+        repeatMonthDay: task.repeatMonthDay,
+        repeatLunarMonth: task.repeatLunarMonth,
+        repeatLunarDay: task.repeatLunarDay,
+        repeatEndStrategy: task.repeatEndStrategy,
+        repeatEndDate: task.repeatEndDate,
+        repeatCount: task.repeatCount,
+        priority: task.priority,
+        checklist: task.checklist,
+        notes: task.notes,
+        reminderStrategy: task.reminderStrategy,
+        reminderDays: task.reminderDays,
+        reminderHours: task.reminderHours,
+        reminderMinutes: task.reminderMinutes
       })
 
-      const newMission: Mission = {
-        id: dbMission.id,
-        name: dbMission.name,
-        listId: dbMission.list_id,
-        groupId: dbMission.group_id || '',
-        date: dbMission.date || '',
-        startTime: dbMission.start_time || '',
-        endTime: dbMission.end_time || '',
-        repeatStrategy: (dbMission.repeat_strategy || 'none') as RepeatStrategy,
-        repeatCustomDays: dbMission.repeat_custom_days || 1,
-        repeatEndStrategy: (dbMission.repeat_end_strategy || 'never') as RepeatEndStrategy,
-        repeatEndDate: dbMission.repeat_end_date || '',
-        repeatCount: dbMission.repeat_count || 1,
-        repeatCompletedCount: dbMission.repeat_completed_count ?? dbMission.current_count ?? 0,
-        priority: (dbMission.priority || 'none') as Priority,
-        checklist: dbMission.checklist || [],
-        completed: dbMission.completed,
-        completedStartTime: dbMission.completed_start_time || '',
-        completedEndTime: dbMission.completed_end_time || '',
-        notes: dbMission.notes || dbMission.description || '',
-        reminderStrategy: (dbMission.reminder_strategy || 'none') as ReminderStrategy,
-        reminderDays: dbMission.reminder_days || 0,
-        reminderHours: dbMission.reminder_hours || 0,
-        reminderMinutes: dbMission.reminder_minutes || 0,
-        createdAt: dbMission.created_at,
-        updatedAt: dbMission.updated_at || dbMission.created_at
+      const newTask: Task = {
+        id: dbTask.id,
+        name: dbTask.name,
+        listId: dbTask.list_id,
+        groupId: dbTask.group_id || '',
+        date: dbTask.date || '',
+        endTime: dbTask.end_time || '',
+        repeatStrategy: (dbTask.repeat_strategy || 'none') as RepeatStrategy,
+        repeatCustomDays: dbTask.repeat_custom_days || 1,
+        repeatWeekdays: dbTask.repeat_weekdays || [],
+        repeatMonthDay: dbTask.repeat_month_day || 1,
+        repeatLunarMonth: dbTask.repeat_lunar_month || 1,
+        repeatLunarDay: dbTask.repeat_lunar_day || 1,
+        repeatEndStrategy: (dbTask.repeat_end_strategy || 'never') as RepeatEndStrategy,
+        repeatEndDate: dbTask.repeat_end_date || '',
+        repeatCount: dbTask.repeat_count || 1,
+        repeatCompletedCount: dbTask.repeat_completed_count ?? dbTask.current_count ?? 0,
+        priority: (dbTask.priority || 'none') as Priority,
+        checklist: dbTask.checklist || [],
+        completed: dbTask.completed,
+        completedStartTime: dbTask.completed_start_time || '',
+        completedEndTime: dbTask.completed_end_time || '',
+        notes: dbTask.notes || dbTask.description || '',
+        reminderStrategy: (dbTask.reminder_strategy || 'none') as ReminderStrategy,
+        reminderDays: dbTask.reminder_days || 0,
+        reminderHours: dbTask.reminder_hours || 0,
+        reminderMinutes: dbTask.reminder_minutes || 0,
+        createdAt: dbTask.created_at,
+        updatedAt: dbTask.updated_at || dbTask.created_at
       }
 
-      missions.value.unshift(newMission)
-      return newMission
+      lists.value.unshift(newTask)
+      return newTask
     } catch (error) {
-      console.error('Failed to add mission:', error)
+      console.error('Failed to add task:', error)
       return null
     }
   }
 
   // 更新任务
-  const updateMission = async (id: string, updates: Partial<Omit<Mission, 'id' | 'createdAt' | 'updatedAt'>>) => {
-    const index = missions.value.findIndex(m => m.id === id)
+  const updateTask = async (id: string, updates: Partial<Omit<Task, 'id' | 'createdAt' | 'updatedAt'>>) => {
+    const index = lists.value.findIndex(m => m.id === id)
     if (index === -1) return
 
-    const mission = missions.value[index]
+    const task = lists.value[index]
 
     try {
-      await api.updateMission(id, {
+      await api.updateListTask(id, {
         name: updates.name,
         description: updates.notes,
         currentCount: updates.repeatCompletedCount,
         completed: updates.completed,
         groupId: updates.groupId,
         date: updates.date,
-        startTime: updates.startTime,
         endTime: updates.endTime,
         repeatStrategy: updates.repeatStrategy,
         repeatCustomDays: updates.repeatCustomDays,
+        repeatWeekdays: updates.repeatWeekdays,
+        repeatMonthDay: updates.repeatMonthDay,
+        repeatLunarMonth: updates.repeatLunarMonth,
+        repeatLunarDay: updates.repeatLunarDay,
         repeatEndStrategy: updates.repeatEndStrategy,
         repeatEndDate: updates.repeatEndDate,
         repeatCount: updates.repeatCount,
@@ -729,226 +792,229 @@ export const useMissionStore = defineStore('mission', () => {
       })
 
       // 更新本地状态
-      if (updates.name !== undefined) mission.name = updates.name
-      if (updates.groupId !== undefined) mission.groupId = updates.groupId
-      if (updates.date !== undefined) mission.date = updates.date
-      if (updates.startTime !== undefined) mission.startTime = updates.startTime
-      if (updates.endTime !== undefined) mission.endTime = updates.endTime
-      if (updates.repeatStrategy !== undefined) mission.repeatStrategy = updates.repeatStrategy
-      if (updates.repeatCustomDays !== undefined) mission.repeatCustomDays = updates.repeatCustomDays
-      if (updates.repeatEndStrategy !== undefined) mission.repeatEndStrategy = updates.repeatEndStrategy
-      if (updates.repeatEndDate !== undefined) mission.repeatEndDate = updates.repeatEndDate
-      if (updates.repeatCount !== undefined) mission.repeatCount = updates.repeatCount
-      if (updates.repeatCompletedCount !== undefined) mission.repeatCompletedCount = updates.repeatCompletedCount
-      if (updates.priority !== undefined) mission.priority = updates.priority
-      if (updates.checklist !== undefined) mission.checklist = updates.checklist
-      if (updates.completed !== undefined) mission.completed = updates.completed
-      if (updates.completedStartTime !== undefined) mission.completedStartTime = updates.completedStartTime
-      if (updates.completedEndTime !== undefined) mission.completedEndTime = updates.completedEndTime
-      if (updates.notes !== undefined) mission.notes = updates.notes
-      if (updates.reminderStrategy !== undefined) mission.reminderStrategy = updates.reminderStrategy
-      if (updates.reminderDays !== undefined) mission.reminderDays = updates.reminderDays
-      if (updates.reminderHours !== undefined) mission.reminderHours = updates.reminderHours
-      if (updates.reminderMinutes !== undefined) mission.reminderMinutes = updates.reminderMinutes
-      mission.updatedAt = new Date().toISOString()
+      if (updates.name !== undefined) task.name = updates.name
+      if (updates.groupId !== undefined) task.groupId = updates.groupId
+      if (updates.date !== undefined) task.date = updates.date
+      if (updates.endTime !== undefined) task.endTime = updates.endTime
+      if (updates.repeatStrategy !== undefined) task.repeatStrategy = updates.repeatStrategy
+      if (updates.repeatCustomDays !== undefined) task.repeatCustomDays = updates.repeatCustomDays
+      if (updates.repeatWeekdays !== undefined) task.repeatWeekdays = updates.repeatWeekdays
+      if (updates.repeatMonthDay !== undefined) task.repeatMonthDay = updates.repeatMonthDay
+      if (updates.repeatLunarMonth !== undefined) task.repeatLunarMonth = updates.repeatLunarMonth
+      if (updates.repeatLunarDay !== undefined) task.repeatLunarDay = updates.repeatLunarDay
+      if (updates.repeatEndStrategy !== undefined) task.repeatEndStrategy = updates.repeatEndStrategy
+      if (updates.repeatEndDate !== undefined) task.repeatEndDate = updates.repeatEndDate
+      if (updates.repeatCount !== undefined) task.repeatCount = updates.repeatCount
+      if (updates.repeatCompletedCount !== undefined) task.repeatCompletedCount = updates.repeatCompletedCount
+      if (updates.priority !== undefined) task.priority = updates.priority
+      if (updates.checklist !== undefined) task.checklist = updates.checklist
+      if (updates.completed !== undefined) task.completed = updates.completed
+      if (updates.completedStartTime !== undefined) task.completedStartTime = updates.completedStartTime
+      if (updates.completedEndTime !== undefined) task.completedEndTime = updates.completedEndTime
+      if (updates.notes !== undefined) task.notes = updates.notes
+      if (updates.reminderStrategy !== undefined) task.reminderStrategy = updates.reminderStrategy
+      if (updates.reminderDays !== undefined) task.reminderDays = updates.reminderDays
+      if (updates.reminderHours !== undefined) task.reminderHours = updates.reminderHours
+      if (updates.reminderMinutes !== undefined) task.reminderMinutes = updates.reminderMinutes
+      task.updatedAt = new Date().toISOString()
     } catch (error) {
-      console.error('Failed to update mission:', error)
+      console.error('Failed to update task:', error)
     }
   }
 
   // 删除任务
-  const deleteMission = async (id: string) => {
+  const deleteTask = async (id: string) => {
     try {
-      await api.deleteMission(id)
-      missions.value = missions.value.filter(m => m.id !== id)
+      await api.deleteListTask(id)
+      lists.value = lists.value.filter(m => m.id !== id)
     } catch (error) {
-      console.error('Failed to delete mission:', error)
+      console.error('Failed to delete task:', error)
     }
   }
 
-  // 完成使命
-  const completeMission = async (id: string) => {
-    const mission = missions.value.find(m => m.id === id)
-    if (!mission) return
+  // 完成任务
+  const completeTask = async (id: string) => {
+    const task = lists.value.find(m => m.id === id)
+    if (!task) return
 
-    await saveCompletedRecord(mission)
+    await saveCompletedRecord(task)
 
-    if (mission.checklist.length > 0) {
-      mission.checklist.forEach(item => item.completed = true)
+    if (task.checklist.length > 0) {
+      task.checklist.forEach(item => item.completed = true)
     }
 
-    if (mission.repeatStrategy !== 'none') {
-      mission.repeatCompletedCount++
-      const baseDate = mission.date || dayjs().format('YYYY-MM-DD')
-      const nextDate = getNextRepeatDate(baseDate, mission.repeatStrategy, mission.repeatCustomDays)
+    if (task.repeatStrategy !== 'none') {
+      task.repeatCompletedCount++
+      const baseDate = task.date || dayjs().format('YYYY-MM-DD')
+      const nextDate = getNextRepeatDate(baseDate, task.repeatStrategy, task.repeatCustomDays, task.repeatWeekdays, task.repeatMonthDay, task.repeatLunarMonth, task.repeatLunarDay)
 
-      if (isRepeatDateBeyondEndDate(nextDate, mission.repeatEndStrategy, mission.repeatEndDate, mission.repeatCount, mission.repeatCompletedCount)) {
-        await deleteMission(id)
+      if (isRepeatDateBeyondEndDate(nextDate, task.repeatEndStrategy, task.repeatEndDate, task.repeatCount, task.repeatCompletedCount)) {
+        await deleteTask(id)
       } else {
-        mission.date = nextDate
-        mission.checklist.forEach(item => item.completed = false)
-        await updateMission(id, {
+        task.date = nextDate
+        task.checklist.forEach(item => item.completed = false)
+        await updateTask(id, {
           completed: false,
-          repeatCompletedCount: mission.repeatCompletedCount,
-          checklist: mission.checklist,
-          date: mission.date
+          repeatCompletedCount: task.repeatCompletedCount,
+          checklist: task.checklist,
+          date: task.date
         })
       }
     } else {
-      await deleteMission(id)
+      await deleteTask(id)
     }
   }
 
-  // 取消完成使命
-  const uncompleteMission = async (id: string) => {
-    await updateMission(id, { completed: false, completedStartTime: '', completedEndTime: '' })
+  // 取消完成任务
+  const uncompleteTask = async (id: string) => {
+    await updateTask(id, { completed: false, completedStartTime: '', completedEndTime: '' })
   }
 
   // 切换任务完成状态（简化版，用于兼容）
-  const toggleMission = (id: string) => {
-    const mission = missions.value.find(m => m.id === id)
-    if (mission) {
-      if (mission.completed) {
-        uncompleteMission(id)
+  const toggleTask = (id: string) => {
+    const task = lists.value.find(m => m.id === id)
+    if (task) {
+      if (task.completed) {
+        uncompleteTask(id)
       }
     }
   }
 
   // 切换检查事项完成状态
-  const toggleChecklistItem = async (missionId: string, itemId: string) => {
-    const mission = missions.value.find(m => m.id === missionId)
-    if (!mission) return
+  const toggleChecklistItem = async (taskId: string, itemId: string) => {
+    const task = lists.value.find(m => m.id === taskId)
+    if (!task) return
 
-    const item = mission.checklist.find(c => c.id === itemId)
+    const item = task.checklist.find(c => c.id === itemId)
     if (!item) return
 
     // 切换完成状态
     item.completed = !item.completed
 
-    if (mission.repeatStrategy === 'none') {
-      // 非重复性使命：完成检查事项后立即删除该检查事项
+    if (task.repeatStrategy === 'none') {
+      // 非重复性任务：完成检查事项后立即删除该检查事项
       if (item.completed) {
         // 先保存状态用于判断
-        const remainingCount = mission.checklist.filter(c => c.id !== itemId).length
+        const remainingCount = task.checklist.filter(c => c.id !== itemId).length
 
         // 删除已完成的检查事项
-        mission.checklist = mission.checklist.filter(c => c.id !== itemId)
+        task.checklist = task.checklist.filter(c => c.id !== itemId)
 
         if (remainingCount === 0) {
-          // 没有更多检查事项了，删除整个使命
-          await deleteMission(missionId)
+          // 没有更多检查事项了，删除整个任务
+          await deleteTask(taskId)
         } else {
           // 还有其他检查事项，保存更新
-          await updateMission(missionId, { checklist: mission.checklist })
+          await updateTask(taskId, { checklist: task.checklist })
         }
       } else {
         // 取消完成，直接保存
-        await updateMission(missionId, { checklist: mission.checklist })
+        await updateTask(taskId, { checklist: task.checklist })
       }
     } else {
-      // 重复性使命：所有检查事项完成后进入下一轮
-      const allCompleted = mission.checklist.length > 0 && mission.checklist.every(c => c.completed)
+      // 重复性任务：所有检查事项完成后进入下一轮
+      const allCompleted = task.checklist.length > 0 && task.checklist.every(c => c.completed)
 
       if (allCompleted) {
-        mission.repeatCompletedCount++
-        const baseDate = mission.date || dayjs().format('YYYY-MM-DD')
-        const nextDate = getNextRepeatDate(baseDate, mission.repeatStrategy, mission.repeatCustomDays)
+        task.repeatCompletedCount++
+        const baseDate = task.date || dayjs().format('YYYY-MM-DD')
+        const nextDate = getNextRepeatDate(baseDate, task.repeatStrategy, task.repeatCustomDays, task.repeatWeekdays, task.repeatMonthDay, task.repeatLunarMonth, task.repeatLunarDay)
 
         // 检查是否超过结束日期或次数
-        if (isRepeatDateBeyondEndDate(nextDate, mission.repeatEndStrategy, mission.repeatEndDate, mission.repeatCount, mission.repeatCompletedCount)) {
+        if (isRepeatDateBeyondEndDate(nextDate, task.repeatEndStrategy, task.repeatEndDate, task.repeatCount, task.repeatCompletedCount)) {
           // 超过结束条件，直接删除
-          await deleteMission(missionId)
+          await deleteTask(taskId)
         } else {
-          mission.date = nextDate
-          mission.checklist.forEach(c => c.completed = false)
-          await updateMission(missionId, {
+          task.date = nextDate
+          task.checklist.forEach(c => c.completed = false)
+          await updateTask(taskId, {
             completed: false,
-            repeatCompletedCount: mission.repeatCompletedCount,
-            checklist: mission.checklist,
-            date: mission.date
+            repeatCompletedCount: task.repeatCompletedCount,
+            checklist: task.checklist,
+            date: task.date
           })
         }
       } else {
-        await updateMission(missionId, { checklist: mission.checklist })
+        await updateTask(taskId, { checklist: task.checklist })
       }
     }
   }
 
   // 添加检查事项
-  const addChecklistItem = async (missionId: string, text: string) => {
-    const mission = missions.value.find(m => m.id === missionId)
-    if (!mission) return
+  const addChecklistItem = async (taskId: string, text: string) => {
+    const task = lists.value.find(m => m.id === taskId)
+    if (!task) return
 
-    mission.checklist.push({
+    task.checklist.push({
       id: Date.now().toString(),
       text,
       completed: false
     })
 
-    await updateMission(missionId, { checklist: mission.checklist })
+    await updateTask(taskId, { checklist: task.checklist })
   }
 
   // 删除检查事项
-  const deleteChecklistItem = async (missionId: string, itemId: string) => {
-    const mission = missions.value.find(m => m.id === missionId)
-    if (!mission) return
+  const deleteChecklistItem = async (taskId: string, itemId: string) => {
+    const task = lists.value.find(m => m.id === taskId)
+    if (!task) return
 
-    mission.checklist = mission.checklist.filter(c => c.id !== itemId)
+    task.checklist = task.checklist.filter(c => c.id !== itemId)
 
-    await updateMission(missionId, { checklist: mission.checklist })
+    await updateTask(taskId, { checklist: task.checklist })
   }
 
   // 更新检查事项
-  const updateChecklistItem = async (missionId: string, itemId: string, text: string) => {
-    const mission = missions.value.find(m => m.id === missionId)
-    if (!mission) return
+  const updateChecklistItem = async (taskId: string, itemId: string, text: string) => {
+    const task = lists.value.find(m => m.id === taskId)
+    if (!task) return
 
-    const item = mission.checklist.find(c => c.id === itemId)
+    const item = task.checklist.find(c => c.id === itemId)
     if (!item) return
 
     item.text = text
 
-    await updateMission(missionId, { checklist: mission.checklist })
+    await updateTask(taskId, { checklist: task.checklist })
   }
 
-  // 删除已完成的使命
-  const deleteCompletedMissions = async (listId?: string) => {
-    const toDelete = missions.value.filter(m => {
+  // 删除已完成的任务
+  const deleteCompletedTasks = async (listId?: string) => {
+    const toDelete = lists.value.filter(m => {
       if (!m.completed) return false
       if (listId && m.listId !== listId) return false
       return true
     })
 
-    for (const mission of toDelete) {
-      await api.deleteMission(mission.id)
+    for (const task of toDelete) {
+      await api.deleteListTask(task.id)
     }
 
-    missions.value = missions.value.filter(m => {
+    lists.value = lists.value.filter(m => {
       if (!m.completed) return true
       if (listId && m.listId !== listId) return true
       return false
     })
   }
 
-  // 获取已完成使命的数量
-  const getCompletedMissionsCount = (listId?: string) => {
+  // 获取已完成任务的数量
+  const getCompletedTasksCount = (listId?: string) => {
     if (listId) {
-      return missions.value.filter(m => m.listId === listId && m.completed).length
+      return lists.value.filter(m => m.listId === listId && m.completed).length
     }
-    return missions.value.filter(m => m.completed).length
+    return lists.value.filter(m => m.completed).length
   }
 
   // Reset store (used when logging out)
   const reset = () => {
+    taskLists.value = []
     lists.value = []
-    missions.value = []
     folders.value = []
     isLoaded.value = false
   }
 
   return {
+    taskLists,
     lists,
-    missions,
     folders,
     isLoaded,
     loadData,
@@ -969,18 +1035,18 @@ export const useMissionStore = defineStore('mission', () => {
     moveGroupUp,
     moveGroupDown,
     getGroupsInList,
-    addMission,
-    updateMission,
-    deleteMission,
-    toggleMission,
-    completeMission,
-    uncompleteMission,
+    addTask,
+    updateTask,
+    deleteTask,
+    toggleTask,
+    completeTask,
+    uncompleteTask,
     toggleChecklistItem,
     addChecklistItem,
     deleteChecklistItem,
     updateChecklistItem,
-    deleteCompletedMissions,
-    getCompletedMissionsCount,
+    deleteCompletedTasks,
+    getCompletedTasksCount,
     reset
   }
 })

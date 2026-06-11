@@ -1,14 +1,19 @@
 apply plugin: 'com.android.application'
 
+def packageJson = new groovy.json.JsonSlurper().parse(file('../../package.json'))
+
 android {
     namespace = "com.earthsurvivaldiary.app"
     compileSdk = rootProject.ext.compileSdkVersion
+    buildFeatures {
+        resValues = true
+    }
     defaultConfig {
         applicationId "com.earthsurvivaldiary.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0"
+        versionName packageJson.version
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -20,13 +25,8 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.debug
         }
-    }
-}
-
-repositories {
-    flatDir{
-        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
     }
 }
 

@@ -11,38 +11,44 @@
         <div class="reminder-columns">
           <div class="reminder-col">
             <div class="reminder-col-list" ref="dayListRef" @scroll="onDayScroll" @scrollend="onDayScrollEnd">
-              <div class="reminder-spacer" v-for="n in 2" :key="'ds'+n"></div>
+              <div class="reminder-spacer" v-for="n in 1" :key="'ds'+n"></div>
               <div v-for="d in 31" :key="d - 1"
                 class="reminder-item" :class="{ active: draft.days === d - 1 }"
                 @click="selectDay(d - 1)">{{ d - 1 }}</div>
-              <div class="reminder-spacer" v-for="n in 2" :key="'de'+n"></div>
+              <div class="reminder-spacer" v-for="n in 1" :key="'de'+n"></div>
             </div>
             <span class="reminder-col-unit">天</span>
           </div>
           <div class="reminder-col">
             <div class="reminder-col-list" ref="hourListRef" @scroll="onHourScroll" @scrollend="onHourScrollEnd">
-              <div class="reminder-spacer" v-for="n in 2" :key="'hs'+n"></div>
+              <div class="reminder-spacer" v-for="n in 1" :key="'hs'+n"></div>
               <div v-for="h in 24" :key="h - 1"
                 class="reminder-item" :class="{ active: draft.hours === h - 1 }"
                 @click="selectHour(h - 1)">{{ h - 1 }}</div>
-              <div class="reminder-spacer" v-for="n in 2" :key="'he'+n"></div>
+              <div class="reminder-spacer" v-for="n in 1" :key="'he'+n"></div>
             </div>
             <span class="reminder-col-unit">时</span>
           </div>
           <div class="reminder-col">
             <div class="reminder-col-list" ref="minuteListRef" @scroll="onMinuteScroll" @scrollend="onMinuteScrollEnd">
-              <div class="reminder-spacer" v-for="n in 2" :key="'ms'+n"></div>
+              <div class="reminder-spacer" v-for="n in 1" :key="'ms'+n"></div>
               <div v-for="m in 60" :key="m - 1"
                 class="reminder-item" :class="{ active: draft.minutes === m - 1 }"
                 @click="selectMinute(m - 1)">{{ m - 1 }}</div>
-              <div class="reminder-spacer" v-for="n in 2" :key="'me'+n"></div>
+              <div class="reminder-spacer" v-for="n in 1" :key="'me'+n"></div>
             </div>
             <span class="reminder-col-unit">分</span>
           </div>
         </div>
         <div class="reminder-actions">
-          <el-button size="small" @click="cancel">取消</el-button>
-          <el-button size="small" type="primary" @click="save">保存</el-button>
+          <button class="capsule-btn cancel-btn" @click="cancel">
+            <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            <span>取消</span>
+          </button>
+          <button class="capsule-btn submit-btn" @click="save">
+            <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
+            <span>保存</span>
+          </button>
         </div>
       </div>
     </div>
@@ -77,7 +83,7 @@ const ITEM_HEIGHT = 32
 
 const displayText = computed(() => {
   const { days, hours, minutes } = props.modelValue
-  if (days === 0 && hours === 0 && minutes === 0) return '不提醒'
+  if (days === 0 && hours === 0 && minutes === 0) return '准时提醒'
   const parts: string[] = []
   if (days > 0) parts.push(`${days}天`)
   if (hours > 0) parts.push(`${hours}小时`)
@@ -193,7 +199,6 @@ function cancel() {
   transition: border-color 0.2s;
   box-sizing: border-box;
 }
-.reminder-trigger:hover { border-color: rgba(102, 126, 234, 0.5); }
 .trigger-arrow { width: 14px; height: 14px; opacity: 0.5; flex-shrink: 0; }
 
 .reminder-overlay {
@@ -214,14 +219,14 @@ function cancel() {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   padding: 16px;
-  min-width: 300px;
+  min-width: 150px;
 }
 
 .reminder-columns { display: flex; gap: 0; }
 .reminder-col { flex: 1; display: flex; align-items: center; }
 
 .reminder-col-list {
-  height: 160px;
+  height: 96px;
   overflow-y: auto;
   scrollbar-width: none;
   flex: 1;
@@ -237,9 +242,7 @@ function cancel() {
   cursor: pointer;
   border-radius: 4px;
   text-align: center;
-  transition: all 0.15s;
 }
-.reminder-item:hover { background: rgba(102, 126, 234, 0.15); color: #fff; }
 .reminder-item.active { color: #667eea; font-weight: 700; }
 
 .reminder-col-unit {
@@ -254,5 +257,31 @@ function cancel() {
   justify-content: center;
   gap: 12px;
   margin-top: 14px;
+}
+
+.capsule-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.capsule-btn .capsule-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.submit-btn {
+  background: rgba(102, 126, 234, 0.2);
+  border-color: rgba(102, 126, 234, 0.4);
+  color: #93c5fd;
 }
 </style>

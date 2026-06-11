@@ -1,22 +1,7 @@
 <template>
   <div class="profile-page">
-    <div class="profile-nav-wrapper" ref="profileNavRef">
-      <div class="profile-nav-inner">
-        <div
-            v-for="item in navItems"
-            :key="item.key"
-            class="profile-nav-item"
-            :class="{ active: activeNavKey === item.key }"
-            :ref="setProfileNavItemRef"
-            @click="scrollToSection(item.key, item.id)"
-        >
-          <el-icon v-if="item.icon" class="nav-icon"><component :is="item.icon" /></el-icon>
-          <span class="nav-name">{{ item.name }}</span>
-        </div>
-      </div>
-    </div>
     <div class="profile-content">
-      <el-scrollbar ref="profileScrollbarRef" @scroll="handleProfileScroll">
+      <el-scrollbar>
         <div class="profile-section" id="section-profile">
           <h3 class="section-title">个人信息</h3>
 
@@ -85,16 +70,18 @@
           </div>
 
           <div class="security-actions">
-            <el-button type="danger" @click="handleLogout" :loading="loggingOut">
-              退出登录
-            </el-button>
-            <el-button type="danger" plain @click="handleDeleteAccount" :loading="deletingAccount">
-              注销账号
-            </el-button>
+            <button class="capsule-btn capsule-btn-danger" @click="handleLogout" :disabled="loggingOut">
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              <span>退出登录</span>
+            </button>
+            <button class="capsule-btn capsule-btn-danger" @click="handleDeleteAccount" :disabled="deletingAccount">
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+              <span>注销账号</span>
+            </button>
           </div>
         </div>
 
-        <div class="profile-section" id="section-system">
+        <div class="profile-section" id="section-system" v-if="isElectron">
           <h3 class="section-title">系统设置</h3>
           <p class="section-desc">配置程序在系统中的行为。</p>
 
@@ -144,12 +131,21 @@
           <div class="about-item">
             <span class="about-label">版本号</span>
             <span class="about-value">v{{ version }}</span>
-            <el-button size="small" @click="checkForUpdate" :disabled="isGuideActive">检查更新</el-button>
-            <el-button size="small" @click="openChangelogDialog" :disabled="isGuideActive">查看更新日志</el-button>
+            
           </div>
           <div class="about-item about-tools-row">
-            <el-button size="small" type="primary" @click="startGuide" :disabled="isGuideActive">新手引导</el-button>
-            <el-button size="small" class="storage-btn storage-btn-normal" @click="handleViewLogs" :disabled="isGuideActive">查看日志</el-button>
+            <button class="capsule-btn" @click="checkForUpdate" :disabled="isGuideActive">
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              <span>检查更新</span>
+            </button>
+            <button class="capsule-btn" @click="openChangelogDialog" :disabled="isGuideActive">
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              <span>查看更新日志</span>
+            </button>
+            <button class="capsule-btn" @click="startGuide" :disabled="isGuideActive">
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span>新手引导</span>
+            </button>
           </div>
         </div>
 
@@ -233,10 +229,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch, nextTick, inject } from 'vue'
+import { ref, reactive, computed, onMounted, watch, inject } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Calendar, Lock, InfoFilled, Monitor } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { useAuthStore } from '../../stores/authStore'
 import { usePageNav } from '../../composables/usePageNav'
@@ -254,6 +249,7 @@ const emit = defineEmits<{
 
 const startGuide = inject<() => void>('startGuide', () => {})
 const isGuideActive = inject('guideVisible', ref(false))
+const isElectron = inject<boolean>('isElectron', false)
 
 const authStore = useAuthStore()
 const pageNav = usePageNav()
@@ -314,25 +310,16 @@ const handleCloseActionChange = async (val: string) => {
 
 const version = ref(appVersion.replace('-', '.'))
 
-const handleViewLogs = async () => {
-  logger.info('[我的] 查看日志')
-  try {
-    const content = await window.electronAPI.getLogContent()
-    window.electronAPI?.openLogViewer?.(content)
-    ElMessage.success('日志查看器已打开')
-  } catch (e) {
-    logger.error('[我的] 打开日志失败', { error: e instanceof Error ? e.message : String(e) })
-    ElMessage.error('打开日志失败')
-  }
-}
-
 const checkForUpdate = async () => {
-  if (!window.electronAPI?.checkForUpdate) return
-  try {
-    const result = await window.electronAPI.checkForUpdate()
-    logger.info('[关于] 检查更新结果', result)
-  } catch (e) {
-    logger.error('[关于] 检查更新失败', { error: e instanceof Error ? e.message : String(e) })
+  if (window.electronAPI?.checkForUpdate) {
+    try {
+      const result = await window.electronAPI.checkForUpdate()
+      logger.info('[关于] 检查更新结果', result)
+    } catch (e) {
+      logger.error('[关于] 检查更新失败', { error: e instanceof Error ? e.message : String(e) })
+    }
+  } else if ((window as any).__checkForUpdate) {
+    await (window as any).__checkForUpdate()
   }
 }
 
@@ -486,6 +473,9 @@ const handleLogout = async () => {
     await authStore.signOut()
     if (window.electronAPI) {
       await window.electronAPI.restartApp()
+    } else if (typeof (window as any).Capacitor !== 'undefined') {
+      // Android (Capacitor) 端：重启应用
+      window.location.reload()
     } else {
       emit('logout')
     }
@@ -515,7 +505,7 @@ const handleDeleteAccount = async () => {
     if (window.electronAPI) {
       await window.electronAPI.restartApp()
     } else {
-      emit('logout')
+      window.location.reload()
     }
   } catch (err: any) {
     if (err !== 'cancel') {
@@ -545,125 +535,7 @@ onMounted(async () => {
   }
 
   loadSystemSettings()
-
-  nextTick(() => {
-    initProfileNavDrag()
-    centerNavActive()
-  })
-  window.addEventListener('resize', () => {
-    scrollingLock = true
-    centerNavActive()
-    setTimeout(() => { scrollingLock = false }, 400)
-  })
 })
-
-// 导航栏相关
-
-const navItems = [
-  { key: 'profile', name: '个人信息', id: 'section-profile', icon: Calendar },
-  { key: 'security', name: '账号安全', id: 'section-security', icon: Lock },
-  { key: 'system', name: '系统设置', id: 'section-system', icon: Monitor },
-  { key: 'about', name: '关于', id: 'section-about', icon: InfoFilled }
-]
-
-const activeNavKey = ref('profile')
-const profileNavRef = ref<HTMLElement>()
-const profileScrollbarRef = ref()
-const profileNavItemRefs = ref<HTMLElement[]>([])
-
-const setProfileNavItemRef = (el: HTMLElement | null) => {
-  if (el) profileNavItemRefs.value.push(el)
-}
-
-const centerNavActive = () => {
-  const wrapper = profileNavRef.value
-  if (!wrapper) return
-  const inner = wrapper.querySelector('.profile-nav-inner') as HTMLElement
-  if (!inner) return
-
-  const wrapperWidth = wrapper.clientWidth
-  const innerWidth = inner.scrollWidth
-
-  if (innerWidth <= wrapperWidth) {
-    inner.style.marginLeft = ((wrapperWidth - innerWidth) / 2) + 'px'
-    wrapper.scrollLeft = 0
-    return
-  }
-
-  inner.style.marginLeft = '0'
-  const idx = navItems.findIndex(item => item.key === activeNavKey.value)
-  if (idx < 0) return
-  const activeEl = profileNavItemRefs.value[idx]
-  if (!activeEl) return
-  const visibleWidth = wrapperWidth - 32
-  const maxScroll = Math.max(0, innerWidth - visibleWidth)
-  const target = activeEl.offsetLeft - (visibleWidth - activeEl.offsetWidth) / 2
-  wrapper.scrollTo({ left: Math.max(0, Math.min(target, maxScroll)), behavior: 'smooth' })
-}
-
-let scrollingLock = false
-
-const scrollToSection = (key: string, domId: string) => {
-  activeNavKey.value = key
-  nextTick(() => centerNavActive())
-  const el = document.getElementById(domId)
-  if (!el) return
-  const scrollbarEl = profileScrollbarRef.value?.$el?.querySelector('.el-scrollbar__wrap')
-  if (scrollbarEl) {
-    scrollingLock = true
-    scrollbarEl.scrollTo({ top: el.offsetTop - 10, behavior: 'smooth' })
-    setTimeout(() => { scrollingLock = false }, 600)
-  }
-}
-
-const handleProfileScroll = () => {
-  if (scrollingLock) return
-  const scrollbarEl = profileScrollbarRef.value?.$el?.querySelector('.el-scrollbar__wrap')
-  if (!scrollbarEl) return
-  const sections = navItems.map(item => ({ key: item.key, el: document.getElementById(item.id) }))
-    .filter(s => s.el)
-  let currentKey = 'profile'
-  for (const section of sections) {
-    if (section.el && section.el.offsetTop <= scrollbarEl.scrollTop + 60) {
-      currentKey = section.key
-    }
-  }
-  const last = sections[sections.length - 1]
-  if (last && last.el && last.el.offsetTop + last.el.offsetHeight <= scrollbarEl.scrollTop + scrollbarEl.offsetHeight) {
-    currentKey = last.key
-  }
-  activeNavKey.value = currentKey
-}
-
-let isProfileDragging = false
-let profileDragStartX = 0
-let profileDragStartScrollLeft = 0
-
-const initProfileNavDrag = () => {
-  const el = profileNavRef.value
-  if (!el) return
-  el.addEventListener('mousedown', (e: MouseEvent) => {
-    const inner = el.querySelector('.profile-nav-inner') as HTMLElement
-    if (inner && inner.scrollWidth <= el.clientWidth) return
-    isProfileDragging = false
-    profileDragStartX = e.pageX
-    profileDragStartScrollLeft = el.scrollLeft
-    const onMove = (ev: MouseEvent) => {
-      const diff = ev.pageX - profileDragStartX
-      if (Math.abs(diff) > 3) isProfileDragging = true
-      el.scrollLeft = profileDragStartScrollLeft - diff
-    }
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-  })
-  el.addEventListener('click', (e: MouseEvent) => {
-    if (isProfileDragging) { e.preventDefault(); e.stopPropagation(); isProfileDragging = false }
-  }, true)
-}
 
 watch(() => authStore.profile?.nickname, (val) => {
   if (val) form.nickname = val
@@ -705,52 +577,6 @@ watch(() => form.birthday, () => {
   flex-direction: column;
   background: transparent;
   justify-content: center;
-}
-
-.profile-nav-wrapper {
-  overflow: hidden;
-  padding: 12px 16px;
-  -webkit-user-select: none;
-  user-select: none;
-  flex-shrink: 0;
-}
-
-.profile-nav-inner {
-  display: inline-flex;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.profile-nav-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.6);
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: 13px;
-  flex-shrink: 0;
-}
-
-.profile-nav-item:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.profile-nav-item.active {
-  background: rgba(102, 126, 234, 0.25);
-  color: #667eea;
-}
-
-.nav-icon {
-  font-size: 14px;
-}
-
-.nav-name {
-  white-space: nowrap;
 }
 
 .profile-content {
@@ -967,7 +793,10 @@ watch(() => form.birthday, () => {
 .form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); }
 .capsule-btn { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 18px; border: 1px solid rgba(255,255,255,0.15); border-radius: 20px; background: transparent; color: var(--chalk-white-70); cursor: pointer; font-size: 13px; font-family: inherit; transition: all 0.2s; }
 .capsule-btn:hover { background: rgba(255,255,255,0.08); color: var(--chalk-white); }
+.capsule-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .capsule-btn .capsule-icon { width: 14px; height: 14px; }
+.capsule-btn-danger { border-color: rgba(239, 68, 68, 0.4); color: #ef4444; }
+.capsule-btn-danger:hover { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
 .submit-btn { background: rgba(102,126,234,0.2); border-color: rgba(102,126,234,0.4); color: #93c5fd; }
 .submit-btn:hover { background: rgba(102,126,234,0.35); color: var(--chalk-white); }
 
@@ -1002,9 +831,9 @@ watch(() => form.birthday, () => {
 
 .about-tools-row {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   justify-content: flex-start;
-  margin-top: 8px;
+  margin-top: 12px;
 }
 
 .about-link {
@@ -1023,7 +852,6 @@ watch(() => form.birthday, () => {
   gap: 12px;
   padding-top: 16px;
   margin-top: 4px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .storage-list {
@@ -1266,11 +1094,13 @@ watch(() => form.birthday, () => {
 
 .changelog-panel {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 3000;
   width: 480px;
-  max-height: 55vh;
+  max-width: 80vw;
+  max-height: 85vh;
   background: rgba(20, 16, 55, 0.95);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -1278,12 +1108,12 @@ watch(() => form.birthday, () => {
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
-  animation: changelogSlideIn 0.3s ease-out;
+  animation: changelogFadeIn 0.3s ease-out;
 }
 
-@keyframes changelogSlideIn {
-  from { opacity: 0; transform: translateY(20px) translateX(20px); }
-  to { opacity: 1; transform: translateY(0) translateX(0); }
+@keyframes changelogFadeIn {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
 .changelog-panel-header {

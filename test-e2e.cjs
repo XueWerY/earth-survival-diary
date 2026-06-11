@@ -83,12 +83,12 @@ async function run() {
   assert('获取足迹列表', r.status === 200 && r.data.tasks && r.data.tasks.length >= 1)
 
   console.log('\n-- 清单 --')
-  r = await post('/mission-lists', { name: '测试清单' })
+  r = await post('/list-lists', { name: '测试清单' })
   assert('添加清单', r.status === 200 && r.data.list)
   const listId = r.data.list.id
 
-  r = await post('/missions', { listId, name: '测试任务' })
-  assert('添加任务', r.status === 200 && r.data.mission)
+  r = await post('/list-tasks', { listId, name: '测试任务' })
+  assert('添加任务', r.status === 200 && r.data.listTask)
 
   console.log('\n-- 通用数据 --')
   r = await post('/data/course/courses', { data: { semesterStart: '2026-02-15' } })

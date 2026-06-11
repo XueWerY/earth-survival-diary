@@ -1,17 +1,11 @@
 <template>
   <div class="tool-container">
-    <div class="tool-header">
-      <h3 class="tool-title">🎲 随机数生成</h3>
-      <p class="tool-desc">输入范围，点击按钮生成随机数</p>
-    </div>
-
     <div class="tool-body">
       <div class="input-row">
         <div class="input-group">
           <label class="input-label">最小值</label>
           <el-input-number v-model="min" :min="0" :max="999999" :step="1" size="default" controls-position="right" />
         </div>
-        <span class="range-sep">~</span>
         <div class="input-group">
           <label class="input-label">最大值</label>
           <el-input-number v-model="max" :min="0" :max="999999" :step="1" size="default" controls-position="right" />
@@ -71,23 +65,6 @@ function generate() {
   padding: 8px 0;
 }
 
-.tool-header {
-  margin-bottom: 16px;
-}
-
-.tool-title {
-  color: var(--chalk-white);
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0 0 4px 0;
-}
-
-.tool-desc {
-  color: var(--chalk-white-60);
-  font-size: 13px;
-  margin: 0;
-}
-
 .input-row {
   display: flex;
   align-items: flex-end;
@@ -108,10 +85,13 @@ function generate() {
   font-size: 12px;
 }
 
-.range-sep {
-  color: var(--chalk-white-40);
-  font-size: 18px;
-  padding-bottom: 6px;
+@media (max-width: 600px) {
+  .input-group {
+    flex: 1;
+  }
+  .input-group :deep(.el-input-number) {
+    width: 100%;
+  }
 }
 
 .center-section {

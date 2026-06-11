@@ -41,11 +41,11 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { useMissionStore, DEFAULT_LIST_COLORS, type MissionList } from '../../stores/missionStore'
+import { useListStore, DEFAULT_LIST_COLORS, type ListPage } from '../../stores/listStore'
 
 const props = defineProps<{
   visible: boolean
-  list?: MissionList | null
+  list?: ListPage | null
 }>()
 
 const emit = defineEmits<{
@@ -53,7 +53,7 @@ const emit = defineEmits<{
   (e: 'submit'): void
 }>()
 
-const missionStore = useMissionStore()
+const listStore = useListStore()
 
 const dialogVisible = computed({
   get: () => props.visible,
@@ -75,7 +75,7 @@ const isEdit = computed(() => !!props.list)
 // 已使用的颜色
 const usedColors = computed(() => {
   const colors = new Set<string>()
-  missionStore.lists.forEach(list => {
+  listStore.taskLists.forEach(list => {
     // 编辑时排除当前清单的颜色
     if (!props.list || list.id !== props.list.id) {
       colors.add(list.color)
@@ -124,9 +124,9 @@ const handleSubmit = async () => {
   await formRef.value.validate((valid) => {
     if (valid) {
       if (isEdit.value && props.list) {
-        missionStore.updateList(props.list.id, form.value)
+        listStore.updateList(props.list.id, form.value)
       } else {
-        missionStore.addList(form.value.name, form.value.color)
+        listStore.addList(form.value.name, form.value.color)
       }
 
       emit('submit')

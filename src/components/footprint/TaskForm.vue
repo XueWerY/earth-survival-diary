@@ -8,13 +8,11 @@
         <div class="dialog-body">
           <el-form :model="form" :rules="rules" ref="formRef" label-width="90px">
             <el-form-item label="事件名称" prop="name">
-              <el-autocomplete
+              <el-input
                   v-model="form.name"
-                  :fetch-suggestions="querySearch"
+                  type="textarea"
+                  :rows="2"
                   placeholder="今天做了什么？"
-                  clearable
-                  style="width: 100%"
-                  @select="handleNameSelect"
               />
             </el-form-item>
             <el-form-item label="开始时间" v-if="props.mode !== 'diary'">
@@ -27,16 +25,26 @@
               <el-input
                   v-model="form.notes"
                   type="textarea"
-                  :rows="2"
-                  placeholder="添加备注（可选）"
-                  maxlength="200"
-                  show-word-limit
+                  :rows="3"
+                  placeholder="添加备注"
               />
             </el-form-item>
           </el-form>
           <div class="form-footer">
-            <el-button @click="dialogVisible = false">取消</el-button>
-            <el-button type="primary" @click="handleSubmit">{{ isEdit ? '更新' : '添加' }}</el-button>
+            <button class="capsule-btn" @click="dialogVisible = false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+              <span>取消</span>
+            </button>
+            <button class="capsule-btn capsule-btn-primary" @click="handleSubmit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span>{{ isEdit ? '更新' : '添加' }}</span>
+            </button>
           </div>
         </div>
       </div>
@@ -49,7 +57,6 @@ import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import dayjs from 'dayjs'
 import { useTaskStore, type Task } from '../../stores/taskStore'
-import LunarDatePicker from '../common/picker/LunarDatePicker.vue'
 import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
 
 const props = defineProps<{
@@ -66,24 +73,6 @@ const emit = defineEmits<{
 
 const taskStore = useTaskStore()
 const formRef = ref<FormInstance>()
-
-const historyNames = computed(() => taskStore.historyNames)
-
-const querySearch = (queryString: string, cb: (results: { value: string }[]) => void) => {
-  const results = queryString
-      ? historyNames.value
-          .filter((name: string) => name.toLowerCase().includes(queryString.toLowerCase()))
-          .map((name: string) => ({ value: name }))
-      : historyNames.value.map((name: string) => ({ value: name }))
-  cb(results)
-}
-
-const handleNameSelect = (item: { value: string }) => {
-  form.name = item.value
-  if (formRef.value) {
-    formRef.value.validateField('name')
-  }
-}
 
 const dialogVisible = computed({
   get: () => props.visible,
@@ -123,9 +112,16 @@ watch(() => props.visible, (val) => {
     form.startTime = props.task.startTime
     form.endTime = props.task.endTime
     form.notes = props.task.notes || ''
+  } else if (val) {
+    isEdit.value = false
+    form.name = ''
+    form.date = props.defaultDate || dayjs().format('YYYY-MM-DD')
+    const defaults = getDefaultTimes()
+    form.startTime = defaults.startTime
+    form.endTime = defaults.endTime
+    form.notes = ''
   } else {
     isEdit.value = false
-    form.date = props.defaultDate || dayjs().format('YYYY-MM-DD')
   }
 })
 
@@ -186,10 +182,10 @@ const handleSubmit = async () => {
         ...newTask,
         updatedAt: new Date().toISOString(),
       })
-      ElMessage.success('记录已更新')
+      ElMessage.success(props.mode === 'diary' ? '日记已更新' : '记录已更新')
     } else {
       await taskStore.addTask(newTask)
-      ElMessage.success('记录已添加')
+      ElMessage.success(props.mode === 'diary' ? '日记已添加' : '记录已添加')
     }
     dialogVisible.value = false
     emit('submit')
@@ -202,7 +198,7 @@ const handleSubmit = async () => {
 
 <style scoped>
 .dialog-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
-.dialog-container { background: rgba(30, 30, 50, 0.95); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); max-width: 90vw; }
+.dialog-container { background: rgba(30, 28, 52, 0.98); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); max-width: 90vw; }
 .task-form-dialog { width: 300px; }
 .dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 0; flex-shrink: 0; }
 .dialog-header-title { font-size: 16px; font-weight: 600; color: var(--chalk-white); }
@@ -212,7 +208,44 @@ const handleSubmit = async () => {
 
 .form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
 
-:deep(.el-form-item) { margin-bottom: 12px; }
+.capsule-btn {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 12px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--chalk-white-60);
+  cursor: pointer;
+  border-radius: 16px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.capsule-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--chalk-white);
+}
+
+.capsule-btn-primary {
+  background: rgba(102, 126, 234, 0.3);
+  color: var(--chalk-blue);
+}
+
+.capsule-btn-primary:hover {
+  background: rgba(102, 126, 234, 0.45);
+  color: #fff;
+}
+
+.capsule-svg {
+  width: 14px;
+  height: 14px;
+}
+
+:deep(.el-form-item) { margin-bottom: 20px; }
 :deep(.el-form-item:last-child) { margin-bottom: 0; }
 :deep(.el-form-item__label) { color: var(--chalk-white-70); width: 80px !important; }
 :deep(.el-input__wrapper),

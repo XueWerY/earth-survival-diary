@@ -25,29 +25,27 @@
     </div>
 
     <div class="main-content" @click="closeDropdown">
-      <div class="content-wrapper">
+      <div v-if="isCountdownHome" class="card-grid" :class="isElectron ? 'grid-3cols' : 'grid-2cols'">
+        <div class="folder-card has-actions" @click="pageNav.setNavPath(['countdown', ALL_CATEGORY_VALUE])">
+          <div class="folder-card-icon" style="background: #667eea">📋</div>
+          <span class="folder-card-name">全部</span>
+          <span class="folder-card-count">{{ milestones.length }}个倒数日</span>
+        </div>
+        <div v-for="cat in categories" :key="cat.value" class="folder-card has-actions" @click="pageNav.setNavPath(['countdown', cat.value])">
+          <div class="card-top-actions" @click.stop>
+            <button v-if="cat.isCustom" class="card-icon-btn" title="编辑分类" @click="editCategoryFromCard(cat)"><el-icon><Edit /></el-icon></button>
+            <button v-if="cat.isCustom" class="card-icon-btn danger" title="删除分类" @click="deleteCategoryFromCard(cat)"><el-icon><Delete /></el-icon></button>
+          </div>
+          <div class="folder-card-icon" :style="{ background: cat.color }">{{ cat.icon }}</div>
+          <span class="folder-card-name">{{ cat.label }}</span>
+          <span class="folder-card-count">{{ getCategoryCount(cat.value) }}个倒数日</span>
+        </div>
+      </div>
+
+      <div v-else class="content-wrapper">
         <div class="content-body">
           <el-scrollbar>
-            <div v-if="isCountdownHome" class="category-cards" :class="isElectron ? 'cols-3' : 'cols-1'">
-              <div class="folder-card has-actions" @click="pageNav.setNavPath(['countdown', ALL_CATEGORY_VALUE])">
-                <div class="folder-card-icon" style="background: #667eea">📋</div>
-                <span class="folder-card-name">全部</span>
-                <span class="folder-card-count">{{ milestones.length }}个倒数日</span>
-              </div>
-              <div v-for="cat in categories" :key="cat.value" class="folder-card has-actions" @click="pageNav.setNavPath(['countdown', cat.value])">
-                <div class="card-top-actions" @click.stop>
-                  <button v-if="cat.isCustom" class="card-icon-btn" title="编辑分类" @click="editCategoryFromCard(cat)"><el-icon><Edit /></el-icon></button>
-                  <button v-if="cat.isCustom" class="card-icon-btn danger" title="删除分类" @click="deleteCategoryFromCard(cat)"><el-icon><Delete /></el-icon></button>
-                  <button class="card-icon-btn" title="左移" @click="moveCategoryCard(cat, 'left')">⬅</button>
-                  <button class="card-icon-btn" title="右移" @click="moveCategoryCard(cat, 'right')">➡</button>
-                </div>
-                <div class="folder-card-icon" :style="{ background: cat.color }">{{ cat.icon }}</div>
-                <span class="folder-card-name">{{ cat.label }}</span>
-                <span class="folder-card-count">{{ getCategoryCount(cat.value) }}个倒数日</span>
-              </div>
-            </div>
-
-            <template v-else-if="isCategoryView">
+            <template v-if="isCategoryView">
               <el-empty
                   v-if="filteredMilestones.length === 0"
                   :description="isAllView ? '暂无倒数日' : '该分类下暂无倒数日'"
@@ -57,77 +55,37 @@
               <div v-if="pinnedMilestones.length > 0" class="section pinned-section">
                 <div class="section-title">
                   <el-icon><Star /></el-icon>
-                  <span>星标倒数日</span>
+                  <span>星标</span>
                 </div>
                 <div class="milestone-grid">
-                  <div
-                      v-for="milestone in pinnedMilestones"
-                      :key="milestone.id"
-                      class="milestone-card pinned"
-                  >
-                    <div class="card-header">
-                      <span class="category-badge">
-                        {{ getCategoryIcon(milestone.category) }}
-                      </span>
-                      <div class="card-actions">
-                        <el-button type="warning" size="small" text :icon="Star" class="card-btn card-btn-unpin" @click.stop="handleCommand('unpin', milestone)" title="取消星标" />
-                        <el-button type="danger" size="small" text :icon="Delete" class="card-btn" @click.stop="handleCommand('delete', milestone)" title="删除" />
-                      </div>
-                    </div>
-                    <template v-if="editingNameId === milestone.id">
-                      <textarea
-                        v-model="editingNameValue"
-                        class="inline-edit-textarea"
-                        @blur="saveNameEdit(milestone)"
-                        @keydown.escape.prevent="cancelNameEdit"
-                        @keydown.enter.prevent="saveNameEdit(milestone)"
-                        rows="2"
-                        autofocus
-                      />
-                    </template>
-                    <h3 v-else class="milestone-name" @dblclick="startNameEdit(milestone)">{{ milestone.name }}</h3>
-                    <div class="milestone-date">
-                      <span class="date-plain-text" @click.stop="openDatePicker(milestone)">
-                      <el-icon><Calendar /></el-icon>
-                      {{ formatDate(milestone.targetDate) }}
-                    </span>
-                    </div>
-                    <div class="milestone-meta">
-                      <template v-if="milestone.countMode !== 'countup'">
-                        <span class="meta-item repeat-text" @click.stop="toggleRepeat(milestone)">
-                          {{ milestone.repeatStrategy === 'yearly' ? '每年重复' : '不重复' }}
-                        </span>
-                        <span class="meta-separator">·</span>
-                        <template v-if="getReminderLabel(milestone)">
-                          <span class="meta-item reminder-has" @click.stop="openReminderPicker(milestone)">
-                            {{ getReminderLabel(milestone) }}
-                          </span>
-                        </template>
-                        <template v-else>
-                          <span class="meta-item reminder-none" @click.stop="openReminderPicker(milestone)">不提醒</span>
-                        </template>
-                      </template>
-                    </div>
-                    <div class="countdown-display" :class="getCountdownClass(milestone)">
-                      <span class="countdown-number">{{ getCountdownDays(milestone) }}</span>
-                      <span class="countdown-unit">{{ getCountdownUnit(milestone) }}</span>
-                    </div>
-                    <template v-if="editingDescId === milestone.id">
-                      <textarea
-                        v-model="editingDescValue"
-                        class="inline-edit-textarea desc-textarea"
-                        @blur="saveDescEdit(milestone)"
-                        @keydown.escape.prevent="cancelDescEdit"
-                        rows="2"
-                        placeholder="添加描述"
-                        autofocus
-                      />
-                    </template>
-                    <template v-else>
-                      <p v-if="milestone.description" class="milestone-desc" @dblclick="startDescEdit(milestone)">{{ milestone.description }}</p>
-                      <p v-else class="milestone-desc desc-placeholder" @dblclick="startDescEdit(milestone)">双击添加描述</p>
-                    </template>
-                  </div>
+                  <CountdownCard
+                    v-for="milestone in pinnedMilestones"
+                    :key="milestone.id"
+                    :milestone="milestone"
+                    :card-type="'pinned'"
+                    :category-icon="getCategoryIcon(milestone.category)"
+                    :countdown-days="getCountdownDays(milestone)"
+                    :countdown-unit="getCountdownUnit(milestone)"
+                    :reminder-label="getReminderLabel(milestone)"
+                    :is-editing-name="editingNameId === milestone.id"
+                    :editing-name-value="editingNameValue"
+                    :is-editing-desc="editingDescId === milestone.id"
+                    :editing-desc-value="editingDescValue"
+                    @start-name-edit="startNameEdit(milestone)"
+                    @save-name-edit="saveNameEdit(milestone)"
+                    @cancel-name-edit="cancelNameEdit"
+                    @update:editing-name-value="editingNameValue = $event"
+                    @start-desc-edit="startDescEdit(milestone)"
+                    @save-desc-edit="saveDescEdit(milestone)"
+                    @cancel-desc-edit="cancelDescEdit"
+                    @update:editing-desc-value="editingDescValue = $event"
+                    @unpin="handleCommand('unpin', milestone)"
+                    @delete="handleCommand('delete', milestone)"
+                    @open-date-picker="openDatePicker(milestone)"
+                    @toggle-repeat="toggleRepeat(milestone)"
+                    @edit="handleEditMilestone(milestone)"
+                    @open-reminder-picker="openReminderPicker(milestone)"
+                  />
                 </div>
               </div>
 
@@ -137,73 +95,34 @@
                   <span>即将到来</span>
                 </div>
                 <div class="milestone-grid">
-                  <div
-                      v-for="milestone in upcomingMilestones"
-                      :key="milestone.id"
-                      class="milestone-card"
-                      :class="{ 'urgent': isUrgent(milestone) }"
-                  >
-                    <div class="card-header">
-                      <span class="category-badge">{{ getCategoryIcon(milestone.category) }}</span>
-                      <div class="card-actions">
-                        <el-button type="warning" size="small" text :icon="Star" class="card-btn" @click.stop="handleCommand('pin', milestone)" title="设为星标" />
-                        <el-button type="danger" size="small" text :icon="Delete" class="card-btn" @click.stop="handleCommand('delete', milestone)" title="删除" />
-                      </div>
-                    </div>
-                    <template v-if="editingNameId === milestone.id">
-                      <textarea
-                        v-model="editingNameValue"
-                        class="inline-edit-textarea"
-                        @blur="saveNameEdit(milestone)"
-                        @keydown.escape.prevent="cancelNameEdit"
-                        @keydown.enter.prevent="saveNameEdit(milestone)"
-                        rows="2"
-                        autofocus
-                      />
-                    </template>
-                    <h3 v-else class="milestone-name" @dblclick="startNameEdit(milestone)">{{ milestone.name }}</h3>
-                    <div class="milestone-date">
-                      <span class="date-plain-text" @click.stop="openDatePicker(milestone)">
-                      <el-icon><Calendar /></el-icon>
-                      {{ formatDate(milestone.targetDate) }}
-                    </span>
-                    </div>
-                    <div class="milestone-meta">
-                      <template v-if="milestone.countMode !== 'countup'">
-                        <span class="meta-item repeat-text" @click.stop="toggleRepeat(milestone)">
-                          {{ milestone.repeatStrategy === 'yearly' ? '每年重复' : '不重复' }}
-                        </span>
-                        <span class="meta-separator">·</span>
-                        <template v-if="getReminderLabel(milestone)">
-                          <span class="meta-item reminder-has" @click.stop="openReminderPicker(milestone)">
-                            {{ getReminderLabel(milestone) }}
-                          </span>
-                        </template>
-                        <template v-else>
-                          <span class="meta-item reminder-none" @click.stop="openReminderPicker(milestone)">不提醒</span>
-                        </template>
-                      </template>
-                    </div>
-                    <div class="countdown-display" :class="getCountdownClass(milestone)">
-                      <span class="countdown-number">{{ getCountdownDays(milestone) }}</span>
-                      <span class="countdown-unit">{{ getCountdownUnit(milestone) }}</span>
-                    </div>
-                    <template v-if="editingDescId === milestone.id">
-                      <textarea
-                        v-model="editingDescValue"
-                        class="inline-edit-textarea desc-textarea"
-                        @blur="saveDescEdit(milestone)"
-                        @keydown.escape.prevent="cancelDescEdit"
-                        rows="2"
-                        placeholder="添加描述"
-                        autofocus
-                      />
-                    </template>
-                    <template v-else>
-                      <p v-if="milestone.description" class="milestone-desc" @dblclick="startDescEdit(milestone)">{{ milestone.description }}</p>
-                      <p v-else class="milestone-desc desc-placeholder" @dblclick="startDescEdit(milestone)">双击添加描述</p>
-                    </template>
-                  </div>
+                  <CountdownCard
+                    v-for="milestone in upcomingMilestones"
+                    :key="milestone.id"
+                    :milestone="milestone"
+                    :card-type="'upcoming'"
+                    :category-icon="getCategoryIcon(milestone.category)"
+                    :countdown-days="getCountdownDays(milestone)"
+                    :countdown-unit="getCountdownUnit(milestone)"
+                    :reminder-label="getReminderLabel(milestone)"
+                    :is-editing-name="editingNameId === milestone.id"
+                    :editing-name-value="editingNameValue"
+                    :is-editing-desc="editingDescId === milestone.id"
+                    :editing-desc-value="editingDescValue"
+                    @start-name-edit="startNameEdit(milestone)"
+                    @save-name-edit="saveNameEdit(milestone)"
+                    @cancel-name-edit="cancelNameEdit"
+                    @update:editing-name-value="editingNameValue = $event"
+                    @start-desc-edit="startDescEdit(milestone)"
+                    @save-desc-edit="saveDescEdit(milestone)"
+                    @cancel-desc-edit="cancelDescEdit"
+                    @update:editing-desc-value="editingDescValue = $event"
+                    @pin="handleCommand('pin', milestone)"
+                    @delete="handleCommand('delete', milestone)"
+                    @open-date-picker="openDatePicker(milestone)"
+                    @toggle-repeat="toggleRepeat(milestone)"
+                    @edit="handleEditMilestone(milestone)"
+                    @open-reminder-picker="openReminderPicker(milestone)"
+                  />
                 </div>
               </div>
 
@@ -213,68 +132,34 @@
                   <span>未来展望</span>
                 </div>
                 <div class="milestone-grid">
-                  <div v-for="milestone in futureMilestones" :key="milestone.id" class="milestone-card">
-                    <div class="card-header">
-                      <span class="category-badge">{{ getCategoryIcon(milestone.category) }}</span>
-                      <div class="card-actions">
-                        <el-button type="warning" size="small" text :icon="Star" class="card-btn" @click.stop="handleCommand('pin', milestone)" title="设为星标" />
-                        <el-button type="danger" size="small" text :icon="Delete" class="card-btn" @click.stop="handleCommand('delete', milestone)" title="删除" />
-                      </div>
-                    </div>
-                    <template v-if="editingNameId === milestone.id">
-                      <textarea
-                        v-model="editingNameValue"
-                        class="inline-edit-textarea"
-                        @blur="saveNameEdit(milestone)"
-                        @keydown.escape.prevent="cancelNameEdit"
-                        @keydown.enter.prevent="saveNameEdit(milestone)"
-                        rows="2"
-                        autofocus
-                      />
-                    </template>
-                    <h3 v-else class="milestone-name" @dblclick="startNameEdit(milestone)">{{ milestone.name }}</h3>
-                    <div class="milestone-date">
-                      <span class="date-plain-text" @click.stop="openDatePicker(milestone)">
-                      <el-icon><Calendar /></el-icon>
-                      {{ formatDate(milestone.targetDate) }}
-                    </span>
-                    </div>
-                    <div class="milestone-meta">
-                      <template v-if="milestone.countMode !== 'countup'">
-                        <span class="meta-item repeat-text" @click.stop="toggleRepeat(milestone)">
-                          {{ milestone.repeatStrategy === 'yearly' ? '每年重复' : '不重复' }}
-                        </span>
-                        <span class="meta-separator">·</span>
-                        <template v-if="getReminderLabel(milestone)">
-                          <span class="meta-item reminder-has" @click.stop="openReminderPicker(milestone)">
-                            {{ getReminderLabel(milestone) }}
-                          </span>
-                        </template>
-                        <template v-else>
-                          <span class="meta-item reminder-none" @click.stop="openReminderPicker(milestone)">不提醒</span>
-                        </template>
-                      </template>
-                    </div>
-                    <div class="countdown-display" :class="getCountdownClass(milestone)">
-                      <span class="countdown-number">{{ getCountdownDays(milestone) }}</span>
-                      <span class="countdown-unit">{{ getCountdownUnit(milestone) }}</span>
-                    </div>
-                    <template v-if="editingDescId === milestone.id">
-                      <textarea
-                        v-model="editingDescValue"
-                        class="inline-edit-textarea desc-textarea"
-                        @blur="saveDescEdit(milestone)"
-                        @keydown.escape.prevent="cancelDescEdit"
-                        rows="2"
-                        placeholder="添加描述"
-                        autofocus
-                      />
-                    </template>
-                    <template v-else>
-                      <p v-if="milestone.description" class="milestone-desc" @dblclick="startDescEdit(milestone)">{{ milestone.description }}</p>
-                      <p v-else class="milestone-desc desc-placeholder" @dblclick="startDescEdit(milestone)">双击添加描述</p>
-                    </template>
-                  </div>
+                  <CountdownCard
+                    v-for="milestone in futureMilestones"
+                    :key="milestone.id"
+                    :milestone="milestone"
+                    :card-type="'future'"
+                    :category-icon="getCategoryIcon(milestone.category)"
+                    :countdown-days="getCountdownDays(milestone)"
+                    :countdown-unit="getCountdownUnit(milestone)"
+                    :reminder-label="getReminderLabel(milestone)"
+                    :is-editing-name="editingNameId === milestone.id"
+                    :editing-name-value="editingNameValue"
+                    :is-editing-desc="editingDescId === milestone.id"
+                    :editing-desc-value="editingDescValue"
+                    @start-name-edit="startNameEdit(milestone)"
+                    @save-name-edit="saveNameEdit(milestone)"
+                    @cancel-name-edit="cancelNameEdit"
+                    @update:editing-name-value="editingNameValue = $event"
+                    @start-desc-edit="startDescEdit(milestone)"
+                    @save-desc-edit="saveDescEdit(milestone)"
+                    @cancel-desc-edit="cancelDescEdit"
+                    @update:editing-desc-value="editingDescValue = $event"
+                    @pin="handleCommand('pin', milestone)"
+                    @delete="handleCommand('delete', milestone)"
+                    @open-date-picker="openDatePicker(milestone)"
+                    @toggle-repeat="toggleRepeat(milestone)"
+                    @edit="handleEditMilestone(milestone)"
+                    @open-reminder-picker="openReminderPicker(milestone)"
+                  />
                 </div>
               </div>
 
@@ -284,68 +169,34 @@
                   <span>时光印记</span>
                 </div>
                 <div class="milestone-grid passed">
-                  <div v-for="milestone in passedMilestones" :key="milestone.id" class="milestone-card passed">
-                    <div class="card-header">
-                      <span class="category-badge">{{ getCategoryIcon(milestone.category) }}</span>
-                      <div class="card-actions">
-                        <el-button type="warning" size="small" text :icon="Star" class="card-btn" @click.stop="handleCommand('pin', milestone)" title="设为星标" />
-                        <el-button type="danger" size="small" text :icon="Delete" class="card-btn" @click.stop="handleCommand('delete', milestone)" title="删除" />
-                      </div>
-                    </div>
-                    <template v-if="editingNameId === milestone.id">
-                      <textarea
-                        v-model="editingNameValue"
-                        class="inline-edit-textarea"
-                        @blur="saveNameEdit(milestone)"
-                        @keydown.escape.prevent="cancelNameEdit"
-                        @keydown.enter.prevent="saveNameEdit(milestone)"
-                        rows="2"
-                        autofocus
-                      />
-                    </template>
-                    <h3 v-else class="milestone-name" @dblclick="startNameEdit(milestone)">{{ milestone.name }}</h3>
-                    <div class="milestone-date">
-                      <span class="date-plain-text" @click.stop="openDatePicker(milestone)">
-                      <el-icon><Calendar /></el-icon>
-                      {{ formatDate(milestone.targetDate) }}
-                    </span>
-                    </div>
-                    <div class="milestone-meta">
-                      <template v-if="milestone.countMode !== 'countup'">
-                        <span class="meta-item repeat-text" @click.stop="toggleRepeat(milestone)">
-                          {{ milestone.repeatStrategy === 'yearly' ? '每年重复' : '不重复' }}
-                        </span>
-                        <span class="meta-separator">·</span>
-                        <template v-if="getReminderLabel(milestone)">
-                          <span class="meta-item reminder-has" @click.stop="openReminderPicker(milestone)">
-                            {{ getReminderLabel(milestone) }}
-                          </span>
-                        </template>
-                        <template v-else>
-                          <span class="meta-item reminder-none" @click.stop="openReminderPicker(milestone)">不提醒</span>
-                        </template>
-                      </template>
-                    </div>
-                    <div class="countdown-display" :class="getCountdownClass(milestone)">
-                      <span class="countdown-number">{{ getCountdownDays(milestone) }}</span>
-                      <span class="countdown-unit">{{ getCountdownUnit(milestone) }}</span>
-                    </div>
-                    <template v-if="editingDescId === milestone.id">
-                      <textarea
-                        v-model="editingDescValue"
-                        class="inline-edit-textarea desc-textarea"
-                        @blur="saveDescEdit(milestone)"
-                        @keydown.escape.prevent="cancelDescEdit"
-                        rows="2"
-                        placeholder="添加描述"
-                        autofocus
-                      />
-                    </template>
-                    <template v-else>
-                      <p v-if="milestone.description" class="milestone-desc" @dblclick="startDescEdit(milestone)">{{ milestone.description }}</p>
-                      <p v-else class="milestone-desc desc-placeholder" @dblclick="startDescEdit(milestone)">双击添加描述</p>
-                    </template>
-                  </div>
+                  <CountdownCard
+                    v-for="milestone in passedMilestones"
+                    :key="milestone.id"
+                    :milestone="milestone"
+                    :card-type="'passed'"
+                    :category-icon="getCategoryIcon(milestone.category)"
+                    :countdown-days="getCountdownDays(milestone)"
+                    :countdown-unit="getCountdownUnit(milestone)"
+                    :reminder-label="getReminderLabel(milestone)"
+                    :is-editing-name="editingNameId === milestone.id"
+                    :editing-name-value="editingNameValue"
+                    :is-editing-desc="editingDescId === milestone.id"
+                    :editing-desc-value="editingDescValue"
+                    @start-name-edit="startNameEdit(milestone)"
+                    @save-name-edit="saveNameEdit(milestone)"
+                    @cancel-name-edit="cancelNameEdit"
+                    @update:editing-name-value="editingNameValue = $event"
+                    @start-desc-edit="startDescEdit(milestone)"
+                    @save-desc-edit="saveDescEdit(milestone)"
+                    @cancel-desc-edit="cancelDescEdit"
+                    @update:editing-desc-value="editingDescValue = $event"
+                    @pin="handleCommand('pin', milestone)"
+                    @delete="handleCommand('delete', milestone)"
+                    @open-date-picker="openDatePicker(milestone)"
+                    @toggle-repeat="toggleRepeat(milestone)"
+                    @edit="handleEditMilestone(milestone)"
+                    @open-reminder-picker="openReminderPicker(milestone)"
+                  />
                 </div>
               </div>
             </template>
@@ -359,31 +210,9 @@
         :milestone="editingMilestoneForForm"
         :categories="categories"
         :default-category="currentCategoryFromPath !== ALL_CATEGORY_VALUE ? currentCategoryFromPath : 'life'"
+        :reminder-only="countdownFormReminderOnly"
         @submit="handleCountdownFormSubmit"
     />
-
-    <Teleport to="body">
-      <div v-if="reminderPickerVisible" class="dialog-overlay" @click.self="cancelReminderPicker">
-        <div class="dialog-container reminder-picker-dialog">
-          <div class="dialog-header folder-dialog-header">
-            <span class="dialog-header-title folder-dialog-title">设置提醒</span>
-          </div>
-          <div class="dialog-body">
-            <ReminderTimePicker v-model="reminderPickerValue" />
-            <div class="form-footer">
-              <button class="capsule-btn cancel-btn" @click="cancelReminderPicker">
-                <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                <span>取消</span>
-              </button>
-              <button class="capsule-btn submit-btn" @click="saveReminderPicker">
-                <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
-                <span>保存</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
 
     <DateScrollPicker
       v-if="datePickerMilestoneId"
@@ -392,47 +221,71 @@
       @update:model-value="onDatePickerConfirm"
     />
 
-    <el-dialog
-        v-model="categoryFormVisible"
-        :title="editingCategory ? '编辑分类' : '添加分类'"
-        width="400px"
-        modal-class="category-dialog-overlay"
-        class="category-form-dialog"
-    >
-      <el-form :model="categoryForm" label-width="80px">
-        <el-form-item label="分类名称">
-          <el-input v-model="categoryForm.label" placeholder="输入分类名称" maxlength="10" />
-        </el-form-item>
-        <el-form-item label="图标">
-          <div class="icon-picker">
-            <div
-                v-for="icon in ICON_OPTIONS"
-                :key="icon"
-                class="icon-option"
-                :class="{ active: categoryForm.icon === icon }"
-                @click="categoryForm.icon = icon"
-            >
-              {{ icon }}
-            </div>
-          </div>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="categoryFormVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleCategoryFormSubmit">确定</el-button>
-      </template>
-    </el-dialog>
+    <ConfirmDialog
+      v-model="showDeleteConfirm"
+      title="提示"
+      message="确定要删除这个倒数日吗？"
+      @confirm="onDeleteConfirmed"
+    />
+
+    <div v-if="categoryFormVisible" class="dialog-overlay" @click.self="categoryFormVisible = false">
+      <div class="dialog-container" style="max-width: 440px;">
+        <div class="dialog-header" style="justify-content: center;">
+          <span class="dialog-header-title">{{ editingCategory ? '编辑分类' : '添加分类' }}</span>
+        </div>
+        <div class="dialog-body">
+          <el-form :model="categoryForm" label-width="80px">
+            <el-form-item label="分类名称">
+              <el-input v-model="categoryForm.label" placeholder="输入分类名称" maxlength="10" />
+            </el-form-item>
+            <el-form-item label="图标">
+              <div class="icon-picker">
+                <div
+                    v-for="icon in ICON_OPTIONS"
+                    :key="icon"
+                    class="icon-option"
+                    :class="{ active: categoryForm.icon === icon }"
+                    @click="categoryForm.icon = icon"
+                >
+                  {{ icon }}
+                </div>
+              </div>
+              <div class="custom-icon-row">
+                <span class="custom-icon-label">自定义</span>
+                <el-input
+                  v-model="categoryForm.icon"
+                  placeholder="输入表情符号"
+                  maxlength="4"
+                  class="custom-icon-input"
+                />
+              </div>
+            </el-form-item>
+          </el-form>
+        </div>
+        <div class="form-footer">
+          <button class="capsule-btn" @click="categoryFormVisible = false">
+            <el-icon><Close /></el-icon>
+            <span>取消</span>
+          </button>
+          <button class="capsule-btn submit-btn" @click="handleCategoryFormSubmit">
+            <el-icon><Check /></el-icon>
+            <span>确定</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, inject, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Clock, Timer, Star, Sunny, Delete, Plus } from '@element-plus/icons-vue'
+import { Calendar, Clock, Timer, Star, Sunny, Delete, Plus, Check, Close } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import CountdownForm from './CountdownForm.vue'
+import CountdownCard from './CountdownCard.vue'
+import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
-import ReminderTimePicker from '../common/picker/ReminderTimePicker.vue'
 import { setData } from '../../services/storageService'
 import { logger } from '../../lib/logger'
 import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem } from '../../composables/usePageNav'
@@ -478,7 +331,7 @@ const DEFAULT_CATEGORIES: Category[] = [
   { value: 'life', label: '生活', icon: '🌟', color: '#f59e0b' }
 ]
 
-const ICON_OPTIONS = ['🎂', '💕', '🎉', '✈️', '🎮', '💼', '📚', '🌟', '🎵', '🎬', '🏠', '❤️', '🎁', '🏆', '📅', '🎯']
+const ICON_OPTIONS = ['🎂', '💕', '🎉', '✈️', '🎮', '💼', '📚', '🌟', '🎵', '🎬', '🏠', '❤️', '🎁', '🏆', '📅', '🎯', '🏖️', '🎄', '🍕', '🚗', '💡', '🔥', '🌈', '⚽', '🏀', '🎸', '🎨', '📷', '💰', '🍀']
 
 const COLOR_OPTIONS = ['#f472b6', '#ec4899', '#a855f7', '#8b5cf6', '#06b6d4', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6b7280']
 
@@ -567,7 +420,7 @@ const localBreadcrumbSegments = ref<BreadcrumbSegment[]>([])
 
 const showBreadcrumb = computed(() => {
   const mod = navPath.value[0]
-  return mod === 'countdown' && !isCountdownHome.value
+  return mod === 'countdown'
 })
 
 const plusAction = computed(() => {
@@ -625,13 +478,13 @@ const isDefaultCategory = (value: string): boolean => {
 
 const initFilterState = async () => {
   logger.debug('[CountdownList] initFilterState 开始', { navPath: pageNav.navPath.value })
+  if (pageNav.navPath.value.length > 1 && pageNav.navPath.value[0] === 'countdown') {
+    logger.debug('[CountdownList] initFilterState 已有具体路径，跳过恢复')
+    return
+  }
   const restored = await restoreModuleNavPath('countdown')
   logger.debug('[CountdownList] initFilterState 恢复的路径', { restored, currentNavPath: pageNav.navPath.value })
-  if (restored.length === 1 && restored[0] === 'countdown') {
-    pageNav.setNavPath(['countdown', ALL_CATEGORY_VALUE])
-  } else {
-    pageNav.setNavPath(restored)
-  }
+  pageNav.setNavPath(restored)
   logger.debug('[CountdownList] initFilterState 完成', { navPath: pageNav.navPath.value })
 }
 
@@ -767,6 +620,7 @@ const selectCategory = (category: string) => {
 }
 
 const countdownFormVisible = ref(false)
+const countdownFormReminderOnly = ref(false)
 const editingMilestoneForForm = ref<Milestone | null>(null)
 
 const editingNameId = ref<string | null>(null)
@@ -776,9 +630,6 @@ const editingDescValue = ref('')
 const datePickerVisible = ref(false)
 const datePickerMilestoneId = ref<string | null>(null)
 const datePickerTargetDate = ref('')
-const reminderPickerVisible = ref(false)
-const reminderPickerMilestoneId = ref<string | null>(null)
-const reminderPickerValue = ref({ days: 0, hours: 0, minutes: 0 })
 
 const startNameEdit = (milestone: Milestone) => {
   editingNameId.value = milestone.id
@@ -843,6 +694,19 @@ const onDatePickerConfirm = () => {
   datePickerMilestoneId.value = null
 }
 
+const openReminderPicker = (milestone: Milestone) => {
+  editingMilestoneForForm.value = { ...milestone }
+  countdownFormReminderOnly.value = true
+  countdownFormVisible.value = true
+}
+
+const handleEditMilestone = (milestone: Milestone) => {
+  editingMilestoneForForm.value = { ...milestone }
+  countdownFormReminderOnly.value = false
+  countdownFormVisible.value = true
+  logger.info('[倒数日] 打开编辑倒数日对话框', { id: milestone.id, name: milestone.name })
+}
+
 const toggleRepeat = (milestone: Milestone) => {
   const index = milestones.value.findIndex(m => m.id === milestone.id)
   if (index > -1) {
@@ -851,44 +715,6 @@ const toggleRepeat = (milestone: Milestone) => {
     saveData()
     refreshReminders()
   }
-}
-
-const openReminderPicker = (milestone: Milestone) => {
-  reminderPickerMilestoneId.value = milestone.id
-  reminderPickerValue.value = {
-    days: milestone.reminderDays || 0,
-    hours: milestone.reminderHours || 0,
-    minutes: milestone.reminderMinutes || 0
-  }
-  reminderPickerVisible.value = true
-}
-
-const saveReminderPicker = () => {
-  if (reminderPickerMilestoneId.value) {
-    const index = milestones.value.findIndex(m => m.id === reminderPickerMilestoneId.value)
-    if (index > -1) {
-      milestones.value[index].reminderStrategy = 'advance'
-      milestones.value[index].reminderDays = reminderPickerValue.value.days
-      milestones.value[index].reminderHours = reminderPickerValue.value.hours
-      milestones.value[index].reminderMinutes = reminderPickerValue.value.minutes
-      milestones.value[index].updatedAt = new Date().toISOString()
-      saveData()
-      refreshReminders()
-    }
-  }
-  reminderPickerMilestoneId.value = null
-  reminderPickerVisible.value = false
-}
-
-const cancelReminderPicker = () => {
-  reminderPickerMilestoneId.value = null
-  reminderPickerVisible.value = false
-}
-
-const handleEditMilestone = (milestone: Milestone) => {
-  editingMilestoneForForm.value = { ...milestone }
-  countdownFormVisible.value = true
-  logger.info('[倒数日] 打开编辑倒数日对话框', { id: milestone.id, name: milestone.name })
 }
 
 const handleAddMilestone = () => {
@@ -995,23 +821,28 @@ const handleCommand = (command: string, milestone: Milestone) => {
       }
       break
     case 'delete':
-      ElMessageBox.confirm('确定要删除这个倒数日吗？', '提示', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }).then(() => {
-        const deleteIndex = milestones.value.findIndex(m => m.id === milestone.id)
-        if (deleteIndex > -1) {
-          const hadReminder = milestones.value[deleteIndex].reminderStrategy === 'advance'
-          milestones.value.splice(deleteIndex, 1)
-          saveData()
-          if (hadReminder) refreshReminders()
-          logger.info('[倒数日] 删除倒数日', { id: milestone.id, name: milestone.name })
-          ElMessage.success('删除成功')
-        }
-      }).catch(() => {})
+      deleteTargetMilestone.value = milestone
+      showDeleteConfirm.value = true
       break
   }
+}
+
+const showDeleteConfirm = ref(false)
+const deleteTargetMilestone = ref<Milestone | null>(null)
+
+const onDeleteConfirmed = () => {
+  const target = deleteTargetMilestone.value
+  if (!target) return
+  const deleteIndex = milestones.value.findIndex(m => m.id === target.id)
+  if (deleteIndex > -1) {
+    const hadReminder = milestones.value[deleteIndex].reminderStrategy === 'advance'
+    milestones.value.splice(deleteIndex, 1)
+    saveData()
+    if (hadReminder) refreshReminders()
+    logger.info('[倒数日] 删除倒数日', { id: target.id, name: target.name })
+    ElMessage.success('删除成功')
+  }
+  deleteTargetMilestone.value = null
 }
 
 const handleAddCategory = () => {
@@ -1245,33 +1076,32 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.category-cards {
-  padding: 20px;
-  width: 80%;
-  margin: 0 auto;
-  box-sizing: border-box;
-}
+.card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 80%; margin: 0 auto; box-sizing: border-box; }
+.card-grid.grid-3cols { grid-template-columns: repeat(3, 1fr); }
+.card-grid.grid-2cols { grid-template-columns: repeat(2, 1fr); }
 
-.category-cards.cols-3 {
-  column-count: 3;
-  column-gap: 16px;
-}
+.folder-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 16px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; cursor: pointer; transition: all 0.2s; position: relative; }
+.folder-card:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(102, 126, 234, 0.3); transform: translateY(-2px); }
+.folder-card-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; }
+.folder-card-name { font-size: 15px; font-weight: 500; color: var(--chalk-white); text-align: center; }
+.folder-card-count { font-size: 12px; color: var(--chalk-dim); padding: 2px 10px; background: rgba(255, 255, 255, 0.08); border-radius: 10px; }
 
-.category-cards.cols-1 {
-  column-count: 1;
-}
+.card-top-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 2px; z-index: 2; }
+.card-icon-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: transparent; color: var(--chalk-white-60); cursor: pointer; border-radius: 4px; font-size: 12px; transition: all 0.15s; }
+.card-icon-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--chalk-white); }
+.card-icon-btn.danger:hover { color: var(--chalk-danger); }
 
-.category-cards .folder-card {
-  break-inside: avoid;
-  margin-bottom: 16px;
-}
+.folder-card.has-actions { padding-top: 44px; }
 
 .main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .content-wrapper {
@@ -1288,6 +1118,10 @@ onMounted(async () => {
 }
 
 .content-wrapper::-webkit-scrollbar {
+  display: none;
+}
+
+.main-content::-webkit-scrollbar {
   display: none;
 }
 
@@ -1326,262 +1160,40 @@ onMounted(async () => {
   margin-bottom: 16px;
 }
 
+.pinned-section .section-title {
+  color: #fbbf24;
+}
+
+.pinned-section .section-title .el-icon {
+  color: #fbbf24;
+  font-size: 18px;
+}
+
+.upcoming-section .section-title {
+  color: #ef4444;
+}
+
+.upcoming-section .section-title .el-icon {
+  color: #ef4444;
+  font-size: 18px;
+}
+
+.future-section .section-title {
+  color: #a78bfa;
+}
+
+.future-section .section-title .el-icon {
+  color: #a78bfa;
+  font-size: 18px;
+}
+
 .milestone-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
 }
 
-.milestone-card {
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 12px;
-  padding: 20px;
-  transition: all 0.2s ease;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  position: relative;
-  overflow: hidden;
-}
-
-.milestone-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-  border-color: rgba(102, 126, 234, 0.5);
-}
-
-.milestone-card.pinned {
-  background: linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(245, 158, 11, 0.05) 100%);
-  border-color: rgba(251, 191, 36, 0.3);
-}
-
-.milestone-card.urgent {
-  border-color: rgba(239, 68, 68, 0.3);
-}
-
-.milestone-card.passed {
-  opacity: 0.85;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.card-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.card-btn {
-  opacity: 0;
-  transition: opacity 0.2s;
-  width: 24px;
-  height: 24px;
-  padding: 2px;
-  flex-shrink: 0;
-  background: none;
-  border: none;
-  box-shadow: none;
-}
-
-.milestone-card:hover .card-btn {
-  opacity: 1;
-}
-
-:deep(.milestone-card .el-button.is-text) {
-  background: none !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-:deep(.milestone-card .el-button.is-text:hover) {
-  background: none !important;
-}
-
-.category-badge {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  flex-shrink: 0;
-}
-
-.milestone-name {
-  margin: 0 0 8px 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--chalk-white);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  user-select: none;
-}
-
-.milestone-date {
-  margin-bottom: 8px;
-}
-
-.date-plain-text {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--chalk-muted);
-  cursor: pointer;
-  transition: color 0.15s;
-}
-
-.date-plain-text .el-icon {
-  font-size: 13px;
-}
-
-.date-plain-text:hover {
-  color: var(--chalk-white);
-}
-
-.milestone-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 12px;
-  font-size: 12px;
-  min-height: 18px;
-}
-
-.meta-item {
-  cursor: pointer;
-  transition: color 0.15s;
-}
-
-.meta-item:hover {
-  color: var(--chalk-white);
-}
-
-.repeat-text {
-  color: var(--chalk-blue);
-}
-
-.reminder-has {
-  color: var(--chalk-orange);
-}
-
-.reminder-none {
-  color: var(--chalk-muted);
-}
-
-.meta-separator {
-  color: var(--chalk-white-30);
-  user-select: none;
-}
-
-.countdown-display {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  margin-bottom: 12px;
-}
-
-.countdown-display.today {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(6, 182, 212, 0.1) 100%);
-}
-
-.countdown-display.urgent {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(249, 115, 22, 0.1) 100%);
-}
-
-.countdown-display.upcoming {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 102, 241, 0.1) 100%);
-}
-
-.countdown-display.passed {
-  background: linear-gradient(135deg, rgba(107, 114, 128, 0.15) 0%, rgba(75, 85, 99, 0.1) 100%);
-}
-
-.countdown-number {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--chalk-white);
-}
-
-.countdown-display.today .countdown-number {
-  color: var(--chalk-green);
-}
-
-.countdown-display.urgent .countdown-number {
-  color: var(--chalk-danger);
-}
-
-.countdown-display.upcoming .countdown-number {
-  color: var(--chalk-blue);
-}
-
-.countdown-display.passed .countdown-number {
-  color: var(--chalk-white-60);
-}
-
-.countdown-unit {
-  font-size: 14px;
-  color: var(--chalk-muted);
-}
-
-.milestone-desc {
-  margin: 0;
-  font-size: 13px;
-  color: var(--chalk-muted);
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  cursor: pointer;
-}
-
-.milestone-desc.desc-placeholder {
-  color: var(--chalk-subtle);
-  font-style: italic;
-}
-
-.inline-edit-textarea {
-  width: 100%;
-  padding: 6px 8px;
-  margin-bottom: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(102, 126, 234, 0.5);
-  border-radius: 6px;
-  color: var(--chalk-white-90);
-  font-size: 14px;
-  font-family: inherit;
-  line-height: 1.5;
-  resize: none;
-  outline: none;
-  box-sizing: border-box;
-}
-
-.inline-edit-textarea:focus {
-  border-color: rgba(102, 126, 234, 0.8);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.inline-edit-textarea::placeholder {
-  color: var(--chalk-subtle);
-}
-
-.desc-textarea {
-  font-size: 13px;
-  margin-bottom: 0;
-}
-
-.dialog-overlay {
+.icon-picker {
   position: fixed;
   top: 0;
   left: 0;
@@ -1602,11 +1214,7 @@ onMounted(async () => {
   max-width: 90vw;
 }
 
-.reminder-picker-dialog {
-  width: 350px;
-}
-
-.dialog-header {
+.dialog-body {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1638,6 +1246,7 @@ onMounted(async () => {
   gap: 12px;
   margin-top: 14px;
   padding-top: 12px;
+  padding-bottom: 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -1726,15 +1335,23 @@ onMounted(async () => {
   background: rgba(59, 130, 246, 0.1);
 }
 
-.category-form-dialog :deep(.el-dialog) {
-  width: 400px;
+.custom-icon-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-@media (max-width: 440px) {
-  .category-form-dialog :deep(.el-dialog) {
-    width: calc(100vw - 32px);
-    margin: 16px auto;
-  }
+.custom-icon-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+  flex-shrink: 0;
+}
+
+.custom-icon-input {
+  flex: 1;
 }
 </style>
 

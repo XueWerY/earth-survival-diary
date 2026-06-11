@@ -80,27 +80,35 @@ async function getAllFileKeys(prefix: string = ''): Promise<string[]> {
 }
 
 async function deleteDir(dirPath: string) {
+  // 优先尝试原生递归删除（快速路径，Capacitor v8+ 支持）
   try {
-    const entries = await Filesystem.readdir({
-      path: DATA_DIR + dirPath,
-      directory: Directory.Data
-    })
-    for (const entry of entries.files) {
-      const full = dirPath + '/' + entry.name
-      if (entry.type === 'file') {
-        await Filesystem.deleteFile({
-          path: DATA_DIR + full,
-          directory: Directory.Data
-        })
-      } else {
-        await deleteDir(full)
-      }
-    }
     await Filesystem.rmdir({
       path: DATA_DIR + dirPath,
-      directory: Directory.Data
+      directory: Directory.Data,
+      recursive: true
     })
-  } catch {}
+    return
+  } catch {
+    // 原生递归失败，进入逐文件降级删除
+  }
+
+  try {
+    // 获取 data/ 下所有文件，筛选出属于该用户的文件逐一删除
+    const allKeys = await getAllFileKeys('')
+    const userKeys = allKeys.filter(k => k.startsWith(dirPath + '/') || k === dirPath)
+    for (const key of userKeys) {
+      await deleteFile(key)
+    }
+    // 尝试移除用户目录（可能已空）
+    try {
+      await Filesystem.rmdir({
+        path: DATA_DIR + dirPath,
+        directory: Directory.Data
+      })
+    } catch {}
+  } catch (e) {
+    logger.warn('[FileStore] 删除目录失败', { path: dirPath, error: e instanceof Error ? e.message : String(e) })
+  }
 }
 
 // ============ Helpers ============
@@ -340,9 +348,9 @@ export async function fsDeleteTask(userId: string, taskId: string) {
   return { success: true }
 }
 
-// ============ Mission Lists ============
+// ============ Task Lists ============
 
-export async function fsGetMissionLists(userId: string) {
+export async function fsGetLists(userId: string) {
   let lists = await readJson<any[]>(userDataPath(userId, 'list', 'lists'), [])
   lists = lists.map((list: any) => {
     if (!list.groups || list.groups.length === 0) {
@@ -353,7 +361,7 @@ export async function fsGetMissionLists(userId: string) {
   return { lists }
 }
 
-export async function fsAddMissionList(userId: string, data: any) {
+export async function fsAddList(userId: string, data: any) {
   const lists = await readJson<any[]>(userDataPath(userId, 'list', 'lists'), [])
   const listId = generateId()
   const newList = {
@@ -368,29 +376,29 @@ export async function fsAddMissionList(userId: string, data: any) {
   return { list: newList }
 }
 
-export async function fsUpdateMissionList(userId: string, listId: string, data: any) {
+export async function fsUpdateList(userId: string, listId: string, data: any) {
   const lists = await readJson<any[]>(userDataPath(userId, 'list', 'lists'), [])
   const idx = lists.findIndex((l: any) => l.id === listId)
-  if (idx === -1) throw new Error('使命列表不存在')
+  if (idx === -1) throw new Error('任务列表不存在')
   if (data.name !== undefined) lists[idx].name = data.name
   if (data.icon !== undefined) lists[idx].icon = data.icon
   await writeJson(userDataPath(userId, 'list', 'lists'), lists)
   return { list: lists[idx] }
 }
 
-export async function fsDeleteMissionList(userId: string, listId: string) {
+export async function fsDeleteList(userId: string, listId: string) {
   let lists = await readJson<any[]>(userDataPath(userId, 'list', 'lists'), [])
-  let missions = await readJson<any[]>(userDataPath(userId, 'list', 'tasks'), [])
+  let tasks = await readJson<any[]>(userDataPath(userId, 'list', 'tasks'), [])
   lists = lists.filter((l: any) => l.id !== listId)
-  missions = missions.filter((m: any) => m.list_id !== listId)
+  tasks = tasks.filter((m: any) => m.list_id !== listId)
   await writeJson(userDataPath(userId, 'list', 'lists'), lists)
-  await writeJson(userDataPath(userId, 'list', 'tasks'), missions)
+  await writeJson(userDataPath(userId, 'list', 'tasks'), tasks)
   return { success: true }
 }
 
-// ============ Mission Groups ============
+// ============ Task Groups ============
 
-export async function fsUpdateMissionGroup(userId: string, listId: string, groupId: string, data: any) {
+export async function fsUpdateGroup(userId: string, listId: string, groupId: string, data: any) {
   const lists = await readJson<any[]>(userDataPath(userId, 'list', 'lists'), [])
   const idx = lists.findIndex((l: any) => l.id === listId)
   if (idx === -1) throw new Error('使命列表不存在')
@@ -410,7 +418,7 @@ export async function fsUpdateMissionGroup(userId: string, listId: string, group
   return { group: list.groups[gIdx] }
 }
 
-export async function fsAddMissionGroup(userId: string, listId: string, data: any) {
+export async function fsAddGroup(userId: string, listId: string, data: any) {
   const lists = await readJson<any[]>(userDataPath(userId, 'list', 'lists'), [])
   const idx = lists.findIndex((l: any) => l.id === listId)
   if (idx === -1) throw new Error('使命列表不存在')
@@ -422,7 +430,7 @@ export async function fsAddMissionGroup(userId: string, listId: string, data: an
   return { group: newGroup }
 }
 
-export async function fsDeleteMissionGroup(userId: string, listId: string, groupId: string) {
+export async function fsDeleteGroup(userId: string, listId: string, groupId: string) {
   const lists = await readJson<any[]>(userDataPath(userId, 'list', 'lists'), [])
   const idx = lists.findIndex((l: any) => l.id === listId)
   if (idx === -1) throw new Error('使命列表不存在')
@@ -434,7 +442,7 @@ export async function fsDeleteMissionGroup(userId: string, listId: string, group
   return { success: true }
 }
 
-export async function fsReorderMissionLists(userId: string, orders: { id: string; order: number }[]) {
+export async function fsReorderLists(userId: string, orders: { id: string; order: number }[]) {
   const lists = await readJson<any[]>(userDataPath(userId, 'list', 'lists'), [])
   orders.forEach(({ id, order }) => {
     const i = lists.findIndex((l: any) => l.id === id)
@@ -460,17 +468,17 @@ export async function fsReorderGroups(userId: string, listId: string, orders: { 
   return { groups: list.groups }
 }
 
-// ============ Missions ============
+// ============ List Tasks ============
 
-export async function fsGetMissions(userId: string, listId?: string) {
-  let missions = await readJson<any[]>(userDataPath(userId, 'list', 'tasks'), [])
-  if (listId) missions = missions.filter((m: any) => m.list_id === listId)
-  return { missions }
+export async function fsGetListTasks(userId: string, listId?: string) {
+  let tasks = await readJson<any[]>(userDataPath(userId, 'list', 'tasks'), [])
+  if (listId) tasks = tasks.filter((m: any) => m.list_id === listId)
+  return { listTasks: tasks }
 }
 
-export async function fsAddMission(userId: string, data: any) {
-  const missions = await readJson<any[]>(userDataPath(userId, 'list', 'tasks'), [])
-  const newMission = {
+export async function fsAddListTask(userId: string, data: any) {
+  const tasks = await readJson<any[]>(userDataPath(userId, 'list', 'tasks'), [])
+  const newTask = {
     id: generateId(),
     list_id: data.listId,
     name: data.name,
@@ -480,10 +488,13 @@ export async function fsAddMission(userId: string, data: any) {
     completed: false,
     group_id: data.groupId || '',
     date: data.date || '',
-    start_time: data.startTime || '',
     end_time: data.endTime || '',
     repeat_strategy: data.repeatStrategy || 'none',
     repeat_custom_days: data.repeatCustomDays || 1,
+    repeat_weekdays: data.repeatWeekdays || [],
+    repeat_month_day: data.repeatMonthDay || 1,
+    repeat_lunar_month: data.repeatLunarMonth || 1,
+    repeat_lunar_day: data.repeatLunarDay || 1,
     repeat_end_strategy: data.repeatEndStrategy || 'never',
     repeat_end_date: data.repeatEndDate || '',
     repeat_count: data.repeatCount || 1,
@@ -500,21 +511,24 @@ export async function fsAddMission(userId: string, data: any) {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   }
-  missions.push(newMission)
-  await writeJson(userDataPath(userId, 'list', 'tasks'), missions)
-  return { mission: newMission }
+  tasks.push(newTask)
+  await writeJson(userDataPath(userId, 'list', 'tasks'), tasks)
+  return { listTask: newTask }
 }
 
-export async function fsUpdateMission(userId: string, missionId: string, updates: any) {
-  const missions = await readJson<any[]>(userDataPath(userId, 'list', 'tasks'), [])
-  const idx = missions.findIndex((m: any) => m.id === missionId)
-  if (idx === -1) throw new Error('使命不存在')
-  const mission = missions[idx]
+export async function fsUpdateListTask(userId: string, taskId: string, updates: any) {
+  const tasks = await readJson<any[]>(userDataPath(userId, 'list', 'tasks'), [])
+  const idx = tasks.findIndex((m: any) => m.id === taskId)
+  if (idx === -1) throw new Error('任务不存在')
+  const task = tasks[idx]
   const fieldMap: Record<string, string> = {
     name: 'name', description: 'description', targetCount: 'target_count',
     currentCount: 'current_count', completed: 'completed', groupId: 'group_id',
-    date: 'date', startTime: 'start_time', endTime: 'end_time',
+    date: 'date', endTime: 'end_time',
     repeatStrategy: 'repeat_strategy', repeatCustomDays: 'repeat_custom_days',
+    repeatWeekdays: 'repeat_weekdays',
+    repeatMonthDay: 'repeat_month_day',
+    repeatLunarMonth: 'repeat_lunar_month', repeatLunarDay: 'repeat_lunar_day',
     repeatEndStrategy: 'repeat_end_strategy', repeatEndDate: 'repeat_end_date',
     repeatCount: 'repeat_count', repeatCompletedCount: 'repeat_completed_count',
     priority: 'priority', checklist: 'checklist',
@@ -524,17 +538,17 @@ export async function fsUpdateMission(userId: string, missionId: string, updates
     reminderMinutes: 'reminder_minutes'
   }
   for (const [key, field] of Object.entries(fieldMap)) {
-    if (updates[key] !== undefined) mission[field] = updates[key]
+    if (updates[key] !== undefined) task[field] = updates[key]
   }
-  mission.updated_at = new Date().toISOString()
-  await writeJson(userDataPath(userId, 'list', 'tasks'), missions)
-  return { mission }
+  task.updated_at = new Date().toISOString()
+  await writeJson(userDataPath(userId, 'list', 'tasks'), tasks)
+  return { listTask: task }
 }
 
-export async function fsDeleteMission(userId: string, missionId: string) {
-  let missions = await readJson<any[]>(userDataPath(userId, 'list', 'tasks'), [])
-  missions = missions.filter((m: any) => m.id !== missionId)
-  await writeJson(userDataPath(userId, 'list', 'tasks'), missions)
+export async function fsDeleteListTask(userId: string, taskId: string) {
+  let tasks = await readJson<any[]>(userDataPath(userId, 'list', 'tasks'), [])
+  tasks = tasks.filter((m: any) => m.id !== taskId)
+  await writeJson(userDataPath(userId, 'list', 'tasks'), tasks)
   return { success: true }
 }
 
@@ -542,15 +556,32 @@ export async function fsDeleteMission(userId: string, missionId: string) {
 
 export async function fsGetStats(userId: string) {
   const lists = await readJson<any[]>(userDataPath(userId, 'list', 'lists'), [])
-  const missions = await readJson<any[]>(userDataPath(userId, 'list', 'tasks'), [])
-  const tasks = await readJson<any[]>(userDataPath(userId, 'footprint', 'footprint'), [])
-  return { stats: { listCount: lists.length, missionCount: missions.length, taskCount: tasks.length } }
+  const listTasks = await readJson<any[]>(userDataPath(userId, 'list', 'tasks'), [])
+  const footprintTasks = await readJson<any[]>(userDataPath(userId, 'footprint', 'footprint'), [])
+  return { stats: { listCount: lists.length, listTaskCount: listTasks.length, taskCount: footprintTasks.length } }
 }
 
 // ============ Data API ============
 
 export async function fsGetData<T>(userId: string, type: string, key: string): Promise<T | null> {
-  return readJson<T | null>(userDataPath(userId, type, key), null)
+  const data = await readJson<T | null>(userDataPath(userId, type, key), null)
+  // 迁移：将旧的 defaultsInitialized.json 合并到 state.json
+  if (type === 'system' && key === 'state') {
+    const legacyPath = userDataPath(userId, 'system', 'defaultsInitialized')
+    const legacy = await readJson<any>(legacyPath, null)
+    if (legacy === true) {
+      const merged = { ...(data || {}), defaultsInitialized: true } as T
+      await writeJson(userDataPath(userId, type, key), merged)
+      try {
+        await Filesystem.deleteFile({
+          path: DATA_DIR + legacyPath,
+          directory: Directory.Data
+        })
+      } catch {}
+      return merged
+    }
+  }
+  return data
 }
 
 export async function fsSetData(userId: string, type: string, key: string, data: any) {

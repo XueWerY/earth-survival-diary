@@ -157,6 +157,7 @@ export interface SystemState {
   session?: { token: string }
   guideCompleted?: boolean
   version?: string
+  defaultsInitialized?: boolean
 }
 
 async function loadSystemState(): Promise<SystemState> {

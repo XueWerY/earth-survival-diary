@@ -1,12 +1,12 @@
 <template>
-  <div class="footprint-container">
+  <div class="footprint-container" :class="{ 'is-mobile': !isElectron }">
     <div class="header-actions">
       <InlineLunarDatePicker ref="datePickerRef" v-model="selectedDateValue" @add-footprint="handleAddTask" @add-diary="handleAddDiary" />
     </div>
 
     <div class="footprint-content">
       <el-scrollbar>
-        <div v-if="filteredTasks.length === 0 && missionCards.length === 0 && courseCards.length === 0 && countdownCards.length === 0 && positiveDayCards.length === 0" class="empty-state">
+        <div v-if="filteredTasks.length === 0 && listCards.length === 0 && courseCards.length === 0 && countdownDisplayCards.length === 0" class="empty-state">
           <el-empty
               :description="emptyText"
               :image-size="120"
@@ -14,188 +14,231 @@
         </div>
 
         <template v-else>
-          <div class="diary-section">
-            <div class="diary-header">
-              <div class="diary-header-left">
-                <p class="diary-date-display">{{ formatFullDate(selectedDate) }}</p>
-                <p class="diary-intro">{{ diaryIntro }}</p>
-                <p class="diary-mood">{{ diaryMood }}</p>
+          <div v-if="pinnedCountdownCards.length > 0" class="important-section">
+            <p class="important-title">⭐ 重要</p>
+            <div class="countdown-section">
+              <div v-for="item in pinnedCountdownCards" :key="item.milestone.id" class="countdown-item">
+                <CountdownCard
+                  :milestone="item.milestone"
+                  :card-type="item.cardType"
+                  :category-icon="item.categoryIcon"
+                  :countdown-days="item.countdownDays"
+                  :countdown-unit="item.countdownUnit"
+                  :reminder-label="item.reminderLabel"
+                  :is-editing-name="countdownEditingNameId === item.milestone.id"
+                  :editing-name-value="countdownEditingNameValue"
+                  :is-editing-desc="countdownEditingDescId === item.milestone.id"
+                  :editing-desc-value="countdownEditingDescValue"
+                  @start-name-edit="startCountdownNameEdit(item.milestone)"
+                  @save-name-edit="saveCountdownNameEdit(item.milestone)"
+                  @cancel-name-edit="cancelCountdownNameEdit"
+                  @update:editing-name-value="countdownEditingNameValue = $event"
+                  @start-desc-edit="startCountdownDescEdit(item.milestone)"
+                  @save-desc-edit="saveCountdownDescEdit(item.milestone)"
+                  @cancel-desc-edit="cancelCountdownDescEdit"
+                  @update:editing-desc-value="countdownEditingDescValue = $event"
+                  @pin="handleCountdownCommand('pin', item.milestone)"
+                  @unpin="handleCountdownCommand('unpin', item.milestone)"
+                  @delete="handleCountdownCommand('delete', item.milestone)"
+                  @edit="openCountdownEditForm(item.milestone)"
+                  @open-date-picker="openCountdownDatePicker(item.milestone)"
+                  @toggle-repeat="toggleRepeatCountdown(item.milestone)"
+                  @open-reminder-picker="openCountdownReminderForm(item.milestone)"
+                />
               </div>
             </div>
+          </div>
 
-            <div v-if="countdownCards.length > 0 || positiveDayCards.length > 0" class="countdown-section">
-              <div v-if="countdownCards.length > 0" class="countdown-cards">
-                <div v-for="card in countdownCards" :key="card.id" class="task-card countdown-card">
-                  <div class="task-card-row">
-                    <span class="task-card-name">{{ card.name }}</span>
-                  </div>
-                  <span class="task-card-time countdown-time">{{ card.timeText }}</span>
-                  <div v-if="card.description" class="task-card-notes">{{ card.description }}</div>
-                </div>
-              </div>
-              <div v-if="positiveDayCards.length > 0" class="positive-day-cards">
-                <div v-for="card in positiveDayCards" :key="card.id" class="task-card positive-card">
-                  <div class="task-card-row">
-                    <span class="task-card-name">{{ card.name }}</span>
-                  </div>
-                  <span class="task-card-time positive-time">{{ card.timeText }}</span>
-                  <div v-if="card.description" class="task-card-notes">{{ card.description }}</div>
-                </div>
+            <div v-if="unpinnedCountdownCards.length > 0" class="countdown-section">
+              <div v-for="item in unpinnedCountdownCards" :key="item.milestone.id" class="countdown-item">
+                <CountdownCard
+                  :milestone="item.milestone"
+                  :card-type="item.cardType"
+                  :category-icon="item.categoryIcon"
+                  :countdown-days="item.countdownDays"
+                  :countdown-unit="item.countdownUnit"
+                  :reminder-label="item.reminderLabel"
+                  :is-editing-name="countdownEditingNameId === item.milestone.id"
+                  :editing-name-value="countdownEditingNameValue"
+                  :is-editing-desc="countdownEditingDescId === item.milestone.id"
+                  :editing-desc-value="countdownEditingDescValue"
+                  @start-name-edit="startCountdownNameEdit(item.milestone)"
+                  @save-name-edit="saveCountdownNameEdit(item.milestone)"
+                  @cancel-name-edit="cancelCountdownNameEdit"
+                  @update:editing-name-value="countdownEditingNameValue = $event"
+                  @start-desc-edit="startCountdownDescEdit(item.milestone)"
+                  @save-desc-edit="saveCountdownDescEdit(item.milestone)"
+                  @cancel-desc-edit="cancelCountdownDescEdit"
+                  @update:editing-desc-value="countdownEditingDescValue = $event"
+                  @pin="handleCountdownCommand('pin', item.milestone)"
+                  @unpin="handleCountdownCommand('unpin', item.milestone)"
+                  @delete="handleCountdownCommand('delete', item.milestone)"
+                  @edit="openCountdownEditForm(item.milestone)"
+                  @open-date-picker="openCountdownDatePicker(item.milestone)"
+                  @toggle-repeat="toggleRepeatCountdown(item.milestone)"
+                  @open-reminder-picker="openCountdownReminderForm(item.milestone)"
+                />
               </div>
             </div>
 
             <div class="diary-content">
               <div v-if="morningCards.length > 0" class="diary-period">
-                <p class="period-title">上午</p>
+                <p class="period-title period-morning">🌤️ 上午</p>
                 <div class="period-items">
                   <template v-for="card in morningCards" :key="card.id">
-                    <div v-if="card.type === 'record' && card.record" class="period-item">
-                      <div class="task-card">
-                        <div class="task-card-row">
-                          <template v-if="editingNameId === card.record.id">
-                            <textarea v-model="editingNameValue" class="inline-edit-textarea" @blur="saveNameEdit(card.record)" @keydown.escape.prevent="cancelNameEdit" rows="2" />
-                          </template>
-                          <span v-else class="task-card-name" @dblclick="startNameEdit(card.record)">{{ card.record.name }}</span>
-                          <div class="task-card-actions">
-                            <el-button :icon="Delete" circle size="small" class="task-card-btn" @click.stop="openDeleteConfirm(card.record.id)" />
-                          </div>
-                        </div>
-                        <span v-if="card.record.isDiary || card.record.category === 'diary'" class="task-card-diary-time">创建于 {{ formatDiaryTime(card.record.createdAt) }}</span>
-                        <div v-else class="task-card-time-row">
-                          <TimePickerPopover :model-value="card.record.startTime" @update:model-value="(v: string) => updateCardTime(card.record!.id, 'startTime', v)" placeholder="开始" />
-                          <span class="time-sep">-</span>
-                          <TimePickerPopover :model-value="card.record.endTime" @update:model-value="(v: string) => updateCardTime(card.record!.id, 'endTime', v)" placeholder="结束" />
-                          <span v-if="formatDurationLabel(card.record.startTime, card.record.endTime)" class="time-duration-label">{{ formatDurationLabel(card.record.startTime, card.record.endTime) }}</span>
-                        </div>
-                        <template v-if="editingNotesId === card.record.id">
-                          <textarea v-model="editingNotesValue" class="inline-edit-textarea" @blur="saveNotesEdit(card.record)" @keydown.escape.prevent="cancelNotesEdit" rows="2" placeholder="添加备注" />
-                        </template>
-                        <template v-else>
-                          <div v-if="card.record.notes" class="task-card-notes" @dblclick="startNotesEdit(card.record)">{{ card.record.notes }}</div>
-                          <div v-else class="task-card-notes task-card-notes-placeholder" @dblclick="startNotesEdit(card.record)">双击添加备注</div>
-                        </template>
-                      </div>
+                    <div v-if="card.type === 'record' && card.record && (card.record.isDiary || card.record.category === 'diary')" class="period-item">
+                      <DiaryCard
+                        :record="card.record"
+                        :editing-name-id="editingNameId"
+                        :editing-name-value="editingNameValue"
+                        :editing-notes-id="editingNotesId"
+                        :editing-notes-value="editingNotesValue"
+                        @update:editing-name-value="editingNameValue = $event"
+                        @update:editing-notes-value="editingNotesValue = $event"
+                        @start-name-edit="startNameEdit"
+                        @save-name-edit="saveNameEdit"
+                        @cancel-name-edit="cancelNameEdit"
+                        @start-notes-edit="startNotesEdit"
+                        @save-notes-edit="saveNotesEdit"
+                        @cancel-notes-edit="cancelNotesEdit"
+                        @delete="openDeleteConfirm"
+                      />
                     </div>
-                    <div v-else-if="card.type === 'mission' && card.mission" class="period-item">
-                      <MissionCard :mission="card.mission" context="footprint" @delete="handleMissionDelete" @complete="onMissionComplete" />
+                    <div v-else-if="card.type === 'record' && card.record" class="period-item">
+                      <RecordCard
+                        :record="card.record"
+                        :editing-name-id="editingNameId"
+                        :editing-name-value="editingNameValue"
+                        :editing-notes-id="editingNotesId"
+                        :editing-notes-value="editingNotesValue"
+                        @update:editing-name-value="editingNameValue = $event"
+                        @update:editing-notes-value="editingNotesValue = $event"
+                        @start-name-edit="startNameEdit"
+                        @save-name-edit="saveNameEdit"
+                        @cancel-name-edit="cancelNameEdit"
+                        @start-notes-edit="startNotesEdit"
+                        @save-notes-edit="saveNotesEdit"
+                        @cancel-notes-edit="cancelNotesEdit"
+                        @delete="openDeleteConfirm"
+                        @update:start-time="(id, v) => taskStore.updateTask(id, { startTime: v })"
+                        @update:end-time="(id, v) => taskStore.updateTask(id, { endTime: v })"
+                      />
+                    </div>
+                    <div v-else-if="card.type === 'list' && card.list" class="period-item">
+                      <TaskCard :list="card.list" context="footprint" @delete="handleTaskDelete" @complete="onTaskComplete" />
                     </div>
                     <div v-else-if="card.type === 'course' && card.course" class="period-item">
-                      <div class="task-card">
-                        <div class="task-card-row">
-                          <span class="task-card-name" :style="{ color: card.course.color }">{{ card.course.name }}</span>
-                        </div>
-                        <span class="task-card-time">{{ card.course.startTime }} - {{ card.course.endTime }}<template v-if="card.course.location || card.course.teacher"> | <template v-if="card.course.location">{{ card.course.location }}</template><template v-if="card.course.location && card.course.teacher"> / </template><template v-if="card.course.teacher">{{ card.course.teacher }}</template></template></span>
-                        <div v-if="card.course.note" class="task-card-notes">{{ card.course.note }}</div>
-                      </div>
+                      <CourseCard :course="card.course" />
                     </div>
                   </template>
                 </div>
               </div>
 
               <div v-if="afternoonCards.length > 0" class="diary-period">
-                <p class="period-title">下午</p>
+                <p class="period-title period-afternoon">🌞 下午</p>
                 <div class="period-items">
                   <template v-for="card in afternoonCards" :key="card.id">
-                    <div v-if="card.type === 'record' && card.record" class="period-item">
-                      <div class="task-card">
-                        <div class="task-card-row">
-                          <template v-if="editingNameId === card.record.id">
-                            <textarea v-model="editingNameValue" class="inline-edit-textarea" @blur="saveNameEdit(card.record)" @keydown.escape.prevent="cancelNameEdit" rows="2" />
-                          </template>
-                          <span v-else class="task-card-name" @dblclick="startNameEdit(card.record)">{{ card.record.name }}</span>
-                          <div class="task-card-actions">
-                            <el-button :icon="Delete" circle size="small" class="task-card-btn" @click.stop="openDeleteConfirm(card.record.id)" />
-                          </div>
-                        </div>
-                        <span v-if="card.record.isDiary || card.record.category === 'diary'" class="task-card-diary-time">创建于 {{ formatDiaryTime(card.record.createdAt) }}</span>
-                        <div v-else class="task-card-time-row">
-                          <TimePickerPopover :model-value="card.record.startTime" @update:model-value="(v: string) => updateCardTime(card.record!.id, 'startTime', v)" placeholder="开始" />
-                          <span class="time-sep">-</span>
-                          <TimePickerPopover :model-value="card.record.endTime" @update:model-value="(v: string) => updateCardTime(card.record!.id, 'endTime', v)" placeholder="结束" />
-                          <span v-if="formatDurationLabel(card.record.startTime, card.record.endTime)" class="time-duration-label">{{ formatDurationLabel(card.record.startTime, card.record.endTime) }}</span>
-                        </div>
-                        <template v-if="editingNotesId === card.record.id">
-                          <textarea v-model="editingNotesValue" class="inline-edit-textarea" @blur="saveNotesEdit(card.record)" @keydown.escape.prevent="cancelNotesEdit" rows="2" placeholder="添加备注" />
-                        </template>
-                        <template v-else>
-                          <div v-if="card.record.notes" class="task-card-notes" @dblclick="startNotesEdit(card.record)">{{ card.record.notes }}</div>
-                          <div v-else class="task-card-notes task-card-notes-placeholder" @dblclick="startNotesEdit(card.record)">双击添加备注</div>
-                        </template>
-                      </div>
+                    <div v-if="card.type === 'record' && card.record && (card.record.isDiary || card.record.category === 'diary')" class="period-item">
+                      <DiaryCard
+                        :record="card.record"
+                        :editing-name-id="editingNameId"
+                        :editing-name-value="editingNameValue"
+                        :editing-notes-id="editingNotesId"
+                        :editing-notes-value="editingNotesValue"
+                        @update:editing-name-value="editingNameValue = $event"
+                        @update:editing-notes-value="editingNotesValue = $event"
+                        @start-name-edit="startNameEdit"
+                        @save-name-edit="saveNameEdit"
+                        @cancel-name-edit="cancelNameEdit"
+                        @start-notes-edit="startNotesEdit"
+                        @save-notes-edit="saveNotesEdit"
+                        @cancel-notes-edit="cancelNotesEdit"
+                        @delete="openDeleteConfirm"
+                      />
                     </div>
-                    <div v-else-if="card.type === 'mission' && card.mission" class="period-item">
-                      <MissionCard :mission="card.mission" context="footprint" @delete="handleMissionDelete" @complete="onMissionComplete" />
+                    <div v-else-if="card.type === 'record' && card.record" class="period-item">
+                      <RecordCard
+                        :record="card.record"
+                        :editing-name-id="editingNameId"
+                        :editing-name-value="editingNameValue"
+                        :editing-notes-id="editingNotesId"
+                        :editing-notes-value="editingNotesValue"
+                        @update:editing-name-value="editingNameValue = $event"
+                        @update:editing-notes-value="editingNotesValue = $event"
+                        @start-name-edit="startNameEdit"
+                        @save-name-edit="saveNameEdit"
+                        @cancel-name-edit="cancelNameEdit"
+                        @start-notes-edit="startNotesEdit"
+                        @save-notes-edit="saveNotesEdit"
+                        @cancel-notes-edit="cancelNotesEdit"
+                        @delete="openDeleteConfirm"
+                        @update:start-time="(id, v) => taskStore.updateTask(id, { startTime: v })"
+                        @update:end-time="(id, v) => taskStore.updateTask(id, { endTime: v })"
+                      />
+                    </div>
+                    <div v-else-if="card.type === 'list' && card.list" class="period-item">
+                      <TaskCard :list="card.list" context="footprint" @delete="handleTaskDelete" @complete="onTaskComplete" />
                     </div>
                     <div v-else-if="card.type === 'course' && card.course" class="period-item">
-                      <div class="task-card">
-                        <div class="task-card-row">
-                          <span class="task-card-name" :style="{ color: card.course.color }">{{ card.course.name }}</span>
-                        </div>
-                        <span class="task-card-time">{{ card.course.startTime }} - {{ card.course.endTime }}<template v-if="card.course.location || card.course.teacher"> | <template v-if="card.course.location">{{ card.course.location }}</template><template v-if="card.course.location && card.course.teacher"> / </template><template v-if="card.course.teacher">{{ card.course.teacher }}</template></template></span>
-                        <div v-if="card.course.note" class="task-card-notes">{{ card.course.note }}</div>
-                      </div>
+                      <CourseCard :course="card.course" />
                     </div>
                   </template>
                 </div>
               </div>
 
               <div v-if="eveningCards.length > 0" class="diary-period">
-                <p class="period-title">晚上</p>
+                <p class="period-title period-evening">🌙 晚上</p>
                 <div class="period-items">
                   <template v-for="card in eveningCards" :key="card.id">
-                    <div v-if="card.type === 'record' && card.record" class="period-item">
-                      <div class="task-card">
-                        <div class="task-card-row">
-                          <template v-if="editingNameId === card.record.id">
-                            <textarea v-model="editingNameValue" class="inline-edit-textarea" @blur="saveNameEdit(card.record)" @keydown.escape.prevent="cancelNameEdit" rows="2" />
-                          </template>
-                          <span v-else class="task-card-name" @dblclick="startNameEdit(card.record)">{{ card.record.name }}</span>
-                          <div class="task-card-actions">
-                            <el-button :icon="Delete" circle size="small" class="task-card-btn" @click.stop="openDeleteConfirm(card.record.id)" />
-                          </div>
-                        </div>
-                        <span v-if="card.record.isDiary || card.record.category === 'diary'" class="task-card-diary-time">创建于 {{ formatDiaryTime(card.record.createdAt) }}</span>
-                        <div v-else class="task-card-time-row">
-                          <TimePickerPopover :model-value="card.record.startTime" @update:model-value="(v: string) => updateCardTime(card.record!.id, 'startTime', v)" placeholder="开始" />
-                          <span class="time-sep">-</span>
-                          <TimePickerPopover :model-value="card.record.endTime" @update:model-value="(v: string) => updateCardTime(card.record!.id, 'endTime', v)" placeholder="结束" />
-                          <span v-if="formatDurationLabel(card.record.startTime, card.record.endTime)" class="time-duration-label">{{ formatDurationLabel(card.record.startTime, card.record.endTime) }}</span>
-                        </div>
-                        <template v-if="editingNotesId === card.record.id">
-                          <textarea v-model="editingNotesValue" class="inline-edit-textarea" @blur="saveNotesEdit(card.record)" @keydown.escape.prevent="cancelNotesEdit" rows="2" placeholder="添加备注" />
-                        </template>
-                        <template v-else>
-                          <div v-if="card.record.notes" class="task-card-notes" @dblclick="startNotesEdit(card.record)">{{ card.record.notes }}</div>
-                          <div v-else class="task-card-notes task-card-notes-placeholder" @dblclick="startNotesEdit(card.record)">双击添加备注</div>
-                        </template>
-                      </div>
+                    <div v-if="card.type === 'record' && card.record && (card.record.isDiary || card.record.category === 'diary')" class="period-item">
+                      <DiaryCard
+                        :record="card.record"
+                        :editing-name-id="editingNameId"
+                        :editing-name-value="editingNameValue"
+                        :editing-notes-id="editingNotesId"
+                        :editing-notes-value="editingNotesValue"
+                        @update:editing-name-value="editingNameValue = $event"
+                        @update:editing-notes-value="editingNotesValue = $event"
+                        @start-name-edit="startNameEdit"
+                        @save-name-edit="saveNameEdit"
+                        @cancel-name-edit="cancelNameEdit"
+                        @start-notes-edit="startNotesEdit"
+                        @save-notes-edit="saveNotesEdit"
+                        @cancel-notes-edit="cancelNotesEdit"
+                        @delete="openDeleteConfirm"
+                      />
                     </div>
-                    <div v-else-if="card.type === 'mission' && card.mission" class="period-item">
-                      <MissionCard :mission="card.mission" context="footprint" @delete="handleMissionDelete" @complete="onMissionComplete" />
+                    <div v-else-if="card.type === 'record' && card.record" class="period-item">
+                      <RecordCard
+                        :record="card.record"
+                        :editing-name-id="editingNameId"
+                        :editing-name-value="editingNameValue"
+                        :editing-notes-id="editingNotesId"
+                        :editing-notes-value="editingNotesValue"
+                        @update:editing-name-value="editingNameValue = $event"
+                        @update:editing-notes-value="editingNotesValue = $event"
+                        @start-name-edit="startNameEdit"
+                        @save-name-edit="saveNameEdit"
+                        @cancel-name-edit="cancelNameEdit"
+                        @start-notes-edit="startNotesEdit"
+                        @save-notes-edit="saveNotesEdit"
+                        @cancel-notes-edit="cancelNotesEdit"
+                        @delete="openDeleteConfirm"
+                        @update:start-time="(id, v) => taskStore.updateTask(id, { startTime: v })"
+                        @update:end-time="(id, v) => taskStore.updateTask(id, { endTime: v })"
+                      />
+                    </div>
+                    <div v-else-if="card.type === 'list' && card.list" class="period-item">
+                      <TaskCard :list="card.list" context="footprint" @delete="handleTaskDelete" @complete="onTaskComplete" />
                     </div>
                     <div v-else-if="card.type === 'course' && card.course" class="period-item">
-                      <div class="task-card">
-                        <div class="task-card-row">
-                          <span class="task-card-name" :style="{ color: card.course.color }">{{ card.course.name }}</span>
-                        </div>
-                        <span class="task-card-time">{{ card.course.startTime }} - {{ card.course.endTime }}<template v-if="card.course.location || card.course.teacher"> | <template v-if="card.course.location">{{ card.course.location }}</template><template v-if="card.course.location && card.course.teacher"> / </template><template v-if="card.course.teacher">{{ card.course.teacher }}</template></template></span>
-                        <div v-if="card.course.note" class="task-card-notes">{{ card.course.note }}</div>
-                      </div>
+                      <CourseCard :course="card.course" />
                     </div>
                   </template>
                 </div>
               </div>
 
-              <div class="diary-summary">
-                <p class="summary-title">{{ summaryTitle }}</p>
-                <p class="summary-content">
-                  <template v-for="(segment, index) in summarySegments" :key="index">
-                    <span :class="`segment-${segment.type}`">{{ segment.text }}</span>
-                  </template>
-                </p>
               </div>
-            </div>
-          </div>
         </template>
       </el-scrollbar>
     </div>
@@ -211,7 +254,7 @@
     <ConfirmDialog
       v-model="showDeleteConfirm"
       title="确认删除"
-      message="确定删除这条记录吗？"
+      :message="deleteMessage"
       @confirm="onDeleteConfirmed"
     />
 
@@ -222,38 +265,66 @@
           <el-button class="dialog-close-btn" text @click="closeMoveDialog"><el-icon><Close /></el-icon></el-button>
         </div>
         <div class="dialog-body">
-          <MoveMissionPage :mission-id="moveMissionId" @submit="onMoveSubmit" @cancel="closeMoveDialog" />
+          <MoveTaskPage :list-id="moveTaskId" @submit="onMoveSubmit" @cancel="closeMoveDialog" />
         </div>
       </div>
     </div>
 
     <ConfirmDialog
-      v-model="showMissionDeleteConfirm"
+      v-model="showTaskDeleteConfirm"
       title="确认删除"
       message="确定删除这个任务吗？"
-      @confirm="onMissionDeleteConfirmed"
+      @confirm="onTaskDeleteConfirmed"
+    />
+
+    <ConfirmDialog
+      v-model="showCountdownDeleteConfirm"
+      title="提示"
+      message="确定要删除这个倒数日吗？"
+      @confirm="onCountdownDeleteConfirmed"
+    />
+
+    <DateScrollPicker
+      v-if="datePickerMilestoneId"
+      v-model="datePickerTargetDate"
+      v-model:visible="datePickerVisible"
+      @update:model-value="onDatePickerConfirm"
+    />
+
+    <CountdownForm
+      v-model:visible="countdownFormVisible"
+      :milestone="editingCountdownForForm"
+      :categories="countdownCategories"
+      :reminder-only="countdownFormReminderOnly"
+      @submit="handleCountdownFormSubmit"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, inject, onMounted, type Ref } from 'vue'
+import { ref, computed, watch, inject, onMounted, nextTick, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Delete, Close } from '@element-plus/icons-vue'
+import { Close } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
 import { useTaskStore, type Task } from '../../stores/taskStore'
-import { useMissionStore, type Mission } from '../../stores/missionStore'
+import { useListStore, type Task as ListTask } from '../../stores/listStore'
 import { useFootprintCards } from '../../composables/useFootprintCards'
 import { usePageNav } from '../../composables/usePageNav'
 import TaskForm from './TaskForm.vue'
-import MissionCard from '../mission/MissionCard.vue'
-import MoveMissionPage from '../mission/MoveMissionPage.vue'
+import RecordCard from './RecordCard.vue'
+import DiaryCard from './DiaryCard.vue'
+import CourseCard from '../course/CourseCard.vue'
+import TaskCard from '../list/TaskCard.vue'
+import CountdownCard from '../countdown/CountdownCard.vue'
+import CountdownForm from '../countdown/CountdownForm.vue'
+import MoveTaskPage from '../list/MoveTaskPage.vue'
 import InlineLunarDatePicker from '../common/picker/InlineLunarDatePicker.vue'
-import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
+import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
 import { logger } from '../../lib/logger'
 import { chalk } from '../../lib/chalk'
+import { setData } from '../../services/storageService'
 
 dayjs.locale('zh-cn')
 
@@ -262,12 +333,155 @@ const emit = defineEmits<{
 }>()
 
 const isGuideActive = inject('guideVisible', ref(false))
+const isElectron = inject<boolean>('isElectron', false)
 
 const taskStore = useTaskStore()
-const missionStore = useMissionStore()
+const listStore = useListStore()
 const pageNav = usePageNav()
 
 const countdownMilestones = inject<Ref<any[]>>('countdownMilestones', ref<any[]>([]))
+const countdownCategories = inject<Ref<any[]>>('countdownCategories', ref<any[]>([]))
+
+const countdownFormVisible = ref(false)
+const countdownFormReminderOnly = ref(false)
+const editingCountdownForForm = ref<any>(null)
+
+const openCountdownEditForm = (milestone: any) => {
+  editingCountdownForForm.value = { ...milestone }
+  countdownFormReminderOnly.value = false
+  countdownFormVisible.value = true
+}
+
+const openCountdownReminderForm = (milestone: any) => {
+  editingCountdownForForm.value = { ...milestone }
+  countdownFormReminderOnly.value = true
+  countdownFormVisible.value = true
+}
+
+const toggleRepeatCountdown = (milestone: any) => {
+  const index = countdownMilestones.value.findIndex((m: any) => m.id === milestone.id)
+  if (index > -1) {
+    countdownMilestones.value[index].repeatStrategy = countdownMilestones.value[index].repeatStrategy === 'yearly' ? 'none' : 'yearly'
+    countdownMilestones.value[index].updatedAt = new Date().toISOString()
+    saveCountdownData()
+  }
+}
+
+const handleCountdownFormSubmit = async (data: any) => {
+  const index = countdownMilestones.value.findIndex((m: any) => m.id === editingCountdownForForm.value.id)
+  if (index > -1) {
+    countdownMilestones.value[index] = {
+      ...countdownMilestones.value[index],
+      ...data,
+      updatedAt: new Date().toISOString()
+    }
+    await saveCountdownData()
+  }
+  editingCountdownForForm.value = null
+}
+
+const COUNTDOWN_STORAGE_KEY = ['countdown', 'milestones'] as const
+
+const saveCountdownData = async () => {
+  await setData(COUNTDOWN_STORAGE_KEY[0], COUNTDOWN_STORAGE_KEY[1], countdownMilestones.value)
+}
+
+const countdownEditingNameId = ref<string | null>(null)
+const countdownEditingNameValue = ref('')
+const countdownEditingDescId = ref<string | null>(null)
+const countdownEditingDescValue = ref('')
+
+const startCountdownNameEdit = (milestone: any) => {
+  countdownEditingNameId.value = milestone.id
+  countdownEditingNameValue.value = milestone.name
+}
+
+const saveCountdownNameEdit = async (milestone: any) => {
+  const trimmed = countdownEditingNameValue.value.trim()
+  if (trimmed && trimmed !== milestone.name) {
+    const idx = countdownMilestones.value.findIndex((m: any) => m.id === milestone.id)
+    if (idx > -1) {
+      countdownMilestones.value[idx].name = trimmed
+      await saveCountdownData()
+      logger.info('[足迹][倒数日] 更新名称', { id: milestone.id, name: trimmed })
+    }
+  }
+  countdownEditingNameId.value = null
+}
+
+const cancelCountdownNameEdit = () => {
+  countdownEditingNameId.value = null
+}
+
+const startCountdownDescEdit = (milestone: any) => {
+  countdownEditingDescId.value = milestone.id
+  countdownEditingDescValue.value = milestone.description || ''
+}
+
+const saveCountdownDescEdit = async (milestone: any) => {
+  const trimmed = countdownEditingDescValue.value.trim()
+  if (trimmed !== (milestone.description || '')) {
+    const idx = countdownMilestones.value.findIndex((m: any) => m.id === milestone.id)
+    if (idx > -1) {
+      countdownMilestones.value[idx].description = trimmed
+      await saveCountdownData()
+      logger.info('[足迹][倒数日] 更新描述', { id: milestone.id })
+    }
+  }
+  countdownEditingDescId.value = null
+}
+
+const cancelCountdownDescEdit = () => {
+  countdownEditingDescId.value = null
+}
+
+const datePickerMilestoneId = ref<string | null>(null)
+const datePickerTargetDate = ref('')
+const datePickerVisible = ref(false)
+
+const openCountdownDatePicker = (milestone: any) => {
+  datePickerMilestoneId.value = milestone.id
+  datePickerTargetDate.value = milestone.targetDate
+  datePickerVisible.value = true
+}
+
+const onDatePickerConfirm = async () => {
+  if (datePickerMilestoneId.value) {
+    const index = countdownMilestones.value.findIndex((m: any) => m.id === datePickerMilestoneId.value)
+    if (index > -1) {
+      countdownMilestones.value[index].targetDate = datePickerTargetDate.value
+      await saveCountdownData()
+      logger.info('[足迹][倒数日] 更新日期', { id: datePickerMilestoneId.value, targetDate: datePickerTargetDate.value })
+    }
+  }
+  datePickerMilestoneId.value = null
+}
+
+const handleCountdownCommand = async (command: string, milestone: any) => {
+  const index = countdownMilestones.value.findIndex((m: any) => m.id === milestone.id)
+  switch (command) {
+    case 'pin':
+      if (index > -1) {
+        countdownMilestones.value[index].pinned = true
+        await saveCountdownData()
+        logger.info('[足迹][倒数日] 设为星标', { id: milestone.id, name: milestone.name })
+        ElMessage.success('已设为星标')
+      }
+      break
+    case 'unpin':
+      if (index > -1) {
+        countdownMilestones.value[index].pinned = false
+        await saveCountdownData()
+        logger.info('[足迹][倒数日] 取消星标', { id: milestone.id, name: milestone.name })
+        ElMessage.success('已取消星标')
+      }
+      break
+    case 'delete':
+      countdownDeleteTarget.value = milestone
+      showCountdownDeleteConfirm.value = true
+      break
+  }
+}
 
 const datePickerRef = ref<InstanceType<typeof InlineLunarDatePicker> | null>(null)
 
@@ -279,6 +493,10 @@ const editingNotesValue = ref('')
 const startNameEdit = (record: Task) => {
   editingNameId.value = record.id
   editingNameValue.value = record.name
+  nextTick(() => {
+    const el = document.querySelector('.inline-edit-textarea') as HTMLTextAreaElement | null
+    el?.focus()
+  })
 }
 
 const saveNameEdit = async (record: Task) => {
@@ -296,6 +514,10 @@ const cancelNameEdit = () => {
 const startNotesEdit = (record: Task) => {
   editingNotesId.value = record.id
   editingNotesValue.value = record.notes || ''
+  nextTick(() => {
+    const el = document.querySelector('.inline-edit-textarea') as HTMLTextAreaElement | null
+    el?.focus()
+  })
 }
 
 const saveNotesEdit = async (record: Task) => {
@@ -310,8 +532,104 @@ const cancelNotesEdit = () => {
   editingNotesId.value = null
 }
 
-const updateCardTime = (id: string, field: 'startTime' | 'endTime', value: string) => {
-  taskStore.updateTask(id, { [field]: value })
+const handleAddTask = () => {
+  editingTask.value = null
+  currentMode.value = 'record'
+  formVisible.value = true
+}
+
+const handleAddDiary = () => {
+  editingTask.value = null
+  currentMode.value = 'diary'
+  formVisible.value = true
+}
+
+const handleEditTask = (task: Task) => {
+  editingTask.value = task
+  currentMode.value = task.isDiary || task.category === 'diary' ? 'diary' : 'record'
+  formVisible.value = true
+}
+
+const handleDeleteTask = (id: string) => {
+  const task = taskStore.tasks.find(t => t.id === id)
+  const isDiary = task?.isDiary || task?.category === 'diary'
+  taskStore.deleteTask(id)
+  logger.info('[足迹] 删除足迹', { taskId: id })
+  ElMessage.success(isDiary ? '日记删除成功' : '记录删除成功')
+}
+
+const openDeleteConfirm = (id: string) => {
+  deleteTargetId.value = id
+  showDeleteConfirm.value = true
+}
+
+const onDeleteConfirmed = () => {
+  handleDeleteTask(deleteTargetId.value)
+}
+
+const handleFormSubmit = (task: Task) => {
+  if (editingTask.value) {
+    logger.info('[足迹] 编辑足迹', { taskId: task.id, name: task.name })
+  } else {
+    logger.info('[足迹] 添加足迹', { name: task.name })
+  }
+  editingTask.value = null
+}
+
+const showMoveDialog = ref(false)
+const moveTaskId = ref('')
+
+const handleTaskMove = (list: Task) => {
+  moveTaskId.value = list.id
+  showMoveDialog.value = true
+}
+
+const closeMoveDialog = () => {
+  showMoveDialog.value = false
+  moveTaskId.value = ''
+}
+
+const onMoveSubmit = () => {
+  closeMoveDialog()
+}
+
+const showTaskDeleteConfirm = ref(false)
+const deleteTaskTargetId = ref('')
+
+const handleTaskDelete = (list: Task) => {
+  deleteTaskTargetId.value = list.id
+  showTaskDeleteConfirm.value = true
+}
+
+const onTaskDeleteConfirmed = async () => {
+  const id = deleteTaskTargetId.value
+  const list = listStore.lists.find(m => m.id === id)
+  const hadReminder = list && list.reminderStrategy !== 'none' && list.date
+  await listStore.deleteTask(id)
+  logger.info('[足迹] 删除任务', { listId: id })
+  ElMessage.success('任务已删除')
+  if (hadReminder) {
+    const refreshReminders = inject<() => void>('refreshReminders', () => {})
+    refreshReminders()
+  }
+}
+
+const onTaskComplete = () => {}
+
+const showCountdownDeleteConfirm = ref(false)
+const countdownDeleteTarget = ref<any>(null)
+
+const onCountdownDeleteConfirmed = async () => {
+  const target = countdownDeleteTarget.value
+  if (!target) return
+  const deleteIndex = countdownMilestones.value.findIndex((m: any) => m.id === target.id)
+  if (deleteIndex > -1) {
+    countdownMilestones.value.splice(deleteIndex, 1)
+    await saveCountdownData()
+    logger.info('[足迹][倒数日] 删除倒数日', { id: target.id, name: target.name })
+    ElMessage.success('删除成功')
+  }
+  countdownDeleteTarget.value = null
 }
 
 onMounted(() => {
@@ -347,9 +665,8 @@ const emptyText = computed(() => {
 })
 
 const {
-  countdownCards,
-  positiveDayCards,
-  missionCards,
+  countdownDisplayCards,
+  listCards,
   courseCards,
   allCards,
   morningCards,
@@ -357,6 +674,14 @@ const {
   eveningCards,
   filteredTasks,
 } = useFootprintCards(selectedDateValue, countdownMilestones, isGuideActive)
+
+const pinnedCountdownCards = computed(() =>
+  countdownDisplayCards.value.filter(item => item.milestone.pinned)
+)
+
+const unpinnedCountdownCards = computed(() =>
+  countdownDisplayCards.value.filter(item => !item.milestone.pinned)
+)
 
 const todayTasks = computed(() => {
   return filteredTasks.value
@@ -367,6 +692,11 @@ const editingTask = ref<Task | null>(null)
 const currentMode = ref<'record' | 'diary'>('record')
 const showDeleteConfirm = ref(false)
 const deleteTargetId = ref('')
+const deleteMessage = computed(() => {
+  const task = taskStore.tasks.find(t => t.id === deleteTargetId.value)
+  const isDiary = task?.isDiary || task?.category === 'diary'
+  return isDiary ? '确定删除这篇日记吗？' : '确定删除这条记录吗？'
+})
 
 const morningTasks = computed(() => {
   return todayTasks.value.filter(task => {
@@ -389,124 +719,9 @@ const eveningTasks = computed(() => {
   })
 })
 
-const totalDuration = computed(() => {
-  return filteredTasks.value.reduce((sum, task) => {
-    if (task.startTime && task.endTime) {
-      const start = task.startTime.split(':').map(Number)
-      const end = task.endTime.split(':').map(Number)
-      return sum + (end[0] * 60 + end[1]) - (start[0] * 60 + start[1])
-    }
-    return sum + (task.duration || 0)
-  }, 0)
-})
-
-const diaryIntro = computed(() => {
-  if (filteredTasks.value.length === 1) {
-    return '简单的一天，专注于做一件事。'
-  } else if (filteredTasks.value.length >= 5) {
-    return '忙碌而充实的一天，记录下这些美好的时刻。'
-  }
-  return '平凡的一天，也值得被记录。'
-})
-
-const diaryMood = computed(() => {
-  const total = filteredTasks.value.length
-  if (total === 0) return '今日关键词：探索'
-  if (total === 1) return '今日关键词：专注'
-  if (total >= 5) return '今日关键词：充实'
-  return '今日关键词：平凡'
-})
-
 const morningTitle = computed(() => morningTasks.value.length >= 3 ? '晨间时光' : '上午')
 const afternoonTitle = computed(() => afternoonTasks.value.length >= 3 ? '午后时光' : '下午')
 const eveningTitle = computed(() => eveningTasks.value.length >= 3 ? '晚间时光' : '晚上')
-const summaryTitle = computed(() => '今日总结')
-
-const formatDurationLabel = (startTime: string, endTime: string): string => {
-  if (!startTime || !endTime) return ''
-  const [sh, sm] = startTime.split(':').map(Number)
-  const [eh, em] = endTime.split(':').map(Number)
-  const totalMinutes = (eh * 60 + em) - (sh * 60 + sm)
-  if (totalMinutes <= 0) return ''
-  const hours = Math.floor(totalMinutes / 60)
-  const minutes = totalMinutes % 60
-  if (hours > 0 && minutes > 0) return `（共${hours}小时${minutes}分钟）`
-  if (hours > 0) return `（共${hours}小时）`
-  return `（共${minutes}分钟）`
-}
-
-const getRecordTimeDisplay = (startTime: string, endTime: string): string => {
-  const timeText = `${startTime || '--:--'} - ${endTime || '--:--'}`
-  const duration = formatDurationLabel(startTime, endTime)
-  if (!duration) return timeText
-  return `${timeText} <span style="color:${chalk.dim}">${duration}</span>`
-}
-
-const diarySummary = computed(() => {
-  const total = filteredTasks.value.length
-  const duration = totalDuration.value
-  const durationText = duration > 0 ? `，总计约${formatDuration(duration)}` : ''
-
-  if (total === 0) {
-    if (isCurrentDay.value) return '今天还没有留下足迹，快去记录吧！'
-    return '这一天还没有留下足迹。'
-  }
-  if (total === 1) return '专注做一件事，有时候比忙碌一整天更有意义。'
-  if (total >= 6) return `今天完成了${total}件事${durationText}，高效且充实。`
-  return `今天完成了${total}件事${durationText}，平凡的一天也有它的意义。`
-})
-
-interface SummarySegment {
-  text: string
-  type: 'normal' | 'number' | 'duration' | 'keyword' | 'highlight'
-}
-
-const summarySegments = computed((): SummarySegment[] => {
-  const text = diarySummary.value
-  const segments: SummarySegment[] = []
-
-  const numberPattern = /(\d+)件/g
-  const durationPattern = /，总计约([^，。]+)/g
-  const keywords = ['高效', '充实', '运动', '学习', '放松休息', '进步', '专注', '意义', '坚持']
-
-  let lastIndex = 0
-  const matches: { index: number; length: number; type: SummarySegment['type'] }[] = []
-
-  let match
-  while ((match = numberPattern.exec(text)) !== null) {
-    matches.push({ index: match.index, length: match[0].length, type: 'number' })
-  }
-
-  while ((match = durationPattern.exec(text)) !== null) {
-    matches.push({ index: match.index, length: match[0].length, type: 'duration' })
-  }
-
-  keywords.forEach(keyword => {
-    let idx = text.indexOf(keyword)
-    while (idx !== -1) {
-      matches.push({ index: idx, length: keyword.length, type: 'keyword' })
-      idx = text.indexOf(keyword, idx + 1)
-    }
-  })
-
-  matches.sort((a, b) => a.index - b.index)
-
-  matches.forEach(m => {
-    if (m.index > lastIndex) {
-      segments.push({ text: text.slice(lastIndex, m.index), type: 'normal' })
-    }
-    if (m.index >= lastIndex) {
-      segments.push({ text: text.slice(m.index, m.index + m.length), type: m.type })
-      lastIndex = m.index + m.length
-    }
-  })
-
-  if (lastIndex < text.length) {
-    segments.push({ text: text.slice(lastIndex), type: 'normal' })
-  }
-
-  return segments.length > 0 ? segments : [{ text, type: 'normal' }]
-})
 
 const generateTaskDescription = (task: Task) => {
   const name = task.name.toLowerCase()
@@ -544,120 +759,44 @@ const generateTaskDescription = (task: Task) => {
   return '完成了这件事'
 }
 
-const formatFullDate = (date: string) => dayjs(date).format('YYYY年MM月DD日 dddd')
-const formatDiaryTime = (createdAt?: string) => {
-  if (!createdAt) return ''
-  return dayjs(createdAt).format('HH:mm')
-}
-const formatDuration = (minutes: number) => {
-  const hours = Math.floor(minutes / 60)
-  const mins = minutes % 60
-  if (hours > 0 && mins > 0) return `${hours}h ${mins}min`
-  if (hours > 0) return `${hours}h`
-  return `${mins}min`
-}
-
-const handleAddTask = () => {
-  editingTask.value = null
-  currentMode.value = 'record'
-  formVisible.value = true
-}
-
-const handleAddDiary = () => {
-  editingTask.value = null
-  currentMode.value = 'diary'
-  formVisible.value = true
-}
-
-const handleEditTask = (task: Task) => {
-  editingTask.value = task
-  currentMode.value = task.isDiary || task.category === 'diary' ? 'diary' : 'record'
-  formVisible.value = true
-}
-
-const handleDeleteTask = (id: string) => {
-  taskStore.deleteTask(id)
-  logger.info('[足迹] 删除足迹', { taskId: id })
-  ElMessage.success('记录删除成功')
-}
-
-const openDeleteConfirm = (id: string) => {
-  deleteTargetId.value = id
-  showDeleteConfirm.value = true
-}
-
-const onDeleteConfirmed = () => {
-  handleDeleteTask(deleteTargetId.value)
-}
-
-const handleFormSubmit = (task: Task) => {
-  if (editingTask.value) {
-    logger.info('[足迹] 编辑足迹', { taskId: task.id, name: task.name })
-  } else {
-    logger.info('[足迹] 添加足迹', { name: task.name })
-  }
-  editingTask.value = null
-}
-
-const showMoveDialog = ref(false)
-const moveMissionId = ref('')
-
-const handleMissionMove = (mission: Mission) => {
-  moveMissionId.value = mission.id
-  showMoveDialog.value = true
-}
-
-const closeMoveDialog = () => {
-  showMoveDialog.value = false
-  moveMissionId.value = ''
-}
-
-const onMoveSubmit = () => {
-  closeMoveDialog()
-}
-
-const showMissionDeleteConfirm = ref(false)
-const deleteMissionTargetId = ref('')
-
-const handleMissionDelete = (mission: Mission) => {
-  deleteMissionTargetId.value = mission.id
-  showMissionDeleteConfirm.value = true
-}
-
-const onMissionDeleteConfirmed = async () => {
-  const id = deleteMissionTargetId.value
-  const mission = missionStore.missions.find(m => m.id === id)
-  const hadReminder = mission && mission.reminderStrategy !== 'none' && mission.date
-  await missionStore.deleteMission(id)
-  logger.info('[足迹] 删除任务', { missionId: id })
-  ElMessage.success('任务已删除')
-  if (hadReminder) {
-    const refreshReminders = inject<() => void>('refreshReminders', () => {})
-    refreshReminders()
-  }
-}
-
-const onMissionComplete = () => {}
 </script>
 
 <style scoped>
 .footprint-container {
-  width: 500px;
+  width: min(325px, 80vw);
   margin: 0 auto;
   height: 100%;
   display: flex;
   flex-direction: column;
 }
 
+.footprint-container.is-mobile .footprint-content {
+  padding-bottom: 16px;
+}
+
+.footprint-container.is-mobile .footprint-content :deep(.el-scrollbar__view) {
+  padding-bottom: 16px;
+}
+
+.footprint-container:not(.is-mobile) .footprint-content {
+  padding-bottom: 16px;
+}
+
+.footprint-container:not(.is-mobile) .footprint-content :deep(.el-scrollbar__view) {
+  padding-bottom: 16px;
+}
+
 .header-actions {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 16px 24px;
+  padding: 16px 0;
   gap: 12px;
   flex-shrink: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
+
+
 
 .empty-state {
   display: flex;
@@ -743,84 +882,32 @@ const onMissionComplete = () => {}
   min-height: 100%;
 }
 
-.diary-section {
-  margin: 16px auto 0 auto;
-  padding: 0 0 16px 0;
-  width: 500px;
+.important-section {
+  margin-top: 20px;
+  width: 100%;
 }
 
-.diary-header {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.diary-header-left {
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.diary-date-display {
-  font-size: 15px;
-  color: var(--chalk-white-60);
+.important-title {
+  font-weight: 600;
+  color: #fbbf24;
   margin: 0 0 12px 0;
+  font-size: 15px;
+  text-align: center;
 }
 
-.diary-intro {
-  color: var(--chalk-white-90);
-  font-size: 16px;
-  font-weight: 500;
-  margin: 0 0 8px 0;
-}
-
-.diary-mood {
-  color: rgba(167, 139, 250, 0.9);
-  font-size: 14px;
-  padding: 6px 12px;
-  background: rgba(167, 139, 250, 0.15);
-  border-radius: 20px;
-  display: inline-block;
-  margin: 0;
+.important-section .countdown-section {
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 .countdown-section {
   margin-top: 20px;
   margin-bottom: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-width: 500px;
   width: 100%;
-  margin-left: auto;
-  margin-right: auto;
 }
 
-.countdown-cards,
-.positive-day-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.countdown-card .task-card-name {
-  color: var(--chalk-orange);
-}
-
-.positive-card .task-card-name {
-  color: var(--chalk-cyan);
-}
-
-.countdown-time {
-  color: var(--chalk-amber) !important;
-}
-
-.positive-time {
-  color: var(--chalk-cyan) !important;
+.countdown-item {
+  margin-bottom: 8px;
 }
 
 .diary-content {
@@ -840,70 +927,27 @@ const onMissionComplete = () => {}
   text-align: center;
 }
 
+.period-title.period-morning {
+  color: var(--chalk-orange);
+}
+
+.period-title.period-afternoon {
+  color: var(--chalk-cyan);
+}
+
+.period-title.period-evening {
+  color: var(--chalk-violet);
+}
+
 .period-items {
-  display: flex;
-  flex-direction: column;
-  max-width: 500px;
   width: 100%;
   margin: 0 auto;
-  gap: 8px;
 }
 
 .period-item {
-  width: 100%;
+  display: flex;
   text-align: left;
-}
-
-.diary-summary {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px dashed rgba(255, 255, 255, 0.15);
-  width: 100%;
-  max-width: 500px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.summary-title {
-  font-weight: 600;
-  color: var(--chalk-white);
-  margin: 0 0 12px 0;
-  font-size: 15px;
-  text-align: center;
-}
-
-.summary-content {
-  color: var(--chalk-white-75);
-  font-size: 14px;
-  line-height: 1.8;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 10px;
-  margin: 0;
-}
-
-.summary-content .segment-number {
-  color: var(--chalk-amber);
-  font-weight: 600;
-}
-
-.summary-content .segment-duration {
-  color: var(--chalk-cyan);
-  font-weight: 500;
-}
-
-.summary-content .segment-keyword {
-  color: var(--chalk-violet);
-  font-weight: 500;
-}
-
-.summary-content .segment-highlight {
-  color: var(--chalk-pink);
-  font-weight: 500;
-}
-
-.summary-content .segment-normal {
-  color: var(--chalk-white-75);
+  margin-bottom: 8px;
 }
 
 .diary-stats {
@@ -1328,151 +1372,6 @@ const onMissionComplete = () => {}
 .no-data {
   padding: 60px 0;
 }
-
-.task-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  transition: background 0.2s;
-  text-align: left;
-}
-
-.task-card:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.task-card-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-}
-
-.task-card-name {
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--chalk-white-95);
-  flex: 1;
-  min-width: 0;
-}
-
-.task-card-actions {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  flex-shrink: 0;
-}
-
-.task-card-btn {
-  width: 26px;
-  height: 26px;
-  min-width: 26px;
-  min-height: 26px;
-  padding: 0;
-  background: none !important;
-  border: none !important;
-  color: var(--chalk-subtle);
-  box-shadow: none !important;
-  font-size: 14px;
-}
-
-.task-card-btn:hover {
-  color: var(--chalk-white-85);
-}
-
-.task-card-time {
-  font-size: 13px;
-  color: var(--chalk-blue);
-  font-weight: 500;
-  margin-top: 6px;
-}
-
-.task-card-diary-time {
-  font-size: 12px;
-  color: var(--chalk-white-60);
-  margin-top: 6px;
-}
-
-.task-card-notes {
-  font-size: 12px;
-  color: var(--chalk-subtle);
-  margin-top: 6px;
-  line-height: 1.4;
-}
-
-.task-card-notes-placeholder {
-  cursor: pointer;
-  font-style: italic;
-  opacity: 0.4;
-  user-select: none;
-}
-
-.task-card-notes-placeholder:hover {
-  opacity: 0.7;
-}
-
-.task-card-time-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 6px;
-  font-size: 13px;
-}
-
-.task-card-time-row :deep(.time-btn) {
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  padding: 0;
-  width: auto;
-  height: auto;
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--chalk-white-85);
-}
-
-.task-card-time-row :deep(.time-btn:hover) {
-  border: none;
-  color: var(--chalk-white);
-}
-
-.time-sep {
-  color: var(--chalk-white-60);
-  flex-shrink: 0;
-}
-
-.time-duration-label {
-  color: var(--chalk-white-60);
-  font-size: 12px;
-  margin-left: 6px;
-  flex-shrink: 0;
-}
-
-.inline-edit-textarea {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(102, 126, 234, 0.4);
-  border-radius: 6px;
-  color: var(--chalk-white);
-  padding: 6px 10px;
-  font-size: 14px;
-  resize: vertical;
-  font-family: inherit;
-  outline: none;
-  line-height: 1.4;
-  box-sizing: border-box;
-}
-
-.inline-edit-textarea:focus {
-  border-color: #667eea;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.task-card-time :deep(span) { margin-left: 6px; }
 
 .dialog-overlay {
   position: fixed;

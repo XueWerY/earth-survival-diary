@@ -152,6 +152,182 @@ ipcMain.handle('write-file', async (_event, filePath, content) => {
   }
 })
 
+// ====== 文件管理器 IPC ======
+const ALLOWED_DIRS = [
+  path.join(app.getPath('userData'), 'data'),
+  path.join(app.getPath('userData'), 'logs')
+]
+
+function isPathAllowed(targetPath) {
+  const resolved = path.resolve(targetPath)
+  return ALLOWED_DIRS.some(dir => resolved.startsWith(dir + path.sep) || resolved === dir)
+}
+
+ipcMain.handle('get-data-dir-path', async () => {
+  return path.join(app.getPath('userData'), 'data')
+})
+
+ipcMain.handle('get-log-dir-path', async () => {
+  return path.join(app.getPath('userData'), 'logs')
+})
+
+ipcMain.handle('read-directory', async (_event, dirPath) => {
+  try {
+    if (!isPathAllowed(dirPath)) throw new Error('访问被拒绝：不允许的目录')
+    if (!fs.existsSync(dirPath)) return []
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true })
+    return entries.map(entry => ({
+      name: entry.name,
+      path: path.join(dirPath, entry.name),
+      isDirectory: entry.isDirectory(),
+      size: entry.isFile() ? fs.statSync(path.join(dirPath, entry.name)).size : 0
+    }))
+  } catch (e) {
+    errorLog('[FileManager] read-directory 失败: ' + e.message)
+    throw e
+  }
+})
+
+ipcMain.handle('delete-file-path', async (_event, filePath) => {
+  try {
+    if (!isPathAllowed(filePath)) throw new Error('访问被拒绝：不允许的目录')
+    if (!fs.existsSync(filePath)) throw new Error('文件不存在')
+    const stat = fs.statSync(filePath)
+    if (stat.isDirectory()) {
+      fs.rmSync(filePath, { recursive: true, force: true })
+    } else {
+      fs.unlinkSync(filePath)
+    }
+    return true
+  } catch (e) {
+    errorLog('[FileManager] delete-file-path 失败: ' + e.message)
+    throw e
+  }
+})
+
+ipcMain.handle('rename-file-path', async (_event, oldPath, newPath) => {
+  try {
+    if (!isPathAllowed(oldPath)) throw new Error('访问被拒绝：不允许的目录')
+    if (!isPathAllowed(newPath)) throw new Error('目标路径不被允许')
+    if (!fs.existsSync(oldPath)) throw new Error('文件不存在')
+    fs.renameSync(oldPath, newPath)
+    return true
+  } catch (e) {
+    errorLog('[FileManager] rename-file-path 失败: ' + e.message)
+    throw e
+  }
+})
+
+ipcMain.handle('read-text-file-path', async (_event, filePath) => {
+  try {
+    if (!isPathAllowed(filePath)) throw new Error('访问被拒绝：不允许的目录')
+    if (!fs.existsSync(filePath)) throw new Error('文件不存在')
+    return fs.readFileSync(filePath, 'utf-8')
+  } catch (e) {
+    errorLog('[FileManager] read-text-file-path 失败: ' + e.message)
+    throw e
+  }
+})
+// ====== 文件管理器 IPC 结束 ======
+
+// ====== 局域网传输 IPC ======
+const http = require('http')
+const os = require('os')
+
+let lanTransferServer = null
+let lanTransferData = null
+
+ipcMain.handle('start-lan-server', async (_event, data) => {
+  try {
+    // 关闭已有的服务器
+    if (lanTransferServer) {
+      lanTransferServer.close()
+      lanTransferServer = null
+    }
+    lanTransferData = data
+
+    return new Promise((resolve, reject) => {
+      const server = http.createServer((req, res) => {
+        if (req.url === '/api/lan-export') {
+          res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          })
+          res.end(JSON.stringify(lanTransferData))
+        } else {
+          res.writeHead(404)
+          res.end('Not Found')
+        }
+      })
+
+      server.listen(5789, '0.0.0.0', () => {
+        lanTransferServer = server
+        // 获取本地局域网 IP
+        const interfaces = os.networkInterfaces()
+        let localIP = '127.0.0.1'
+        for (const name of Object.keys(interfaces)) {
+          for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+              localIP = iface.address
+              break
+            }
+          }
+          if (localIP !== '127.0.0.1') break
+        }
+        debugLog('[LAN] 局域网传输服务器已启动: ' + localIP + ':5789')
+        resolve({ ip: localIP, port: 5789 })
+      })
+
+      server.on('error', (err) => {
+        errorLog('[LAN] 启动局域网服务器失败: ' + err.message)
+        reject(err)
+      })
+    })
+  } catch (e) {
+    errorLog('[LAN] start-lan-server 失败: ' + e.message)
+    throw e
+  }
+})
+
+ipcMain.handle('stop-lan-server', async () => {
+  try {
+    if (lanTransferServer) {
+      lanTransferServer.close()
+      lanTransferServer = null
+      lanTransferData = null
+      debugLog('[LAN] 局域网传输服务器已关闭')
+    }
+    return true
+  } catch (e) {
+    errorLog('[LAN] stop-lan-server 失败: ' + e.message)
+    return false
+  }
+})
+
+ipcMain.handle('fetch-lan-data', async (_event, url) => {
+  try {
+    return new Promise((resolve, reject) => {
+      http.get(url, (res) => {
+        let data = ''
+        res.on('data', (chunk) => { data += chunk })
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(data))
+          } catch {
+            reject(new Error('从局域网接收到的数据格式错误'))
+          }
+        })
+      }).on('error', (err) => {
+        reject(new Error('连接局域网服务器失败: ' + err.message))
+      })
+    })
+  } catch (e) {
+    errorLog('[LAN] fetch-lan-data 失败: ' + e.message)
+    throw e
+  }
+})
+// ====== 局域网传输 IPC 结束 ======
+
 const logFile = path.join(app.getPath('userData'), 'logs', 'app-' + new Date().toISOString().slice(0, 10) + '.log')
 const p = (n, l = 2) => String(n).padStart(l, '0')
 const formatTs = () => { const d = new Date(); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}:${p(d.getMilliseconds(), 3)}` }
@@ -225,7 +401,7 @@ function createWindow(url) {
     const parsed = new URL(targetUrl)
     const childForm = parsed.searchParams.get('childForm')
     let options = {}
-    if (childForm === 'mission') {
+    if (childForm === 'list') {
       options = { parent: mainWindow, modal: true, width: 580, height: 750, minWidth: 480, minHeight: 600, resizable: false }
     } else if (childForm === 'move') {
       options = { parent: mainWindow, modal: true, width: 420, height: 340, minWidth: 360, minHeight: 300, resizable: false }
@@ -373,7 +549,7 @@ const MODULE_FILE_MAP = {
 const MODULE_GROUP_DEF = [
   { key: 'footprint', label: '足迹', children: [{ key: 'tasks', label: '足迹记录', serverKeys: ['tasks'] }] },
   { key: 'focus', label: '专注', children: [{ key: 'focus_favorites', label: '常用专注', serverKeys: ['focus_favorites'] }, { key: 'focus_records', label: '专注记录', serverKeys: ['focus_records'] }] },
-  { key: 'lists', label: '清单', children: [{ key: 'lists', label: '清单列表及其任务', serverKeys: ['lists', 'missions'] }] },
+  { key: 'lists', label: '清单', children: [{ key: 'lists', label: '清单列表及其任务', serverKeys: ['lists', 'lists'] }] },
   { key: 'countdown', label: '倒数日', children: [{ key: 'countdown', label: '倒数日分类及其倒数日', serverKeys: ['countdown_categories', 'countdowns'] }] },
   { key: 'courses', label: '课程表', children: [{ key: 'courses', label: '课程', serverKeys: ['courses', 'course_recorded_courses'] }] }
 ]
@@ -840,6 +1016,7 @@ ipcMain.handle('open-changelog-window', async (_event, content) => {
 let reminderTimers = []
 let reminderQueue = []
 let reminderPersistDuration = 30
+let allScheduledReminders = []
 let isShowingReminder = false
 let showReminderTimer = null
 
@@ -945,6 +1122,7 @@ ipcMain.handle('schedule-reminders', async (_event, reminders, persistDuration) 
   debugLog('[提醒] 收到调度请求，共 ' + (reminders ? reminders.length : 0) + ' 条提醒')
   cancelAllReminderTimers()
   if (persistDuration != null) reminderPersistDuration = persistDuration
+  allScheduledReminders = reminders || []
 
   if (!reminders || reminders.length === 0) return { ok: true, count: 0 }
 
@@ -972,6 +1150,10 @@ ipcMain.handle('cancel-all-reminders', async () => {
 
 ipcMain.handle('get-reminder-persist-duration', async () => {
   return { persistDuration: reminderPersistDuration }
+})
+
+ipcMain.handle('get-all-reminders', async () => {
+  return allScheduledReminders
 })
 
 function escapeHtml(str) {

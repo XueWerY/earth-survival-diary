@@ -11,28 +11,25 @@
         <span class="year-month">{{ currentYear }}年{{ currentMonth }}月</span>
       </div>
       <div v-if="showHeaderActions" class="header-right">
-        <button class="icon-btn" @click="showDatePicker = true">
+        <button class="icon-capsule-btn" @click="showDatePicker = true" title="跳转日期">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
             <line x1="16" y1="2" x2="16" y2="6"></line>
             <line x1="8" y1="2" x2="8" y2="6"></line>
             <line x1="3" y1="10" x2="21" y2="10"></line>
           </svg>
-          <span>跳转日期</span>
         </button>
-        <button class="icon-btn add-btn" @click="emit('addFootprint')">
+        <button class="icon-capsule-btn add-btn" @click="emit('addFootprint')" title="添加足迹">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          <span>添加足迹</span>
         </button>
-        <button class="icon-btn diary-btn" @click="emit('addDiary')">
+        <button class="icon-capsule-btn diary-btn" @click="emit('addDiary')" title="添加日记">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
           </svg>
-          <span>添加日记</span>
         </button>
       </div>
     </div>
@@ -320,42 +317,26 @@ defineExpose({ openDatePicker: () => { showDatePicker.value = true } })
 <style scoped>
 .inline-picker-container {
   width: 100%;
-  max-width: 600px;
   user-select: none;
   -webkit-user-select: none;
   touch-action: pan-x pan-y;
-}
-
-.hide-header-actions {
-  max-width: 500px;
-}
-
-.hide-header-actions .picker-header {
-  justify-content: center;
-}
-
-.hide-header-actions .header-left {
-  text-align: center;
 }
 
 .picker-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 0 8px 0;
+  padding: 4px 0;
 }
 
 .header-left {
-  flex: 55;
-  text-align: left;
+  text-align: center;
 }
 
 .header-right {
-  flex: 45;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
+  gap: 6px;
 }
 
 .year-month {
@@ -364,34 +345,33 @@ defineExpose({ openDatePicker: () => { showDatePicker.value = true } })
   color: var(--chalk-white);
 }
 
-.icon-btn {
+.icon-capsule-btn {
+  width: 32px;
   height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 0 8px;
   border: none;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.08);
   color: var(--chalk-white-60);
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: 16px;
   transition: all 0.2s;
   flex-shrink: 0;
-  font-size: 12px;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.icon-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+.icon-capsule-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
   color: var(--chalk-white);
 }
 
-.icon-btn.add-btn:hover {
+.icon-capsule-btn.add-btn:hover {
   background: rgba(102, 126, 234, 0.25);
   color: var(--chalk-blue);
 }
 
-.icon-btn.diary-btn:hover {
+.icon-capsule-btn.diary-btn:hover {
   background: rgba(167, 139, 250, 0.25);
   color: var(--chalk-violet);
 }

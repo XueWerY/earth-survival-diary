@@ -41,11 +41,11 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { useMissionStore, DEFAULT_GROUP_COLORS, type MissionGroup } from '../../stores/missionStore'
+import { useListStore, DEFAULT_GROUP_COLORS, type TaskGroup } from '../../stores/listStore'
 
 const props = defineProps<{
   visible: boolean
-  group?: MissionGroup | null
+  group?: TaskGroup | null
   listId?: string
 }>()
 
@@ -54,7 +54,7 @@ const emit = defineEmits<{
   (e: 'submit'): void
 }>()
 
-const missionStore = useMissionStore()
+const listStore = useListStore()
 
 const dialogVisible = computed({
   get: () => props.visible,
@@ -78,7 +78,7 @@ const usedColors = computed(() => {
   const colors = new Set<string>()
   if (!props.listId) return []
 
-  const currentList = missionStore.lists.find(l => l.id === props.listId)
+  const currentList = listStore.taskLists.find(l => l.id === props.listId)
   if (!currentList) return []
 
   currentList.groups.forEach(group => {
@@ -139,9 +139,9 @@ const handleSubmit = async () => {
       if (!targetListId) return
 
       if (isEdit.value && props.group) {
-        missionStore.updateGroupInList(targetListId, props.group.id, form.value)
+        listStore.updateGroupInList(targetListId, props.group.id, form.value)
       } else {
-        missionStore.addGroupToList(targetListId, form.value.name, form.value.color)
+        listStore.addGroupToList(targetListId, form.value.name, form.value.color)
       }
 
       emit('submit')

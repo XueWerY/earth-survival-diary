@@ -33,22 +33,22 @@ export interface NavContext {
   actions?: NavAction[]
 }
 
-export const MODULES = ['footprint', 'focus', 'mission', 'countdown', 'course', 'statistics', 'toolbox', 'profile']
+export const MODULES = ['footprint', 'focus', 'list', 'countdown', 'course', 'statistics', 'toolbox', 'profile']
 
 export const MODULE_ICONS: Record<string, string> = {
-  footprint: '👣', focus: '🧘', mission: '📋', countdown: '⏳', course: '📖', statistics: '📊', toolbox: '🧰', profile: '👤'
+  footprint: '👣', focus: '🧘', list: '📋', countdown: '⏳', course: '📖', statistics: '📊', toolbox: '🧰', profile: '👤'
 }
 
 export const MODULE_LABELS: Record<string, string> = {
-  footprint: '足迹', focus: '专注', mission: '清单', countdown: '倒数日', course: '课程表', statistics: '统计', toolbox: '工具箱', profile: '我的'
+  footprint: '足迹', focus: '专注', list: '清单', countdown: '倒数日', course: '课程表', statistics: '统计', toolbox: '工具箱', profile: '我的'
 }
 
 export const MODULE_ROUTES: Record<string, string> = {
-  footprint: '/footprint', focus: '/focus', mission: '/mission', countdown: '/countdown', course: '/course', statistics: '/statistics', toolbox: '/toolbox', profile: '/profile'
+  footprint: '/footprint', focus: '/focus', list: '/list', countdown: '/countdown', course: '/course', statistics: '/statistics', toolbox: '/toolbox', profile: '/profile'
 }
 
 const MODULE_PERSIST_KEYS: Record<string, string> = {
-  mission: 'list',
+  list: 'list',
   countdown: 'countdown'
 }
 
@@ -64,14 +64,19 @@ const currentModule = computed(() => navPath.value[0] || '')
 const moduleIcon = computed(() => MODULE_ICONS[currentModule.value] || '')
 const moduleLabel = computed(() => MODULE_LABELS[currentModule.value] || '')
 
+let persistTimer: ReturnType<typeof setTimeout> | null = null
+
 watch(navPath, async () => {
     const module = currentModule.value
     const key = MODULE_PERSIST_KEYS[module]
     logger.debug('[PageNav] navPath watch 触发', { navPath: navPath.value, module, key })
-    if (key && navPath.value.length > 1) {
-      logger.debug('[PageNav] 持久化 navPath', { key, value: { navPath: navPath.value } })
-      await setSystemStateField(key, { navPath: navPath.value })
-    }
+    if (persistTimer) clearTimeout(persistTimer)
+    persistTimer = setTimeout(async () => {
+      if (key) {
+        logger.debug('[PageNav] 持久化 navPath', { key, value: { navPath: navPath.value } })
+        await setSystemStateField(key, { navPath: navPath.value })
+      }
+    }, 300)
   }, { deep: true })
 
 export function usePageNav() {

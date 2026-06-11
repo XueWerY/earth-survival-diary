@@ -61,14 +61,26 @@
               </div>
             </div>
             <div class="jump-actions">
-              <button class="today-btn" title="回到今日" @click="goToToday">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="today-svg">
+              <button class="capsule-btn" @click="goToToday">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
                   <circle cx="12" cy="12" r="10"></circle>
                   <polyline points="12 6 12 12 16 14"></polyline>
                 </svg>
+                <span>回到今天</span>
               </button>
-              <el-button size="small" @click="onCancel">取消</el-button>
-              <el-button size="small" type="primary" @click="confirmDate">保存</el-button>
+              <button class="capsule-btn" @click="onCancel">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+                <span>取消</span>
+              </button>
+              <button class="capsule-btn capsule-btn-primary" @click="confirmDate">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span>保存</span>
+              </button>
             </div>
           </div>
         </div>
@@ -438,27 +450,40 @@ watch([pickerYear, pickerMonth], () => {
   margin-top: 12px;
 }
 
-.today-btn {
-  width: 32px;
+.capsule-btn {
   height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: none;
+  gap: 4px;
+  padding: 0 12px;
   border: none;
-  color: var(--chalk-muted);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--chalk-white-60);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 16px;
   transition: all 0.2s;
+  flex-shrink: 0;
+  font-size: 12px;
 }
 
-.today-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+.capsule-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
   color: var(--chalk-white);
 }
 
-.today-svg {
-  width: 18px;
-  height: 18px;
+.capsule-btn-primary {
+  background: rgba(102, 126, 234, 0.3);
+  color: var(--chalk-blue);
+}
+
+.capsule-btn-primary:hover {
+  background: rgba(102, 126, 234, 0.45);
+  color: #fff;
+}
+
+.capsule-svg {
+  width: 14px;
+  height: 14px;
 }
 </style>

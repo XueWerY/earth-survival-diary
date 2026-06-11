@@ -27,10 +27,10 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { EXTENDED_FOLDER_COLORS, type MissionGroup } from '../../stores/missionStore'
+import { EXTENDED_FOLDER_COLORS, type TaskGroup } from '../../stores/listStore'
 
 const props = defineProps<{
-  group?: MissionGroup | null
+  group?: TaskGroup | null
   listId?: string
 }>()
 

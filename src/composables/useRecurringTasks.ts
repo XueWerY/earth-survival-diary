@@ -1,11 +1,11 @@
 import { computed } from 'vue'
 import dayjs from 'dayjs'
-import { useMissionStore, type Mission, type RepeatStrategy } from '../stores/missionStore'
+import { useListStore, type Task, type RepeatStrategy } from '../stores/listStore'
 
-export function useRecurringMissions() {
-  const missionStore = useMissionStore()
+export function useRecurringTasks() {
+  const listStore = useListStore()
 
-  const getNextRepeatDate = (currentDate: string, strategy: RepeatStrategy, customDays: number = 1): string => {
+  const getNextRepeatDate = (currentDate: string, strategy: RepeatStrategy, customDays: number = 1, lunarMonth: number = 1, lunarDay: number = 1): string => {
     const current = dayjs(currentDate)
     switch (strategy) {
       case 'daily':
@@ -21,6 +21,29 @@ export function useRecurringMissions() {
         return current.add(1, 'week').format('YYYY-MM-DD')
       case 'monthly':
         return current.add(1, 'month').format('YYYY-MM-DD')
+      case 'lunar_date': {
+        try {
+          const { Lunar } = require('lunar-javascript') as any
+          const solar = require('lunar-javascript').Solar.fromYmd(current.year(), current.month() + 1, current.date())
+          const currentLunar = solar.getLunar()
+          const lunarYear = currentLunar.getYear()
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              const targetLunar = Lunar.fromYmd(lunarYear + attempt, lunarMonth, lunarDay)
+              const targetSolar = targetLunar.getSolar()
+              const targetDate = dayjs(`${targetSolar.getYear()}-${String(targetSolar.getMonth()).padStart(2, '0')}-${String(targetSolar.getDay()).padStart(2, '0')}`)
+              if (targetDate.isAfter(current)) {
+                return targetDate.format('YYYY-MM-DD')
+              }
+            } catch {}
+          }
+          const nextLunar = Lunar.fromYmd(lunarYear + 1, lunarMonth, lunarDay)
+          const nextSolar = nextLunar.getSolar()
+          return `${nextSolar.getYear()}-${String(nextSolar.getMonth()).padStart(2, '0')}-${String(nextSolar.getDay()).padStart(2, '0')}`
+        } catch {
+          return currentDate
+        }
+      }
       case 'yearly':
         return current.add(1, 'year').format('YYYY-MM-DD')
       case 'custom_days':
@@ -76,19 +99,19 @@ export function useRecurringMissions() {
    * 检查重复任务是否在某日期有实例
    * 从任务的原始日期开始，向前推进直到等于或超过目标日期
    */
-  const missionOccursOnDate = (mission: Mission, targetDate: string): boolean => {
-    if (mission.repeatStrategy === 'none') {
-      return mission.date === targetDate
+  const taskOccursOnDate = (task: Task, targetDate: string): boolean => {
+    if (task.repeatStrategy === 'none') {
+      return task.date === targetDate
     }
 
-    const startDate = dayjs(mission.date).startOf('day')
+    const startDate = dayjs(task.date).startOf('day')
     const target = dayjs(targetDate).startOf('day')
 
     if (target.isBefore(startDate)) {
       return false
     }
 
-    let current = mission.date
+    let current = task.date
     let cycleCount = 0
     const maxCycles = 365 * 10
 
@@ -96,7 +119,7 @@ export function useRecurringMissions() {
       const currentDayjs = dayjs(current).startOf('day')
 
       if (currentDayjs.isSame(target)) {
-        if (isRepeatDateBeyondEndDate(current, mission.repeatEndStrategy, mission.repeatEndDate, mission.repeatCount, cycleCount)) {
+        if (isRepeatDateBeyondEndDate(current, task.repeatEndStrategy, task.repeatEndDate, task.repeatCount, cycleCount)) {
           return false
         }
         return true
@@ -106,7 +129,7 @@ export function useRecurringMissions() {
         return false
       }
 
-      current = getNextRepeatDate(current, mission.repeatStrategy, mission.repeatCustomDays)
+      current = getNextRepeatDate(current, task.repeatStrategy, task.repeatCustomDays, task.repeatLunarMonth, task.repeatLunarDay)
       cycleCount++
     }
 
@@ -117,12 +140,12 @@ export function useRecurringMissions() {
    * 获取给定日期对应的重复任务实例日期
    * 返回该日期在重复模式中对应的日期，如果不存在则返回null
    */
-  const getMissionDateForDate = (mission: Mission, targetDate: string): string | null => {
-    if (mission.repeatStrategy === 'none') {
-      return mission.date === targetDate ? mission.date : null
+  const getTaskDateForDate = (task: Task, targetDate: string): string | null => {
+    if (task.repeatStrategy === 'none') {
+      return task.date === targetDate ? task.date : null
     }
 
-    if (missionOccursOnDate(mission, targetDate)) {
+    if (taskOccursOnDate(task, targetDate)) {
       return targetDate
     }
 
@@ -132,13 +155,13 @@ export function useRecurringMissions() {
   /**
    * 获取指定日期应显示的所有任务（包括周期性任务的实例）
    */
-  const getMissionsForDate = (targetDate: string): Mission[] => {
-    const result: Mission[] = []
+  const getTasksForDate = (targetDate: string): Task[] => {
+    const result: Task[] = []
 
-    for (const mission of missionStore.missions) {
-      if (missionOccursOnDate(mission, targetDate)) {
+    for (const task of listStore.lists) {
+      if (taskOccursOnDate(task, targetDate)) {
         result.push({
-          ...mission,
+          ...task,
           date: targetDate
         })
       }
@@ -147,22 +170,22 @@ export function useRecurringMissions() {
     return result
   }
 
-  const recurringMissions = computed(() => {
-    return missionStore.missions.filter(m => m.repeatStrategy !== 'none')
+  const recurringTasks = computed(() => {
+    return listStore.lists.filter(m => m.repeatStrategy !== 'none')
   })
 
-  const nonRecurringMissions = computed(() => {
-    return missionStore.missions.filter(m => m.repeatStrategy === 'none')
+  const nonRecurringTasks = computed(() => {
+    return listStore.lists.filter(m => m.repeatStrategy === 'none')
   })
 
   return {
     getNextRepeatDate,
     getPrevRepeatDate,
     isRepeatDateBeyondEndDate,
-    missionOccursOnDate,
-    getMissionDateForDate,
-    getMissionsForDate,
-    recurringMissions,
-    nonRecurringMissions,
+    taskOccursOnDate,
+    getTaskDateForDate,
+    getTasksForDate,
+    recurringTasks,
+    nonRecurringTasks,
   }
 }

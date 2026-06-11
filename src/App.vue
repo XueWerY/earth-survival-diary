@@ -21,7 +21,7 @@
     <!-- 已登录且数据加载完成，显示主界面 -->
     <template v-else>
       <!-- 主导航栏 - Electron 端在顶部 -->
-      <div v-if="isElectron" class="main-nav-bar" :class="{ 'nav-hidden': isFocusFullscreen }">
+      <div v-if="isElectron && !splitScreen.isSplitActive.value" class="main-nav-bar" :class="{ 'nav-hidden': isFocusFullscreen }" @contextmenu.prevent="handleNavContextMenu">
         <div class="nav-items-scroll" ref="navScrollRef">
           <button
             v-for="m in MODULES"
@@ -38,9 +38,61 @@
 
       
 
+      <!-- 上下文菜单 -->
+      <teleport to="body">
+        <div v-if="contextMenuVisible" class="context-menu-overlay" @click="closeContextMenu"></div>
+        <div v-if="contextMenuVisible" class="context-menu" :style="contextMenuStyle">
+          <div v-if="!splitScreen.isSplitActive.value" class="context-menu-item" @click="handleEnterSplit">
+            <span>拆分界面</span>
+          </div>
+          <div v-if="splitScreen.isSplitActive.value" class="context-menu-item context-menu-item-danger" @click="handleExitSplitClick">
+            <span>退出拆分界面</span>
+          </div>
+        </div>
+      </teleport>
+
       <!-- 主内容区域 -->
       <main class="main-content">
-        <div class="panel-wrapper">
+        <div v-if="splitScreen.isSplitActive.value" class="split-container">
+          <div class="split-panel">
+            <div class="split-panel-nav-bar">
+              <div class="nav-items-scroll">
+                <button v-for="m in MODULES" :key="m" class="nav-item" :class="{ active: panelModules[0] === m }" @click="panelNavigate(0, m)">
+                  <span class="nav-item-icon">{{ MODULE_ICONS[m] }}</span>
+                  <span class="nav-item-label">{{ MODULE_LABELS[m] }}</span>
+                </button>
+              </div>
+            </div>
+            <div class="split-panel-content">
+              <component :is="moduleComponents[panelModules[0]]" :key="`split-0-${panelModules[0]}`"
+                @fullscreen-change="handleFullscreenFromRoute"
+                @logout="handleLogout"
+                @refreshData="handleRefreshData"
+                @profile-updated="handleProfileUpdated"
+              />
+            </div>
+          </div>
+          <div class="split-divider"></div>
+          <div class="split-panel">
+            <div class="split-panel-nav-bar">
+              <div class="nav-items-scroll">
+                <button v-for="m in MODULES" :key="m" class="nav-item" :class="{ active: panelModules[1] === m }" @click="panelNavigate(1, m)">
+                  <span class="nav-item-icon">{{ MODULE_ICONS[m] }}</span>
+                  <span class="nav-item-label">{{ MODULE_LABELS[m] }}</span>
+                </button>
+              </div>
+            </div>
+            <div class="split-panel-content">
+              <component :is="moduleComponents[panelModules[1]]" :key="`split-1-${panelModules[1]}`"
+                @fullscreen-change="handleFullscreenFromRoute"
+                @logout="handleLogout"
+                @refreshData="handleRefreshData"
+                @profile-updated="handleProfileUpdated"
+              />
+            </div>
+          </div>
+        </div>
+        <div v-else class="panel-wrapper">
           <router-view v-slot="{ Component }">
             <template v-if="Component">
               <component
@@ -130,25 +182,33 @@
           </button>
         </div>
       </div>
+
+      <div v-if="isElectron && focusStore.timerState && route.path !== '/focus'" class="focus-status-indicator">
+        <span class="focus-status-icon">{{ focusStore.timerState.type === 'pomodoro' ? '🍅' : '⏱️' }}</span>
+        <span class="focus-status-text">{{ focusStore.timerState.name }}</span>
+        <span class="focus-status-time">{{ focusDisplayTime }}</span>
+      </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed, nextTick, provide, onErrorCaptured } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick, provide, onErrorCaptured, defineAsyncComponent } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AuthPage from './components/auth/AuthPage.vue'
 import { useTaskStore } from './stores/taskStore'
-import { useMissionStore } from './stores/missionStore'
+import { useListStore, DEFAULT_LIST_COLORS } from './stores/listStore'
 import { useAuthStore } from './stores/authStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useFocusStore } from './stores/focusStore'
 import { getData, setData, preloadData, clearCache, getSystemStateField, setSystemStateField } from './services/storageService'
 import { logger } from './lib/logger'
 import { usePageNav, MODULES, MODULE_ICONS, MODULE_LABELS, MODULE_ROUTES } from './composables/usePageNav'
+import { useSplitScreen } from './composables/useSplitScreen'
 import dayjs from 'dayjs'
 // @ts-expect-error - Vite raw import
 import changelogContent from '../CHANGELOG.md?raw'
+import appVersion from 'virtual:version'
 import GuideOverlay from './components/common/overlay/GuideOverlay.vue'
 import { guideSteps } from './data/guideSteps'
 import { ElMessage } from 'element-plus'
@@ -156,10 +216,55 @@ import { ElMessage } from 'element-plus'
 const router = useRouter()
 const route = useRoute()
 
-const VALID_ROUTES = ['footprint', 'focus', 'mission', 'countdown', 'course', 'statistics', 'toolbox', 'profile']
+const VALID_ROUTES = ['footprint', 'focus', 'list', 'countdown', 'course', 'statistics', 'toolbox', 'profile']
 const MAX_SCHEDULE_DELAY = 20 * 24 * 3600 * 1000
 
 const pageNav = usePageNav()
+const splitScreen = useSplitScreen()
+
+const moduleComponents: Record<string, ReturnType<typeof defineAsyncComponent>> = {
+  footprint: defineAsyncComponent(() => import('./components/footprint/TaskList.vue')),
+  focus: defineAsyncComponent(() => import('./components/focus/FocusTimer.vue')),
+  list: defineAsyncComponent(() => import('./components/list/ListPage.vue')),
+  countdown: defineAsyncComponent(() => import('./components/countdown/CountdownList.vue')),
+  course: defineAsyncComponent(() => import('./components/course/CourseSchedule.vue')),
+  statistics: defineAsyncComponent(() => import('./components/statistics/StatisticsPage.vue')),
+  toolbox: defineAsyncComponent(() => import('./components/toolbox/ToolboxPage.vue')),
+  profile: defineAsyncComponent(() => import('./components/profile/ProfilePage.vue')),
+}
+
+const panelModules = ref<string[]>(['footprint', 'footprint'])
+
+const contextMenuVisible = ref(false)
+const contextMenuStyle = ref({ top: '0px', left: '0px' })
+
+function handleNavContextMenu(event: MouseEvent) {
+  contextMenuStyle.value = {
+    top: `${event.clientY}px`,
+    left: `${event.clientX}px`,
+  }
+  contextMenuVisible.value = true
+}
+
+function closeContextMenu() {
+  contextMenuVisible.value = false
+}
+
+function handleEnterSplit() {
+  const current = pageNav.currentModule.value
+  panelModules.value = [current, current]
+  closeContextMenu()
+  splitScreen.enterSplit(current)
+}
+
+function handleExitSplitClick() {
+  closeContextMenu()
+  splitScreen.exitSplit()
+}
+
+function panelNavigate(panelIndex: number, module: string) {
+  panelModules.value[panelIndex] = module
+}
 
 const isElectron = computed(() => typeof window !== 'undefined' && !!(window as any).electronAPI)
 
@@ -192,7 +297,7 @@ const navigateTo = (module: string) => {
 }
 
 const taskStore = useTaskStore()
-const missionStore = useMissionStore()
+const listStore = useListStore()
 const authStore = useAuthStore()
 const settingsStore = useSettingsStore()
 const focusStore = useFocusStore()
@@ -225,9 +330,12 @@ const handleLogout = async () => {
   if (window.electronAPI?.cancelAllReminders) {
     window.electronAPI.cancelAllReminders()
   }
+  // 清理所有 JS 定时器
+  reminderTimers.forEach(t => clearTimeout(t))
+  reminderTimers.length = 0
   // 重置所有 store 状态
   taskStore.reset()
-  missionStore.reset()
+  listStore.reset()
   focusStore.reset()
   settingsStore.reset()
   // 清除所有缓存数据
@@ -271,6 +379,8 @@ const cleanUpCourseAutoRecordedTasks = async () => {
 const showAppChangelogDialog = ref(false)
 
 const activeReminders = ref<ReminderItem[]>([])
+const reminderTimers: ReturnType<typeof setTimeout>[] = []
+const MAX_REMINDER_DELAY = 7 * 24 * 60 * 60 * 1000 // JS 定时器最多调度 7 天内的提醒
 
 function playReminderSound() {
   try {
@@ -340,30 +450,60 @@ const openReleasesUrl = () => {
   logger.info('[App] 用户点击更新链接')
   if (window.electronAPI?.openExternal) {
     window.electronAPI.openExternal(RELEASES_URL)
+  } else {
+    window.open(RELEASES_URL, '_blank')
   }
 }
 
 const versionChecksStarted = ref(false)
 
-const startVersionChecks = () => {
+const startVersionChecks = async () => {
   if (versionChecksStarted.value) return
   versionChecksStarted.value = true
   logger.info('[更新] 开始版本检测')
 
-  if (window.electronAPI?.checkVersionUpdate && authStore.user?.id) {
-    window.electronAPI.checkVersionUpdate(authStore.user.id).then(async (result) => {
-      if (result.isUpdated) {
-        try {
-          await setSystemStateField('version', result.newVersion)
-          logger.info('[App] 检测到版本更新，已同步版本到前端', { oldVersion: result.oldVersion, newVersion: result.newVersion })
-        } catch (e) {
-          logger.warn('[App] 同步版本到前端失败', { error: e instanceof Error ? e.message : String(e) })
+  if (authStore.user?.id) {
+    if (window.electronAPI?.checkVersionUpdate) {
+      try {
+        const result = await window.electronAPI.checkVersionUpdate(authStore.user.id)
+        if (result.isUpdated) {
+          try {
+            await setSystemStateField('version', result.newVersion)
+            logger.info('[App] 检测到版本更新，已同步版本到前端', { oldVersion: result.oldVersion, newVersion: result.newVersion })
+          } catch (e) {
+            logger.warn('[App] 同步版本到前端失败', { error: e instanceof Error ? e.message : String(e) })
+          }
+          showAppChangelogDialog.value = true
         }
-        showAppChangelogDialog.value = true
+      } catch (e) {
+        console.error('[App] 版本更新检测失败:', e)
       }
-    }).catch(e => {
-      console.error('[App] 版本更新检测失败:', e)
-    })
+    } else {
+      // 非 Electron 端：检查持久化的版本号
+      try {
+        const storedVersion = await getSystemStateField('version')
+        if (storedVersion !== appVersion) {
+          await setSystemStateField('version', appVersion)
+          logger.info('[App] 检测到版本更新', { oldVersion: storedVersion, newVersion: appVersion })
+          showAppChangelogDialog.value = true
+        }
+      } catch (e) {
+        logger.warn('[App] 非 Electron 版本检测失败', { error: e instanceof Error ? e.message : String(e) })
+      }
+      // 检查 GitHub 是否有新版本
+      try {
+        const res = await fetch('https://api.github.com/repos/XueWerY/earth-survival-diary/releases/latest')
+        if (res.ok) {
+          const data = await res.json()
+          const latestVersion = (data.tag_name || '').replace(/^v/, '')
+          if (latestVersion && latestVersion !== appVersion) {
+            updateStatus.value = 'available'
+            updateVersion.value = latestVersion
+            updateDialogVisible.value = true
+          }
+        }
+      } catch { /* GitHub 不可达，静默跳过 */ }
+    }
   }
 
   setupUpdateStatusListener()
@@ -390,6 +530,43 @@ const setupUpdateStatusListener = () => {
       }, 1500)
     }
   })
+}
+
+// 暴露全局函数供 ProfilePage 调用（非 Electron 端使用）
+(window as any).__checkForUpdate = async () => {
+  updateStatus.value = 'checking'
+  updateDialogVisible.value = true
+  try {
+    const res = await fetch('https://api.github.com/repos/XueWerY/earth-survival-diary/releases/latest')
+    if (!res.ok) throw new Error('网络请求失败')
+    const data = await res.json()
+    const latestVersion = (data.tag_name || '').replace(/^v/, '')
+    if (latestVersion && latestVersion !== appVersion) {
+      updateStatus.value = 'available'
+      updateVersion.value = latestVersion
+    } else {
+      updateStatus.value = 'no-update'
+    }
+  } catch (e) {
+    updateStatus.value = 'error'
+    updateMessage.value = e instanceof Error ? e.message : '检查失败'
+  }
+  if (updateStatus.value === 'no-update') {
+    if (updateNoUpdateTimer) clearTimeout(updateNoUpdateTimer)
+    updateNoUpdateTimer = setTimeout(() => {
+      updateDialogVisible.value = false
+    }, 1500)
+  }
+}
+
+/** 将字符串 ID 哈希为非负整数，用于 Android 通知 ID */
+const hashStringId = (id: string): number => {
+  let hash = 0
+  for (let i = 0; i < id.length; i++) {
+    hash = ((hash << 5) - hash) + id.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash) % 2147483647
 }
 
 const getNextOccurrence = (baseDate: string, strategy: string, customDays: number, from: dayjs.Dayjs): dayjs.Dayjs | null => {
@@ -431,17 +608,18 @@ const getNextOccurrence = (baseDate: string, strategy: string, customDays: numbe
   }
 }
 
-const scheduleMissionReminders = async () => {
-  if (!window.electronAPI?.scheduleReminders) return
+const scheduleListReminders = async () => {
+  const isAndroidCapacitor = typeof window !== 'undefined' && !(window as any).electronAPI && typeof (window as any).Capacitor !== 'undefined'
+  if (!window.electronAPI?.scheduleReminders && !isAndroidCapacitor) return
   try {
     const now = dayjs()
     const today = now.startOf('day')
     const persistDuration = settingsStore.settings?.reminderPersistDuration ?? 30
-    const reminders: { id: string; name: string; body: string; triggerTime: string; listName?: string; groupName?: string; repeatStrategy?: string; repeatCustomDays?: number; repeatEndStrategy?: string; repeatEndDate?: string; repeatCount?: number; repeatCompletedCount?: number; reminderStrategy?: string; reminderDays?: number; reminderHours?: number; reminderMinutes?: number; endTime?: string }[] = []
+    const reminders: { id: string; name: string; body: string; triggerTime: string; listName?: string; groupName?: string; folderName?: string; repeatStrategy?: string; repeatCustomDays?: number; repeatEndStrategy?: string; repeatEndDate?: string; repeatCount?: number; repeatCompletedCount?: number; reminderStrategy?: string; reminderDays?: number; reminderHours?: number; reminderMinutes?: number; endTime?: string }[] = []
 
-    const missions = missionStore.missions.filter(m => !m.completed && m.reminderStrategy !== 'none' && m.date)
+    const lists = listStore.lists.filter(m => !m.completed && m.reminderStrategy !== 'none' && m.date)
 
-    for (const m of missions) {
+    for (const m of lists) {
       let nextDate: dayjs.Dayjs
 
       if (m.repeatStrategy !== 'none') {
@@ -468,11 +646,14 @@ const scheduleMissionReminders = async () => {
 
       let listName = ''
       let groupName = ''
-      const list = missionStore.lists.find(l => l.id === m.listId)
+      let folderName = ''
+      const list = listStore.taskLists.find(l => l.id === m.listId)
       if (list) {
         listName = list.name
         const group = list.groups.find(g => g.id === m.groupId)
         if (group) groupName = group.name
+        const folder = listStore.folders.find(f => f.listIds.includes(m.listId))
+        if (folder) folderName = folder.name
       }
 
       reminders.push({
@@ -482,6 +663,7 @@ const scheduleMissionReminders = async () => {
         triggerTime: triggerTime.toISOString(),
         listName,
         groupName,
+        folderName,
         repeatStrategy: m.repeatStrategy,
         repeatCustomDays: m.repeatCustomDays,
         repeatEndStrategy: m.repeatEndStrategy,
@@ -556,9 +738,48 @@ const scheduleMissionReminders = async () => {
       }
     }
 
+    const timeToMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
+    const addMinutes = (time: string, minutes: number) => {
+      const total = timeToMinutes(time) + minutes
+      const h = Math.floor(total / 60) % 24
+      const m = total % 60
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+    }
+
+    const getCourseStartTime = (periodIds: number[], cs: any): string => {
+      if (!periodIds || periodIds.length === 0) return cs?.firstPeriodStart || '08:00'
+      const firstStart = cs?.firstPeriodStart || '08:00'
+      const dur = cs?.periodDuration || 45
+      const brk = cs?.breakDuration || 10
+      const lunch = cs?.lunchBreakMinutes ?? 120
+      const dinner = cs?.dinnerBreakMinutes ?? 90
+      const counts = cs?.periodCountPerSession || { morning: 4, afternoon: 4, evening: 2 }
+      const { morning, afternoon, evening } = counts
+      const periods: { id: number; start: string; end: string }[] = []
+      let cur = firstStart
+      let idNum = 1
+      const addSession = (cnt: number) => {
+        for (let i = 0; i < cnt; i++) {
+          const end = addMinutes(cur, dur)
+          periods.push({ id: idNum++, start: cur, end })
+          cur = addMinutes(end, brk)
+        }
+      }
+      addSession(morning)
+      if (morning > 0 && afternoon > 0) cur = addMinutes(periods[periods.length - 1].end, lunch)
+      else if (morning === 0 && afternoon > 0) cur = firstStart
+      addSession(afternoon)
+      if (afternoon > 0 && evening > 0) cur = addMinutes(periods[periods.length - 1].end, dinner)
+      else if (afternoon === 0 && evening > 0) cur = firstStart
+      addSession(evening)
+      const firstP = periods.find(p => p.id === Math.min(...periodIds))
+      return firstP?.start || firstStart
+    }
+
     try {
-      const courseReminderMinutes = settingsStore.settings.course?.reminderMinutes ?? 5
-      const semesterStartDate = settingsStore.settings.course?.semesterStartDate
+      const courseSettings = settingsStore.settings.course
+      const courseReminderMinutes = courseSettings?.reminderMinutes ?? 5
+      const semesterStartDate = courseSettings?.semesterStartDate
       if (semesterStartDate) {
         const courses = await getData<any[]>('course', 'courses')
         if (courses && courses.length > 0) {
@@ -571,24 +792,28 @@ const scheduleMissionReminders = async () => {
           let courseCount = 0
           for (const course of courses) {
             if (!course.weeks || course.weeks.length === 0) continue
-            if (!course.startTime) continue
+            if (!course.periodIds || course.periodIds.length === 0) continue
+            if (!course.dayOfWeek || course.dayOfWeek.length === 0) continue
             const sortedWeeks = [...course.weeks].sort((a: number, b: number) => a - b)
-            const dayOffset = course.dayOfWeek === 0 ? 6 : course.dayOfWeek - 1
-            for (const week of sortedWeeks) {
-              if (week < currentWeek) continue
-              const classDate = semesterMonday.add((week - 1) * 7 + dayOffset, 'day')
-              const triggerTime = dayjs(classDate.format('YYYY-MM-DD') + 'T' + course.startTime).subtract(courseReminderMinutes, 'minute')
-              if (triggerTime.valueOf() <= now.valueOf() - 60000) continue
-              if (triggerTime.valueOf() > now.valueOf() + MAX_SCHEDULE_DELAY) break
-              reminders.push({
-                id: `course-${course.id}`,
-                name: '课程提醒',
-                body: `「${course.name}」即将开始`,
-                triggerTime: triggerTime.toISOString(),
-                repeatStrategy: 'weekly'
-              })
-              courseCount++
-              break
+            const startTime = getCourseStartTime(course.periodIds, courseSettings)
+            for (const dw of course.dayOfWeek) {
+              const dayOffset = dw === 0 ? 6 : dw - 1
+              for (const week of sortedWeeks) {
+                if (week < currentWeek) continue
+                const classDate = semesterMonday.add((week - 1) * 7 + dayOffset, 'day')
+                const triggerTime = dayjs(classDate.format('YYYY-MM-DD') + 'T' + startTime).subtract(courseReminderMinutes, 'minute')
+                if (triggerTime.valueOf() <= now.valueOf() - 60000) continue
+                if (triggerTime.valueOf() > now.valueOf() + MAX_SCHEDULE_DELAY) break
+                reminders.push({
+                  id: `course-${course.id}-${dw}`,
+                  name: course.name,
+                  body: `「${course.name}」即将开始`,
+                  triggerTime: triggerTime.toISOString(),
+                  repeatStrategy: 'weekly'
+                })
+                courseCount++
+                break
+              }
             }
           }
           if (courseCount > 0) logger.info('[提醒] 课程提醒已加入调度', { count: courseCount })
@@ -599,13 +824,32 @@ const scheduleMissionReminders = async () => {
     }
 
     logger.info('[提醒] 调度提醒任务', { count: reminders.length, persistDuration })
-    window.electronAPI.scheduleReminders(reminders, persistDuration)
+    if (window.electronAPI?.scheduleReminders) {
+      window.electronAPI.scheduleReminders(reminders, persistDuration)
+    } else if (isAndroidCapacitor) {
+      // Android 端：使用 JS 定时器调度提醒（替代系统通知）
+      reminderTimers.forEach(t => clearTimeout(t))
+      reminderTimers.length = 0
+      const nowMs = Date.now()
+      for (const r of reminders) {
+        const triggerMs = new Date(r.triggerTime).getTime()
+        const delay = triggerMs - nowMs
+        if (delay > 0 && delay < MAX_REMINDER_DELAY) {
+          const timer = setTimeout(() => {
+            activeReminders.value.push(r)
+            playReminderSound()
+          }, delay)
+          reminderTimers.push(timer)
+        }
+      }
+    }
   } catch (e) {
     logger.error('[提醒] 调度失败', { error: e instanceof Error ? e.message : String(e) })
   }
 }
 
-provide('refreshReminders', scheduleMissionReminders)
+provide('refreshReminders', scheduleListReminders)
+provide('isElectron', isElectron)
 
 const countdownMilestones = ref<any[]>([])
 const countdownCategories = ref<any[]>([])
@@ -673,6 +917,108 @@ const handleGuideSkip = () => {
 provide('startGuide', startGuide)
 provide('guideVisible', guideVisible)
 
+/** 为新用户创建默认数据（默认清单、示例任务、默认课程、示例足迹、示例日记） */
+const ensureDefaultData = async () => {
+  try {
+    const initialized = await getSystemStateField('defaultsInitialized')
+    if (initialized) return
+
+    // 已有数据则跳过（避免覆盖已有数据）
+    if (listStore.taskLists.length > 0) {
+      await setSystemStateField('defaultsInitialized', true)
+      return
+    }
+
+    // 1. 创建默认清单（含默认分组）
+    const newList = await listStore.addList('默认清单', DEFAULT_LIST_COLORS[0])
+    if (!newList) {
+      logger.error('[App] 创建默认清单失败')
+      return
+    }
+
+    // 2. 创建示例任务
+    const defaultGroup = newList.groups[0]
+    if (defaultGroup) {
+      const now = dayjs()
+      await listStore.addTask({
+        name: '这是一个任务',
+        listId: newList.id,
+        groupId: defaultGroup.id,
+        date: now.format('YYYY-MM-DD'),
+        endTime: now.format('HH:mm'),
+        repeatStrategy: 'none',
+        repeatCustomDays: 1,
+        repeatWeekdays: [],
+        repeatMonthDay: 1,
+        repeatLunarMonth: 1,
+        repeatLunarDay: 1,
+        repeatEndStrategy: 'never',
+        repeatEndDate: '',
+        repeatCount: 1,
+        priority: 'medium',
+        checklist: [],
+        completed: false,
+        completedStartTime: '',
+        completedEndTime: '',
+        notes: '这里是备注',
+        reminderStrategy: 'advance',
+        reminderDays: 0,
+        reminderHours: 0,
+        reminderMinutes: 15
+      })
+      logger.info('[App] 已创建示例任务')
+    }
+
+    // 3. 创建默认课程（日期为今日对应的周几）
+    const todayWeekday = dayjs().day() // 0=周日, 1=周一, ..., 6=周六
+    const courseDayOfWeek = todayWeekday === 0 ? 7 : todayWeekday // 转为课程系统：1=周一...7=周日
+    const courses = (await getData<any[]>('course', 'courses')) || []
+    courses.push({
+      id: Date.now().toString(),
+      name: '这是一门课程',
+      dayOfWeek: [courseDayOfWeek],
+      periodIds: [1],
+      location: '地球',
+      teacher: '官方',
+      color: '#667eea',
+      weeks: [],
+      note: '这里是备注',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    })
+    await setData('course', 'courses', courses)
+    logger.info('[App] 已创建默认课程')
+
+    // 4. 创建示例足迹记录
+    const taskNow = dayjs()
+    await taskStore.addTask({
+      name: '这是一个足迹',
+      date: taskNow.format('YYYY-MM-DD'),
+      startTime: taskNow.subtract(1, 'minute').format('HH:mm'),
+      endTime: taskNow.format('HH:mm'),
+      notes: '这里是备注'
+    })
+    logger.info('[App] 已创建示例足迹')
+
+    // 5. 创建示例日记
+    await taskStore.addTask({
+      name: '这是一篇日记',
+      date: taskNow.format('YYYY-MM-DD'),
+      startTime: '',
+      endTime: '',
+      notes: '这里是备注',
+      category: 'diary'
+    })
+    logger.info('[App] 已创建示例日记')
+
+    // 6. 标记为已初始化
+    await setSystemStateField('defaultsInitialized', true)
+    logger.info('[App] 默认数据初始化完成')
+  } catch (error) {
+    logger.error('[App] 创建默认数据失败', { error: error instanceof Error ? error.message : String(error) })
+  }
+}
+
 const initializeData = async () => {
   if (isInitializing.value) {
     logger.debug('[App] 初始化正在进行中，跳过重复调用')
@@ -701,7 +1047,7 @@ const initializeData = async () => {
     // 并行加载所有模块数据
     await Promise.all([
       taskStore.loadTasks(),
-      missionStore.loadData(),
+      listStore.loadData(),
       settingsStore.loadSettings(),
       focusStore.loadData(),
       preloadCountdownData(),
@@ -709,11 +1055,18 @@ const initializeData = async () => {
     ])
 
     logger.debug('[App] 并行加载完成')
+
+    // 为新用户创建默认数据
+    await ensureDefaultData()
+
     logger.info('[App] 数据初始化完成')
 
     cleanUpCourseAutoRecordedTasks()
 
-    scheduleMissionReminders()
+    scheduleListReminders()
+
+    // 成功登录后立即加载自动清理日志设置并执行清理
+    runAutoCleanAfterLogin()
 
     try {
       const isCompleted = await getSystemStateField('guideCompleted')
@@ -730,12 +1083,45 @@ const initializeData = async () => {
         startGuide()
       }, 800)
     }
+
   } catch (error) {
     logger.error('[App] 初始化数据失败:', { error: error instanceof Error ? error.message : String(error) })
   } finally {
     logger.debug('[App] initializeData 设置 dataInitialized = true', { navPath: pageNav.navPath.value, route: route.name })
     dataInitialized.value = true
     logger.debug('[App] dataInitialized 已设置为 true')
+  }
+}
+
+// 成功登录后加载自动清理日志设置并执行清理
+function runAutoCleanAfterLogin() {
+  const autoClean = (settingsStore.settings as any)?.autoClean
+  if (!autoClean?.enabled) return
+  const days = autoClean.days ?? 30
+  const thresholdDate = new Date()
+  thresholdDate.setDate(thresholdDate.getDate() - days)
+  const thresholdStr = thresholdDate.toISOString().slice(0, 10)
+
+  const electronAPI = (window as any).electronAPI
+  if (electronAPI?.getLogDirPath) {
+    electronAPI.getLogDirPath().then((logDirPath: string) => {
+      return electronAPI.readDirectory(logDirPath)
+    }).then((items: any[]) => {
+      const promises = items
+        .filter((item: any) => !item.isDirectory)
+        .map((item: any) => {
+          const m = item.name.match(/app-(\d{4}-\d{2}-\d{2})\.log/)
+          if (m && m[1] < thresholdStr) {
+            return electronAPI.deleteFilePath(item.path)
+          }
+        })
+        .filter(Boolean)
+      return Promise.all(promises)
+    }).then(() => {
+      logger.info('[App] 登录后自动清理日志完成', { threshold: thresholdStr })
+    }).catch((e: any) => {
+      logger.error('[App] 登录后自动清理日志失败', { error: e })
+    })
   }
 }
 
@@ -1042,6 +1428,51 @@ const handleFullscreenFromRoute = (fullscreen: boolean) => {
   }
 }
 
+const focusDisplayTime = ref('')
+let focusDisplayTimer: ReturnType<typeof setInterval> | null = null
+
+const updateFocusDisplayTime = () => {
+  const state = focusStore.timerState
+  if (!state) {
+    focusDisplayTime.value = ''
+    return
+  }
+  const now = Date.now()
+  const elapsedSinceStart = Math.floor((now - state.startTimestamp) / 1000)
+  let totalSeconds: number
+  if (state.type === 'pomodoro') {
+    totalSeconds = Math.max(0, state.targetDuration * 60 - elapsedSinceStart)
+  } else {
+    totalSeconds = Math.max(0, elapsedSinceStart)
+  }
+
+  const days = Math.floor(totalSeconds / 86400)
+  const hours = Math.floor((totalSeconds % 86400) / 3600)
+  const mins = Math.floor((totalSeconds % 3600) / 60)
+  const secs = totalSeconds % 60
+
+  if (days > 0 || totalSeconds >= 86400) {
+    focusDisplayTime.value = `${String(days).padStart(2, '0')}:${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+  } else if (hours > 0 || totalSeconds >= 3600) {
+    focusDisplayTime.value = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+  } else {
+    focusDisplayTime.value = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+  }
+}
+
+watch(() => focusStore.timerState, (state) => {
+  if (focusDisplayTimer) {
+    clearInterval(focusDisplayTimer)
+    focusDisplayTimer = null
+  }
+  if (state) {
+    updateFocusDisplayTime()
+    focusDisplayTimer = setInterval(updateFocusDisplayTime, 1000)
+  } else {
+    focusDisplayTime.value = ''
+  }
+}, { immediate: true })
+
 const starCanvas = ref<HTMLCanvasElement>()
 let animationId: number
 let resizeHandler: (() => void) | null = null
@@ -1068,7 +1499,7 @@ onMounted(async () => {
 
   // 注册倒数日刷新回调
   (window as any).__countdownRefresh = () => {
-    scheduleMissionReminders()
+    scheduleListReminders()
   }
 
   // 注册提醒 IPC 监听
@@ -1083,9 +1514,10 @@ onMounted(async () => {
   // 先初始化认证状态
   await authStore.init()
 
-  // 如果已登录，初始化数据
+  // 已登录时加载数据并调度提醒
   if (authStore.isAuthenticated) {
     await initializeData()
+    scheduleListReminders()
     startVersionChecks()
   }
 
@@ -1127,7 +1559,7 @@ onMounted(async () => {
         x: Math.random() * canvas.width,
         y: 0,
         length: Math.random() * 80 + 50,
-        speed: Math.random() * 8 + 6,
+        speed: Math.random() * 0.5 + 0.2,
         opacity: 1,
         angle: Math.PI / 4 + (Math.random() - 0.5) * 0.2
       })
@@ -1168,31 +1600,62 @@ onMounted(async () => {
     meteors.forEach((meteor, index) => {
       meteor.x += Math.cos(meteor.angle) * meteor.speed
       meteor.y += Math.sin(meteor.angle) * meteor.speed
-      meteor.opacity -= 0.01
 
-      if (meteor.opacity <= 0 || meteor.x > canvas.width || meteor.y > canvas.height) {
+      if (meteor.x > canvas.width || meteor.y > canvas.height) {
         meteors.splice(index, 1)
         return
       }
 
-      const gradient = ctx.createLinearGradient(
-          meteor.x, meteor.y,
-          meteor.x - Math.cos(meteor.angle) * meteor.length,
-          meteor.y - Math.sin(meteor.angle) * meteor.length
-      )
-      gradient.addColorStop(0, `rgba(255, 255, 255, ${meteor.opacity})`)
-      gradient.addColorStop(0.3, `rgba(200, 220, 255, ${meteor.opacity * 0.6})`)
-      gradient.addColorStop(1, 'rgba(200, 220, 255, 0)')
+      const headX = meteor.x
+      const headY = meteor.y
+
+      const trailDx = -Math.cos(meteor.angle)
+      const trailDy = -Math.sin(meteor.angle)
+      const tx = trailDx !== 0 ? -headX / trailDx : Infinity
+      const ty = trailDy !== 0 ? -headY / trailDy : Infinity
+      const t = Math.min(tx, ty)
+      const trailEndX = headX + trailDx * t
+      const trailEndY = headY + trailDy * t
+
+      const trailGradient = ctx.createLinearGradient(trailEndX, trailEndY, headX, headY)
+      trailGradient.addColorStop(0, 'rgba(150, 210, 255, 0)')
+      trailGradient.addColorStop(0.3, 'rgba(150, 210, 255, 0.08)')
+      trailGradient.addColorStop(0.7, 'rgba(180, 220, 255, 0.2)')
+      trailGradient.addColorStop(1, 'rgba(200, 230, 255, 0.4)')
 
       ctx.beginPath()
-      ctx.moveTo(meteor.x, meteor.y)
-      ctx.lineTo(
-          meteor.x - Math.cos(meteor.angle) * meteor.length,
-          meteor.y - Math.sin(meteor.angle) * meteor.length
-      )
-      ctx.strokeStyle = gradient
+      ctx.moveTo(trailEndX, trailEndY)
+      ctx.lineTo(headX, headY)
+      ctx.strokeStyle = trailGradient
       ctx.lineWidth = 2
       ctx.stroke()
+
+      const headGlow = ctx.createRadialGradient(headX, headY, 0, headX, headY, 12)
+      headGlow.addColorStop(0, 'rgba(255, 240, 150, 1)')
+      headGlow.addColorStop(0.3, 'rgba(255, 200, 50, 0.8)')
+      headGlow.addColorStop(0.6, 'rgba(255, 160, 30, 0.3)')
+      headGlow.addColorStop(1, 'rgba(255, 160, 30, 0)')
+
+      ctx.beginPath()
+      ctx.arc(headX, headY, 12, 0, Math.PI * 2)
+      ctx.fillStyle = headGlow
+      ctx.fill()
+
+      const rainbowGlow = ctx.createRadialGradient(headX, headY, 6, headX, headY, 20)
+      rainbowGlow.addColorStop(0, 'rgba(255, 200, 100, 0.4)')
+      rainbowGlow.addColorStop(0.5, 'rgba(255, 150, 200, 0.2)')
+      rainbowGlow.addColorStop(0.7, 'rgba(130, 180, 255, 0.15)')
+      rainbowGlow.addColorStop(1, 'rgba(130, 180, 255, 0)')
+
+      ctx.beginPath()
+      ctx.arc(headX, headY, 20, 0, Math.PI * 2)
+      ctx.fillStyle = rainbowGlow
+      ctx.fill()
+
+      ctx.beginPath()
+      ctx.arc(headX, headY, 3, 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(255, 255, 220, 1)'
+      ctx.fill()
     })
 
     animationId = requestAnimationFrame(animate)
@@ -1211,6 +1674,9 @@ onUnmounted(() => {
   if (updateNoUpdateTimer) {
     clearTimeout(updateNoUpdateTimer)
   }
+  if (focusDisplayTimer) {
+    clearInterval(focusDisplayTimer)
+  }
 })
 </script>
 
@@ -1223,6 +1689,8 @@ onUnmounted(() => {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  padding-top: var(--safe-area-inset-top, 0px);
+  padding-bottom: var(--safe-area-inset-bottom, 0px);
 }
 
 /* 被踢出提示 */
@@ -1294,8 +1762,27 @@ onUnmounted(() => {
 }
 
 .nav-bar-bottom {
+  width: 500px;
+  margin: 0 auto;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   margin-top: auto;
+}
+
+@media (max-width: 500px) {
+  .nav-bar-bottom {
+    width: 80%;
+  }
+}
+
+.nav-bar-bottom .nav-items-scroll {
+  justify-content: flex-start;
+}
+
+.nav-bar-bottom .nav-items-scroll::before,
+.nav-bar-bottom .nav-items-scroll::after {
+  content: '';
+  flex: 1;
+  min-width: 0;
 }
 
 .nav-items-scroll {
@@ -1353,6 +1840,42 @@ onUnmounted(() => {
   line-height: 1;
 }
 
+.focus-status-indicator {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(30, 28, 52, 0.92);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+.focus-status-icon {
+  font-size: 16px;
+}
+
+.focus-status-text {
+  font-size: 13px;
+  color: var(--chalk-white);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.focus-status-time {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--chalk-primary);
+  font-variant-numeric: tabular-nums;
+}
+
 /* 顶部页面导航栏 - 已废弃，保留以兼容旧引用 */
 .page-nav-bar {
   display: none;
@@ -1405,10 +1928,12 @@ onUnmounted(() => {
 
 .update-panel {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 3000;
   width: 380px;
+  max-width: 80vw;
   background: rgba(20, 16, 55, 0.95);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -1416,7 +1941,7 @@ onUnmounted(() => {
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
-  animation: changelogSlideIn 0.3s ease-out;
+  animation: changelogFadeIn 0.3s ease-out;
 }
 
 .update-panel-header {
@@ -1488,32 +2013,26 @@ onUnmounted(() => {
 
 .reminder-stack {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 2900;
   pointer-events: none;
-  display: flex;
-  flex-direction: column-reverse;
-  gap: 12px;
-  max-height: calc(100vh - 120px);
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-
-.reminder-stack::-webkit-scrollbar {
-  display: none;
+  width: 320px;
+  height: 0;
 }
 
 .reminder-panel {
-  position: relative;
-  width: 320px;
-  flex-shrink: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
   background: rgba(20, 16, 55, 0.95);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
-  animation: changelogSlideIn 0.3s ease-out;
+  animation: reminderSlideIn 0.3s ease-out;
   pointer-events: auto;
   overflow: hidden;
 }
@@ -1584,11 +2103,13 @@ onUnmounted(() => {
 
 .changelog-panel {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   z-index: 3000;
   width: 480px;
-  max-height: 55vh;
+  max-width: 80vw;
+  max-height: 85vh;
   background: rgba(20, 16, 55, 0.95);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -1596,17 +2117,22 @@ onUnmounted(() => {
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
-  animation: changelogSlideIn 0.3s ease-out;
+  animation: changelogFadeIn 0.3s ease-out;
 }
 
-@keyframes changelogSlideIn {
+@keyframes changelogFadeIn {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes reminderSlideIn {
   from {
     opacity: 0;
-    transform: translateY(20px) translateX(20px);
+    transform: translateY(-20px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) translateX(0);
+    transform: translateY(0);
   }
 }
 
@@ -1654,4 +2180,88 @@ onUnmounted(() => {
 .changelog-panel-body :deep(.cl-list) { margin: 0 0 4px 16px; padding: 0; list-style: none; color: var(--chalk-white-75); }
 .changelog-panel-body :deep(.cl-list li) { font-size: 12px; line-height: 1.7; padding: 2px 0; position: relative; padding-left: 14px; }
 .changelog-panel-body :deep(.cl-list li)::before { content: '•'; position: absolute; left: 0; color: rgba(255,255,255,0.25); font-size: 10px; top: 5px; }
+
+.context-menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10000;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 10001;
+  background: rgba(30, 28, 52, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 4px 0;
+  min-width: 150px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+}
+
+.context-menu-item {
+  padding: 8px 16px;
+  font-size: 13px;
+  color: var(--chalk-white-85);
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.context-menu-item:hover {
+  background: rgba(102, 126, 234, 0.2);
+  color: var(--chalk-white);
+}
+
+.context-menu-item-danger {
+  color: var(--chalk-red);
+}
+
+.context-menu-item-danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--chalk-red);
+}
+
+.context-menu-divider {
+  height: 1px;
+  margin: 4px 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.split-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.split-panel {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.split-panel-nav-bar {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.split-panel-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.split-divider {
+  width: 4px;
+  cursor: col-resize;
+  background: rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
 </style>

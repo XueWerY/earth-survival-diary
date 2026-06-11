@@ -4,16 +4,22 @@
     <div class="guide-mask-bottom" :style="maskBottomStyle" />
     <div class="guide-mask-left" :style="maskLeftStyle" />
     <div class="guide-mask-right" :style="maskRightStyle" />
+    <div class="guide-spotlight-blocker" :style="spotlightBlockerStyle" />
     <div class="guide-spotlight-border" :style="spotlightStyle" />
-    <div class="guide-tooltip" v-if="visible">
+    <div class="guide-tooltip" :style="tooltipStyle" v-if="visible">
       <div class="guide-step-badge">{{ currentIndex + 1 }} / {{ steps.length }}</div>
       <h3 class="guide-step-title">{{ currentStep.title }}</h3>
       <p class="guide-step-desc">{{ currentStep.description }}</p>
       <div class="guide-actions">
-        <el-button size="small" plain @click="skip">跳过引导</el-button>
-        <el-button v-if="currentIndex > 0" size="small" @click="prev">上一步</el-button>
-        <el-button size="small" type="primary" @click="next">
-          {{ currentIndex < steps.length - 1 ? '下一步' : '完成' }}
+        <el-button size="small" plain round @click="skip">
+          <el-icon><Close /></el-icon>跳过引导
+        </el-button>
+        <el-button v-if="currentIndex > 0" size="small" round @click="prev">
+          <el-icon><ArrowLeft /></el-icon>上一步
+        </el-button>
+        <el-button size="small" type="primary" round @click="next">
+          <template v-if="currentIndex < steps.length - 1">下一步<el-icon><ArrowRight /></el-icon></template>
+          <template v-else>完成<el-icon><Check /></el-icon></template>
         </el-button>
       </div>
     </div>
@@ -22,6 +28,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { Close, ArrowLeft, ArrowRight, Check } from '@element-plus/icons-vue'
 
 export interface GuideStep {
   route: string
@@ -29,6 +36,8 @@ export interface GuideStep {
   title: string
   description: string
   padding?: number
+  tooltipPosition?: 'bottom-right' | 'bottom-center' | 'top-center'
+  onActivate?: () => void
 }
 
 const props = defineProps<{
@@ -84,6 +93,41 @@ const spotlightStyle = computed(() => ({
   opacity: foundTarget.value ? 1 : 0
 }))
 
+const spotlightBlockerStyle = computed(() => ({
+  left: spotlight.value.x + 'px',
+  top: spotlight.value.y + 'px',
+  width: spotlight.value.w + 'px',
+  height: spotlight.value.h + 'px'
+}))
+
+const tooltipStyle = computed(() => {
+  const gap = 16
+  if (currentStep.value.tooltipPosition === 'top-center' ||
+      currentStep.value.tooltipPosition === 'bottom-center') {
+    const targetMidY = spotlight.value.y + spotlight.value.h / 2
+    const viewportMid = window.innerHeight / 2
+    if (targetMidY > viewportMid) {
+      // 中线在下半屏 → 显示在上方
+      return {
+        bottom: (window.innerHeight - spotlight.value.y + gap) + 'px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        right: 'auto',
+        top: 'auto'
+      }
+    }
+    // 中线在上半屏 → 显示在下方
+    return {
+      top: (spotlight.value.y + spotlight.value.h + gap) + 'px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      right: 'auto',
+      bottom: 'auto'
+    }
+  }
+  return {}
+})
+
 const locateTarget = () => {
   if (retryTimer) {
     clearTimeout(retryTimer)
@@ -133,7 +177,8 @@ const locateTarget = () => {
 watch(() => props.currentIndex, () => {
   retryCount = 0
   nextTick(() => {
-    setTimeout(locateTarget, 300)
+    currentStep.value.onActivate?.()
+    setTimeout(locateTarget, 350)
   })
 })
 
@@ -210,6 +255,14 @@ onUnmounted(() => {
   right: 0;
 }
 
+.guide-spotlight-blocker {
+  position: fixed;
+  z-index: 10001;
+  pointer-events: auto;
+  background: transparent;
+  transition: all 0.3s ease;
+}
+
 .guide-spotlight-border {
   position: fixed;
   z-index: 10001;
@@ -224,8 +277,6 @@ onUnmounted(() => {
   position: fixed;
   z-index: 10002;
   width: 320px;
-  right: 24px;
-  bottom: 24px;
   background: linear-gradient(135deg, #1a1a3e 0%, #252550 100%);
   border: 1px solid rgba(102, 126, 234, 0.3);
   border-radius: 14px;
@@ -261,6 +312,6 @@ onUnmounted(() => {
 .guide-actions {
   display: flex;
   gap: 8px;
-  justify-content: flex-end;
+  justify-content: center;
 }
 </style>

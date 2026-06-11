@@ -75,7 +75,7 @@ export const useTaskStore = defineStore('task', () => {
     }
   }
 
-  // Add a completed task (used when mission is completed)
+  // Add a completed task (used when list is completed)
   const addCompletedTask = async (task: Task) => {
     try {
       const duration = calculateDuration(task.startTime, task.endTime)

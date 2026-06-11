@@ -286,9 +286,9 @@ export function capDeleteTask(userId: string, taskId: string) {
   return { success: true }
 }
 
-// ============ Mission Lists ============
+// ============ Task Lists ============
 
-export function capGetMissionLists(userId: string) {
+export function capGetLists(userId: string) {
   let lists = getUserData<any[]>(userId, 'list', 'lists', [])
   lists = lists.map((list: any) => {
     if (!list.groups || list.groups.length === 0) {
@@ -299,7 +299,7 @@ export function capGetMissionLists(userId: string) {
   return { lists }
 }
 
-export function capAddMissionList(userId: string, data: any) {
+export function capAddList(userId: string, data: any) {
   const lists = getUserData<any[]>(userId, 'list', 'lists', [])
   const listId = generateId()
   const newList = {
@@ -314,29 +314,29 @@ export function capAddMissionList(userId: string, data: any) {
   return { list: newList }
 }
 
-export function capUpdateMissionList(userId: string, listId: string, data: any) {
+export function capUpdateList(userId: string, listId: string, data: any) {
   const lists = getUserData<any[]>(userId, 'list', 'lists', [])
   const idx = lists.findIndex((l: any) => l.id === listId)
-  if (idx === -1) throw new Error('使命列表不存在')
+  if (idx === -1) throw new Error('任务列表不存在')
   if (data.name !== undefined) lists[idx].name = data.name
   if (data.icon !== undefined) lists[idx].icon = data.icon
   setUserData(userId, 'list', 'lists', lists)
   return { list: lists[idx] }
 }
 
-export function capDeleteMissionList(userId: string, listId: string) {
+export function capDeleteList(userId: string, listId: string) {
   let lists = getUserData<any[]>(userId, 'list', 'lists', [])
-  let missions = getUserData<any[]>(userId, 'list', 'tasks', [])
+  let tasks = getUserData<any[]>(userId, 'list', 'tasks', [])
   lists = lists.filter((l: any) => l.id !== listId)
-  missions = missions.filter((m: any) => m.list_id !== listId)
+  tasks = tasks.filter((m: any) => m.list_id !== listId)
   setUserData(userId, 'list', 'lists', lists)
-  setUserData(userId, 'list', 'tasks', missions)
+  setUserData(userId, 'list', 'tasks', tasks)
   return { success: true }
 }
 
-// ============ Mission Groups ============
+// ============ Task Groups ============
 
-export function capUpdateMissionGroup(userId: string, listId: string, groupId: string, data: any) {
+export function capUpdateGroup(userId: string, listId: string, groupId: string, data: any) {
   const lists = getUserData<any[]>(userId, 'list', 'lists', [])
   const idx = lists.findIndex((l: any) => l.id === listId)
   if (idx === -1) throw new Error('使命列表不存在')
@@ -356,7 +356,7 @@ export function capUpdateMissionGroup(userId: string, listId: string, groupId: s
   return { group: list.groups[gIdx] }
 }
 
-export function capAddMissionGroup(userId: string, listId: string, data: any) {
+export function capAddGroup(userId: string, listId: string, data: any) {
   const lists = getUserData<any[]>(userId, 'list', 'lists', [])
   const idx = lists.findIndex((l: any) => l.id === listId)
   if (idx === -1) throw new Error('使命列表不存在')
@@ -368,7 +368,7 @@ export function capAddMissionGroup(userId: string, listId: string, data: any) {
   return { group: newGroup }
 }
 
-export function capDeleteMissionGroup(userId: string, listId: string, groupId: string) {
+export function capDeleteGroup(userId: string, listId: string, groupId: string) {
   const lists = getUserData<any[]>(userId, 'list', 'lists', [])
   const idx = lists.findIndex((l: any) => l.id === listId)
   if (idx === -1) throw new Error('使命列表不存在')
@@ -380,7 +380,7 @@ export function capDeleteMissionGroup(userId: string, listId: string, groupId: s
   return { success: true }
 }
 
-export function capReorderMissionLists(userId: string, orders: { id: string; order: number }[]) {
+export function capReorderLists(userId: string, orders: { id: string; order: number }[]) {
   const lists = getUserData<any[]>(userId, 'list', 'lists', [])
   orders.forEach(({ id, order }) => {
     const i = lists.findIndex((l: any) => l.id === id)
@@ -406,17 +406,17 @@ export function capReorderGroups(userId: string, listId: string, orders: { id: s
   return { groups: list.groups }
 }
 
-// ============ Missions ============
+// ============ Tasks ============
 
-export function capGetMissions(userId: string, listId?: string) {
-  let missions = getUserData<any[]>(userId, 'list', 'tasks', [])
-  if (listId) missions = missions.filter((m: any) => m.list_id === listId)
-  return { missions }
+export function capGetTasks(userId: string, listId?: string) {
+  let tasks = getUserData<any[]>(userId, 'list', 'tasks', [])
+  if (listId) tasks = tasks.filter((m: any) => m.list_id === listId)
+  return { tasks }
 }
 
-export function capAddMission(userId: string, data: any) {
-  const missions = getUserData<any[]>(userId, 'list', 'tasks', [])
-  const newMission = {
+export function capAddTask(userId: string, data: any) {
+  const tasks = getUserData<any[]>(userId, 'list', 'tasks', [])
+  const newTask = {
     id: generateId(),
     list_id: data.listId,
     name: data.name,
@@ -426,10 +426,10 @@ export function capAddMission(userId: string, data: any) {
     completed: false,
     group_id: data.groupId || '',
     date: data.date || '',
-    start_time: data.startTime || '',
     end_time: data.endTime || '',
     repeat_strategy: data.repeatStrategy || 'none',
     repeat_custom_days: data.repeatCustomDays || 1,
+    repeat_weekdays: data.repeatWeekdays || [],
     repeat_end_strategy: data.repeatEndStrategy || 'never',
     repeat_end_date: data.repeatEndDate || '',
     repeat_count: data.repeatCount || 1,
@@ -446,21 +446,22 @@ export function capAddMission(userId: string, data: any) {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   }
-  missions.push(newMission)
-  setUserData(userId, 'list', 'tasks', missions)
-  return { mission: newMission }
+  tasks.push(newTask)
+  setUserData(userId, 'list', 'tasks', tasks)
+  return { task: newTask }
 }
 
-export function capUpdateMission(userId: string, missionId: string, updates: any) {
-  const missions = getUserData<any[]>(userId, 'list', 'tasks', [])
-  const idx = missions.findIndex((m: any) => m.id === missionId)
-  if (idx === -1) throw new Error('使命不存在')
-  const mission = missions[idx]
+export function capUpdateTask(userId: string, taskId: string, updates: any) {
+  const tasks = getUserData<any[]>(userId, 'list', 'tasks', [])
+  const idx = tasks.findIndex((m: any) => m.id === taskId)
+  if (idx === -1) throw new Error('任务不存在')
+  const task = tasks[idx]
   const fieldMap: Record<string, string> = {
     name: 'name', description: 'description', targetCount: 'target_count',
     currentCount: 'current_count', completed: 'completed', groupId: 'group_id',
-    date: 'date', startTime: 'start_time', endTime: 'end_time',
+    date: 'date', endTime: 'end_time',
     repeatStrategy: 'repeat_strategy', repeatCustomDays: 'repeat_custom_days',
+    repeatWeekdays: 'repeat_weekdays',
     repeatEndStrategy: 'repeat_end_strategy', repeatEndDate: 'repeat_end_date',
     repeatCount: 'repeat_count', repeatCompletedCount: 'repeat_completed_count',
     priority: 'priority', checklist: 'checklist',
@@ -470,17 +471,17 @@ export function capUpdateMission(userId: string, missionId: string, updates: any
     reminderMinutes: 'reminder_minutes'
   }
   for (const [key, field] of Object.entries(fieldMap)) {
-    if (updates[key] !== undefined) mission[field] = updates[key]
+    if (updates[key] !== undefined) task[field] = updates[key]
   }
-  mission.updated_at = new Date().toISOString()
-  setUserData(userId, 'list', 'tasks', missions)
-  return { mission }
+  task.updated_at = new Date().toISOString()
+  setUserData(userId, 'list', 'tasks', tasks)
+  return { task }
 }
 
-export function capDeleteMission(userId: string, missionId: string) {
-  let missions = getUserData<any[]>(userId, 'list', 'tasks', [])
-  missions = missions.filter((m: any) => m.id !== missionId)
-  setUserData(userId, 'list', 'tasks', missions)
+export function capDeleteTask(userId: string, taskId: string) {
+  let tasks = getUserData<any[]>(userId, 'list', 'tasks', [])
+  tasks = tasks.filter((m: any) => m.id !== taskId)
+  setUserData(userId, 'list', 'tasks', tasks)
   return { success: true }
 }
 
@@ -488,9 +489,9 @@ export function capDeleteMission(userId: string, missionId: string) {
 
 export function capGetStats(userId: string) {
   const lists = getUserData<any[]>(userId, 'list', 'lists', [])
-  const missions = getUserData<any[]>(userId, 'list', 'tasks', [])
-  const tasks = getUserData<any[]>(userId, 'footprint', 'footprint', [])
-  return { stats: { listCount: lists.length, missionCount: missions.length, taskCount: tasks.length } }
+  const listTasks = getUserData<any[]>(userId, 'list', 'tasks', [])
+  const footprintTasks = getUserData<any[]>(userId, 'footprint', 'footprint', [])
+  return { stats: { listCount: lists.length, listTaskCount: listTasks.length, taskCount: footprintTasks.length } }
 }
 
 // ============ Data API ============
