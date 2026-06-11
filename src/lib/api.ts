@@ -328,6 +328,7 @@ export interface Task {
     duration: number
     completed: boolean
     notes: string | null
+    content: string | null
     category: string | null
     created_at: string
 }
@@ -338,6 +339,7 @@ export interface TaskFormData {
     startTime?: string
     endTime?: string
     notes?: string
+    content?: string
     category?: string
 }
 

@@ -17,6 +17,7 @@
       </div>
     </div>
     <span class="task-card-diary-time">创建于 {{ formatDiaryTime(record.createdAt) }}</span>
+    <div v-if="(record as any).content" class="task-card-content">{{ (record as any).content }}</div>
     <template v-if="isEditingNotes">
       <textarea
         :value="editingNotesValue"
@@ -158,6 +159,15 @@ const formatDiaryTime = (createdAt?: string) => {
 
 .task-card-notes-placeholder:hover {
   opacity: 0.7;
+}
+
+.task-card-content {
+  font-size: 13px;
+  color: var(--chalk-white-70);
+  margin-top: 6px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .inline-edit-textarea {

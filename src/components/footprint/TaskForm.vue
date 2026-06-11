@@ -5,14 +5,23 @@
         <div class="dialog-header folder-dialog-header">
           <span class="dialog-header-title folder-dialog-title">{{ dialogTitle }}</span>
         </div>
+        <div class="dialog-divider"></div>
         <div class="dialog-body">
-          <el-form :model="form" :rules="rules" ref="formRef" label-width="90px">
-            <el-form-item label="事件名称" prop="name">
+          <el-form :model="form" :rules="rules" ref="formRef" label-width="60px">
+            <el-form-item :label="props.mode === 'diary' ? '名称' : '事件名称'" prop="name">
               <el-input
                   v-model="form.name"
                   type="textarea"
                   :rows="2"
-                  placeholder="今天做了什么？"
+                  :placeholder="props.mode === 'diary' ? '给日记起个名字' : '今天做了什么？'"
+              />
+            </el-form-item>
+            <el-form-item label="内容" prop="content" v-if="props.mode === 'diary'">
+              <el-input
+                  v-model="form.content"
+                  type="textarea"
+                  :rows="4"
+                  placeholder="记录今天的心情和故事"
               />
             </el-form-item>
             <el-form-item label="开始时间" v-if="props.mode !== 'diary'">
@@ -82,7 +91,7 @@ const isEdit = ref(false)
 
 const dialogTitle = computed(() => {
   if (isEdit.value) return props.mode === 'diary' ? '编辑日记' : '编辑记录'
-  return props.mode === 'diary' ? '添加日记' : '添加足迹'
+  return props.mode === 'diary' ? '写日记' : '添加足迹'
 })
 
 const getDefaultTimes = () => {
@@ -97,11 +106,12 @@ const form = reactive({
   date: dayjs().format('YYYY-MM-DD'),
   startTime: getDefaultTimes().startTime,
   endTime: getDefaultTimes().endTime,
-  notes: ''
+  notes: '',
+  content: ''
 })
 
 const rules = reactive<FormRules>({
-  name: [{ required: true, message: '请输入事件名称', trigger: 'blur' }]
+  name: [{ required: true, message: props.mode === 'diary' ? '请输入日记名称' : '请输入事件名称', trigger: 'blur' }]
 })
 
 watch(() => props.visible, (val) => {
@@ -112,6 +122,7 @@ watch(() => props.visible, (val) => {
     form.startTime = props.task.startTime
     form.endTime = props.task.endTime
     form.notes = props.task.notes || ''
+    form.content = (props.task as any).content || ''
   } else if (val) {
     isEdit.value = false
     form.name = ''
@@ -120,6 +131,7 @@ watch(() => props.visible, (val) => {
     form.startTime = defaults.startTime
     form.endTime = defaults.endTime
     form.notes = ''
+    form.content = ''
   } else {
     isEdit.value = false
   }
@@ -135,6 +147,7 @@ const resetForm = () => {
   form.startTime = defaults.startTime
   form.endTime = defaults.endTime
   form.notes = ''
+  form.content = ''
   isEdit.value = false
 }
 
@@ -170,6 +183,7 @@ const handleSubmit = async () => {
     startTime: isDiary ? nowTime : form.startTime,
     endTime: isDiary ? nowTime : form.endTime,
     notes: form.notes,
+    content: form.content,
     category: isDiary ? 'diary' : 'activity',
     isDiary: isDiary,
     createdAt: new Date().toISOString(),
@@ -199,14 +213,15 @@ const handleSubmit = async () => {
 <style scoped>
 .dialog-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
 .dialog-container { background: rgba(30, 28, 52, 0.98); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); max-width: 90vw; }
-.task-form-dialog { width: 300px; }
-.dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 0; flex-shrink: 0; }
+.task-form-dialog { width: min(500px, 80vw); }
+.dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 12px; flex-shrink: 0; }
 .dialog-header-title { font-size: 16px; font-weight: 600; color: var(--chalk-white); }
 .folder-dialog-header { justify-content: center; }
 .folder-dialog-title { text-align: center; }
 .dialog-body { padding: 12px 16px 16px; }
+.dialog-divider { height: 1px; background: rgba(255, 255, 255, 0.12); margin: 0 16px; }
 
-.form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
 
 .capsule-btn {
   height: 32px;
@@ -247,7 +262,7 @@ const handleSubmit = async () => {
 
 :deep(.el-form-item) { margin-bottom: 20px; }
 :deep(.el-form-item:last-child) { margin-bottom: 0; }
-:deep(.el-form-item__label) { color: var(--chalk-white-70); width: 80px !important; }
+:deep(.el-form-item__label) { color: var(--chalk-white-70); }
 :deep(.el-input__wrapper),
 :deep(.el-textarea__inner) { background: rgba(255, 255, 255, 0.05) !important; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: none !important; }
 :deep(.el-input__wrapper:hover),

@@ -13,6 +13,7 @@ export interface Task {
   completed: boolean
   duration: number // in minutes
   notes?: string
+  content?: string
   category?: string
   createdAt?: string
   isDiary?: boolean
@@ -28,6 +29,7 @@ const dbToTask = (dbTask: api.Task): Task => ({
   completed: dbTask.completed,
   duration: dbTask.duration,
   notes: dbTask.notes || undefined,
+  content: dbTask.content || undefined,
   category: dbTask.category || undefined,
   createdAt: dbTask.created_at,
   isDiary: dbTask.category === 'diary'
@@ -67,6 +69,7 @@ export const useTaskStore = defineStore('task', () => {
         startTime: task.startTime,
         endTime: task.endTime,
         notes: task.notes,
+        content: task.content,
         category: task.category
       })
       tasks.value.unshift({ ...dbToTask(dbTask), duration })
@@ -85,6 +88,7 @@ export const useTaskStore = defineStore('task', () => {
         startTime: task.startTime,
         endTime: task.endTime,
         notes: task.notes,
+        content: task.content,
         category: task.category
       })
       tasks.value.unshift({ ...dbToTask(dbTask), duration, completed: true })
@@ -124,6 +128,7 @@ export const useTaskStore = defineStore('task', () => {
         startTime: updates.startTime,
         endTime: updates.endTime,
         notes: updates.notes,
+        content: updates.content,
         category: updates.category,
         completed: updates.completed
       })

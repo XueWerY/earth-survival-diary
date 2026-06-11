@@ -440,12 +440,12 @@ function createProdServer(options = {}) {
     catch (e) { console.error('Get tasks error:', e); res.status(500).json({ error: '获取任务失败' }) }
   })
 
-  /** POST /api/tasks (auth) body:{name,date,startTime?,endTime?,notes?,category?} => 200 {task} */
+  /** POST /api/tasks (auth) body:{name,date,startTime?,endTime?,notes?,content?,category?} => 200 {task} */
   app.post('/api/tasks', authMiddleware, async (req, res) => {
     try {
-      const { name, date, startTime, endTime, notes, category } = req.body
+      const { name, date, startTime, endTime, notes, content, category } = req.body
       const tasks = await getUserFootprintTasks(req.userId)
-      const newTask = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), name, date, startTime: startTime || null, endTime: endTime || null, duration: 0, completed: false, notes: notes || null, category: category || null, created_at: new Date().toISOString() }
+      const newTask = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), name, date, startTime: startTime || null, endTime: endTime || null, duration: 0, completed: false, notes: notes || null, content: content || null, category: category || null, created_at: new Date().toISOString() }
       tasks.unshift(newTask)
       await setUserFootprintTasks(req.userId, tasks)
       res.json({ task: newTask })
@@ -465,6 +465,7 @@ function createProdServer(options = {}) {
       if (updates.startTime !== undefined) task.startTime = updates.startTime || null
       if (updates.endTime !== undefined) task.endTime = updates.endTime || null
       if (updates.notes !== undefined) task.notes = updates.notes || null
+      if (updates.content !== undefined) task.content = updates.content || null
       if (updates.category !== undefined) task.category = updates.category || null
       if (updates.completed !== undefined) task.completed = updates.completed
       await setUserFootprintTasks(req.userId, tasks)
