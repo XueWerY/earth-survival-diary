@@ -763,7 +763,7 @@ const generateTaskDescription = (task: Task) => {
 
 <style scoped>
 .footprint-container {
-  width: min(325px, 80vw);
+  width: min(500px, 80vw);
   margin: 0 auto;
   height: 100%;
   display: flex;
