@@ -944,6 +944,12 @@ const generateTaskDescription = (task: Task) => {
   line-height: 16px;
 }
 
+@media (max-width: 500px) {
+  .section-nav-label {
+    display: none;
+  }
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;
