@@ -4,6 +4,19 @@
       <InlineLunarDatePicker ref="datePickerRef" v-model="selectedDateValue" @add-footprint="handleAddTask" @add-diary="handleAddDiary" />
     </div>
 
+    <div v-if="sectionItems.length > 1" class="section-nav">
+      <div
+        v-for="item in sectionItems"
+        :key="item.id"
+        class="section-nav-item"
+        @click="scrollToSection(item.id)"
+      >
+        <span class="section-nav-icon">{{ item.icon }}</span>
+        <span class="section-nav-label">{{ item.label }}</span>
+        <span class="section-nav-count">{{ item.count }}</span>
+      </div>
+    </div>
+
     <div class="footprint-content">
       <el-scrollbar>
         <div v-if="filteredTasks.length === 0 && listCards.length === 0 && courseCards.length === 0 && countdownDisplayCards.length === 0" class="empty-state">
@@ -14,7 +27,7 @@
         </div>
 
         <template v-else>
-          <div v-if="pinnedCountdownCards.length > 0 || pinnedRecords.length > 0" class="important-section">
+          <div id="section-pinned" v-if="pinnedCountdownCards.length > 0 || pinnedRecords.length > 0" class="important-section">
             <p class="important-title">⭐ 重要</p>
             <div v-if="pinnedCountdownCards.length > 0" class="countdown-section">
               <div v-for="item in pinnedCountdownCards" :key="item.milestone.id" class="countdown-item">
@@ -73,7 +86,7 @@
             </div>
           </div>
 
-            <div v-if="unpinnedCountdownCards.length > 0" class="countdown-section">
+            <div id="section-countdown" v-if="unpinnedCountdownCards.length > 0" class="countdown-section">
               <div v-for="item in unpinnedCountdownCards" :key="item.milestone.id" class="countdown-item">
                 <CountdownCard
                   :milestone="item.milestone"
@@ -106,7 +119,7 @@
             </div>
 
             <div class="diary-content">
-              <div v-if="unpinnedMorningCards.length > 0" class="diary-period">
+              <div id="section-morning" v-if="unpinnedMorningCards.length > 0" class="diary-period">
                 <p class="period-title period-morning">🌤️ 上午</p>
                 <div class="period-items">
                   <template v-for="card in unpinnedMorningCards" :key="card.id">
@@ -160,7 +173,7 @@
                 </div>
               </div>
 
-              <div v-if="unpinnedAfternoonCards.length > 0" class="diary-period">
+              <div id="section-afternoon" v-if="unpinnedAfternoonCards.length > 0" class="diary-period">
                 <p class="period-title period-afternoon">🌞 下午</p>
                 <div class="period-items">
                   <template v-for="card in unpinnedAfternoonCards" :key="card.id">
@@ -214,7 +227,7 @@
                 </div>
               </div>
 
-              <div v-if="unpinnedEveningCards.length > 0" class="diary-period">
+              <div id="section-evening" v-if="unpinnedEveningCards.length > 0" class="diary-period">
                 <p class="period-title period-evening">🌙 晚上</p>
                 <div class="period-items">
                   <template v-for="card in unpinnedEveningCards" :key="card.id">
@@ -789,6 +802,31 @@ const morningTitle = computed(() => morningTasks.value.length >= 3 ? '晨间时�
 const afternoonTitle = computed(() => afternoonTasks.value.length >= 3 ? '午后时光' : '下午')
 const eveningTitle = computed(() => eveningTasks.value.length >= 3 ? '晚间时光' : '晚上')
 
+const sectionItems = computed(() => {
+  const items: { id: string; icon: string; label: string; count: number }[] = []
+  const importantCount = pinnedCountdownCards.value.length + pinnedRecords.value.length + unpinnedCountdownCards.value.length
+  if (importantCount > 0) {
+    items.push({ id: 'section-pinned', icon: '⭐', label: '重要', count: importantCount })
+  }
+  if (unpinnedMorningCards.value.length > 0) {
+    items.push({ id: 'section-morning', icon: '🌤️', label: '上午', count: unpinnedMorningCards.value.length })
+  }
+  if (unpinnedAfternoonCards.value.length > 0) {
+    items.push({ id: 'section-afternoon', icon: '🌞', label: '下午', count: unpinnedAfternoonCards.value.length })
+  }
+  if (unpinnedEveningCards.value.length > 0) {
+    items.push({ id: 'section-evening', icon: '🌙', label: '晚上', count: unpinnedEveningCards.value.length })
+  }
+  return items
+})
+
+const scrollToSection = (sectionId: string) => {
+  const el = document.getElementById(sectionId)
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+}
+
 const generateTaskDescription = (task: Task) => {
   const name = task.name.toLowerCase()
 
@@ -862,7 +900,49 @@ const generateTaskDescription = (task: Task) => {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.section-nav {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 0;
+  flex-shrink: 0;
+}
 
+.section-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+  user-select: none;
+}
+
+.section-nav-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.section-nav-icon {
+  font-size: 13px;
+}
+
+.section-nav-label {
+  font-size: 12px;
+  color: var(--chalk-white-75);
+}
+
+.section-nav-count {
+  font-size: 11px;
+  color: var(--chalk-muted);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0 5px;
+  border-radius: 4px;
+  line-height: 16px;
+}
 
 .empty-state {
   display: flex;
