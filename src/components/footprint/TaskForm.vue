@@ -17,12 +17,22 @@
               />
             </el-form-item>
             <el-form-item label="内容" prop="content" v-if="props.mode === 'diary'">
-              <el-input
-                  v-model="form.content"
-                  type="textarea"
-                  :rows="4"
-                  placeholder="记录今天的心情和故事"
-              />
+              <div class="content-input-wrapper">
+                <el-input
+                    v-model="form.content"
+                    type="textarea"
+                    :rows="4"
+                    placeholder="记录今天的心情和故事"
+                />
+                <button class="expand-btn" type="button" @click.stop="isContentExpanded = true" title="放大编辑">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="expand-svg">
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <polyline points="9 21 3 21 3 15"></polyline>
+                    <line x1="21" y1="3" x2="14" y2="10"></line>
+                    <line x1="3" y1="21" x2="10" y2="14"></line>
+                  </svg>
+                </button>
+              </div>
             </el-form-item>
             <el-form-item label="开始时间" v-if="props.mode !== 'diary'">
               <TimePickerPopover v-model="form.startTime" :offset-minutes="0" />
@@ -58,6 +68,23 @@
         </div>
       </div>
     </div>
+    <div v-if="isContentExpanded" class="content-expanded-overlay">
+      <div class="content-expanded-header">
+        <span class="content-expanded-title">编辑内容</span>
+        <button class="capsule-btn" type="button" @click.stop="isContentExpanded = false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+          <span>收起</span>
+        </button>
+      </div>
+      <textarea
+          v-model="form.content"
+          class="content-expanded-textarea"
+          placeholder="记录今天的心情和故事"
+      ></textarea>
+    </div>
   </Teleport>
 </template>
 
@@ -88,6 +115,7 @@ const dialogVisible = computed({
   set: (val) => emit('update:visible', val)
 })
 const isEdit = ref(false)
+const isContentExpanded = ref(false)
 
 const dialogTitle = computed(() => {
   if (isEdit.value) return props.mode === 'diary' ? '编辑日记' : '编辑记录'
@@ -274,4 +302,15 @@ const handleSubmit = async () => {
 :deep(.el-autocomplete) { width: 100%; }
 :deep(.el-input__count),
 :deep(.el-input__count-inner) { background: transparent !important; color: var(--chalk-subtle) !important; }
+
+.content-input-wrapper { position: relative; width: 100%; }
+.expand-btn { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.08); border: none; border-radius: 4px; cursor: pointer; opacity: 0.6; transition: all 0.2s; z-index: 1; }
+.expand-btn:hover { opacity: 1; background: rgba(255, 255, 255, 0.15); }
+.expand-svg { width: 12px; height: 12px; color: var(--chalk-white-60); }
+
+.content-expanded-overlay { position: fixed; top: 0; left: 10%; width: 80%; height: 100%; background: rgba(30, 28, 52, 0.99); display: flex; flex-direction: column; z-index: 10001; }
+.content-expanded-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
+.content-expanded-title { font-size: 14px; font-weight: 600; color: var(--chalk-white); }
+.content-expanded-textarea { flex: 1; width: 100%; padding: 16px; background: transparent; border: none; color: var(--chalk-white-90); font-size: 15px; line-height: 1.6; resize: none; outline: none; box-sizing: border-box; font-family: inherit; }
+.content-expanded-textarea::placeholder { color: var(--chalk-subtle); }
 </style>

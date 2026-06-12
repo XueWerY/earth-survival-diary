@@ -11,7 +11,7 @@
         <span class="year-month">{{ currentYear }}年{{ currentMonth }}月</span>
       </div>
       <div v-if="showHeaderActions" class="header-right">
-        <button class="icon-capsule-btn" @click="showDatePicker = true" title="跳转日期">
+        <button class="icon-capsule-btn" @click="showDatePicker = true" :title="isWideScreen ? undefined : '跳转日期'">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
             <line x1="16" y1="2" x2="16" y2="6"></line>
@@ -20,14 +20,14 @@
           </svg>
           <span class="btn-text">跳转日期</span>
         </button>
-        <button class="icon-capsule-btn add-btn" @click="emit('addFootprint')" title="添加足迹">
+        <button class="icon-capsule-btn add-btn" @click="emit('addFootprint')" :title="isWideScreen ? undefined : '添加足迹'">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
           <span class="btn-text">记录足迹</span>
         </button>
-        <button class="icon-capsule-btn diary-btn" @click="emit('addDiary')" title="添加日记">
+        <button class="icon-capsule-btn diary-btn" @click="emit('addDiary')" :title="isWideScreen ? undefined : '添加日记'">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
@@ -101,6 +101,11 @@ const expanded = ref(false)
 const weekOffset = ref(0)
 const showDatePicker = ref(false)
 const datePickerValue = ref(todayStr)
+const isWideScreen = ref(window.innerWidth >= 500)
+
+window.addEventListener('resize', () => {
+  isWideScreen.value = window.innerWidth >= 500
+})
 
 const weekdays = ['日', '一', '二', '三', '四', '五', '六']
 
