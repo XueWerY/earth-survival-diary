@@ -831,10 +831,16 @@ const scheduleListReminders = async () => {
       reminderTimers.forEach(t => clearTimeout(t))
       reminderTimers.length = 0
       const nowMs = Date.now()
-      for (const r of reminders) {
+      // 按触发时间排序，相同触发时间的提醒间隔 5 秒依次弹出
+      const sortedReminders = [...reminders].sort((a, b) => new Date(a.triggerTime).getTime() - new Date(b.triggerTime).getTime())
+      let lastScheduledMs = 0
+      for (const r of sortedReminders) {
         const triggerMs = new Date(r.triggerTime).getTime()
-        const delay = triggerMs - nowMs
+        let delay = triggerMs - nowMs
         if (delay > 0 && delay < MAX_REMINDER_DELAY) {
+          // 与前一个提醒至少保持 5 秒间隔，避免同时弹出一堆卡片
+          delay = Math.max(delay, lastScheduledMs + 5000)
+          lastScheduledMs = delay
           const timer = setTimeout(() => {
             activeReminders.value.push(r)
             playReminderSound()
