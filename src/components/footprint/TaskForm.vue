@@ -308,7 +308,7 @@ const handleSubmit = async () => {
 .expand-btn:hover { opacity: 1; background: rgba(255, 255, 255, 0.15); }
 .expand-svg { width: 12px; height: 12px; color: var(--chalk-white-60); }
 
-.content-expanded-overlay { position: fixed; top: 0; left: 10%; width: 80%; height: 100%; background: rgba(30, 28, 52, 0.99); display: flex; flex-direction: column; z-index: 10001; }
+.content-expanded-overlay { position: fixed; top: 10vh; left: 10%; width: 80%; height: 80vh; background: rgba(30, 28, 52, 0.99); display: flex; flex-direction: column; z-index: 10001; }
 .content-expanded-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
 .content-expanded-title { font-size: 14px; font-weight: 600; color: var(--chalk-white); }
 .content-expanded-textarea { flex: 1; width: 100%; padding: 16px; background: transparent; border: none; color: var(--chalk-white-90); font-size: 15px; line-height: 1.6; resize: none; outline: none; box-sizing: border-box; font-family: inherit; }
