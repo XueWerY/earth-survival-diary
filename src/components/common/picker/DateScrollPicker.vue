@@ -357,8 +357,19 @@ watch([pickerYear, pickerMonth], () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px 20px 0;
+  padding: 16px 20px 12px;
+  position: relative;
   flex-shrink: 0;
+}
+
+.date-dialog-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 20px;
+  right: 20px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .date-dialog-title {
@@ -369,7 +380,7 @@ watch([pickerYear, pickerMonth], () => {
 }
 
 .date-dialog-body {
-  padding: 8px 20px 20px;
+  padding: 12px 20px 20px;
 }
 
 .jump-toggle {
