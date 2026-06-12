@@ -1,6 +1,8 @@
 <template>
   <div class="app-container">
-    <!-- 星空背景 - 始终存在但通过 CSS 控制显示 -->
+    <!-- Three.js 3D 背景（地球 + 星空） -->
+    <div ref="threeContainer" class="three-background" :class="{ 'canvas-hidden': !showStarCanvas }"></div>
+    <!-- Canvas 2D 流星背景 -->
     <canvas ref="starCanvas" class="star-canvas" :class="{ 'canvas-hidden': !showStarCanvas }"></canvas>
 
     <!-- 未登录时显示登录页面 -->
@@ -206,6 +208,7 @@ import { logger } from './lib/logger'
 import { usePageNav, MODULES, MODULE_ICONS, MODULE_LABELS, MODULE_ROUTES } from './composables/usePageNav'
 import { useSplitScreen } from './composables/useSplitScreen'
 import dayjs from 'dayjs'
+import * as THREE from 'three'
 // @ts-expect-error - Vite raw import
 import changelogContent from '../CHANGELOG.md?raw'
 import appVersion from 'virtual:version'
@@ -1480,17 +1483,11 @@ watch(() => focusStore.timerState, (state) => {
 }, { immediate: true })
 
 const starCanvas = ref<HTMLCanvasElement>()
+const threeContainer = ref<HTMLDivElement>()
+let threeRenderer: THREE.WebGLRenderer | null = null
+let threeAnimationId: number = 0
 let animationId: number
 let resizeHandler: (() => void) | null = null
-
-interface Star {
-  x: number
-  y: number
-  radius: number
-  opacity: number
-  speed: number
-  twinkleSpeed: number
-}
 
 interface Meteor {
   x: number
@@ -1537,45 +1534,74 @@ onMounted(async () => {
   resizeHandler = () => {
     canvas.width = window.innerWidth
     canvas.height = window.innerHeight
+    syncStarCount()
   }
-  resizeHandler()
+  canvas.width = window.innerWidth
+  canvas.height = window.innerHeight
   window.addEventListener('resize', resizeHandler)
 
-  // 创建星星
-  const stars: Star[] = []
-  const starCount = 200
-
-  for (let i = 0; i < starCount; i++) {
-    stars.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      radius: Math.random() * 1.5 + 0.5,
-      opacity: Math.random(),
-      speed: Math.random() * 0.5 + 0.1,
-      twinkleSpeed: Math.random() * 0.02 + 0.005
-    })
+  // 创建彩色星星
+  const stars: Array<{
+    x: number
+    y: number
+    radius: number
+    opacity: number
+    color: string
+    twinkleSpeed: number
+    vx: number
+    vy: number
+  }> = []
+  const starPalette = ['#ffffff', '#ffe8d0', '#d0e8ff', '#ffd0d0', '#fff0d0', '#d0ffd0', '#d0d0ff']
+  const starDensity = 3 / 5000 // 每像素的星星密度（原版 3 倍）
+  const syncStarCount = () => {
+    const target = Math.floor(canvas.width * canvas.height * starDensity)
+    while (stars.length < target) {
+      stars.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        radius: Math.random() * 1.5 + 0.5,
+        opacity: Math.random() * 0.7 + 0.3,
+        color: starPalette[Math.floor(Math.random() * starPalette.length)],
+        twinkleSpeed: Math.random() * 0.02 + 0.005,
+        vx: (Math.random() - 0.5) * 0.02,
+        vy: (Math.random() - 0.5) * 0.02
+      })
+    }
+    while (stars.length > target) {
+      stars.pop()
+    }
   }
+  syncStarCount()
 
   // 创建流星
   const meteors: Meteor[] = []
 
   const createMeteor = () => {
-    if (Math.random() < 0.02 && meteors.length < 3) {
+    if (Math.random() < 0.035 && meteors.length < 3) {
+      const edge = Math.floor(Math.random() * 4) // 0:上 1:右 2:下 3:左
+      let x: number, y: number
+      switch (edge) {
+        case 0: x = Math.random() * canvas.width; y = 0; break
+        case 1: x = canvas.width; y = Math.random() * canvas.height; break
+        case 2: x = Math.random() * canvas.width; y = canvas.height; break
+        default: x = 0; y = Math.random() * canvas.height; break
+      }
       meteors.push({
-        x: Math.random() * canvas.width,
-        y: 0,
+        x,
+        y,
         length: Math.random() * 80 + 50,
-        speed: Math.random() * 0.5 + 0.2,
+        speed: Math.random() * 0.3 + 0.1,
         opacity: 1,
-        angle: Math.PI / 4 + (Math.random() - 0.5) * 0.2
+        angle: Math.random() * Math.PI * 2
       })
     }
   }
 
-  // 动画循环
+  // 动画循环（只渲染流星）
   const animate = () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
+    // 渲染彩色星星
     stars.forEach(star => {
       star.opacity += star.twinkleSpeed
       if (star.opacity > 1 || star.opacity < 0.3) {
@@ -1584,20 +1610,35 @@ onMounted(async () => {
 
       ctx.beginPath()
       ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2)
-      ctx.fillStyle = `rgba(255, 255, 255, ${star.opacity})`
+      ctx.fillStyle = star.color
+      ctx.globalAlpha = star.opacity
       ctx.fill()
+      ctx.globalAlpha = 1
 
       if (star.radius > 1) {
         ctx.beginPath()
         ctx.arc(star.x, star.y, star.radius * 2, 0, Math.PI * 2)
-        ctx.fillStyle = `rgba(255, 255, 255, ${star.opacity * 0.2})`
+        ctx.fillStyle = star.color
+        ctx.globalAlpha = star.opacity * 0.12
         ctx.fill()
+        ctx.globalAlpha = 1
       }
 
-      star.y += star.speed * 0.1
+      star.x += star.vx
+      star.y += star.vy
       if (star.y > canvas.height) {
         star.y = 0
         star.x = Math.random() * canvas.width
+      } else if (star.y < 0) {
+        star.y = canvas.height
+        star.x = Math.random() * canvas.width
+      }
+      if (star.x > canvas.width) {
+        star.x = 0
+        star.y = Math.random() * canvas.height
+      } else if (star.x < 0) {
+        star.x = canvas.width
+        star.y = Math.random() * canvas.height
       }
     })
 
@@ -1607,7 +1648,7 @@ onMounted(async () => {
       meteor.x += Math.cos(meteor.angle) * meteor.speed
       meteor.y += Math.sin(meteor.angle) * meteor.speed
 
-      if (meteor.x > canvas.width || meteor.y > canvas.height) {
+      if (meteor.x < 0 || meteor.x > canvas.width || meteor.y < 0 || meteor.y > canvas.height) {
         meteors.splice(index, 1)
         return
       }
@@ -1617,9 +1658,12 @@ onMounted(async () => {
 
       const trailDx = -Math.cos(meteor.angle)
       const trailDy = -Math.sin(meteor.angle)
-      const tx = trailDx !== 0 ? -headX / trailDx : Infinity
-      const ty = trailDy !== 0 ? -headY / trailDy : Infinity
-      const t = Math.min(tx, ty)
+      const txs: number[] = []
+      if (trailDx > 0) txs.push((canvas.width - headX) / trailDx)
+      if (trailDx < 0) txs.push(-headX / trailDx)
+      if (trailDy > 0) txs.push((canvas.height - headY) / trailDy)
+      if (trailDy < 0) txs.push(-headY / trailDy)
+      const t = Math.min(...txs)
       const trailEndX = headX + trailDx * t
       const trailEndY = headY + trailDy * t
 
@@ -1668,6 +1712,78 @@ onMounted(async () => {
   }
 
   animate()
+
+  // Three.js 地球 + 3D 星空背景
+  const setupThreeScene = () => {
+    const container = threeContainer.value
+    if (!container) return
+
+    const scene = new THREE.Scene()
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000)
+    camera.position.z = 6
+
+    threeRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true })
+    threeRenderer.setSize(window.innerWidth, window.innerHeight)
+    threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    container.appendChild(threeRenderer.domElement)
+
+    // 地球（受光照，一半白天一半黑夜）
+    const texLoader = new THREE.TextureLoader()
+    const earthTex = texLoader.load('https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg')
+    const earthGeo = new THREE.SphereGeometry(1.6, 64, 64)
+    const earthMat = new THREE.MeshPhongMaterial({
+      map: earthTex,
+      specular: new THREE.Color(0x333344),
+      shininess: 10
+    })
+    const earth = new THREE.Mesh(earthGeo, earthMat)
+    scene.add(earth)
+
+    // 云层
+    const cloudTex = texLoader.load('https://threejs.org/examples/textures/planets/earth_clouds_1024.png')
+    const cloudGeo = new THREE.SphereGeometry(1.63, 64, 64)
+    const cloudMat = new THREE.MeshPhongMaterial({
+      map: cloudTex,
+      transparent: true,
+      opacity: 0.35,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    })
+    const clouds = new THREE.Mesh(cloudGeo, cloudMat)
+    scene.add(clouds)
+
+    // 光照（方向光从右侧照射，产生半白半黑效果）
+    scene.add(new THREE.AmbientLight(0x224466, 0.25))
+    const sunLight = new THREE.DirectionalLight(0xffeedd, 2.5)
+    sunLight.position.set(2, 0.5, 1)
+    scene.add(sunLight)
+
+    // 更新 resizeHandler（移除旧监听，添加新监听，同时处理 Canvas 和 Three.js）
+    window.removeEventListener('resize', resizeHandler)
+    resizeHandler = () => {
+      canvas.width = window.innerWidth
+      canvas.height = window.innerHeight
+      syncStarCount()
+      if (threeRenderer) {
+        threeRenderer.setSize(window.innerWidth, window.innerHeight)
+        camera.aspect = window.innerWidth / window.innerHeight
+        camera.updateProjectionMatrix()
+      }
+    }
+    window.addEventListener('resize', resizeHandler)
+
+    const animateThree = () => {
+      threeAnimationId = requestAnimationFrame(animateThree)
+      earth.rotation.y += 0.0003
+      clouds.rotation.y += 0.0004
+      threeRenderer!.render(scene, camera)
+    }
+    animateThree()
+  }
+
+  setupThreeScene()
 })
 
 onUnmounted(() => {
@@ -1676,6 +1792,13 @@ onUnmounted(() => {
   }
   if (animationId) {
     cancelAnimationFrame(animationId)
+  }
+  if (threeAnimationId) {
+    cancelAnimationFrame(threeAnimationId)
+  }
+  if (threeRenderer) {
+    threeRenderer.dispose()
+    threeRenderer = null
   }
   if (updateNoUpdateTimer) {
     clearTimeout(updateNoUpdateTimer)
@@ -1731,6 +1854,16 @@ onUnmounted(() => {
   color: var(--chalk-white-60);
   margin: 0 0 24px 0;
   font-size: 14px;
+}
+
+.three-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .star-canvas {
