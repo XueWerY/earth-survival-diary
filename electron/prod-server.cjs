@@ -468,6 +468,7 @@ function createProdServer(options = {}) {
       if (updates.content !== undefined) task.content = updates.content || null
       if (updates.category !== undefined) task.category = updates.category || null
       if (updates.completed !== undefined) task.completed = updates.completed
+      if (updates.pinned !== undefined) task.pinned = updates.pinned
       await setUserFootprintTasks(req.userId, tasks)
       res.json({ task })
     } catch (e) { console.error('Update task error:', e); res.status(500).json({ error: '更新任务失败' }) }

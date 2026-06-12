@@ -1,5 +1,5 @@
 <template>
-  <div class="task-card">
+  <div class="task-card" :class="{ 'task-card-pinned': record.pinned }">
     <div class="task-card-row">
       <template v-if="isEditingName">
         <textarea
@@ -7,13 +7,21 @@
           @input="emit('update:editing-name-value', ($event.target as HTMLTextAreaElement).value)"
           class="inline-edit-textarea"
           @blur="emit('save-name-edit', record)"
-          @keydown.escape.prevent="emit('cancel-name-edit')"
+          @keydown.escape.prevent="emit('save-name-edit', record)"
           rows="2"
         />
       </template>
       <span v-else class="task-card-name" @dblclick="emit('start-name-edit', record)">📝 {{ record.name }}</span>
       <div class="task-card-actions">
-        <el-button :icon="Delete" circle size="small" class="task-card-btn" @click.stop="emit('delete', record.id)" />
+        <button class="card-btn card-btn-star" :class="{ starred: record.pinned }" @click.stop="emit('star', record)" title="星标">
+          <el-icon><Star v-if="!record.pinned" /><StarFilled v-else /></el-icon>
+        </button>
+        <button class="card-btn card-btn-edit" @click.stop="emit('edit', record)" title="编辑">
+          <el-icon><Edit /></el-icon>
+        </button>
+        <button class="card-btn card-btn-delete" @click.stop="emit('delete', record.id)" title="删除">
+          <el-icon><Delete /></el-icon>
+        </button>
       </div>
     </div>
     <span v-if="record.isDiary || record.category === 'diary'" class="task-card-diary-time">创建于 {{ formatDiaryTime(record.createdAt) }}</span>
@@ -43,7 +51,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Delete } from '@element-plus/icons-vue'
+import { Delete, Edit, Star, StarFilled } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
 import type { Task } from '../../stores/taskStore'
@@ -68,6 +76,8 @@ const emit = defineEmits<{
   'delete': [id: string]
   'update:start-time': [id: string, value: string]
   'update:end-time': [id: string, value: string]
+  'edit': [record: Task]
+  'star': [record: Task]
 }>()
 
 const isEditingName = computed(() => props.editingNameId === props.record.id)
@@ -106,6 +116,11 @@ const formatDurationLabel = (startTime: string, endTime: string): string => {
   width: 100%;
 }
 
+.task-card-pinned {
+  background: rgba(241, 196, 15, 0.08) !important;
+  border-color: rgba(241, 196, 15, 0.15) !important;
+}
+
 .task-card:hover {
   background: rgba(255, 255, 255, 0.08);
 }
@@ -131,34 +146,64 @@ const formatDurationLabel = (startTime: string, endTime: string): string => {
 .task-card-actions {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 2px;
   flex-shrink: 0;
 }
 
-.task-card-btn {
-  width: 26px;
-  height: 26px;
-  min-width: 26px;
-  min-height: 26px;
+.card-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  background: none !important;
-  border: none !important;
-  color: var(--chalk-red) !important;
-  box-shadow: none !important;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 6px;
   font-size: 14px;
+  transition: all 0.15s;
+  color: var(--chalk-white-50);
 }
 
-.task-card-btn:hover {
-  color: var(--chalk-red) !important;
-  background: transparent !important;
+.card-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--chalk-white);
 }
 
-.task-card-btn:focus,
-.task-card-btn:focus-visible,
-.task-card-btn:active {
-  outline: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
+.card-btn-star {
+  color: rgba(251, 191, 36, 0.5);
+}
+
+.card-btn-star:hover {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.card-btn-star.starred {
+  color: #fbbf24;
+}
+
+.card-btn-star.starred:hover {
+  background: rgba(251, 191, 36, 0.15);
+}
+
+.card-btn-edit {
+  color: rgba(102, 126, 234, 0.5);
+}
+
+.card-btn-edit:hover {
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.12);
+}
+
+.card-btn-delete {
+  color: rgba(239, 68, 68, 0.5);
+}
+
+.card-btn-delete:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
 }
 
 .task-card-time {

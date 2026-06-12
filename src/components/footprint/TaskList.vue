@@ -14,9 +14,9 @@
         </div>
 
         <template v-else>
-          <div v-if="pinnedCountdownCards.length > 0" class="important-section">
+          <div v-if="pinnedCountdownCards.length > 0 || pinnedRecords.length > 0" class="important-section">
             <p class="important-title">⭐ 重要</p>
-            <div class="countdown-section">
+            <div v-if="pinnedCountdownCards.length > 0" class="countdown-section">
               <div v-for="item in pinnedCountdownCards" :key="item.milestone.id" class="countdown-item">
                 <CountdownCard
                   :milestone="item.milestone"
@@ -44,6 +44,30 @@
                   @open-date-picker="openCountdownDatePicker(item.milestone)"
                   @toggle-repeat="toggleRepeatCountdown(item.milestone)"
                   @open-reminder-picker="openCountdownReminderForm(item.milestone)"
+                />
+              </div>
+            </div>
+            <div v-if="pinnedRecords.length > 0" class="countdown-section">
+              <div v-for="record in pinnedRecords" :key="record.id" class="period-item">
+                <RecordCard
+                  :record="record"
+                  :editing-name-id="editingNameId"
+                  :editing-name-value="editingNameValue"
+                  :editing-notes-id="editingNotesId"
+                  :editing-notes-value="editingNotesValue"
+                  @update:editing-name-value="editingNameValue = $event"
+                  @update:editing-notes-value="editingNotesValue = $event"
+                  @start-name-edit="startNameEdit"
+                  @save-name-edit="saveNameEdit"
+                  @cancel-name-edit="cancelNameEdit"
+                  @start-notes-edit="startNotesEdit"
+                  @save-notes-edit="saveNotesEdit"
+                  @cancel-notes-edit="cancelNotesEdit"
+                  @delete="openDeleteConfirm"
+                  @update:start-time="(id, v) => taskStore.updateTask(id, { startTime: v })"
+                  @update:end-time="(id, v) => taskStore.updateTask(id, { endTime: v })"
+                  @edit="handleEditRecord"
+                  @star="handleStarRecord"
                 />
               </div>
             </div>
@@ -82,10 +106,10 @@
             </div>
 
             <div class="diary-content">
-              <div v-if="morningCards.length > 0" class="diary-period">
+              <div v-if="unpinnedMorningCards.length > 0" class="diary-period">
                 <p class="period-title period-morning">🌤️ 上午</p>
                 <div class="period-items">
-                  <template v-for="card in morningCards" :key="card.id">
+                  <template v-for="card in unpinnedMorningCards" :key="card.id">
                     <div v-if="card.type === 'record' && card.record && (card.record.isDiary || card.record.category === 'diary')" class="period-item">
                       <DiaryCard
                         :record="card.record"
@@ -122,6 +146,8 @@
                         @delete="openDeleteConfirm"
                         @update:start-time="(id, v) => taskStore.updateTask(id, { startTime: v })"
                         @update:end-time="(id, v) => taskStore.updateTask(id, { endTime: v })"
+                        @edit="handleEditRecord"
+                        @star="handleStarRecord"
                       />
                     </div>
                     <div v-else-if="card.type === 'list' && card.list" class="period-item">
@@ -134,10 +160,10 @@
                 </div>
               </div>
 
-              <div v-if="afternoonCards.length > 0" class="diary-period">
+              <div v-if="unpinnedAfternoonCards.length > 0" class="diary-period">
                 <p class="period-title period-afternoon">🌞 下午</p>
                 <div class="period-items">
-                  <template v-for="card in afternoonCards" :key="card.id">
+                  <template v-for="card in unpinnedAfternoonCards" :key="card.id">
                     <div v-if="card.type === 'record' && card.record && (card.record.isDiary || card.record.category === 'diary')" class="period-item">
                       <DiaryCard
                         :record="card.record"
@@ -174,6 +200,8 @@
                         @delete="openDeleteConfirm"
                         @update:start-time="(id, v) => taskStore.updateTask(id, { startTime: v })"
                         @update:end-time="(id, v) => taskStore.updateTask(id, { endTime: v })"
+                        @edit="handleEditRecord"
+                        @star="handleStarRecord"
                       />
                     </div>
                     <div v-else-if="card.type === 'list' && card.list" class="period-item">
@@ -186,10 +214,10 @@
                 </div>
               </div>
 
-              <div v-if="eveningCards.length > 0" class="diary-period">
+              <div v-if="unpinnedEveningCards.length > 0" class="diary-period">
                 <p class="period-title period-evening">🌙 晚上</p>
                 <div class="period-items">
-                  <template v-for="card in eveningCards" :key="card.id">
+                  <template v-for="card in unpinnedEveningCards" :key="card.id">
                     <div v-if="card.type === 'record' && card.record && (card.record.isDiary || card.record.category === 'diary')" class="period-item">
                       <DiaryCard
                         :record="card.record"
@@ -226,6 +254,8 @@
                         @delete="openDeleteConfirm"
                         @update:start-time="(id, v) => taskStore.updateTask(id, { startTime: v })"
                         @update:end-time="(id, v) => taskStore.updateTask(id, { endTime: v })"
+                        @edit="handleEditRecord"
+                        @star="handleStarRecord"
                       />
                     </div>
                     <div v-else-if="card.type === 'list' && card.list" class="period-item">
@@ -243,11 +273,17 @@
       </el-scrollbar>
     </div>
 
-    <TaskForm
-        v-model:visible="formVisible"
+    <DiaryForm
+        v-model:visible="diaryFormVisible"
         :task="editingTask"
         :defaultDate="selectedDate"
-        :mode="currentMode"
+        @submit="handleFormSubmit"
+    />
+
+    <RecordForm
+        v-model:visible="recordFormVisible"
+        :task="editingTask"
+        :defaultDate="selectedDate"
         @submit="handleFormSubmit"
     />
 
@@ -311,7 +347,6 @@ import { useTaskStore, type Task } from '../../stores/taskStore'
 import { useListStore, type Task as ListTask } from '../../stores/listStore'
 import { useFootprintCards } from '../../composables/useFootprintCards'
 import { usePageNav } from '../../composables/usePageNav'
-import TaskForm from './TaskForm.vue'
 import RecordCard from './RecordCard.vue'
 import DiaryCard from './DiaryCard.vue'
 import CourseCard from '../course/CourseCard.vue'
@@ -322,6 +357,8 @@ import MoveTaskPage from '../list/MoveTaskPage.vue'
 import InlineLunarDatePicker from '../common/picker/InlineLunarDatePicker.vue'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
+import DiaryForm from './DiaryForm.vue'
+import RecordForm from './RecordForm.vue'
 import { logger } from '../../lib/logger'
 import { chalk } from '../../lib/chalk'
 import { setData } from '../../services/storageService'
@@ -501,9 +538,7 @@ const startNameEdit = (record: Task) => {
 
 const saveNameEdit = async (record: Task) => {
   const trimmed = editingNameValue.value.trim()
-  if (trimmed && trimmed !== record.name) {
-    await taskStore.updateTask(record.id, { name: trimmed })
-  }
+  await taskStore.updateTask(record.id, { name: trimmed })
   editingNameId.value = null
 }
 
@@ -523,7 +558,7 @@ const startNotesEdit = (record: Task) => {
 const saveNotesEdit = async (record: Task) => {
   const trimmed = editingNotesValue.value.trim()
   if (trimmed !== (record.notes || '')) {
-    await taskStore.updateTask(record.id, { notes: trimmed || undefined })
+    await taskStore.updateTask(record.id, { notes: trimmed || null })
   }
   editingNotesId.value = null
 }
@@ -534,20 +569,33 @@ const cancelNotesEdit = () => {
 
 const handleAddTask = () => {
   editingTask.value = null
-  currentMode.value = 'record'
-  formVisible.value = true
+  recordFormVisible.value = true
 }
 
 const handleAddDiary = () => {
   editingTask.value = null
-  currentMode.value = 'diary'
-  formVisible.value = true
+  diaryFormVisible.value = true
 }
 
 const handleEditTask = (task: Task) => {
   editingTask.value = task
-  currentMode.value = task.isDiary || task.category === 'diary' ? 'diary' : 'record'
-  formVisible.value = true
+  if (task.isDiary || task.category === 'diary') {
+    diaryFormVisible.value = true
+  } else {
+    recordFormVisible.value = true
+  }
+}
+
+const handleEditRecord = (record: Task) => {
+  editingTask.value = record
+  recordFormVisible.value = true
+}
+
+const handleStarRecord = async (record: Task) => {
+  const newPinned = !record.pinned
+  await taskStore.updateTask(record.id, { pinned: newPinned })
+  logger.info('[足迹] 星标记录', { taskId: record.id, pinned: newPinned })
+  ElMessage.success(newPinned ? '已设为星标' : '已取消星标')
 }
 
 const handleDeleteTask = (id: string) => {
@@ -683,13 +731,31 @@ const unpinnedCountdownCards = computed(() =>
   countdownDisplayCards.value.filter(item => !item.milestone.pinned)
 )
 
+const pinnedRecords = computed(() =>
+  allCards.value
+    .filter(card => card.type === 'record' && card.record && card.record.pinned)
+    .map(card => card.record!)
+)
+
+const unpinnedMorningCards = computed(() =>
+  morningCards.value.filter(card => !(card.type === 'record' && card.record?.pinned))
+)
+
+const unpinnedAfternoonCards = computed(() =>
+  afternoonCards.value.filter(card => !(card.type === 'record' && card.record?.pinned))
+)
+
+const unpinnedEveningCards = computed(() =>
+  eveningCards.value.filter(card => !(card.type === 'record' && card.record?.pinned))
+)
+
 const todayTasks = computed(() => {
   return filteredTasks.value
 })
 
-const formVisible = ref(false)
+const diaryFormVisible = ref(false)
+const recordFormVisible = ref(false)
 const editingTask = ref<Task | null>(null)
-const currentMode = ref<'record' | 'diary'>('record')
 const showDeleteConfirm = ref(false)
 const deleteTargetId = ref('')
 const deleteMessage = computed(() => {

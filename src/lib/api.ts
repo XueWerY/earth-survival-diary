@@ -331,6 +331,7 @@ export interface Task {
     content: string | null
     category: string | null
     created_at: string
+    pinned?: boolean
 }
 
 export interface TaskFormData {
@@ -341,6 +342,7 @@ export interface TaskFormData {
     notes?: string
     content?: string
     category?: string
+    pinned?: boolean
 }
 
 export async function getTasks(): Promise<{ tasks: Task[] }> {
@@ -354,7 +356,7 @@ export async function addTask(data: TaskFormData): Promise<{ task: Task }> {
     })
 }
 
-export async function updateTask(id: string, data: Partial<TaskFormData & { completed?: boolean }>): Promise<{ task: Task }> {
+export async function updateTask(id: string, data: Partial<TaskFormData & { completed?: boolean; pinned?: boolean }>): Promise<{ task: Task }> {
     return request(`/tasks/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data)
