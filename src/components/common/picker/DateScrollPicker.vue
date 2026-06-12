@@ -10,20 +10,38 @@
       <div v-if="dialogVisible" class="date-dialog-overlay" @click.self="onCancel">
         <div class="date-dialog-container" @click.stop>
           <div class="date-dialog-header">
-            <span class="date-dialog-title">选择日期</span>
+            <span class="date-dialog-title">跳转日期</span>
           </div>
           <div class="date-dialog-body">
             <div class="jump-toggle">
               <button
-                class="toggle-btn"
-                :class="{ active: !isLunarMode }"
+                class="capsule-btn"
+                :class="{ 'capsule-btn-primary': !isLunarMode }"
                 @click="isLunarMode = false"
-              >公历</button>
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
+                  <circle cx="12" cy="12" r="5"></circle>
+                  <line x1="12" y1="1" x2="12" y2="3"></line>
+                  <line x1="12" y1="21" x2="12" y2="23"></line>
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                  <line x1="1" y1="12" x2="3" y2="12"></line>
+                  <line x1="21" y1="12" x2="23" y2="12"></line>
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+                <span>公历</span>
+              </button>
               <button
-                class="toggle-btn"
-                :class="{ active: isLunarMode }"
+                class="capsule-btn"
+                :class="{ 'capsule-btn-primary': isLunarMode }"
                 @click="switchToLunar"
-              >农历</button>
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+                <span>农历</span>
+              </button>
             </div>
             <div class="jump-scrolls">
               <div class="jump-scroll-col" ref="yearScrollRef" @scroll="onYearScroll">
@@ -385,27 +403,9 @@ watch([pickerYear, pickerMonth], () => {
 
 .jump-toggle {
   display: flex;
+  justify-content: center;
   padding: 0 0 12px 0;
   gap: 8px;
-}
-
-.toggle-btn {
-  flex: 1;
-  padding: 6px 0;
-  font-size: 13px;
-  background: none;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: var(--chalk-muted);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.toggle-btn.active {
-  background: rgba(102, 126, 234, 0.3);
-  border-color: #667eea;
-  color: var(--chalk-white);
-  font-weight: 600;
 }
 
 .jump-scrolls {
