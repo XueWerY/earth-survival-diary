@@ -110,6 +110,9 @@
         <div class="module-tree">
           <div class="select-all-row">
             <el-checkbox v-model="exportSelectAll" @change="onExportSelectAll">全选</el-checkbox>
+            <el-button v-if="!lanServerInfo" type="primary" size="default" round @click="handleExportViaLan" :loading="exportLoading" :disabled="exportSelected.length === 0">
+              <span style="margin-right:4px">📤</span>通过局域网发送
+            </el-button>
           </div>
           <div v-for="group in exportGroups" :key="group.key" class="module-group">
             <div class="group-header" @click="toggleExportGroup(group.key)">
@@ -124,14 +127,8 @@
           </div>
         </div>
 
-        <div v-if="!lanServerInfo" class="tool-footer tool-footer-center">
-          <el-button type="primary" size="default" round @click="handleExportViaLan" :loading="exportLoading" :disabled="exportSelected.length === 0">
-            <span style="margin-right:4px">📤</span>通过局域网发送
-          </el-button>
-        </div>
-
         <!-- 局域网传输就绪弹窗 -->
-        <div v-else class="fm-overlay" @click.self="handleStopLanServer">
+        <div v-if="lanServerInfo" class="fm-overlay" @click.self="handleStopLanServer">
           <div class="lan-dialog">
             <div class="lan-dialog-icon">📡</div>
             <div class="lan-dialog-title">局域网传输已就绪</div>
@@ -159,10 +156,12 @@
 
         <div v-if="!importedData" class="lan-connect-area">
           <div class="lan-connect-row">
-            <span class="lan-connect-label">发送方地址</span>
-            <input v-model="lanTargetAddress" type="text" class="lan-ip-input" placeholder="例如: 192.168.1.100:5789" />
-            <el-button title="扫描二维码" round @click="openQRScanner">📷</el-button>
+            <input v-model="lanTargetAddress" type="text" class="lan-ip-input" placeholder="发送方地址，例如：192.168.1.100:5789" />
             <el-button type="primary" round @click="handleConnectLan" :loading="importConnecting">🔗 连接</el-button>
+          </div>
+          <div class="lan-or-divider"><span>或</span></div>
+          <div class="lan-scan-btn-row">
+            <el-button title="扫描二维码" round @click="openQRScanner">📷 扫码</el-button>
           </div>
           <div v-if="importErrorMsg" class="lan-error-msg">{{ importErrorMsg }}</div>
         </div>
@@ -1777,6 +1776,9 @@ onUnmounted(() => {
 }
 
 .select-all-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   margin-bottom: 4px;
@@ -1870,9 +1872,10 @@ onUnmounted(() => {
 }
 
 .lan-address-box {
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(102, 126, 234, 0.3);
   border-radius: 8px;
@@ -1994,6 +1997,39 @@ onUnmounted(() => {
   gap: 10px;
 }
 
+.lan-connect-btn-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.lan-or-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.lan-or-divider::before,
+.lan-or-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.lan-or-divider span {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.lan-scan-btn-row {
+  display: flex;
+  justify-content: center;
+}
+
 .lan-connect-label {
   color: rgba(255, 255, 255, 0.7);
   font-size: 13px;
@@ -2070,5 +2106,20 @@ onUnmounted(() => {
   margin-top: 12px;
   color: rgba(255, 255, 255, 0.6);
   font-size: 13px;
+}
+
+/* ====== 隐藏所有滚动条 ====== */
+.fm-body::-webkit-scrollbar,
+.tool-container::-webkit-scrollbar,
+.fm-preview-content::-webkit-scrollbar,
+.log-container::-webkit-scrollbar {
+  display: none;
+}
+
+.fm-body,
+.tool-container,
+.fm-preview-content,
+.log-container {
+  scrollbar-width: none;
 }
 </style>
