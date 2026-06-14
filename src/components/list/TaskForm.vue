@@ -100,7 +100,13 @@
 
       <div class="form-row">
         <span class="form-label">提醒</span>
-        <ReminderTimePicker v-model="reminderTime" />
+        <div class="reminder-area">
+          <div class="reminder-toggle">
+            <button class="reminder-toggle-btn" :class="{ active: reminderEnabled }" @click="reminderEnabled = true">提醒</button>
+            <button class="reminder-toggle-btn" :class="{ active: !reminderEnabled }" @click="reminderEnabled = false">不提醒</button>
+          </div>
+          <ReminderTimePicker v-if="reminderEnabled" v-model="reminderTime" />
+        </div>
       </div>
 
       <div class="form-row">
@@ -119,7 +125,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useListStore, type RepeatStrategy, type RepeatEndStrategy, REPEAT_STRATEGIES, REPEAT_END_STRATEGIES, PRIORITIES } from '../../stores/listStore'
+import { useListStore, type RepeatStrategy, type RepeatEndStrategy, REPEAT_STRATEGIES, REPEAT_END_STRATEGIES, PRIORITIES, type ReminderStrategy } from '../../stores/listStore'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
 import ReminderTimePicker from '../common/picker/ReminderTimePicker.vue'
@@ -158,6 +164,7 @@ const repeatMonthDay = ref(1)
 const repeatLunarMonth = ref(1)
 const repeatLunarDay = ref(1)
 const reminderTime = ref({ days: 0, hours: 0, minutes: 15 })
+const reminderEnabled = ref(true)
 
 const availableLists = computed(() => {
   return listStore.taskLists.filter(l => !l.deleted)
@@ -188,6 +195,20 @@ const handleSubmit = () => {
   if (!formTime.value) { ElMessage.warning({ message: '时间没有填写', customClass: 'message-above-dialog' }); return }
   if (!formListId.value) { ElMessage.warning({ message: '请选择清单', customClass: 'message-above-dialog' }); return }
   if (!formGroupId.value) { ElMessage.warning({ message: '请选择分组', customClass: 'message-above-dialog' }); return }
+  let reminderStrategy: ReminderStrategy = 'none'
+  let reminderDays = 0
+  let reminderHours = 0
+  let reminderMinutes = 0
+  if (reminderEnabled.value) {
+    if (reminderTime.value.days === 0 && reminderTime.value.hours === 0 && reminderTime.value.minutes === 0) {
+      reminderStrategy = 'on_time'
+    } else {
+      reminderStrategy = 'advance'
+      reminderDays = reminderTime.value.days
+      reminderHours = reminderTime.value.hours
+      reminderMinutes = reminderTime.value.minutes
+    }
+  }
   emit('submit', {
     name,
     date: formDate.value,
@@ -204,7 +225,10 @@ const handleSubmit = () => {
     repeatMonthDay: repeatMonthDay.value,
     repeatLunarMonth: repeatLunarMonth.value,
     repeatLunarDay: repeatLunarDay.value,
-    reminder: { ...reminderTime.value },
+    reminderStrategy,
+    reminderDays,
+    reminderHours,
+    reminderMinutes,
     note: formNote.value || undefined,
   })
 }
@@ -246,6 +270,12 @@ onMounted(async () => {
 
 .select-option-row { display: flex; align-items: center; gap: 8px; }
 .select-option-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+.reminder-area { width: 100%; }
+.reminder-toggle { display: flex; gap: 6px; margin-bottom: 6px; }
+.reminder-toggle-btn { flex: 1; padding: 6px 4px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: var(--chalk-white-70); border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.15s; }
+.reminder-toggle-btn:hover { background: rgba(255,255,255,0.1); }
+.reminder-toggle-btn.active { background: rgba(102,126,234,0.3); border-color: #667eea; color: var(--chalk-white); font-weight: 600; }
 
 :deep(.el-select__wrapper) { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); }
 :deep(.el-input-number) { width: 100%; }

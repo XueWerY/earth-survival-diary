@@ -14,6 +14,9 @@
           >{{ seg.label }}</span>
         </template>
       </div>
+      <button v-if="showSortButton" class="breadcrumb-sort-btn" @click="openSortDropdown" title="排序">
+        <el-icon><Sort /></el-icon>
+      </button>
       <button v-if="plusAction" class="breadcrumb-plus-btn" @click="plusAction" title="添加"><el-icon><PlusIcon /></el-icon></button>
     </div>
 
@@ -21,6 +24,12 @@
       <div v-for="item in segmentDropdownItems" :key="item.id" class="page-dropdown-item" :class="{ current: item.current }" @click="handleSegmentDropdownSelect(item)">
         <span class="page-dropdown-dot" :style="{ background: item.color }"></span>
         <span>{{ item.name }}</span>
+      </div>
+    </div>
+
+    <div v-if="activeDropdown === 'sort'" class="page-dropdown" :style="sortDropdownPosStyle" @click.stop>
+      <div v-for="opt in sortOptions" :key="opt.value" class="page-dropdown-item" :class="{ current: currentSort === opt.value }" @click="selectSortOption(opt.value)">
+        <span>{{ opt.label }}</span>
       </div>
     </div>
 
@@ -232,7 +241,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch, inject } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Calendar, Clock, Timer, Close, Warning, Edit, Plus as PlusIcon, Delete, List, Folder, Check } from '@element-plus/icons-vue'
+import { Calendar, Clock, Timer, Close, Warning, Edit, Plus as PlusIcon, Delete, List, Folder, Check, Sort } from '@element-plus/icons-vue'
 import ListFormPage from './ListFormPage.vue'
 import GroupFormPage from './GroupFormPage.vue'
 import TaskForm from './TaskForm.vue'
@@ -278,6 +287,89 @@ const isFolderView = computed(() => navPath.value.length === 3 && navPath.value[
 const isListView = computed(() => navPath.value.length === 4 && navPath.value[0] === 'list' && navPath.value[1] === 'custom')
 const isGroupTasksView = computed(() => navPath.value.length === 5 && navPath.value[0] === 'list' && navPath.value[1] === 'custom')
 const isAtSmartDetail = computed(() => navPath.value.length >= 3 && navPath.value[0] === 'list' && navPath.value[1] === 'smart')
+
+type SortMode = 'name' | 'date' | 'endTime' | 'priority'
+
+const currentSort = ref<SortMode>('priority')
+
+const sortOptions: { value: SortMode; label: string }[] = [
+  { value: 'name', label: '按名称排序' },
+  { value: 'date', label: '按结束日期排序' },
+  { value: 'endTime', label: '按结束时间排序' },
+  { value: 'priority', label: '按优先级排序' },
+]
+
+const sortDropdownPos = ref({ top: 0, left: 0 })
+const sortDropdownPosStyle = computed(() => ({
+  top: sortDropdownPos.value.top + 'px',
+  left: sortDropdownPos.value.left + 'px'
+}))
+
+const showSortButton = computed(() => isSmartDetail.value || isGroupTasksView.value)
+
+function sortTasks(tasks: Task[]): Task[] {
+  const po: Record<string, number> = { high: 0, medium: 1, low: 2, none: 3 }
+  const mode = currentSort.value
+  return [...tasks].sort((a, b) => {
+    let result = 0
+    // Primary sort by selected mode
+    if (mode === 'name') result = a.name.localeCompare(b.name)
+    else if (mode === 'date') {
+      if (!a.date && !b.date) result = 0
+      else if (!a.date) result = 1
+      else if (!b.date) result = -1
+      else result = dayjs(a.date).valueOf() - dayjs(b.date).valueOf()
+    } else if (mode === 'endTime') {
+      if (!a.date && !b.date && !a.endTime && !b.endTime) result = 0
+      else if (!a.date && !b.date) {
+        if (!a.endTime && b.endTime) result = 1
+        else if (a.endTime && !b.endTime) result = -1
+        else if (a.endTime && b.endTime) result = a.endTime.localeCompare(b.endTime)
+      } else if (!a.date) result = 1
+      else if (!b.date) result = -1
+      else {
+        const dc = dayjs(a.date).valueOf() - dayjs(b.date).valueOf()
+        if (dc !== 0) result = dc
+        else {
+          if (!a.endTime && b.endTime) result = 1
+          else if (a.endTime && !b.endTime) result = -1
+          else if (a.endTime && b.endTime) result = a.endTime.localeCompare(b.endTime)
+        }
+      }
+    } else if (mode === 'priority') {
+      result = po[a.priority] - po[b.priority]
+    }
+    if (result !== 0) return result
+
+    // Tie-breakers: priority > date > endTime > name
+    if (mode !== 'priority') {
+      const pr = po[a.priority] - po[b.priority]
+      if (pr !== 0) return pr
+    }
+    if (mode !== 'date' && mode !== 'endTime') {
+      if (!a.date && !b.date) { /* ok */ }
+      else if (!a.date) return 1
+      else if (!b.date) return -1
+      else {
+        const dr = dayjs(a.date).valueOf() - dayjs(b.date).valueOf()
+        if (dr !== 0) return dr
+      }
+    }
+    if (mode !== 'endTime') {
+      if (!a.endTime && b.endTime) return 1
+      if (a.endTime && !b.endTime) return -1
+      if (a.endTime && b.endTime) {
+        const tr = a.endTime.localeCompare(b.endTime)
+        if (tr !== 0) return tr
+      }
+    }
+    if (mode !== 'name') {
+      const nr = a.name.localeCompare(b.name)
+      if (nr !== 0) return nr
+    }
+    return 0
+  })
+}
 
 function computeBreadcrumbSegments(): BreadcrumbSegment[] {
   const segments: BreadcrumbSegment[] = []
@@ -437,6 +529,19 @@ const handleSegmentDropdownSelect = (item: DropdownItem) => {
   item.onSelect()
 }
 
+const openSortDropdown = (event: MouseEvent) => {
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  sortDropdownPos.value = { top: rect.bottom + 4, left: rect.left - 8 }
+  activeDropdown.value = 'sort'
+  activeSegment.value = null
+}
+
+const selectSortOption = (mode: SortMode) => {
+  currentSort.value = mode
+  activeDropdown.value = null
+}
+
 const closeDropdown = () => {
   activeDropdown.value = null
   activeSegment.value = null
@@ -520,9 +625,9 @@ const futureTasksCount = computed(() => futureTasks.value.length)
 const smartDetailTasks = computed(() => {
   if (!isSmartDetail.value) return []
   const type = navPath.value[2]
-  if (type === 'today') return todayIncompleteTasks.value
-  if (type === 'expired') return expiredTasks.value
-  if (type === 'future') return futureTasks.value
+  if (type === 'today') return sortTasks(todayIncompleteTasks.value)
+  if (type === 'expired') return sortTasks(expiredTasks.value)
+  if (type === 'future') return sortTasks(futureTasks.value)
   return []
 })
 const smartDetailIsToday = computed(() => navPath.value.length === 3 && navPath.value[0] === 'list' && navPath.value[1] === 'smart' && navPath.value[2] === 'today')
@@ -537,13 +642,7 @@ const smartDetailEmptyText = computed(() => {
 
 const currentGroupTasks = computed(() => {
   if (!currentGroupIdFromPath.value) return []
-  const po = { high: 0, medium: 1, low: 2, none: 3 }
-  return listStore.lists.filter(m => m.groupId === currentGroupIdFromPath.value && !m.completed).sort((a, b) => {
-    if (!a.date && b.date) return 1; if (a.date && !b.date) return -1
-    if (!a.date && !b.date) return po[a.priority] - po[b.priority]
-    const dc = dayjs(a.date).valueOf() - dayjs(b.date).valueOf(); if (dc !== 0) return dc
-    return po[a.priority] - po[b.priority]
-  })
+  return sortTasks(listStore.lists.filter(m => m.groupId === currentGroupIdFromPath.value && !m.completed))
 })
 
 const getListTaskCount = (listId: string) => listStore.lists.filter(m => m.listId === listId && !m.completed).length
@@ -717,18 +816,13 @@ const onGroupSubmit = (data: Record<string, unknown>) => {
 }
 
 const onTaskSubmit = async (data: Record<string, unknown>) => {
-  const hasReminder = data.reminderStrategy !== 'none' && data.date
-  const reminder = data.reminder as { days: number; hours: number; minutes: number } | undefined
+  const hasReminder = (data.reminderStrategy as string) !== 'none' && !!data.date
   await listStore.addTask({
     ...data,
     listId: (data.listId || currentListIdFromPath.value) as string,
     groupId: (data.groupId || currentGroupIdFromPath.value) as string,
     endTime: data.time as string || '',
     repeatCount: data.repeatEndCount as number || 1,
-    reminderStrategy: (reminder ? 'advance' : 'none') as any,
-    reminderDays: reminder?.days ?? 0,
-    reminderHours: reminder?.hours ?? 0,
-    reminderMinutes: reminder?.minutes ?? 0,
   } as any)
   ElMessage.success('任务已添加')
   closeTaskDialog()
@@ -837,6 +931,27 @@ const handleConfirmAction = () => {
 
 .breadcrumb-segment.clickable:hover {
   background: rgba(255, 255, 255, 0.08);
+}
+
+.breadcrumb-sort-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--chalk-white-60);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.breadcrumb-sort-btn:hover {
+  background: rgba(102, 126, 234, 0.2);
+  color: var(--chalk-white);
 }
 
 .breadcrumb-plus-btn {

@@ -766,7 +766,7 @@ export const useListStore = defineStore('list', () => {
       await api.updateListTask(id, {
         name: updates.name,
         description: updates.notes,
-        currentCount: updates.repeatCompletedCount,
+        repeatCompletedCount: updates.repeatCompletedCount,
         completed: updates.completed,
         groupId: updates.groupId,
         date: updates.date,
@@ -892,25 +892,8 @@ export const useListStore = defineStore('list', () => {
     item.completed = !item.completed
 
     if (task.repeatStrategy === 'none') {
-      // 非重复性任务：完成检查事项后立即删除该检查事项
-      if (item.completed) {
-        // 先保存状态用于判断
-        const remainingCount = task.checklist.filter(c => c.id !== itemId).length
-
-        // 删除已完成的检查事项
-        task.checklist = task.checklist.filter(c => c.id !== itemId)
-
-        if (remainingCount === 0) {
-          // 没有更多检查事项了，删除整个任务
-          await deleteTask(taskId)
-        } else {
-          // 还有其他检查事项，保存更新
-          await updateTask(taskId, { checklist: task.checklist })
-        }
-      } else {
-        // 取消完成，直接保存
-        await updateTask(taskId, { checklist: task.checklist })
-      }
+      // 非重复性任务：完成检查事项后只标记完成，不删除
+      await updateTask(taskId, { checklist: task.checklist })
     } else {
       // 重复性任务：所有检查事项完成后进入下一轮
       const allCompleted = task.checklist.length > 0 && task.checklist.every(c => c.completed)

@@ -1,7 +1,5 @@
 <template>
   <div class="app-container">
-    <!-- Three.js 3D 背景（地球 + 星空） -->
-    <div ref="threeContainer" class="three-background" :class="{ 'canvas-hidden': !showStarCanvas }"></div>
     <!-- Canvas 2D 流星背景 -->
     <canvas ref="starCanvas" class="star-canvas" :class="{ 'canvas-hidden': !showStarCanvas }"></canvas>
 
@@ -208,7 +206,6 @@ import { logger } from './lib/logger'
 import { usePageNav, MODULES, MODULE_ICONS, MODULE_LABELS, MODULE_ROUTES } from './composables/usePageNav'
 import { useSplitScreen } from './composables/useSplitScreen'
 import dayjs from 'dayjs'
-import * as THREE from 'three'
 // @ts-expect-error - Vite raw import
 import changelogContent from '../CHANGELOG.md?raw'
 import appVersion from 'virtual:version'
@@ -796,10 +793,11 @@ const scheduleListReminders = async () => {
           for (const course of courses) {
             if (!course.weeks || course.weeks.length === 0) continue
             if (!course.periodIds || course.periodIds.length === 0) continue
-            if (!course.dayOfWeek || course.dayOfWeek.length === 0) continue
+            const dwList = Array.isArray(course.dayOfWeek) ? course.dayOfWeek : [course.dayOfWeek]
+            if (!dwList || dwList.length === 0) continue
             const sortedWeeks = [...course.weeks].sort((a: number, b: number) => a - b)
             const startTime = getCourseStartTime(course.periodIds, courseSettings)
-            for (const dw of course.dayOfWeek) {
+            for (const dw of dwList) {
               const dayOffset = dw === 0 ? 6 : dw - 1
               for (const week of sortedWeeks) {
                 if (week < currentWeek) continue
@@ -1483,9 +1481,6 @@ watch(() => focusStore.timerState, (state) => {
 }, { immediate: true })
 
 const starCanvas = ref<HTMLCanvasElement>()
-const threeContainer = ref<HTMLDivElement>()
-let threeRenderer: THREE.WebGLRenderer | null = null
-let threeAnimationId: number = 0
 let animationId: number
 let resizeHandler: (() => void) | null = null
 
@@ -1712,79 +1707,7 @@ onMounted(async () => {
   }
 
   animate()
-
-  // Three.js 地球 + 3D 星空背景
-  const setupThreeScene = () => {
-    const container = threeContainer.value
-    if (!container) return
-
-    const scene = new THREE.Scene()
-
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000)
-    camera.position.z = 6
-
-    threeRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true })
-    threeRenderer.setSize(window.innerWidth, window.innerHeight)
-    threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    container.appendChild(threeRenderer.domElement)
-
-    // 地球（受光照，一半白天一半黑夜）
-    const texLoader = new THREE.TextureLoader()
-    const earthTex = texLoader.load('https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg')
-    const earthGeo = new THREE.SphereGeometry(1.6, 64, 64)
-    const earthMat = new THREE.MeshPhongMaterial({
-      map: earthTex,
-      specular: new THREE.Color(0x333344),
-      shininess: 10
-    })
-    const earth = new THREE.Mesh(earthGeo, earthMat)
-    scene.add(earth)
-
-    // 云层
-    const cloudTex = texLoader.load('https://threejs.org/examples/textures/planets/earth_clouds_1024.png')
-    const cloudGeo = new THREE.SphereGeometry(1.63, 64, 64)
-    const cloudMat = new THREE.MeshPhongMaterial({
-      map: cloudTex,
-      transparent: true,
-      opacity: 0.35,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
-      depthWrite: false
-    })
-    const clouds = new THREE.Mesh(cloudGeo, cloudMat)
-    scene.add(clouds)
-
-    // 光照（方向光从右侧照射，产生半白半黑效果）
-    scene.add(new THREE.AmbientLight(0x224466, 0.25))
-    const sunLight = new THREE.DirectionalLight(0xffeedd, 2.5)
-    sunLight.position.set(2, 0.5, 1)
-    scene.add(sunLight)
-
-    // 更新 resizeHandler（移除旧监听，添加新监听，同时处理 Canvas 和 Three.js）
-    window.removeEventListener('resize', resizeHandler)
-    resizeHandler = () => {
-      canvas.width = window.innerWidth
-      canvas.height = window.innerHeight
-      syncStarCount()
-      if (threeRenderer) {
-        threeRenderer.setSize(window.innerWidth, window.innerHeight)
-        camera.aspect = window.innerWidth / window.innerHeight
-        camera.updateProjectionMatrix()
-      }
-    }
-    window.addEventListener('resize', resizeHandler)
-
-    const animateThree = () => {
-      threeAnimationId = requestAnimationFrame(animateThree)
-      earth.rotation.y += 0.0003
-      clouds.rotation.y += 0.0004
-      threeRenderer!.render(scene, camera)
-    }
-    animateThree()
-  }
-
-  setupThreeScene()
-})
+  })
 
 onUnmounted(() => {
   if (resizeHandler) {
@@ -1792,13 +1715,6 @@ onUnmounted(() => {
   }
   if (animationId) {
     cancelAnimationFrame(animationId)
-  }
-  if (threeAnimationId) {
-    cancelAnimationFrame(threeAnimationId)
-  }
-  if (threeRenderer) {
-    threeRenderer.dispose()
-    threeRenderer = null
   }
   if (updateNoUpdateTimer) {
     clearTimeout(updateNoUpdateTimer)
@@ -1854,16 +1770,6 @@ onUnmounted(() => {
   color: var(--chalk-white-60);
   margin: 0 0 24px 0;
   font-size: 14px;
-}
-
-.three-background {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 1;
 }
 
 .star-canvas {

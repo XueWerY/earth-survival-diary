@@ -22,7 +22,7 @@ function installDeps() {
 // ========== make-ico ==========
 async function makeIco() {
   const sharp = require('sharp')
-  const SOURCE = path.join(ROOT, 'build', 'icon-256.png')
+  const SOURCE = path.join(ROOT, 'build', 'app-icon.png')
   const OUTPUT = path.join(ROOT, 'build', 'icon.ico')
   const SIZES = [16, 24, 32, 48, 64, 128, 256]
   const pngs = await Promise.all(SIZES.map(size => sharp(SOURCE).resize(size, size).png().toBuffer()))

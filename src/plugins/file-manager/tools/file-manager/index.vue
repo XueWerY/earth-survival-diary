@@ -140,6 +140,11 @@
               <span class="lan-address-text">{{ lanServerInfo.ip }}:{{ lanServerInfo.port }}</span>
               <el-button type="primary" size="small" round @click="copyLanAddress">📋 复制</el-button>
             </div>
+            <div class="lan-qr-section">
+              <div class="lan-qr-divider"><span>或</span></div>
+              <p class="lan-qr-hint">使用其他设备的「扫码导入」扫描下方二维码</p>
+              <img v-if="qrCodeDataUrl" :src="qrCodeDataUrl" alt="二维码" class="lan-qr-image" />
+            </div>
             <p class="lan-status-hint">数据传输中请勿关闭此页面</p>
             <el-button round @click="handleStopLanServer">⏹️ 停止传输</el-button>
           </div>
@@ -156,6 +161,7 @@
           <div class="lan-connect-row">
             <span class="lan-connect-label">发送方地址</span>
             <input v-model="lanTargetAddress" type="text" class="lan-ip-input" placeholder="例如: 192.168.1.100:5789" />
+            <el-button title="扫描二维码" round @click="openQRScanner">📷</el-button>
             <el-button type="primary" round @click="handleConnectLan" :loading="importConnecting">🔗 连接</el-button>
           </div>
           <div v-if="importErrorMsg" class="lan-error-msg">{{ importErrorMsg }}</div>
@@ -187,6 +193,22 @@
           </div>
         </div>
       </div>
+
+      <!-- QR 码扫描弹窗 -->
+      <div v-if="showQRScanner" class="fm-overlay" @click.self="closeQRScanner">
+        <div class="qr-scanner-dialog">
+          <div class="qr-scanner-header">
+            <span class="qr-scanner-title">扫描二维码</span>
+            <button class="fm-preview-close" @click="closeQRScanner">✕</button>
+          </div>
+          <div class="qr-scanner-container">
+            <video ref="scannerVideo" autoplay playsinline class="qr-scanner-video"></video>
+            <canvas ref="scannerCanvas" class="qr-scanner-canvas"></canvas>
+          </div>
+          <p class="qr-scanner-hint">将二维码对准摄像头</p>
+          <el-button round @click="closeQRScanner">取消</el-button>
+        </div>
+      </div>
     </template>
 
     <!-- 清理日志模式 -->
@@ -210,13 +232,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem'
 import { CapacitorHttp } from '@capacitor/core'
 import HttpServer from './capacitor-http-server'
 import { logger } from '../../../../lib/logger'
 import { useSettingsStore } from '../../../../stores/settingsStore'
 import * as api from '../../../../lib/api'
+import QRCode from 'qrcode'
+import jsQR from 'jsqr'
 
 // ====== 导入/导出模块定义 ======
 interface ModuleChildDef {
@@ -338,6 +362,10 @@ const lanTargetAddress = ref('')
 const importConnecting = ref(false)
 const importLoading = ref(false)
 const importErrorMsg = ref('')
+
+// ====== QR 码状态 ======
+const qrCodeDataUrl = ref('')
+const showQRScanner = ref(false)
 
 // ====== 导出/导入目录树 ======
 const exportGroups = computed(() => MODULE_DEFS)
@@ -945,6 +973,7 @@ async function handleExportViaLan() {
         return
       }
     }
+    await generateQRCode()
   } catch (e: any) {
     logger.error('[文件管理器] 导出失败', { error: e })
   } finally {
@@ -965,6 +994,7 @@ async function handleStopLanServer() {
     try { await HttpServer.stopServer() } catch {}
   }
   lanServerInfo.value = null
+  qrCodeDataUrl.value = ''
 }
 
 // ====== 数据导入函数 ======
@@ -1083,6 +1113,92 @@ async function handleImportData() {
   } finally {
     importLoading.value = false
   }
+}
+
+// ====== QR 码生成 ======
+async function generateQRCode() {
+  if (!lanServerInfo.value) return
+  const url = `http://${lanServerInfo.value.ip}:${lanServerInfo.value.port}`
+  try {
+    qrCodeDataUrl.value = await QRCode.toDataURL(url, { width: 200, margin: 2, color: { dark: '#ffffff', light: '#1a1a2e' } })
+  } catch (e) {
+    logger.error('[文件管理器] 生成二维码失败', { error: e })
+  }
+}
+
+// ====== QR 码扫描 ======
+const scannerVideo = ref<HTMLVideoElement | null>(null)
+const scannerCanvas = ref<HTMLCanvasElement | null>(null)
+let scanTimer: ReturnType<typeof setInterval> | null = null
+let mediaStream: MediaStream | null = null
+
+async function openQRScanner() {
+  showQRScanner.value = true
+  await nextTick()
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { min: 360 }, height: { min: 360 } }
+    })
+    const video = scannerVideo.value
+    if (video) {
+      video.srcObject = mediaStream
+      await video.play()
+      startScanLoop()
+    }
+  } catch (e: any) {
+    logger.error('[文件管理器] 启动扫码失败', { error: e })
+    alert('无法启动摄像头，请确保已授予相机权限')
+    closeQRScanner()
+  }
+}
+
+function startScanLoop() {
+  const video = scannerVideo.value
+  const canvas = scannerCanvas.value
+  if (!video || !canvas) return
+
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  if (!ctx) return
+
+  const scan = () => {
+    if (!showQRScanner.value) return
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      ctx.drawImage(video, 0, 0)
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const code = jsQR(imageData.data, imageData.width, imageData.height)
+      if (code) {
+        onQRCodeScanned(code.data)
+        return
+      }
+    }
+    scanTimer = setTimeout(scan, 200)
+  }
+  scanTimer = setTimeout(scan, 200)
+}
+
+function closeQRScanner() {
+  if (scanTimer) {
+    clearTimeout(scanTimer)
+    scanTimer = null
+  }
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(t => t.stop())
+    mediaStream = null
+  }
+  showQRScanner.value = false
+}
+
+function onQRCodeScanned(decodedText: string) {
+  closeQRScanner()
+  try {
+    const url = new URL(decodedText)
+    lanTargetAddress.value = url.host
+  } catch {
+    lanTargetAddress.value = decodedText
+  }
+  handleConnectLan()
 }
 
 onMounted(async () => {
@@ -1773,6 +1889,96 @@ onUnmounted(() => {
 
 .lan-status-hint {
   color: rgba(255, 255, 255, 0.35);
+  font-size: 12px;
+  margin: 0 0 16px;
+}
+
+/* ====== 导出二维码 ====== */
+.lan-qr-section {
+  margin-bottom: 12px;
+}
+
+.lan-qr-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.lan-qr-divider::before,
+.lan-qr-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.lan-qr-divider span {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+}
+
+.lan-qr-hint {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  margin: 0 0 10px;
+}
+
+.lan-qr-image {
+  display: block;
+  width: 180px;
+  height: 180px;
+  margin: 0 auto;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ====== QR 码扫描弹窗 ====== */
+.qr-scanner-dialog {
+  background: #1a1a2e;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 380px;
+  width: 80%;
+  text-align: center;
+}
+
+.qr-scanner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.qr-scanner-title {
+  color: var(--chalk-white);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.qr-scanner-container {
+  position: relative;
+  width: 100%;
+  max-width: 300px;
+  margin: 0 auto 12px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+}
+
+.qr-scanner-video {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.qr-scanner-canvas {
+  display: none;
+}
+
+.qr-scanner-hint {
+  color: rgba(255, 255, 255, 0.5);
   font-size: 12px;
   margin: 0 0 16px;
 }

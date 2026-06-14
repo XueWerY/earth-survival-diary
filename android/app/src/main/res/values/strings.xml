@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Earth-Survival-Diary</string>
-    <string name="title_activity_main">Earth-Survival-Diary</string>
+    <string name="app_name">地球生存日记</string>
+    <string name="title_activity_main">地球生存日记</string>
     <string name="package_name">com.earthsurvivaldiary.app</string>
     <string name="custom_url_scheme">com.earthsurvivaldiary.app</string>
 </resources>

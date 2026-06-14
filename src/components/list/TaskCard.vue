@@ -77,6 +77,7 @@
               @blur="finishEditChecklistItem" />
           </template>
           <span v-else class="check-text" @click.stop="startEditChecklistItem(list.id, item)">{{ item.text }}</span>
+          <el-icon class="checklist-delete-btn" title="删除检查事项" @click.stop="handleDeleteChecklistItem(list.id, item.id)"><Delete /></el-icon>
         </div>
         <div class="checklist-add-row" :style="isGuideActive ? { pointerEvents: 'none', opacity: '0.7' } : {}">
           <el-input
@@ -123,7 +124,13 @@
             <div class="list-form">
               <div class="form-row">
                 <span class="form-label">提醒</span>
-                <ReminderTimePicker v-model="reminderTimeValue" />
+                <div class="reminder-area">
+                  <div class="reminder-toggle">
+                    <button class="reminder-toggle-btn" :class="{ active: reminderEnabled }" @click="reminderEnabled = true">提醒</button>
+                    <button class="reminder-toggle-btn" :class="{ active: !reminderEnabled }" @click="reminderEnabled = false">不提醒</button>
+                  </div>
+                  <ReminderTimePicker v-if="reminderEnabled" v-model="reminderTimeValue" />
+                </div>
               </div>
               <div class="list-form-footer">
                 <el-button @click="showReminderDialog = false">取消</el-button>
@@ -490,12 +497,21 @@ const onTimePicked = async (val: string) => {
 
 const showReminderDialog = ref(false)
 const reminderTimeValue = ref({ days: 0, hours: 0, minutes: 15 })
+const reminderEnabled = ref(true)
 
 const openReminderDialog = () => {
-  reminderTimeValue.value = {
-    days: props.list.reminderStrategy === 'advance' ? (props.list.reminderDays || 0) : 0,
-    hours: props.list.reminderStrategy === 'advance' ? (props.list.reminderHours || 0) : 0,
-    minutes: props.list.reminderStrategy === 'advance' ? (props.list.reminderMinutes || 0) : (props.list.reminderStrategy === 'none' ? 0 : 15)
+  const strategy = props.list.reminderStrategy
+  reminderEnabled.value = strategy !== 'none'
+  if (strategy === 'advance') {
+    reminderTimeValue.value = {
+      days: props.list.reminderDays || 0,
+      hours: props.list.reminderHours || 0,
+      minutes: props.list.reminderMinutes || 0
+    }
+  } else if (strategy === 'on_time') {
+    reminderTimeValue.value = { days: 0, hours: 0, minutes: 0 }
+  } else {
+    reminderTimeValue.value = { days: 0, hours: 0, minutes: 15 }
   }
   showReminderDialog.value = true
 }
@@ -571,8 +587,20 @@ const openListGroupDialog = () => {
 }
 
 const saveReminder = async () => {
-  const { days, hours, minutes } = reminderTimeValue.value
-  const strategy: ReminderStrategy = (days === 0 && hours === 0 && minutes === 0) ? 'none' : 'advance'
+  let strategy: ReminderStrategy = 'none'
+  let days = 0
+  let hours = 0
+  let minutes = 0
+  if (reminderEnabled.value) {
+    if (reminderTimeValue.value.days === 0 && reminderTimeValue.value.hours === 0 && reminderTimeValue.value.minutes === 0) {
+      strategy = 'on_time'
+    } else {
+      strategy = 'advance'
+      days = reminderTimeValue.value.days
+      hours = reminderTimeValue.value.hours
+      minutes = reminderTimeValue.value.minutes
+    }
+  }
   await listStore.updateTask(props.list.id, {
     reminderStrategy: strategy,
     reminderDays: days,
@@ -622,6 +650,11 @@ const toggleChecklistItem = (listId: string, itemId: string, event: Event) => {
   const item = list?.checklist.find(c => c.id === itemId)
   logger.info('[清单] 完成检查事项', { listId, listName: list?.name, itemId, itemName: item?.text })
   listStore.toggleChecklistItem(listId, itemId)
+}
+
+const handleDeleteChecklistItem = async (listId: string, itemId: string) => {
+  await listStore.deleteChecklistItem(listId, itemId)
+  logger.info('[清单] 删除检查事项', { listId, itemId })
 }
 
 const addingChecklist = ref<Record<string, boolean>>({})
@@ -816,6 +849,8 @@ const cancelEditNotes = () => {
 .checklist-drag-handle { font-size: 14px; color: var(--chalk-white-30); cursor: grab; flex-shrink: 0; }
 .checklist-drag-handle:active { cursor: grabbing; }
 .checklist-item.drag-over { background: rgba(102,126,234,0.15); }
+.checklist-delete-btn { font-size: 14px; color: var(--chalk-white-30); cursor: pointer; flex-shrink: 0; transition: all 0.2s; border-radius: 4px; padding: 2px; }
+.checklist-delete-btn:hover { color: var(--chalk-danger); background: rgba(255,255,255,0.1); }
 .checklist-edit-input { flex: 1; }
 
 :deep(.el-checkbox__inner) { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
@@ -842,6 +877,12 @@ const cancelEditNotes = () => {
 .full-select { width: 100%; }
 .full-input-num { width: 100%; }
 .full-input-num :deep(.el-input__wrapper) { width: 100%; }
+
+.reminder-area { width: 100%; }
+.reminder-toggle { display: flex; gap: 6px; margin-bottom: 6px; }
+.reminder-toggle-btn { flex: 1; padding: 6px 4px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: var(--chalk-white-70); border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.15s; }
+.reminder-toggle-btn:hover { background: rgba(255,255,255,0.1); }
+.reminder-toggle-btn.active { background: rgba(102,126,234,0.3); border-color: #667eea; color: var(--chalk-white); font-weight: 600; }
 
 .list-form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 8px; }
 
