@@ -488,11 +488,13 @@ const openDatePicker = () => {
 const onDatePicked = async (dateStr: string) => {
   await listStore.updateTask(props.list.id, { date: dateStr })
   logger.info('[清单] 修改结束日期', { listId: props.list.id, date: dateStr })
+  if (props.list.reminderStrategy !== 'none') refreshReminders()
 }
 
 const onTimePicked = async (val: string) => {
   await listStore.updateTask(props.list.id, { endTime: val })
   logger.info('[清单] 修改结束时间', { listId: props.list.id, endTime: val })
+  if (props.list.reminderStrategy !== 'none' && props.list.date) refreshReminders()
 }
 
 const showReminderDialog = ref(false)
@@ -644,12 +646,15 @@ const saveListGroup = async () => {
   ElMessage.success('所属清单分组已更新')
 }
 
-const toggleChecklistItem = (listId: string, itemId: string, event: Event) => {
+const toggleChecklistItem = async (listId: string, itemId: string, event: Event) => {
   event.stopPropagation()
   const list = listStore.lists.find(m => m.id === listId)
   const item = list?.checklist.find(c => c.id === itemId)
+  if (!list || !item) return
+  const hadReminder = list.reminderStrategy !== 'none' && !!list.date
   logger.info('[清单] 完成检查事项', { listId, listName: list?.name, itemId, itemName: item?.text })
-  listStore.toggleChecklistItem(listId, itemId)
+  const completed = await listStore.toggleChecklistItem(listId, itemId)
+  if (completed && hadReminder) refreshReminders()
 }
 
 const handleDeleteChecklistItem = async (listId: string, itemId: string) => {

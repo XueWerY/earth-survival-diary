@@ -880,20 +880,31 @@ export const useListStore = defineStore('list', () => {
     }
   }
 
-  // 切换检查事项完成状态
-  const toggleChecklistItem = async (taskId: string, itemId: string) => {
+  // 切换检查事项完成状态，返回是否触发了任务完成/进入下一轮
+  const toggleChecklistItem = async (taskId: string, itemId: string): Promise<boolean> => {
     const task = lists.value.find(m => m.id === taskId)
-    if (!task) return
+    if (!task) return false
 
     const item = task.checklist.find(c => c.id === itemId)
-    if (!item) return
+    if (!item) return false
 
     // 切换完成状态
     item.completed = !item.completed
 
     if (task.repeatStrategy === 'none') {
-      // 非重复性任务：完成检查事项后只标记完成，不删除
-      await updateTask(taskId, { checklist: task.checklist })
+      // 非重复性任务：所有检查事项完成后自动完成任务
+      const allCompleted = task.checklist.length > 0 && task.checklist.every(c => c.completed)
+
+      if (allCompleted) {
+        // 记录完成记录，然后删除任务
+        await saveCompletedRecord(task)
+        task.checklist.forEach(c => c.completed = true)
+        await deleteTask(taskId)
+        return true
+      } else {
+        await updateTask(taskId, { checklist: task.checklist })
+        return false
+      }
     } else {
       // 重复性任务：所有检查事项完成后进入下一轮
       const allCompleted = task.checklist.length > 0 && task.checklist.every(c => c.completed)
@@ -917,8 +928,10 @@ export const useListStore = defineStore('list', () => {
             date: task.date
           })
         }
+        return true
       } else {
         await updateTask(taskId, { checklist: task.checklist })
+        return false
       }
     }
   }
