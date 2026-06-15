@@ -1075,6 +1075,13 @@ const initializeData = async () => {
     // 成功登录后立即加载自动清理日志设置并执行清理
     runAutoCleanAfterLogin()
 
+    // 启动后应用已保存的窗口分辨率设置
+    if (window.electronAPI?.applyWindowSize && authStore.user?.id) {
+      window.electronAPI.applyWindowSize(authStore.user.id).catch((e: any) => {
+        logger.warn('[App] 应用窗口分辨率失败', { error: e instanceof Error ? e.message : String(e) })
+      })
+    }
+
     try {
       const isCompleted = await getSystemStateField('guideCompleted')
       guideCompleted.value = isCompleted === true

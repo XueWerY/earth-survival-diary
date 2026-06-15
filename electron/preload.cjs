@@ -2,6 +2,10 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electronAPI', {
   resizeWindow: (width, height) => ipcRenderer.send('resize-window', width, height),
+  getScreenInfo: () => ipcRenderer.invoke('get-screen-info'),
+  setWindowSize: (userId, width, height) => ipcRenderer.invoke('set-window-size', userId, width, height),
+  getWindowSize: (userId) => ipcRenderer.invoke('get-window-size', userId),
+  applyWindowSize: (userId) => ipcRenderer.invoke('apply-window-size', userId),
   onUpdateStatus: (callback) => ipcRenderer.on('update-status', (_event, data) => callback(data)),
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),

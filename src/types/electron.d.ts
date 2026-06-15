@@ -5,6 +5,10 @@ declare global {
     electronAPI: {
       resizeWindow: (width: number, height: number) => void
       onUpdateStatus: (callback: (data: UpdateStatus) => void) => void
+      setWindowSize: (userId: string, width: number, height: number) => Promise<boolean>
+      getWindowSize: (userId: string) => Promise<{ width: number; height: number } | null>
+      applyWindowSize: (userId: string) => Promise<boolean>
+      getScreenInfo: () => Promise<{ width: number; height: number; scaleFactor: number; physicalWidth: number; physicalHeight: number }>
       installUpdate: () => Promise<void>
       checkForUpdate: () => Promise<{ updateAvailable?: boolean; error?: string }>
       openExternal: (url: string) => Promise<void>

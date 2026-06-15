@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, shell, dialog, Tray } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, shell, dialog, Tray, screen } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { spawn } = require('child_process')
@@ -33,6 +33,113 @@ if (!gotTheLock) {
 
 let mainWindow
 let serverInstance = null
+
+// ====== 窗口分辨率设置 ======
+function getUserSettingsPath(userId) {
+  return path.join(DATA_DIR, userId, 'settings', 'settings.json')
+}
+
+function readUserSettings(userId) {
+  const p = getUserSettingsPath(userId)
+  if (!fs.existsSync(p)) return {}
+  try { return JSON.parse(fs.readFileSync(p, 'utf-8')) } catch { return {} }
+}
+
+function writeUserSettings(userId, settings) {
+  const p = getUserSettingsPath(userId)
+  const dir = path.dirname(p)
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(p, JSON.stringify(settings, null, 2), 'utf-8')
+}
+
+ipcMain.handle('get-screen-info', async () => {
+  const primaryDisplay = screen.getPrimaryDisplay()
+  const { width, height } = primaryDisplay.size
+  const scaleFactor = primaryDisplay.scaleFactor
+  // width/height 与 BrowserWindow setSize/constructor 单位一致
+  // 同时返回物理值（乘缩放因子）供前端展示用
+  return {
+    width,
+    height,
+    scaleFactor,
+    physicalWidth: Math.round(width * scaleFactor - 0.001),
+    physicalHeight: Math.round(height * scaleFactor - 0.001)
+  }
+})
+
+ipcMain.handle('set-window-size', async (_event, userId, w, h) => {
+  if (mainWindow) {
+    const display = screen.getPrimaryDisplay()
+    const { width: maxW, height: maxH } = display.size
+    const scaleFactor = display.scaleFactor
+    // w/h 的单位与 display.size 一致，直接比较
+    const isMax = w >= maxW - 1 && h >= maxH - 1
+
+    // 保存物理分辨率（前端展示用）
+    const settings = readUserSettings(userId)
+    settings.windowSize = { width: Math.round(w * scaleFactor), height: Math.round(h * scaleFactor) }
+    writeUserSettings(userId, settings)
+
+    if (isMax) {
+      // 临时启用可调整，防止 resizable:false 时 setFullScreen 无效
+      mainWindow.setResizable(true)
+      if (!mainWindow.isFullScreen()) mainWindow.setFullScreen(true)
+      mainWindow.setResizable(false)
+    } else {
+      if (mainWindow.isFullScreen()) mainWindow.setFullScreen(false)
+      // 临时启用可调整，确保 setSize 生效，防止 resizable:false 时 setSize 无效
+      mainWindow.setResizable(true)
+      mainWindow.setSize(w, h)
+      mainWindow.setResizable(false)
+      mainWindow.setPosition(
+        Math.round((maxW - w) / 2),
+        Math.round((maxH - h) / 2)
+      )
+    }
+  }
+  return true
+})
+
+ipcMain.handle('get-window-size', async (_event, userId) => {
+  if (!userId) return null
+  const settings = readUserSettings(userId)
+  return settings.windowSize || null
+})
+
+ipcMain.handle('apply-window-size', async (_event, userId) => {
+  if (!mainWindow || !userId) return false
+  const settings = readUserSettings(userId)
+  if (!settings.windowSize) return false
+
+  const { width: savedPhysW, height: savedPhysH } = settings.windowSize
+  const display = screen.getPrimaryDisplay()
+  const { width: maxW, height: maxH } = display.size
+  const scaleFactor = display.scaleFactor
+
+  // 物理值转回逻辑值，与 set-window-size 存储时的转换相反
+  const logicalW = Math.round(savedPhysW / scaleFactor)
+  const logicalH = Math.round(savedPhysH / scaleFactor)
+
+  const isMax = logicalW >= maxW - 1 && logicalH >= maxH - 1
+  if (isMax) {
+    // 窗口已在 createWindow 中以全屏尺寸创建，只需进入全屏模式（无边框）
+    // 临时启用可调整，防止 resizable:false 时 setFullScreen 无效
+    mainWindow.setResizable(true)
+    if (!mainWindow.isFullScreen()) mainWindow.setFullScreen(true)
+    mainWindow.setResizable(false)
+  } else {
+    if (mainWindow.isFullScreen()) mainWindow.setFullScreen(false)
+    mainWindow.setResizable(true)
+    mainWindow.setSize(logicalW, logicalH)
+    mainWindow.setResizable(false)
+    mainWindow.setPosition(
+      Math.round((maxW - logicalW) / 2),
+      Math.round((maxH - logicalH) / 2)
+    )
+  }
+  return true
+})
+// ====== 窗口分辨率设置结束 ======
 
 ipcMain.on('restart-app', () => { 
   debugLog('[Main] 收到重启请求')
@@ -382,9 +489,14 @@ async function startServer() {
 }
 
 function createWindow(url) {
+  const primaryDisplay = screen.getPrimaryDisplay()
+  const { width: screenW, height: screenH } = primaryDisplay.size
+
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 720,
+    width: screenW,
+    height: screenH,
+    maximizable: false,
+    resizable: false,
     title: '地球 Online 生存日记',
     webPreferences: {
       nodeIntegration: false,

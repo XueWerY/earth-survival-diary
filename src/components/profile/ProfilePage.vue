@@ -118,6 +118,28 @@
             </div>
           </div>
 
+          <div class="setting-item">
+            <div class="setting-info">
+              <span class="setting-label">窗口分辨率</span>
+              <span class="setting-desc">设置电脑端窗口显示尺寸</span>
+            </div>
+            <div class="setting-control">
+              <el-select
+                  v-model="windowResolution"
+                  size="default"
+                  style="width: 140px;"
+                  @change="handleResolutionChange"
+              >
+                <el-option
+                  v-for="opt in resolutionOptions"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
+            </div>
+          </div>
+
         </div>
 
         <div class="profile-section" id="section-about">
@@ -286,6 +308,73 @@ const passwordForm = reactive({
 
 const autoLaunch = ref(false)
 const closeAction = ref('minimize')
+const windowResolution = ref('')
+const resolutionOptions = ref<{ label: string; value: string }[]>([])
+
+// 根据屏幕分辨率生成递退的分辨率选项
+function generateResolutionOptions(screenW: number, screenH: number, scaleFactor: number) {
+  // 减微小量 (0.001) 避免 Electron 截断逻辑值后 Math.round 多 1 的问题
+  const physicalW = Math.round(screenW * scaleFactor - 0.001)
+  const physicalH = Math.round(screenH * scaleFactor - 0.001)
+  // 通用 16:9 分辨率预设（物理像素），从大到小排列
+  const presets: [number, number][] = [
+    [3840, 2160],
+    [2560, 1440],
+    [1920, 1080],
+    [1600, 900],
+    [1366, 768],
+    [1280, 720],
+    [1024, 576]
+  ]
+  const options: { label: string; value: string }[] = []
+  // 最大分辨率：label 用物理值展示，value 用逻辑值（与 Electron API 单位一致）
+  const nativeKey = `${screenW}x${screenH}`
+  options.push({ label: '全屏', value: nativeKey })
+  // 添加小于等于物理分辨率的预设
+  for (const [pw, ph] of presets) {
+    if (pw === physicalW && ph === physicalH) continue // 跳过已添加的最大分辨率
+    if (pw <= physicalW && ph <= physicalH) {
+      const lw = Math.round(pw / scaleFactor)
+      const lh = Math.round(ph / scaleFactor)
+      options.push({ label: `${pw}×${ph}`, value: `${lw}x${lh}` })
+    }
+  }
+  resolutionOptions.value = options
+}
+
+const loadWindowSize = async () => {
+  if (!authStore.user?.id) return
+  if (window.electronAPI?.getScreenInfo) {
+    const screenInfo = await window.electronAPI.getScreenInfo()
+    generateResolutionOptions(screenInfo.width, screenInfo.height, screenInfo.scaleFactor)
+  }
+  if (window.electronAPI?.getWindowSize) {
+    const pref = await window.electronAPI.getWindowSize(authStore.user.id)
+    if (pref && window.electronAPI?.getScreenInfo) {
+      // 存储的是物理值，转回逻辑值匹配选项
+      const screenInfo = await window.electronAPI.getScreenInfo()
+      const logicalW = Math.round(pref.width / screenInfo.scaleFactor)
+      const logicalH = Math.round(pref.height / screenInfo.scaleFactor)
+      windowResolution.value = `${logicalW}x${logicalH}`
+    } else if (window.electronAPI?.getScreenInfo) {
+      const screenInfo = await window.electronAPI.getScreenInfo()
+      windowResolution.value = `${screenInfo.width}x${screenInfo.height}`
+    }
+  }
+}
+
+const handleResolutionChange = async (val: string) => {
+  if (!window.electronAPI?.setWindowSize || !authStore.user?.id) return
+  const parts = val.split('x')
+  if (parts.length === 2) {
+    const w = parseInt(parts[0], 10)
+    const h = parseInt(parts[1], 10)
+    if (!isNaN(w) && !isNaN(h)) {
+      await window.electronAPI.setWindowSize(authStore.user.id, w, h)
+      logger.info('[设置] 修改窗口分辨率', { width: w, height: h })
+    }
+  }
+}
 
 const loadSystemSettings = async () => {
   if (window.electronAPI) {
@@ -535,6 +624,7 @@ onMounted(async () => {
   }
 
   loadSystemSettings()
+  loadWindowSize()
 })
 
 watch(() => authStore.profile?.nickname, (val) => {
@@ -582,14 +672,13 @@ watch(() => form.birthday, () => {
 .profile-content {
   flex: 1;
   overflow: hidden;
-  max-width: 500px;
-  width: 100%;
+  width: 500px;
   margin: 0 auto;
 }
 
-@media (max-width: 540px) {
+@media (max-width: 499px) {
   .profile-content {
-    max-width: none;
+    width: 80%;
   }
 }
 

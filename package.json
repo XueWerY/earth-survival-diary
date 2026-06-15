@@ -1,7 +1,7 @@
 {
   "name": "earth-survival-diary",
   "private": true,
-  "version": "2026.6.14-10",
+  "version": "2026.6.15-9",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -52,7 +52,7 @@
   },
   "build": {
     "appId": "com.earth-survival-diary.app",
-    "productName": "Earth-Survival-Diary",
+    "productName": "地球 Online 生存日记",
     "directories": {
       "output": "release"
     },
