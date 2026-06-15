@@ -76,6 +76,8 @@ interface ReminderItem {
   reminderHours?: number
   reminderMinutes?: number
   endTime?: string
+  focusDuration?: number
+  targetDate?: string
 }
 
 interface UpdateStatus {

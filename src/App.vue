@@ -154,17 +154,7 @@
       </div>
       </template>
       <div class="reminder-stack">
-        <div v-for="(r, i) in activeReminders" :key="r.id" class="reminder-panel">
-          <div class="reminder-panel-header">
-            <span class="reminder-panel-icon">🔔</span>
-            <button class="reminder-panel-close" @click="dismissReminder(i)">✕</button>
-          </div>
-          <div class="reminder-panel-content">
-            <div class="reminder-panel-title">{{ r.name }}</div>
-            <div v-if="r.listName || r.groupName" class="reminder-panel-subtitle">{{ [r.listName, r.groupName].filter(Boolean).join(' / ') }}</div>
-            <div class="reminder-panel-body">{{ r.body }}</div>
-          </div>
-        </div>
+        <ReminderCard v-for="(r, i) in activeReminders" :key="r.id" :reminder="r" @dismiss="dismissReminder(i)" />
       </div>
 
       <!-- 主导航栏 - Android 端在底部 -->
@@ -198,6 +188,7 @@ import { useRouter, useRoute } from 'vue-router'
 import AuthPage from './components/auth/AuthPage.vue'
 import { useTaskStore } from './stores/taskStore'
 import { useListStore, DEFAULT_LIST_COLORS } from './stores/listStore'
+import ReminderCard from './components/common/card/ReminderCard.vue'
 import { useAuthStore } from './stores/authStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useFocusStore } from './stores/focusStore'
@@ -711,7 +702,8 @@ const scheduleListReminders = async () => {
             reminderStrategy: cm.reminderStrategy,
             reminderDays: cm.reminderDays,
             reminderHours: cm.reminderHours,
-            reminderMinutes: cm.reminderMinutes
+            reminderMinutes: cm.reminderMinutes,
+            targetDate: cm.targetDate
           })
         }
         logger.info('[提醒] 倒数日提醒已加入调度', { count: countdownMilestones.filter((cm: any) => cm.reminderStrategy && cm.reminderStrategy !== 'none' && cm.countMode !== 'countup').length })
@@ -729,10 +721,11 @@ const scheduleListReminders = async () => {
       if (remaining > 0) {
         reminders.push({
           id: 'focus-pomodoro',
-          name: '专注完成',
+          name: timerState.name || '专注完成',
           body: '专注完成，请放松一下吧',
           triggerTime: new Date(now + remaining * 1000).toISOString(),
-          repeatStrategy: 'none'
+          repeatStrategy: 'none',
+          focusDuration: timerState.targetDuration
         })
         logger.info('[提醒] 专注提醒已加入调度', { name: '专注完成' })
       }
@@ -2070,87 +2063,10 @@ onUnmounted(() => {
   transform: translateX(-50%);
   z-index: 2900;
   pointer-events: none;
-  width: 320px;
-  height: 0;
-}
-
-.reminder-panel {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  background: rgba(20, 16, 55, 0.95);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
-  animation: reminderSlideIn 0.3s ease-out;
-  pointer-events: auto;
-  overflow: hidden;
-}
-
-.reminder-panel-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px 4px;
-}
-
-.reminder-panel-icon {
-  font-size: 18px;
-  line-height: 1;
-}
-
-.reminder-panel-close {
-  background: rgba(255, 255, 255, 0.08);
-  border: none;
-  color: var(--chalk-muted);
-  font-size: 14px;
-  cursor: pointer;
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  transition: all 0.2s;
-}
-
-.reminder-panel-close:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: var(--chalk-white);
-}
-
-.reminder-panel-content {
-  padding: 2px 14px 10px;
-}
-
-.reminder-panel-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--chalk-amber);
-  margin-bottom: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 260px;
-}
-
-.reminder-panel-subtitle {
-  font-size: 11px;
-  color: var(--chalk-subtle);
-  margin-bottom: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 260px;
-}
-
-.reminder-panel-body {
-  font-size: 12px;
-  color: var(--chalk-white-60);
-  line-height: 1.4;
+  flex-direction: column;
+  gap: 8px;
+  width: 300px;
 }
 
 .changelog-panel {
@@ -2175,17 +2091,6 @@ onUnmounted(() => {
 @keyframes changelogFadeIn {
   from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
-
-@keyframes reminderSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .changelog-panel-header {
