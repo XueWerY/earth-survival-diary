@@ -8,6 +8,7 @@ Menu.setApplicationMenu(null)
 
 let appTray = null
 let closeAction = 'minimize'
+let isQuitting = false
 
 function getCloseAction() {
   const settingsPath = path.join(app.getPath('userData'), 'close-settings.json')
@@ -29,6 +30,16 @@ const gotTheLock = app.requestSingleInstanceLock()
 if (!gotTheLock) {
   debugLog('[Main] 另一个实例已在运行，退出当前实例')
   app.quit()
+} else {
+  app.on('second-instance', () => {
+    debugLog('[Main] 收到第二实例启动请求，显示主窗口')
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.setSkipTaskbar(false)
+      mainWindow.focus()
+    }
+  })
 }
 
 let mainWindow
@@ -536,7 +547,7 @@ function createWindow(url) {
   })
 
   mainWindow.on('close', (e) => {
-    if (closeAction === 'minimize') {
+    if (closeAction === 'minimize' && !isQuitting) {
       e.preventDefault()
       mainWindow.hide()
       mainWindow.setSkipTaskbar(true)
@@ -1336,7 +1347,8 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', async () => {
-  debugLog('[Electron] 应用已关闭')
+  debugLog('[Electron] 应用即将退出（系统关机/用户退出）')
+  isQuitting = true
   cancelAllReminderTimers()
   if (serverInstance) {
     try { serverInstance.close() } catch (e) {}

@@ -39,11 +39,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useFocusStore } from '../../../../stores/focusStore'
 import { useListStore } from '../../../../stores/listStore'
 import { useSettingsStore } from '../../../../stores/settingsStore'
 import { getData } from '../../../../services/storageService'
 import dayjs from 'dayjs'
 
+const focusStore = useFocusStore()
 const listStore = useListStore()
 const settingsStore = useSettingsStore()
 const loading = ref(false)
@@ -306,6 +308,44 @@ async function loadData() {
       }
     } catch {
       // 课程数据加载失败，跳过
+    }
+
+    // 收集专注提醒（番茄钟和正计时整点）
+    try {
+      const timerState = focusStore.timerState
+      if (timerState) {
+        if (timerState.type === 'pomodoro') {
+          const nowMs = Date.now()
+          const elapsedSinceStart = Math.floor((nowMs - timerState.startTimestamp) / 1000)
+          const totalSeconds = timerState.targetDuration * 60
+          const remaining = Math.max(0, totalSeconds - Math.max(0, elapsedSinceStart))
+          if (remaining > 0) {
+            allReminders.push({
+              id: 'focus-pomodoro',
+              name: timerState.name || '专注完成',
+              body: '专注完成，请放松一下吧',
+              triggerTime: new Date(nowMs + remaining * 1000).toISOString(),
+              repeatStrategy: 'none',
+              focusDuration: timerState.targetDuration
+            })
+          }
+        } else if (timerState.type === 'stopwatch') {
+          const nowMs = Date.now()
+          const elapsedMs = nowMs - timerState.startTimestamp
+          const elapsedMinutes = Math.floor(elapsedMs / 60000)
+          const nextHourMark = (Math.floor(elapsedMinutes / 60) + 1) * 60
+          const minutesUntilNextHour = nextHourMark - elapsedMinutes
+          allReminders.push({
+            id: 'focus-hourly',
+            name: timerState.name || '专注提醒',
+            body: '已达整数小时，继续加油！',
+            triggerTime: new Date(nowMs + minutesUntilNextHour * 60000).toISOString(),
+            repeatStrategy: 'hourly'
+          })
+        }
+      }
+    } catch {
+      // 专注数据加载失败，跳过
     }
 
     items.value = allReminders

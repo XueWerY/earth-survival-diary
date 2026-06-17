@@ -11,6 +11,12 @@ export interface DropdownItem {
   onSelect: () => void
 }
 
+export interface FavoriteItem {
+  id: string
+  name: string
+  navPath: string[]
+}
+
 export interface BreadcrumbSegment {
   label: string
   color: string

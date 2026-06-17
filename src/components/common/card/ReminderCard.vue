@@ -52,7 +52,7 @@ const listStore = useListStore()
 
 const type = computed(() => {
   if (props.reminder.id.startsWith('course-')) return 'course'
-  if (props.reminder.id === 'focus-pomodoro') return 'focus'
+  if (props.reminder.id === 'focus-pomodoro' || props.reminder.id === 'focus-hourly') return 'focus'
   if (props.reminder.listName || props.reminder.folderName || props.reminder.groupName) return 'task'
   return 'countdown'
 })

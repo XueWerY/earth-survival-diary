@@ -113,6 +113,20 @@
         <span class="form-label">备注</span>
         <el-input v-model="formNote" type="textarea" :rows="2" placeholder="添加备注..." />
       </div>
+
+      <div class="form-row">
+        <span class="form-label">检查事项</span>
+        <div class="checklist-form-items">
+          <div v-for="(item, idx) in formChecklist" :key="item.id" class="checklist-form-item">
+            <el-input v-model="item.text" placeholder="输入检查事项" size="small" @keyup.enter="addChecklistItem" />
+            <button class="checklist-form-delete" @click="removeChecklistItem(idx)"><el-icon><Delete /></el-icon></button>
+          </div>
+          <div class="checklist-form-add" @click="addChecklistItem">
+            <el-icon><Plus /></el-icon>
+            <span>添加检查事项</span>
+          </div>
+        </div>
+      </div>
     </template>
 
     <div class="list-form-footer">
@@ -125,7 +139,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useListStore, type RepeatStrategy, type RepeatEndStrategy, REPEAT_STRATEGIES, REPEAT_END_STRATEGIES, PRIORITIES, type ReminderStrategy } from '../../stores/listStore'
+import { Delete, Plus } from '@element-plus/icons-vue'
+import { useListStore, type RepeatStrategy, type RepeatEndStrategy, REPEAT_STRATEGIES, REPEAT_END_STRATEGIES, PRIORITIES, type ReminderStrategy, type ChecklistItem } from '../../stores/listStore'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
 import ReminderTimePicker from '../common/picker/ReminderTimePicker.vue'
@@ -158,6 +173,7 @@ const formRepeatEndStrategy = ref<RepeatEndStrategy>('never')
 const formRepeatEndDate = ref('')
 const formRepeatEndCount = ref(1)
 const formNote = ref('')
+const formChecklist = ref<{ id: string; text: string }[]>([])
 const repeatDays = ref(1)
 const repeatWeekdays = ref<number[]>([0, 1, 2, 3, 4])
 const repeatMonthDay = ref(1)
@@ -188,6 +204,14 @@ const toggleWeekday = (idx: number) => {
   repeatWeekdays.value = arr.sort()
 }
 
+const addChecklistItem = () => {
+  formChecklist.value.push({ id: 'cl-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8), text: '' })
+}
+
+const removeChecklistItem = (idx: number) => {
+  formChecklist.value.splice(idx, 1)
+}
+
 const handleSubmit = () => {
   const name = formName.value.trim()
   if (!name) { ElMessage.warning({ message: '任务名称没有填写', customClass: 'message-above-dialog' }); return }
@@ -209,6 +233,9 @@ const handleSubmit = () => {
       reminderMinutes = reminderTime.value.minutes
     }
   }
+  const checklist: ChecklistItem[] = formChecklist.value
+    .filter(item => item.text.trim())
+    .map(item => ({ id: item.id, text: item.text.trim(), completed: false }))
   emit('submit', {
     name,
     date: formDate.value,
@@ -230,6 +257,7 @@ const handleSubmit = () => {
     reminderHours,
     reminderMinutes,
     note: formNote.value || undefined,
+    checklist,
   })
 }
 
@@ -280,4 +308,12 @@ onMounted(async () => {
 :deep(.el-select__wrapper) { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); }
 :deep(.el-input-number) { width: 100%; }
 :deep(.el-input-number .el-input__wrapper) { width: 100%; background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); }
+
+.checklist-form-items { display: flex; flex-direction: column; gap: 6px; }
+.checklist-form-item { display: flex; align-items: center; gap: 6px; }
+.checklist-form-item :deep(.el-input) { flex: 1; }
+.checklist-form-delete { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: transparent; color: var(--chalk-muted); cursor: pointer; border-radius: 4px; transition: all 0.15s; flex-shrink: 0; }
+.checklist-form-delete:hover { background: rgba(255,255,255,0.1); color: var(--chalk-danger); }
+.checklist-form-add { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--chalk-subtle); padding: 4px 8px; border-radius: 6px; cursor: pointer; transition: all 0.15s; }
+.checklist-form-add:hover { color: var(--chalk-white-70); background: rgba(255,255,255,0.05); }
 </style>

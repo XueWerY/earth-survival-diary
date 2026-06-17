@@ -4,7 +4,7 @@
       <button class="breadcrumb-module" @click="pageNav.setNavPath(['list'])" title="回到清单首页">📋</button>
       <div class="breadcrumb-scroll" ref="breadcrumbScrollRef">
         <template v-for="(seg, idx) in localBreadcrumbSegments" :key="idx">
-          <span v-if="seg.dropdownItems" class="breadcrumb-sep clickable" @click.stop="openSegmentDropdown(seg, $event)">></span>
+          <span v-if="seg.dropdownItems" class="breadcrumb-sep clickable" @click.stop="openSegmentDropdown(seg, $event)">{{ (activeDropdown === 'segment' && activeSegment === seg) ? '∨' : '>' }}</span>
           <span v-else class="breadcrumb-sep">></span>
           <span
             class="breadcrumb-segment"
@@ -14,6 +14,12 @@
           >{{ seg.label }}</span>
         </template>
       </div>
+      <button v-if="navPath.length >= 2" class="breadcrumb-fav-btn" :class="{ active: isCurrentFavorited }" @click="toggleFavorite" title="收藏当前视图">
+        <el-icon><StarFilled v-if="isCurrentFavorited" /><Star v-else /></el-icon>
+      </button>
+      <button class="breadcrumb-quick-btn" @click="openFavoritesDropdown" title="快速访问">
+        <el-icon><CollectionTag /></el-icon>
+      </button>
       <button v-if="showSortButton" class="breadcrumb-sort-btn" @click="openSortDropdown" title="排序">
         <el-icon><Sort /></el-icon>
       </button>
@@ -30,6 +36,13 @@
     <div v-if="activeDropdown === 'sort'" class="page-dropdown" :style="sortDropdownPosStyle" @click.stop>
       <div v-for="opt in sortOptions" :key="opt.value" class="page-dropdown-item" :class="{ current: currentSort === opt.value }" @click="selectSortOption(opt.value)">
         <span>{{ opt.label }}</span>
+      </div>
+    </div>
+
+    <div v-if="activeDropdown === 'favorites'" class="page-dropdown" :style="dropdownPosStyle" @click.stop>
+      <div v-if="favorites.length === 0" class="page-dropdown-empty">暂无收藏</div>
+      <div v-for="fav in favorites" :key="fav.id" class="page-dropdown-item" @click="selectFavorite(fav)">
+        <span>{{ fav.name }}</span>
       </div>
     </div>
 
@@ -241,7 +254,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch, inject } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Calendar, Clock, Timer, Close, Warning, Edit, Plus as PlusIcon, Delete, List, Folder, Check, Sort } from '@element-plus/icons-vue'
+import { Calendar, Clock, Timer, Close, Warning, Edit, Plus as PlusIcon, Delete, List, Folder, Check, Sort, Star, StarFilled, CollectionTag } from '@element-plus/icons-vue'
 import ListFormPage from './ListFormPage.vue'
 import GroupFormPage from './GroupFormPage.vue'
 import TaskForm from './TaskForm.vue'
@@ -249,7 +262,8 @@ import TaskCard from './TaskCard.vue'
 import MoveTaskPage from './MoveTaskPage.vue'
 import dayjs from 'dayjs'
 import { useListStore, DEFAULT_FOLDER_COLORS, EXTENDED_FOLDER_COLORS, type Task, type ListPage, type TaskGroup, type TaskFolder } from '../../stores/listStore'
-import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem } from '../../composables/usePageNav'
+import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem, type FavoriteItem } from '../../composables/usePageNav'
+import { getSystemStateField, setSystemStateField } from '../../services/storageService'
 import { logger } from '../../lib/logger'
 
 const pageNav = usePageNav()
@@ -510,6 +524,46 @@ const dropdownPosStyle = computed(() => ({
 
 const activeSegment = ref<BreadcrumbSegment | null>(null)
 
+const favorites = ref<FavoriteItem[]>([])
+
+const loadFavorites = async () => {
+  const listState = await getSystemStateField('list')
+  favorites.value = listState?.favorites || []
+}
+
+const currentNavPathKey = computed(() => JSON.stringify(navPath.value))
+const isCurrentFavorited = computed(() => favorites.value.some(f => JSON.stringify(f.navPath) === currentNavPathKey.value))
+
+const toggleFavorite = async () => {
+  const path = navPath.value
+  if (path.length < 2) return
+  activeDropdown.value = null
+  activeSegment.value = null
+  const key = currentNavPathKey.value
+  if (isCurrentFavorited.value) {
+    favorites.value = favorites.value.filter(f => JSON.stringify(f.navPath) !== key)
+  } else {
+    const name = localBreadcrumbSegments.value.map(s => s.label).join(' > ')
+    favorites.value.push({ id: 'fav-' + Date.now(), name, navPath: [...path] })
+  }
+  const listState = await getSystemStateField('list') || {}
+  listState.favorites = favorites.value
+  await setSystemStateField('list', listState)
+}
+
+const openFavoritesDropdown = (event: MouseEvent) => {
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  dropdownPos.value = { top: rect.bottom + 4, left: rect.left - 8 }
+  activeDropdown.value = 'favorites'
+  activeSegment.value = null
+}
+
+const selectFavorite = (fav: FavoriteItem) => {
+  activeDropdown.value = null
+  pageNav.setNavPath([...fav.navPath])
+}
+
 const segmentDropdownItems = computed<DropdownItem[]>(() => {
   if (activeDropdown.value !== 'segment' || !activeSegment.value) return []
   return activeSegment.value.dropdownItems || []
@@ -684,6 +738,7 @@ onMounted(async () => {
   logger.debug('[ListPage] onMounted 调用 loadData 前', { isLoaded: listStore.isLoaded })
   await listStore.loadData()
   logger.debug('[ListPage] onMounted loadData 完成', { isLoaded: listStore.isLoaded, listsCount: listStore.lists?.length })
+  await loadFavorites()
   await initTaskState()
   logger.debug('[ListPage] onMounted 结束', { navPath: pageNav.navPath.value, showBreadcrumb: showBreadcrumb.value, isTaskRoot: isTaskRoot.value })
 })
@@ -933,6 +988,38 @@ const handleConfirmAction = () => {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.breadcrumb-fav-btn, .breadcrumb-quick-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--chalk-white-60);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.breadcrumb-fav-btn:hover, .breadcrumb-quick-btn:hover {
+  background: rgba(102, 126, 234, 0.2);
+  color: var(--chalk-white);
+}
+
+.breadcrumb-fav-btn.active {
+  color: var(--chalk-warning);
+}
+
+.page-dropdown-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--chalk-muted);
+  font-size: 13px;
+}
+
 .breadcrumb-sort-btn {
   display: flex;
   align-items: center;
@@ -1021,6 +1108,7 @@ const handleConfirmAction = () => {
 .main-content { flex: 1; min-height: 0; }
 .main-content :deep(.el-scrollbar) { height: 100%; }
 .main-content :deep(.el-scrollbar__view) { min-height: 100%; padding: 24px 0; }
+.main-content :deep(.el-scrollbar__bar) { display: none; }
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 0; }
 
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; width: 80%; margin: 0 auto; }

@@ -1,7 +1,7 @@
 {
   "id": "reminder-viewer",
   "name": "提醒查看器",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "查看所有已调度的提醒",
   "author": "官方",
   "tools": {

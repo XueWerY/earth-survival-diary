@@ -793,6 +793,7 @@ const handleCountdownFormSubmit = (data: Partial<Milestone>) => {
   saveData()
   if (hasReminder) refreshReminders()
   editingMilestoneForForm.value = null
+  countdownFormVisible.value = false
 }
 
 const handleCommand = (command: string, milestone: Milestone) => {

@@ -1,5 +1,5 @@
 <template>
-  <div class="list-card" :class="{ completed: list.completed }">
+  <div class="list-card" :class="['priority-bg-' + list.priority, { completed: list.completed }]">
     <div class="list-header">
       <el-checkbox v-if="showCheckbox" :model-value="list.completed" @change="handleTaskComplete(list)" :disabled="isGuideActive" />
       <template v-if="isEditingName">
@@ -788,6 +788,12 @@ const cancelEditNotes = () => {
 .list-card { background: rgba(255, 255, 255, 0.05); border-radius: 10px; padding: 14px 16px; transition: all 0.2s; width: 100%; }
 .list-card:hover { background: rgba(255, 255, 255, 0.08); }
 .list-card.completed { opacity: 0.6; }
+.list-card.priority-bg-high { background: rgba(239, 68, 68, 0.08); }
+.list-card.priority-bg-high:hover { background: rgba(239, 68, 68, 0.12); }
+.list-card.priority-bg-medium { background: rgba(245, 158, 11, 0.08); }
+.list-card.priority-bg-medium:hover { background: rgba(245, 158, 11, 0.12); }
+.list-card.priority-bg-low { background: rgba(34, 197, 94, 0.08); }
+.list-card.priority-bg-low:hover { background: rgba(34, 197, 94, 0.12); }
 .list-card.completed .list-name { text-decoration: line-through; color: var(--chalk-muted) !important; }
 
 .list-header { display: flex; align-items: center; gap: 10px; }

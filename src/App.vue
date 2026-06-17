@@ -731,6 +731,24 @@ const scheduleListReminders = async () => {
       }
     }
 
+    // 正计时整点专注提醒
+    if (timerState && timerState.type === 'stopwatch') {
+      const now = Date.now()
+      const elapsedMs = now - timerState.startTimestamp
+      const elapsedMinutes = Math.floor(elapsedMs / 60000)
+      const nextHourMark = (Math.floor(elapsedMinutes / 60) + 1) * 60
+      const minutesUntilNextHour = nextHourMark - elapsedMinutes
+      const triggerTime = new Date(now + minutesUntilNextHour * 60000).toISOString()
+      reminders.push({
+        id: 'focus-hourly',
+        name: timerState.name || '专注提醒',
+        body: `您已专注${nextHourMark / 60}小时，请放松一下吧！`,
+        triggerTime,
+        repeatStrategy: 'hourly'
+      })
+      logger.info('[提醒] 正计时整点提醒已加入调度', { nextHourMark, triggerTime })
+    }
+
     const timeToMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
     const addMinutes = (time: string, minutes: number) => {
       const total = timeToMinutes(time) + minutes

@@ -237,6 +237,7 @@ const focusStore = useFocusStore()
 const taskStore = useTaskStore()
 const settingsStore = useSettingsStore()
 const pageNav = usePageNav()
+const refreshReminders = inject<() => void>('refreshReminders', () => {})
 
 // 计时器状态
 type TimerState = 'idle' | 'running'
@@ -462,6 +463,7 @@ const startFocus = async () => {
   } else {
     elapsedSeconds.value = 0
     startStopwatch()
+    refreshReminders()
   }
 }
 
@@ -524,6 +526,8 @@ const cancelFocus = async () => {
   focusStore.focusDisplayTime = ''
 
   timeChars.value = '00:00'.split('')
+
+  refreshReminders()
 
   ElMessage.info('已取消专注')
 }
@@ -657,6 +661,8 @@ const completeFocus = async () => {
   focusStore.focusDisplayTime = ''
 
   timeChars.value = '00:00'.split('')
+
+  refreshReminders()
 
   logger.info('[专注] 完成专注', { name: focusName.value, duration: totalDuration })
   ElMessage.success('专注完成！')
