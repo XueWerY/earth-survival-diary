@@ -402,7 +402,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, inject } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowRight, Warning } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
@@ -490,6 +490,7 @@ const courses = ref<Course[]>([])
 
 const settingsStore = useSettingsStore()
 const pageNav = usePageNav()
+const refreshReminders = inject<() => void>('refreshReminders', () => {})
 
 const isElectron = computed(() => typeof window !== 'undefined' && !!(window as any).electronAPI)
 
@@ -957,6 +958,7 @@ async function handleCourseFormSubmit() {
       logger.info('[课程表] 添加课程', { name: courseForm.value.name })
     }
     saveCourses()
+    refreshReminders()
     closeDialog()
   })
 }
@@ -978,6 +980,7 @@ async function confirmDeleteCourse() {
   pendingDeleteCourseId.value = null
   closeDialog()
   await saveCourses()
+  refreshReminders()
   ElMessage.success('课程已删除')
   logger.info('[课程表] 删除课程', { id })
 }
@@ -1066,6 +1069,7 @@ async function confirmCourseSettings() {
     periodCountPerSession: courseSettingsDraft.value.periodCountPerSession
   })
   logger.info('[设置] 修改课程表设置')
+  refreshReminders()
   showCourseSettings.value = false
 }
 

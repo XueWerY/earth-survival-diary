@@ -117,8 +117,15 @@
       <div class="form-row">
         <span class="form-label">检查事项</span>
         <div class="checklist-form-items">
-          <div v-for="(item, idx) in formChecklist" :key="item.id" class="checklist-form-item">
-            <el-input v-model="item.text" placeholder="输入检查事项" size="small" @keyup.enter="addChecklistItem" />
+          <div v-for="(item, idx) in formChecklist" :key="item.id" class="checklist-form-item" :class="{ 'drag-over': formDragOverIdx === idx }"
+               @dragover.prevent="onFormChecklistDragOver($event, idx)"
+               @drop="onFormChecklistDrop(idx)"
+               @dragleave="onFormChecklistDragLeave(idx)">
+            <el-icon class="checklist-drag-handle" draggable="true"
+              @dragstart="onFormChecklistDragStart($event, idx)"
+              @dragend="formDragOverIdx = null"
+            ><Rank /></el-icon>
+            <el-input v-model="item.text" type="textarea" autosize placeholder="输入检查事项" size="small" class="checklist-form-input" />
             <button class="checklist-form-delete" @click="removeChecklistItem(idx)"><el-icon><Delete /></el-icon></button>
           </div>
           <div class="checklist-form-add" @click="addChecklistItem">
@@ -139,7 +146,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Delete, Plus } from '@element-plus/icons-vue'
+import { Delete, Plus, Rank } from '@element-plus/icons-vue'
 import { useListStore, type RepeatStrategy, type RepeatEndStrategy, REPEAT_STRATEGIES, REPEAT_END_STRATEGIES, PRIORITIES, type ReminderStrategy, type ChecklistItem } from '../../stores/listStore'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
@@ -210,6 +217,32 @@ const addChecklistItem = () => {
 
 const removeChecklistItem = (idx: number) => {
   formChecklist.value.splice(idx, 1)
+}
+
+const formDragSourceIdx = ref<number | null>(null)
+const formDragOverIdx = ref<number | null>(null)
+
+const onFormChecklistDragStart = (e: DragEvent, idx: number) => {
+  formDragSourceIdx.value = idx
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+}
+
+const onFormChecklistDragOver = (_e: DragEvent, idx: number) => {
+  formDragOverIdx.value = idx
+}
+
+const onFormChecklistDragLeave = (idx: number) => {
+  if (formDragOverIdx.value === idx) formDragOverIdx.value = null
+}
+
+const onFormChecklistDrop = (targetIdx: number) => {
+  formDragOverIdx.value = null
+  const fromIdx = formDragSourceIdx.value
+  if (fromIdx === null || fromIdx === targetIdx) return
+  const items = [...formChecklist.value]
+  const [moved] = items.splice(fromIdx, 1)
+  items.splice(targetIdx, 0, moved)
+  formChecklist.value = items
 }
 
 const handleSubmit = () => {
@@ -310,8 +343,13 @@ onMounted(async () => {
 :deep(.el-input-number .el-input__wrapper) { width: 100%; background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); }
 
 .checklist-form-items { display: flex; flex-direction: column; gap: 6px; }
-.checklist-form-item { display: flex; align-items: center; gap: 6px; }
-.checklist-form-item :deep(.el-input) { flex: 1; }
+.checklist-form-item { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; transition: all 0.2s ease; }
+.checklist-form-item:hover { background: rgba(255, 255, 255, 0.05); }
+.checklist-form-item.drag-over { background: rgba(102,126,234,0.15); }
+.checklist-form-input { flex: 1; }
+.checklist-form-input :deep(.el-textarea__inner) { font-size: 13px; }
+.checklist-drag-handle { font-size: 14px; color: var(--chalk-white-30); cursor: grab; flex-shrink: 0; }
+.checklist-drag-handle:active { cursor: grabbing; }
 .checklist-form-delete { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: transparent; color: var(--chalk-muted); cursor: pointer; border-radius: 4px; transition: all 0.15s; flex-shrink: 0; }
 .checklist-form-delete:hover { background: rgba(255,255,255,0.1); color: var(--chalk-danger); }
 .checklist-form-add { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--chalk-subtle); padding: 4px 8px; border-radius: 6px; cursor: pointer; transition: all 0.15s; }

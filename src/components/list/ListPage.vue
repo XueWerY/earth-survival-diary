@@ -42,7 +42,7 @@
     <div v-if="activeDropdown === 'favorites'" class="page-dropdown" :style="dropdownPosStyle" @click.stop>
       <div v-if="favorites.length === 0" class="page-dropdown-empty">暂无收藏</div>
       <div v-for="fav in favorites" :key="fav.id" class="page-dropdown-item" @click="selectFavorite(fav)">
-        <span>{{ fav.name }}</span>
+        <span :style="{ color: getFavoriteColor(fav) }">{{ fav.name }}</span>
       </div>
     </div>
 
@@ -552,6 +552,10 @@ const toggleFavorite = async () => {
 }
 
 const openFavoritesDropdown = (event: MouseEvent) => {
+  if (activeDropdown.value === 'favorites') {
+    closeDropdown()
+    return
+  }
   const target = event.currentTarget as HTMLElement
   const rect = target.getBoundingClientRect()
   dropdownPos.value = { top: rect.bottom + 4, left: rect.left - 8 }
@@ -564,12 +568,44 @@ const selectFavorite = (fav: FavoriteItem) => {
   pageNav.setNavPath([...fav.navPath])
 }
 
+const smartColors: Record<string, string> = { today: '#22c55e', expired: '#ef4444', future: '#3b82f6' }
+
+const getFavoriteColor = (fav: FavoriteItem): string => {
+  const path = fav.navPath
+  if (path.length < 2 || path[0] !== 'list') return ''
+  if (path[1] === 'smart') {
+    if (path.length >= 3) return smartColors[path[2]] || '#667eea'
+    return '#667eea'
+  }
+  if (path[1] === 'custom') {
+    if (path.length >= 5) {
+      const list = listStore.taskLists.find(l => l.id === path[3])
+      const group = list?.groups.find(g => g.id === path[4])
+      return group?.color || ''
+    }
+    if (path.length >= 4) {
+      const list = listStore.taskLists.find(l => l.id === path[3])
+      return list?.color || ''
+    }
+    if (path.length >= 3) {
+      const folder = sortedFolders.value.find(f => f.id === path[2])
+      return folder?.color || '#667eea'
+    }
+    return '#667eea'
+  }
+  return ''
+}
+
 const segmentDropdownItems = computed<DropdownItem[]>(() => {
   if (activeDropdown.value !== 'segment' || !activeSegment.value) return []
   return activeSegment.value.dropdownItems || []
 })
 
 const openSegmentDropdown = (seg: BreadcrumbSegment, event: MouseEvent) => {
+  if (activeDropdown.value === 'segment' && activeSegment.value === seg) {
+    closeDropdown()
+    return
+  }
   const target = event.currentTarget as HTMLElement
   const rect = target.getBoundingClientRect()
   dropdownPos.value = { top: rect.bottom + 4, left: rect.left - 8 }
@@ -584,6 +620,10 @@ const handleSegmentDropdownSelect = (item: DropdownItem) => {
 }
 
 const openSortDropdown = (event: MouseEvent) => {
+  if (activeDropdown.value === 'sort') {
+    closeDropdown()
+    return
+  }
   const target = event.currentTarget as HTMLElement
   const rect = target.getBoundingClientRect()
   sortDropdownPos.value = { top: rect.bottom + 4, left: rect.left - 8 }
