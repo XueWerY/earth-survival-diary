@@ -77,6 +77,7 @@ interface ReminderItem {
   reminderMinutes?: number
   endTime?: string
   focusDuration?: number
+  focusStartTimestamp?: number
   targetDate?: string
 }
 

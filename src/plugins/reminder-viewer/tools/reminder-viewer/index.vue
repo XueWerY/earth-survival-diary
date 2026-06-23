@@ -245,7 +245,8 @@ async function loadData() {
           for (const course of courses) {
             if (!course.weeks || course.weeks.length === 0) continue
             if (!course.periodIds || course.periodIds.length === 0) continue
-            if (!course.dayOfWeek || course.dayOfWeek.length === 0) continue
+            const dwList = Array.isArray(course.dayOfWeek) ? course.dayOfWeek : [course.dayOfWeek]
+            if (!dwList || dwList.length === 0) continue
             const sortedWeeks = [...course.weeks].sort((a: number, b: number) => a - b)
 
             const timeToMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
@@ -263,28 +264,28 @@ async function loadData() {
               const dinner = courseSettings?.dinnerBreakMinutes ?? 90
               const counts = courseSettings?.periodCountPerSession || { morning: 4, afternoon: 4, evening: 2 }
               const { morning, afternoon, evening } = counts
-              const periods: { id: number; start: string }[] = []
+              const periods: { id: number; start: string; end: string }[] = []
               let cur = firstStart
               let idNum = 1
               const addSession = (cnt: number) => {
                 for (let i = 0; i < cnt; i++) {
                   const end = addMinutes(cur, dur)
-                  periods.push({ id: idNum++, start: cur })
+                  periods.push({ id: idNum++, start: cur, end })
                   cur = addMinutes(end, brk)
                 }
               }
               addSession(morning)
-              if (morning > 0 && afternoon > 0) cur = addMinutes(periods[periods.length - 1].end || cur, lunch)
+              if (morning > 0 && afternoon > 0) cur = addMinutes(periods[periods.length - 1].end, lunch)
               else if (morning === 0 && afternoon > 0) cur = firstStart
               addSession(afternoon)
-              if (afternoon > 0 && evening > 0) cur = addMinutes(periods[periods.length - 1].end || cur, dinner)
+              if (afternoon > 0 && evening > 0) cur = addMinutes(periods[periods.length - 1].end, dinner)
               else if (afternoon === 0 && evening > 0) cur = firstStart
               addSession(evening)
               const firstP = periods.find(p => p.id === Math.min(...periodIds))
               return firstP?.start || firstStart
             }
 
-            for (const dw of course.dayOfWeek) {
+            for (const dw of dwList) {
               const dayOffset = dw === 0 ? 6 : dw - 1
               for (const week of sortedWeeks) {
                 if (week < currentWeek) continue

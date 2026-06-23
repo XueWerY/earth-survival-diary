@@ -744,7 +744,8 @@ const scheduleListReminders = async () => {
         name: timerState.name || '专注提醒',
         body: `您已专注${nextHourMark / 60}小时，请放松一下吧！`,
         triggerTime,
-        repeatStrategy: 'hourly'
+        repeatStrategy: 'hourly',
+        focusStartTimestamp: timerState.startTimestamp
       })
       logger.info('[提醒] 正计时整点提醒已加入调度', { nextHourMark, triggerTime })
     }
@@ -2081,10 +2082,14 @@ onUnmounted(() => {
   transform: translateX(-50%);
   z-index: 2900;
   pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   width: 300px;
+}
+
+.reminder-stack :deep(.reminder-card) {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
 }
 
 .changelog-panel {

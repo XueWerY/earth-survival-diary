@@ -1231,6 +1231,10 @@ function scheduleNextRepeat(reminder) {
 
   debugLog('[提醒] 下一轮提醒: ' + reminder.name + ' 在 ' + formatDelay(delay) + '后')
   const nextReminder = { ...reminder, triggerTime: nextTrigger.toISOString() }
+  if (reminder.repeatStrategy === 'hourly' && reminder.focusStartTimestamp) {
+    const elapsedHours = Math.round((nextTrigger.getTime() - reminder.focusStartTimestamp) / 3600000)
+    nextReminder.body = `您已专注${elapsedHours}小时，请放松一下吧！`
+  }
   const timer = setTimeout(() => enqueueReminder(nextReminder), delay)
   reminderTimers.push({ id: reminder.id, timeout: timer })
 }
