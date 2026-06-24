@@ -79,6 +79,7 @@ interface ReminderItem {
   focusDuration?: number
   focusStartTimestamp?: number
   targetDate?: string
+  courseStartTime?: string
 }
 
 interface UpdateStatus {

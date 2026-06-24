@@ -141,7 +141,7 @@ const endDateText = computed<{ label: string; value: string } | null>(() => {
     return null
   }
   if (type.value === 'course') {
-    return { label: '上课时间：', value: formatTime(props.reminder.triggerTime) }
+    return { label: '上课时间：', value: formatTime(props.reminder.courseStartTime || props.reminder.triggerTime) }
   }
   if (type.value === 'focus') {
     if (props.reminder.focusDuration) {

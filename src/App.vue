@@ -803,11 +803,13 @@ const scheduleListReminders = async () => {
           const currentWeek = Math.max(1, getMonday(now).diff(semesterMonday, 'week') + 1)
           let courseCount = 0
           for (const course of courses) {
-            if (!course.weeks || course.weeks.length === 0) continue
             if (!course.periodIds || course.periodIds.length === 0) continue
             const dwList = Array.isArray(course.dayOfWeek) ? course.dayOfWeek : [course.dayOfWeek]
             if (!dwList || dwList.length === 0) continue
-            const sortedWeeks = [...course.weeks].sort((a: number, b: number) => a - b)
+            // weeks 为空数组表示全部周（与 CourseSchedule.vue 一致）
+            const sortedWeeks = course.weeks && course.weeks.length > 0
+              ? [...course.weeks].sort((a: number, b: number) => a - b)
+              : Array.from({ length: courseSettings?.totalWeeks || 20 }, (_, i) => i + 1)
             const startTime = getCourseStartTime(course.periodIds, courseSettings)
             for (const dw of dwList) {
               const dayOffset = dw === 0 ? 6 : dw - 1
@@ -822,7 +824,8 @@ const scheduleListReminders = async () => {
                   name: course.name,
                   body: `「${course.name}」即将开始`,
                   triggerTime: triggerTime.toISOString(),
-                  repeatStrategy: 'weekly'
+                  repeatStrategy: 'weekly',
+                  courseStartTime: classDate.format('YYYY-MM-DD') + 'T' + startTime
                 })
                 courseCount++
                 break

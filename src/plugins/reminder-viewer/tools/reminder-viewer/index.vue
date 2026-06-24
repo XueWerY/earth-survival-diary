@@ -243,11 +243,13 @@ async function loadData() {
           const semesterMonday = getMonday(dayjs(semesterStartDate))
           const currentWeek = Math.max(1, getMonday(now).diff(semesterMonday, 'week') + 1)
           for (const course of courses) {
-            if (!course.weeks || course.weeks.length === 0) continue
             if (!course.periodIds || course.periodIds.length === 0) continue
             const dwList = Array.isArray(course.dayOfWeek) ? course.dayOfWeek : [course.dayOfWeek]
             if (!dwList || dwList.length === 0) continue
-            const sortedWeeks = [...course.weeks].sort((a: number, b: number) => a - b)
+            // weeks 为空数组表示全部周（与 CourseSchedule.vue 一致）
+            const sortedWeeks = course.weeks && course.weeks.length > 0
+              ? [...course.weeks].sort((a: number, b: number) => a - b)
+              : Array.from({ length: courseSettings?.totalWeeks || 20 }, (_, i) => i + 1)
 
             const timeToMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
             const addMinutes = (time: string, minutes: number) => {
@@ -299,7 +301,8 @@ async function loadData() {
                   name: course.name,
                   body: `「${course.name}」即将开始`,
                   triggerTime: triggerTime.toISOString(),
-                  repeatStrategy: 'weekly'
+                  repeatStrategy: 'weekly',
+                  courseStartTime: classDate.format('YYYY-MM-DD') + 'T' + startTime
                 })
                 break
               }

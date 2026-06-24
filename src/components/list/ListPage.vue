@@ -263,7 +263,7 @@ import MoveTaskPage from './MoveTaskPage.vue'
 import dayjs from 'dayjs'
 import { useListStore, DEFAULT_FOLDER_COLORS, EXTENDED_FOLDER_COLORS, type Task, type ListPage, type TaskGroup, type TaskFolder } from '../../stores/listStore'
 import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem, type FavoriteItem } from '../../composables/usePageNav'
-import { getSystemStateField, setSystemStateField } from '../../services/storageService'
+import { getData, setData } from '../../services/storageService'
 import { logger } from '../../lib/logger'
 
 const pageNav = usePageNav()
@@ -527,8 +527,7 @@ const activeSegment = ref<BreadcrumbSegment | null>(null)
 const favorites = ref<FavoriteItem[]>([])
 
 const loadFavorites = async () => {
-  const listState = await getSystemStateField('list')
-  favorites.value = listState?.favorites || []
+  favorites.value = (await getData<FavoriteItem[]>('list', 'favorites')) || []
 }
 
 const currentNavPathKey = computed(() => JSON.stringify(navPath.value))
@@ -546,9 +545,7 @@ const toggleFavorite = async () => {
     const name = localBreadcrumbSegments.value.map(s => s.label).join(' > ')
     favorites.value.push({ id: 'fav-' + Date.now(), name, navPath: [...path] })
   }
-  const listState = await getSystemStateField('list') || {}
-  listState.favorites = favorites.value
-  await setSystemStateField('list', listState)
+  await setData('list', 'favorites', favorites.value)
 }
 
 const openFavoritesDropdown = (event: MouseEvent) => {
