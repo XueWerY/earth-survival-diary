@@ -1,0 +1,9 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "Entry module for Earth Survival Diary",
+  "main": "",
+  "author": "",
+  "license": "MIT",
+  "dependencies": {}
+}

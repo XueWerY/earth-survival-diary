@@ -1,10 +1,11 @@
 // API 客户端 - 所有请求通过后端代理
-// 在 Capacitor (无 Electron) 环境下使用本地 localStorage 存储
+// 在 Capacitor (无 Electron) 或 HarmonyOS 环境下使用本地文件存储
 
 import * as fs from './fileStore'
 
 const API_BASE = '/api'
 
+// 非 Electron 环境统一使用本地文件存储（Capacitor 安卓端 + HarmonyOS 鸿蒙端）
 const isCapacitor = typeof window !== 'undefined' && !(window as any).electronAPI
 
 // 获取存储的 token

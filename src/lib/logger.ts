@@ -16,8 +16,8 @@ export interface LogEntry {
   stack?: string;
 }
 
-// 静态导入 Capacitor Filesystem 插件（避免 Android WebView 上动态 import() 可能挂起的问题）
-import { Filesystem, Directory, Encoding } from '@capacitor/filesystem'
+// 静态导入文件系统桥接层（避免 Android WebView 上动态 import() 可能挂起的问题）
+import { Filesystem, Directory, Encoding } from './fileSystemBridge'
 
 // 北京时间格式化工具
 const formatBeijingTimestamp = (date: Date) => {
@@ -57,12 +57,14 @@ class Logger {
     return [...this.logBuffer]
   }
 
-  // 写入日志到本地磁盘文件（安卓端使用）
-  // 使用 1 秒防抖合并短时间内的多次写入请求，减少 Capacitor 原生调用频率
+  // 写入日志到本地磁盘文件（安卓端和鸿蒙端使用）
+  // 使用 1 秒防抖合并短时间内的多次写入请求，减少原生调用频率
   // 每次写入完整的内存缓冲区，先尝试写文件，失败（目录不存在）时自动创建目录后重试
   // 首次写入时自动读取磁盘上已有的历史日志，合并后写入，确保重启后历史日志不丢失
   private writeToDisk() {
-    if (!(window as any).Capacitor?.isNativePlatform?.()) return
+    const isCapacitorNative = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()
+    const isHarmony = typeof window !== 'undefined' && !!(window as any).harmonyAPI
+    if (!isCapacitorNative && !isHarmony) return
     this.scheduleFlush()
   }
 

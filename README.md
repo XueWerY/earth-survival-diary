@@ -1,6 +1,6 @@
 # 地球 Online 生存日记
 
-一个帮助记录生活足迹、管理任务清单、专注时间的桌面与移动端效率应用，拥有绚丽的星空主题界面（彩色流星画布、流星拖尾特效），支持 Electron 桌面端拆分界面和安卓端全屏显示，提供足迹记录、专注计时、清单管理、倒数日、课程表、统计和工具箱等功能模块。
+一个帮助记录生活足迹、管理任务清单、专注时间的桌面与移动端效率应用，拥有绚丽的星空主题界面（彩色流星画布、流星拖尾特效），支持 Electron 桌面端拆分界面、安卓端全屏显示和鸿蒙端 WebView 壳工程，提供足迹记录、专注计时、清单管理、倒数日、课程表、统计和工具箱等功能模块。
 
 ## 功能特性
 
@@ -163,7 +163,7 @@
 | 后端服务 | Express (内嵌) |
 | 数据存储 | 本地 JSON 文件 |
 | 桌面应用 | Electron + electron-updater |
-| 移动应用 | Capacitor |
+| 移动应用 | Capacitor（安卓）/ ArkTS WebView（鸿蒙） |
 | 安装包 | NSIS |
 
 ## 数据存储
@@ -171,6 +171,8 @@
 **桌面版（Windows）**：所有数据存储在 `%APPDATA%/earth-survival-diary/data/` 目录中，通过内嵌 Express 服务器读写 JSON 文件。用户数据通过 userId 隔离。更新或重装不会影响已有数据。卸载时可选择是否删除。桌面窗口默认全屏显示，禁用了最大化按钮和拖拽调整窗口大小，可在「我的 → 系统设置 → 窗口分辨率」中切换不同尺寸。
 
 **安卓版**：与桌面版使用完全相同的路径化 JSON 文件结构存储数据，通过 Capacitor Filesystem 插件直接读写设备本地的 JSON 文件，无需联网，所有操作在设备端完成。卸载应用会清除数据。注销账号时，优先使用系统原生递归删除，若失败则自动降级为逐文件删除，确保所有数据被彻底清除。
+
+**鸿蒙版**：与安卓版使用完全相同的路径化 JSON 文件结构存储数据，通过 HarmonyOS 原生文件系统 API（@ohos.file.fs）读写应用沙箱目录下的 JSON 文件。前端通过 `window.harmonyAPI` 桥接调用原生文件操作，与安卓端 Capacitor Filesystem 方案对等。卸载应用会清除数据。
 
 日志文件存储在 `%APPDATA%/earth-survival-diary/logs/` 目录中，按日轮转（app-YYYY-MM-DD.log）。安卓端同样支持日志文件写入，采用 1 秒防抖合并写入策略（每次写入完整内存缓冲区，首次写入时自动读取磁盘历史日志合并写入，确保重启后不丢失），减少 Capacitor 原生调用频率
 
@@ -290,6 +292,41 @@ npx cap open android
 在 Android Studio 中选择 Build → Build Bundle(s) / APK(s) → Build APK(s)。
 
 构建完成后，APK 输出在 `android/app/build/outputs/apk/` 目录下。
+
+## 构建 HarmonyOS 应用
+
+### 环境要求
+
+- Node.js >= 18
+- pnpm
+- DevEco Studio 5.0+（用于编译 HarmonyOS 应用）
+
+### 开发调试
+
+```
+# 构建 Web 资源并同步到鸿蒙工程
+pnpm harmony:build
+
+# 或分步执行
+pnpm build && pnpm harmony:sync
+```
+
+用 DevEco Studio 打开 `harmony/` 目录，等待项目同步完成后，连接鸿蒙设备或启动模拟器，点击 Run 即可。
+
+### 构建 HAP/APP
+
+在 DevEco Studio 中选择 Build → Build Hap(s)/APP(s)。
+
+构建完成后，产物输出在 `harmony/entry/build/default/outputs/` 目录下。
+
+### 架构说明
+
+鸿蒙端采用 WebView 壳工程方案，与安卓端 Capacitor 方案对等：
+
+- **Web 组件**：加载 `resource://rawfile/web/index.html`（由 `dist/` 同步而来），复用 100% 的 Vue 前端代码
+- **文件系统桥接**：通过 `registerJavaScriptProxy` 注入 `window.harmonyAPI` 对象，暴露同步文件操作方法（readFile/writeFile/deleteFile/stat/mkdir/readdir/rmdir），前端通过 `fileSystemBridge.ts` 统一适配
+- **全屏显示**：`EntryAbility` 中调用 `setWindowLayoutFullScreen(true)` 实现 edge-to-edge 渲染，Web 组件通过 `expandSafeArea` 延伸至系统状态栏和导航栏区域
+- **数据存储**：使用 `@ohos.file.fs` 同步 API 读写应用沙箱 `filesDir/data/` 目录下的 JSON 文件，路径结构与安卓端完全一致
 
 ## API 接口
 

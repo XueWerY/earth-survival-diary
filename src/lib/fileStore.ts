@@ -1,4 +1,4 @@
-import { Filesystem, Directory, Encoding } from '@capacitor/filesystem'
+import { Filesystem, Directory, Encoding } from './fileSystemBridge'
 import { logger } from './logger'
 
 const DATA_DIR = 'data/'
