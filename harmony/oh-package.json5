@@ -3,8 +3,6 @@
   "description": "Earth Survival Diary HarmonyOS App",
   "dependencies": {},
   "devDependencies": {
-    "@ohos/hypium": "1.0.21",
-    "@ohos/hvigor-ohos-plugin": "5.0.2",
-    "@ohos/hvigor": "5.0.2"
+    "@ohos/hypium": "1.0.21"
   }
 }

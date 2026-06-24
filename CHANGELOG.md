@@ -1,5 +1,8 @@
 # 更新日志
 
+### v2026.6.24-5 (2026-06-24)
+- 修复鸿蒙工程在 DevEco Studio 中 ohpm install 失败的问题：移除了 oh-package.json5 中不在 ohpm 仓库的 hvigor 构建工具依赖声明（这些工具由 DevEco Studio 自动提供）
+
 ### v2026.6.24-4 (2026-06-24)
 - 新增鸿蒙（HarmonyOS）应用支持：通过 WebView 壳工程加载现有 Vue 前端，复用全部 Web 代码
 - 新增鸿蒙端文件系统桥接层：前端通过 window.harmonyAPI 调用原生文件操作，与安卓端数据存储方案完全对等
