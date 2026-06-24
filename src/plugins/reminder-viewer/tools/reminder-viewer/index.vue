@@ -262,6 +262,8 @@ async function loadData() {
               const firstStart = courseSettings?.firstPeriodStart || '08:00'
               const dur = courseSettings?.periodDuration || 45
               const brk = courseSettings?.breakDuration || 10
+              const mode = courseSettings?.breakMode || 'uniform'
+              const customBks = courseSettings?.customBreakDurations || []
               const lunch = courseSettings?.lunchBreakMinutes ?? 120
               const dinner = courseSettings?.dinnerBreakMinutes ?? 90
               const counts = courseSettings?.periodCountPerSession || { morning: 4, afternoon: 4, evening: 2 }
@@ -269,11 +271,17 @@ async function loadData() {
               const periods: { id: number; start: string; end: string }[] = []
               let cur = firstStart
               let idNum = 1
+              let customGapIdx = 0
               const addSession = (cnt: number) => {
                 for (let i = 0; i < cnt; i++) {
                   const end = addMinutes(cur, dur)
                   periods.push({ id: idNum++, start: cur, end })
-                  cur = addMinutes(end, brk)
+                  if (i < cnt - 1) {
+                    cur = addMinutes(end, mode === 'custom' ? (customBks[customGapIdx] ?? brk) : brk)
+                    customGapIdx++
+                  } else {
+                    cur = addMinutes(end, brk)
+                  }
                 }
               }
               addSession(morning)

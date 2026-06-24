@@ -519,13 +519,12 @@ const courseStats = computed(() => {
   const dayCounts = [0, 0, 0, 0, 0, 0, 0]
   let totalPeriods = 0
   courses.forEach((c: any) => {
-    if (c.dayOfWeek && Array.isArray(c.dayOfWeek)) {
-      c.dayOfWeek.forEach((d: number) => {
-        dayCounts[d]++
-      })
-    }
+    const dwList = Array.isArray(c.dayOfWeek) ? c.dayOfWeek : (c.dayOfWeek != null ? [c.dayOfWeek] : [])
+    dwList.forEach((d: number) => {
+      if (d >= 0 && d < 7) dayCounts[d]++
+    })
     if (c.periodIds && Array.isArray(c.periodIds)) {
-      totalPeriods += c.periodIds.length
+      totalPeriods += c.periodIds.length * dwList.length
     }
   })
 

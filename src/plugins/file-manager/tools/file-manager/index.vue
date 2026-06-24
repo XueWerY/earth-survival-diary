@@ -273,7 +273,7 @@ const MODULE_DEFS: ModuleGroupDef[] = [
     key: 'list',
     label: '清单',
     children: [
-      { key: 'list', label: '清单数据', dataKeys: ['list/lists', 'list/tasks', 'list/folders', 'list/completed'] }
+      { key: 'list', label: '清单数据', dataKeys: ['list/lists', 'list/tasks', 'list/folders', 'list/completed', 'list/favorites'] }
     ]
   },
   {

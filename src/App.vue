@@ -763,6 +763,8 @@ const scheduleListReminders = async () => {
       const firstStart = cs?.firstPeriodStart || '08:00'
       const dur = cs?.periodDuration || 45
       const brk = cs?.breakDuration || 10
+      const mode = cs?.breakMode || 'uniform'
+      const customBks = cs?.customBreakDurations || []
       const lunch = cs?.lunchBreakMinutes ?? 120
       const dinner = cs?.dinnerBreakMinutes ?? 90
       const counts = cs?.periodCountPerSession || { morning: 4, afternoon: 4, evening: 2 }
@@ -770,11 +772,17 @@ const scheduleListReminders = async () => {
       const periods: { id: number; start: string; end: string }[] = []
       let cur = firstStart
       let idNum = 1
+      let customGapIdx = 0
       const addSession = (cnt: number) => {
         for (let i = 0; i < cnt; i++) {
           const end = addMinutes(cur, dur)
           periods.push({ id: idNum++, start: cur, end })
-          cur = addMinutes(end, brk)
+          if (i < cnt - 1) {
+            cur = addMinutes(end, mode === 'custom' ? (customBks[customGapIdx] ?? brk) : brk)
+            customGapIdx++
+          } else {
+            cur = addMinutes(end, brk)
+          }
         }
       }
       addSession(morning)
