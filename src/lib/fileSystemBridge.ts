@@ -4,7 +4,9 @@
 
 import { Filesystem as CapFilesystem, Directory, Encoding } from '@capacitor/filesystem'
 
-const isHarmony = typeof window !== 'undefined' && !!(window as any).harmonyAPI
+function isHarmony(): boolean {
+  return typeof window !== 'undefined' && !!(window as any).harmonyAPI
+}
 
 function harmony(): any {
   return (window as any).harmonyAPI
@@ -14,14 +16,14 @@ export { Directory, Encoding }
 
 export const Filesystem = {
   async readFile(opts: { path: string; directory: Directory; encoding?: string }): Promise<{ data: string }> {
-    if (isHarmony) {
+    if (isHarmony()) {
       return { data: harmony().readFile(opts.path) }
     }
     return CapFilesystem.readFile(opts as any)
   },
 
   async writeFile(opts: { path: string; data: string; directory: Directory; encoding?: string; recursive?: boolean }): Promise<{}> {
-    if (isHarmony) {
+    if (isHarmony()) {
       harmony().writeFile(opts.path, opts.data)
       return {}
     }
@@ -29,7 +31,7 @@ export const Filesystem = {
   },
 
   async deleteFile(opts: { path: string; directory: Directory }): Promise<{}> {
-    if (isHarmony) {
+    if (isHarmony()) {
       harmony().deleteFile(opts.path)
       return {}
     }
@@ -37,14 +39,14 @@ export const Filesystem = {
   },
 
   async stat(opts: { path: string; directory: Directory }): Promise<{ type: string }> {
-    if (isHarmony) {
+    if (isHarmony()) {
       return { type: harmony().stat(opts.path) }
     }
     return CapFilesystem.stat(opts as any) as Promise<{ type: string }>
   },
 
   async mkdir(opts: { path: string; directory: Directory; recursive?: boolean }): Promise<{}> {
-    if (isHarmony) {
+    if (isHarmony()) {
       harmony().mkdir(opts.path, opts.recursive ?? false)
       return {}
     }
@@ -52,14 +54,14 @@ export const Filesystem = {
   },
 
   async readdir(opts: { path: string; directory: Directory }): Promise<{ files: { name: string; type: string }[] }> {
-    if (isHarmony) {
+    if (isHarmony()) {
       return { files: harmony().readdir(opts.path) }
     }
     return CapFilesystem.readdir(opts as any) as Promise<{ files: { name: string; type: string }[] }>
   },
 
   async rmdir(opts: { path: string; directory: Directory; recursive?: boolean }): Promise<{}> {
-    if (isHarmony) {
+    if (isHarmony()) {
       harmony().rmdir(opts.path, opts.recursive ?? false)
       return {}
     }
