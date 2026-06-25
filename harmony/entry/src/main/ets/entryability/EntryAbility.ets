@@ -8,6 +8,7 @@ const TAG = 'EntryAbility';
 export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam) {
     hilog.info(DOMAIN, TAG, 'onCreate');
+    AppStorage.setOrCreate('filesDir', this.context.filesDir);
   }
 
   onDestroy() {

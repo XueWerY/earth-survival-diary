@@ -1,5 +1,9 @@
 # 更新日志
 
+### v2026.6.24-12 (2026-06-24)
+- 修复鸿蒙应用白屏问题：弃用的 getContext 改用 AppStorage 从 EntryAbility 传递 filesDir，避免 context 获取失败导致 FileBridge 未初始化
+- 添加 Web 组件的 onConsole 和 onErrorReceive 事件用于诊断前端加载错误
+
 ### v2026.6.24-11 (2026-06-24)
 - 修复鸿蒙应用启动白屏问题：模拟器不支持 onControllerAttached 事件，改用 javaScriptProxy 属性方法在 Web 组件构造时直接注入原生文件操作对象
 

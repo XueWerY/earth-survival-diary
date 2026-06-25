@@ -12,8 +12,10 @@ struct Index {
   private bridge: FileBridge | null = null;
 
   aboutToAppear() {
-    const context = getContext(this);
-    this.bridge = new FileBridge(context.filesDir + '/data');
+    const filesDir = AppStorage.get<string>('filesDir') || ''
+    if (filesDir) {
+      this.bridge = new FileBridge(filesDir + '/data')
+    }
   }
 
   build() {
@@ -28,6 +30,12 @@ struct Index {
             name: 'harmonyAPI',
             methodList: ['readFile', 'writeFile', 'deleteFile', 'stat', 'mkdir', 'readdir', 'rmdir'],
             controller: this.controller
+          })
+          .onConsole((event) => {
+            console.log('Web Console: ' + event.message.message)
+          })
+          .onErrorReceive((event) => {
+            console.log('Web Error: ' + event.error.getErrorInfo() + ' URL: ' + event.request.getRequestUrl())
           })
           .width('100%')
           .height('100%')
