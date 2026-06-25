@@ -1,5 +1,8 @@
 # 更新日志
 
+### v2026.6.24-9 (2026-06-24)
+- 修复鸿蒙工程 SafeAreaEdge 枚举值错误：API 24 中 SafeAreaEdge 只有 TOP 和 BOTTOM，移除了不存在的 LEFT 和 RIGHT
+
 ### v2026.6.24-8 (2026-06-24)
 - 修复鸿蒙工程 SDK 版本号配置错误：将 compileSdkVersion、compatibleSdkVersion、targetSdkVersion 从 5.0.0(12) 更正为 6.1.1(24)，与 DevEco Studio 安装的 SDK 版本匹配
 
