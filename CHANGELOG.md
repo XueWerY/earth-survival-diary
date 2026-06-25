@@ -1,5 +1,8 @@
 # 更新日志
 
+### v2026.6.24-6 (2026-06-24)
+- 修复鸿蒙工程在 DevEco Studio 中构建时提示 hvigor-config.json5 不存在的问题：新增了 hvigor 构建配置文件，指定了与 DevEco Studio 匹配的构建插件版本
+
 ### v2026.6.24-5 (2026-06-24)
 - 修复鸿蒙工程在 DevEco Studio 中 ohpm install 失败的问题：移除了 oh-package.json5 中不在 ohpm 仓库的 hvigor 构建工具依赖声明（这些工具由 DevEco Studio 自动提供）
 
