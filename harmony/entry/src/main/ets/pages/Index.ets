@@ -3,7 +3,7 @@ import { FileBridge } from '../utils/FileBridge';
 
 /**
  * 主页面：Web 组件加载 Vue 前端应用
- * 通过 registerJavaScriptProxy 注入 harmonyAPI 供前端调用原生文件操作
+ * 通过 javaScriptProxy 注入 harmonyAPI 供前端调用原生文件操作
  */
 @Entry
 @Component
@@ -18,21 +18,20 @@ struct Index {
 
   build() {
     Column() {
-      Web({ src: 'resource://rawfile/web/index.html', controller: this.controller })
-        .javaScriptAccess(true)
-        .domStorageAccess(true)
-        .fileAccess(true)
-        .onControllerAttached(() => {
-          if (this.bridge) {
-            this.controller.registerJavaScriptProxy(
-              this.bridge,
-              'harmonyAPI',
-              ['readFile', 'writeFile', 'deleteFile', 'stat', 'mkdir', 'readdir', 'rmdir']
-            );
-          }
-        })
-        .width('100%')
-        .height('100%')
+      if (this.bridge) {
+        Web({ src: 'resource://rawfile/web/index.html', controller: this.controller })
+          .javaScriptAccess(true)
+          .domStorageAccess(true)
+          .fileAccess(true)
+          .javaScriptProxy({
+            object: this.bridge,
+            name: 'harmonyAPI',
+            methodList: ['readFile', 'writeFile', 'deleteFile', 'stat', 'mkdir', 'readdir', 'rmdir'],
+            controller: this.controller
+          })
+          .width('100%')
+          .height('100%')
+      }
     }
     .width('100%')
     .height('100%')
