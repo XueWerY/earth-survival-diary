@@ -17,21 +17,25 @@ struct Index {
   }
 
   build() {
-    Web({ src: 'resource://rawfile/web/index.html', controller: this.controller })
-      .javaScriptAccess(true)
-      .domStorageAccess(true)
-      .fileAccess(true)
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.ALL])
-      .onControllerAttached(() => {
-        if (this.bridge) {
-          this.controller.registerJavaScriptProxy(
-            this.bridge,
-            'harmonyAPI',
-            ['readFile', 'writeFile', 'deleteFile', 'stat', 'mkdir', 'readdir', 'rmdir']
-          );
-        }
-      })
-      .width('100%')
-      .height('100%')
+    Column() {
+      Web({ src: 'resource://rawfile/web/index.html', controller: this.controller })
+        .javaScriptAccess(true)
+        .domStorageAccess(true)
+        .fileAccess(true)
+        .onControllerAttached(() => {
+          if (this.bridge) {
+            this.controller.registerJavaScriptProxy(
+              this.bridge,
+              'harmonyAPI',
+              ['readFile', 'writeFile', 'deleteFile', 'stat', 'mkdir', 'readdir', 'rmdir']
+            );
+          }
+        })
+        .width('100%')
+        .height('100%')
+    }
+    .width('100%')
+    .height('100%')
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM, SafeAreaEdge.LEFT, SafeAreaEdge.RIGHT])
   }
 }

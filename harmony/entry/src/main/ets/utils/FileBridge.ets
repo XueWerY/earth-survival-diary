@@ -1,5 +1,10 @@
 import fs from '@ohos.file.fs';
 
+interface DirEntry {
+  name: string;
+  type: string;
+}
+
 /**
  * 文件操作桥接类
  * 通过 WebView JavaScript Proxy 注入到前端，提供同步文件操作
@@ -68,12 +73,19 @@ export class FileBridge {
   }
 
   /** 列出目录内容 */
-  readdir(relativePath: string): { name: string, type: string }[] {
-    const entries = fs.listFileSync(this.resolve(relativePath));
-    return entries.map(entry => ({
-      name: entry.name,
-      type: entry.isDirectory() ? 'directory' : 'file'
-    }));
+  readdir(relativePath: string): DirEntry[] {
+    const dirPath = this.resolve(relativePath);
+    const names: string[] = fs.listFileSync(dirPath);
+    const result: DirEntry[] = [];
+    for (const name of names) {
+      const stat = fs.statSync(dirPath + '/' + name);
+      const entry: DirEntry = {
+        name: name,
+        type: stat.isDirectory() ? 'directory' : 'file'
+      };
+      result.push(entry);
+    }
+    return result;
   }
 
   /** 删除目录，recursive 为 true 时递归删除 */
@@ -89,10 +101,11 @@ export class FileBridge {
 
   /** 递归删除目录 */
   private removeRecursive(dirPath: string): void {
-    const entries = fs.listFileSync(dirPath);
-    for (const entry of entries) {
-      const entryPath = dirPath + '/' + entry.name;
-      if (entry.isDirectory()) {
+    const names: string[] = fs.listFileSync(dirPath);
+    for (const name of names) {
+      const entryPath = dirPath + '/' + name;
+      const stat = fs.statSync(entryPath);
+      if (stat.isDirectory()) {
         this.removeRecursive(entryPath);
       } else {
         fs.unlinkSync(entryPath);

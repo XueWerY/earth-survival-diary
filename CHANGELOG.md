@@ -1,5 +1,8 @@
 # 更新日志
 
+### v2026.6.24-7 (2026-06-24)
+- 修复鸿蒙工程 ArkTS 编译错误：FileBridge 文件列表读取改为使用文件名数组+stat 查询（原代码误用 listFileSync 返回值属性），Index 页面用 Column 容器包裹 Web 组件并修正 SafeAreaEdge 枚举值
+
 ### v2026.6.24-6 (2026-06-24)
 - 修复鸿蒙工程在 DevEco Studio 中构建时提示 hvigor-config.json5 不存在的问题：新增了 hvigor 构建配置文件，指定了与 DevEco Studio 匹配的构建插件版本
 
