@@ -1,5 +1,8 @@
 # 更新日志
 
+### v2026.6.25-1 (2026-06-25)
+- 修复鸿蒙应用白屏问题：ArkWeb 内核禁止 resource:// 协议跨域请求，Vite 构建的 ES module 脚本（type="module" crossorigin）加载失败；改用 HTTPS 自定义域名 + onInterceptRequest 拦截替换本地资源，通过 onInterceptRequest 将 rawfile 中的 JS/CSS 等资源以正确 MIME 类型返回
+
 ### v2026.6.24-12 (2026-06-24)
 - 修复鸿蒙应用白屏问题：弃用的 getContext 改用 AppStorage 从 EntryAbility 传递 filesDir，避免 context 获取失败导致 FileBridge 未初始化
 - 添加 Web 组件的 onConsole 和 onErrorReceive 事件用于诊断前端加载错误
