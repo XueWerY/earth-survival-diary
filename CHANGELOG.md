@@ -1,5 +1,8 @@
 # 更新日志
 
+### v2026.6.25-2 (2026-06-25)
+- 修复鸿蒙应用闪退问题（SIGSEGV）：esbuild 将 ES module 打包为 IIFE 格式时，import.meta.url 被替换为空的 import_meta 变量；动态导入加载器调用 new URL(path, undefined) 触发 ArkWeb 引擎原生崩溃。修复方案：构建脚本后处理 IIFE 文件，将 import_meta 赋值为当前脚本路径，确保模块路径解析正确；同时优化 WebView 使用 $rawfile() 加载本地页面
+
 ### v2026.6.25-1 (2026-06-25)
 - 修复鸿蒙应用白屏问题：ArkWeb 内核禁止 resource:// 协议跨域请求，Vite 构建的 ES module 脚本（type="module" crossorigin）加载失败；改用 HTTPS 自定义域名 + onInterceptRequest 拦截替换本地资源，通过 onInterceptRequest 将 rawfile 中的 JS/CSS 等资源以正确 MIME 类型返回
 
