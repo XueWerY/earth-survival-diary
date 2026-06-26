@@ -327,6 +327,7 @@ pnpm build && pnpm harmony:sync
 - **文件系统桥接**：通过 `registerJavaScriptProxy` 注入 `window.harmonyAPI` 对象，暴露同步文件操作方法（readFile/writeFile/deleteFile/stat/mkdir/readdir/rmdir），前端通过 `fileSystemBridge.ts` 统一适配
 - **全屏显示**：`EntryAbility` 中调用 `setWindowLayoutFullScreen(true)` 实现 edge-to-edge 渲染，Web 组件通过 `expandSafeArea` 延伸至系统状态栏和导航栏区域
 - **数据存储**：使用 `@ohos.file.fs` 同步 API 读写应用沙箱 `filesDir/data/` 目录下的 JSON 文件，路径结构与安卓端完全一致
+- **IIFE 打包**：`scripts/harmony-sync.cjs` 将 `dist/` 中的 ES module 入口打包为单个 IIFE 文件，规避 ArkWeb 对 `resource://` 协议 ES module 跨域加载的限制；后处理补齐 `import_meta.url` 赋值、用字符串拼接代替 `new URL()` 防止协议解析崩溃、跳过 JS modulepreload 仅保留 CSS 加载、为模块导出对象补 `__esModule` 标记使 Vue 异步组件正确取 `default`
 
 ## API 接口
 

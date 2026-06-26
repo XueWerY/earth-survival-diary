@@ -76,11 +76,12 @@ if (entryMatch) {
   })
   console.log('[harmony-sync] IIFE 打包完成: assets/' + iifeName)
 
-  // 4. 修复 IIFE 中的 import_meta.url 为 undefined 导致 ArkWeb 崩溃的问题
-  //    esbuild 将 import.meta.url 替换为 import_meta 变量但未赋值，
-  //    动态导入时会调用 new URL(path, undefined) 触发 SIGSEGV
+  // 4. 修复 IIFE 中 ArkWeb 崩溃问题（SIGSEGV）
+  //    问题1: import_meta.url 为 undefined → new URL(path, undefined) 崩溃
+  //    问题2: 即使 import_meta.url 有值，new URL() 处理 resource:// 协议仍崩溃
+  //    修复: (a) 给 import_meta 赋值 (b) 替换 _2 函数，用字符串拼接代替 new URL
   let iifeContent = fs.readFileSync(iifePath, 'utf-8')
-  const metaUrlExpr = '(document.currentScript&&document.currentScript.src)||window.location.href'
+  const metaUrlExpr = `(document.currentScript&&document.currentScript.src)||'resource://rawfile/web/assets/${iifeName}'`
   // 替换第一个 import_meta 声明（主作用域）
   iifeContent = iifeContent.replace(
     'var import_meta,',
@@ -91,8 +92,67 @@ if (entryMatch) {
     'var import_meta2,',
     `var import_meta2 = { url: ${metaUrlExpr} },`
   )
+  // 替换 import_meta = {}; 覆盖（__esm 函数内部会重新赋值为空对象，覆盖我们的声明）
+  iifeContent = iifeContent.replace(
+    '\n      import_meta = {};',
+    `\n      import_meta = { url: ${metaUrlExpr} };`
+  )
+  // 替换 import_meta2 = {}; 覆盖（同上）
+  iifeContent = iifeContent.replace(
+    '\n      import_meta2 = {};',
+    `\n      import_meta2 = { url: ${metaUrlExpr} };`
+  )
+  // 替换 _2 函数：用字符串拼接代替 new URL()，避免 ArkWeb 处理 resource:// 协议崩溃
+  iifeContent = iifeContent.replace(
+    '_2 = function(e6, t3) {\n        return new URL(e6, t3).href;\n      };',
+    `_2 = function(e6, t3) {
+        if (t3) {
+            var base = t3.substring(0, t3.lastIndexOf('/') + 1);
+            return base + e6.replace(/^\\.\\//, '');
+        }
+        return e6;
+      };`
+  )
+  // 移除动态创建的 <link> 元素的 crossorigin 属性（ArkWeb resource:// 协议不支持 CORS）
+  iifeContent = iifeContent.replace(
+    ', o5.crossOrigin = ``, ',
+    ', '
+  )
+  // 替换 y2 函数（__vitePreload）：IIFE 格式中所有 JS 代码已内联，JS modulepreload 完全多余，
+  // 且 ArkWeb 中 resource:// 协议的 modulepreload 可能触发跨域问题。
+  // 新实现：仅加载 CSS 文件（组件样式），跳过 JS modulepreload，直接调用 e6() 不经过 i5 错误处理器
+  const y2Replaced = iifeContent.replace(
+    /y2 = function\(e6, t3, n3\) \{[\s\S]*?\n      \};/,
+    "y2 = function(e6, t3, n3) {\n" +
+    "        if (t3 && t3.length > 0) {\n" +
+    "          for (let idx = 0; idx < t3.length; idx++) {\n" +
+    "            let dep = _2(t3[idx], n3);\n" +
+    "            if (dep in v2) continue;\n" +
+    "            v2[dep] = true;\n" +
+    "            if (dep.endsWith(`.css`)) {\n" +
+    "              let link = document.createElement(`link`);\n" +
+    "              link.rel = `stylesheet`;\n" +
+    "              link.href = dep;\n" +
+    "              document.head.appendChild(link);\n" +
+    "            }\n" +
+    "          }\n" +
+    "        }\n" +
+    "        return e6().then(function(mod) {\n" +
+    "          if (mod && !mod.__esModule && mod.default) {\n" +
+    "            try { Object.defineProperty(mod, '__esModule', { value: true, enumerable: false }); } catch(e) {}\n" +
+    "          }\n" +
+    "          return mod;\n" +
+    "        });\n" +
+    "      };"
+  )
+  if (y2Replaced === iifeContent) {
+    console.warn('[harmony-sync] 警告: 未找到 y2 函数，跳过替换')
+  } else {
+    iifeContent = y2Replaced
+    console.log('[harmony-sync] y2 函数已替换：跳过 JS modulepreload，仅加载 CSS，直接调用 e6()')
+  }
   fs.writeFileSync(iifePath, iifeContent)
-  console.log('[harmony-sync] IIFE 已修复：import_meta.url 已赋值为当前脚本路径')
+  console.log('[harmony-sync] IIFE 已修复：import_meta.url 赋值 + _2 函数替换 + y2 简化')
 
   // 修改 HTML：移除 modulepreload、crossorigin，替换 script 为延迟加载的普通脚本
   htmlContent = htmlContent
