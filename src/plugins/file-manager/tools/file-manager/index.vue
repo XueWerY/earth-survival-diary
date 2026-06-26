@@ -1037,13 +1037,25 @@ async function handleConnectLan() {
   try {
     const url = `http://${ip}:${port}/api/lan-export`
     let data: any
+    // 超时兜底：10 秒未完成则视为连接失败，避免按钮一直转圈
+    const timeoutMs = 10000
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('连接超时，请检查地址是否正确以及发送方是否已开启传输')), timeoutMs)
+    )
     if (!isElectron) {
       // Capacitor 模式: 使用原生 HTTP 插件绕过混合内容限制
-      const res = await CapacitorHttp.get({ url })
+      // 同时设置 connectTimeout/readTimeout 作为原生层超时
+      const res = await Promise.race([
+        CapacitorHttp.get({ url, connectTimeout: timeoutMs, readTimeout: timeoutMs }),
+        timeoutPromise
+      ])
       if (res.status !== 200) throw new Error('HTTP ' + res.status)
       data = res.data
     } else {
-      const response = await fetch(url, { mode: 'cors' })
+      const response = await Promise.race([
+        fetch(url, { mode: 'cors' }),
+        timeoutPromise
+      ])
       if (!response.ok) throw new Error('HTTP ' + response.status)
       data = await response.json()
     }
