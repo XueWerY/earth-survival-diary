@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container">
+  <div class="app-container" :class="{ 'desktop-layout': isDesktop }">
     <!-- Canvas 2D 流星背景 -->
     <canvas ref="starCanvas" class="star-canvas" :class="{ 'canvas-hidden': !showStarCanvas }"></canvas>
 
@@ -20,23 +20,16 @@
 
     <!-- 已登录且数据加载完成，显示主界面 -->
     <template v-else>
-      <!-- 主导航栏 - Electron 端在顶部 -->
-      <div v-if="isElectron && !splitScreen.isSplitActive.value" class="main-nav-bar" :class="{ 'nav-hidden': isFocusFullscreen }" @contextmenu.prevent="handleNavContextMenu">
-        <div class="nav-items-scroll" ref="navScrollRef">
-          <button
-            v-for="m in MODULES"
-            :key="m"
-            class="nav-item"
-            :class="{ active: pageNav.currentModule.value === m }"
-            @click="navigateTo(m)"
-          >
-            <span class="nav-item-icon">{{ MODULE_ICONS[m] }}</span>
-            <span class="nav-item-label">{{ MODULE_LABELS[m] }}</span>
-          </button>
-        </div>
-      </div>
-
-      
+      <!-- 主导航栏 - 桌面端在左侧 -->
+      <MainNav
+        v-if="isDesktop && !splitScreen.isSplitActive.value"
+        variant="left"
+        :activeModule="pageNav.currentModule.value"
+        :hidden="isFocusFullscreen"
+        noHover
+        @navigate="navigateTo"
+        @contextmenu="handleNavContextMenu"
+      />
 
       <!-- 上下文菜单 -->
       <teleport to="body">
@@ -55,14 +48,7 @@
       <main class="main-content">
         <div v-if="splitScreen.isSplitActive.value" class="split-container">
           <div class="split-panel">
-            <div class="split-panel-nav-bar">
-              <div class="nav-items-scroll">
-                <button v-for="m in MODULES" :key="m" class="nav-item" :class="{ active: panelModules[0] === m }" @click="panelNavigate(0, m)">
-                  <span class="nav-item-icon">{{ MODULE_ICONS[m] }}</span>
-                  <span class="nav-item-label">{{ MODULE_LABELS[m] }}</span>
-                </button>
-              </div>
-            </div>
+            <MainNav variant="split" :activeModule="panelModules[0]" @navigate="(m: string) => panelNavigate(0, m)" />
             <div class="split-panel-content">
               <component :is="moduleComponents[panelModules[0]]" :key="`split-0-${panelModules[0]}`"
                 @fullscreen-change="handleFullscreenFromRoute"
@@ -74,14 +60,7 @@
           </div>
           <div class="split-divider"></div>
           <div class="split-panel">
-            <div class="split-panel-nav-bar">
-              <div class="nav-items-scroll">
-                <button v-for="m in MODULES" :key="m" class="nav-item" :class="{ active: panelModules[1] === m }" @click="panelNavigate(1, m)">
-                  <span class="nav-item-icon">{{ MODULE_ICONS[m] }}</span>
-                  <span class="nav-item-label">{{ MODULE_LABELS[m] }}</span>
-                </button>
-              </div>
-            </div>
+            <MainNav variant="split" :activeModule="panelModules[1]" @navigate="(m: string) => panelNavigate(1, m)" />
             <div class="split-panel-content">
               <component :is="moduleComponents[panelModules[1]]" :key="`split-1-${panelModules[1]}`"
                 @fullscreen-change="handleFullscreenFromRoute"
@@ -93,6 +72,9 @@
           </div>
         </div>
         <div v-else class="panel-wrapper">
+          <div v-if="capturedError" class="captured-error">
+            <pre>{{ capturedError }}</pre>
+          </div>
           <router-view v-slot="{ Component }">
             <template v-if="Component">
               <component
@@ -157,21 +139,14 @@
         <ReminderCard v-for="(r, i) in activeReminders" :key="r.id" :reminder="r" @dismiss="dismissReminder(i)" />
       </div>
 
-      <!-- 主导航栏 - Android 端在底部 -->
-      <div v-if="!isElectron" class="main-nav-bar nav-bar-bottom" :class="{ 'nav-hidden': isFocusFullscreen }">
-        <div class="nav-items-scroll" ref="navScrollRefMobile">
-          <button
-            v-for="m in MODULES"
-            :key="m"
-            class="nav-item"
-            :class="{ active: pageNav.currentModule.value === m }"
-            @click="navigateTo(m)"
-          >
-            <span class="nav-item-icon">{{ MODULE_ICONS[m] }}</span>
-            <span class="nav-item-label">{{ MODULE_LABELS[m] }}</span>
-          </button>
-        </div>
-      </div>
+      <!-- 主导航栏 - 移动端在底部 -->
+      <MainNav
+        v-if="!isDesktop"
+        variant="bottom"
+        :activeModule="pageNav.currentModule.value"
+        :hidden="isFocusFullscreen"
+        @navigate="navigateTo"
+      />
 
       <div v-if="isElectron && focusStore.timerState && route.path !== '/focus'" class="focus-status-indicator">
         <span class="focus-status-icon">{{ focusStore.timerState.type === 'pomodoro' ? '🍅' : '⏱️' }}</span>
@@ -194,8 +169,9 @@ import { useSettingsStore } from './stores/settingsStore'
 import { useFocusStore } from './stores/focusStore'
 import { getData, setData, preloadData, clearCache, getSystemStateField, setSystemStateField } from './services/storageService'
 import { logger } from './lib/logger'
-import { usePageNav, MODULES, MODULE_ICONS, MODULE_LABELS, MODULE_ROUTES } from './composables/usePageNav'
+import { usePageNav, MODULE_ROUTES } from './composables/usePageNav'
 import { useSplitScreen } from './composables/useSplitScreen'
+import MainNav from './components/common/nav/MainNav.vue'
 import dayjs from 'dayjs'
 // @ts-expect-error - Vite raw import
 import changelogContent from '../CHANGELOG.md?raw'
@@ -230,6 +206,8 @@ const contextMenuVisible = ref(false)
 const contextMenuStyle = ref({ top: '0px', left: '0px' })
 
 function handleNavContextMenu(event: MouseEvent) {
+  if (!isElectron.value) return
+  event.preventDefault()
   contextMenuStyle.value = {
     top: `${event.clientY}px`,
     left: `${event.clientX}px`,
@@ -258,24 +236,8 @@ function panelNavigate(panelIndex: number, module: string) {
 }
 
 const isElectron = computed(() => typeof window !== 'undefined' && !!(window as any).electronAPI)
-
-const navScrollRef = ref<HTMLElement | null>(null)
-const navScrollRefMobile = ref<HTMLElement | null>(null)
-
-const scrollNavToActive = () => {
-  nextTick(() => {
-    const container = navScrollRef.value || navScrollRefMobile.value
-    if (!container) return
-    const activeItem = container.querySelector('.nav-item.active') as HTMLElement
-    if (!activeItem) return
-    const containerWidth = container.clientWidth
-    const itemLeft = activeItem.offsetLeft
-    const itemWidth = activeItem.offsetWidth
-    container.scrollTo({ left: itemLeft - containerWidth / 2 + itemWidth / 2, behavior: 'smooth' })
-  })
-}
-
-watch(() => pageNav.currentModule.value, scrollNavToActive)
+const isMobile = computed(() => typeof window !== 'undefined' && (!!(window as any).Capacitor || !!(window as any).harmonyAPI))
+const isDesktop = computed(() => !isMobile.value)
 
 const navigateTo = (module: string) => {
   if (module === pageNav.currentModule.value) {
@@ -303,8 +265,12 @@ const dataInitialized = ref(false)
 const isInitializing = ref(false)
 const userKey = ref(0)
 
+const capturedError = ref<string | null>(null)
+
 onErrorCaptured((err, instance, info) => {
-  logger.error('[App] onErrorCaptured 捕获错误', { error: err instanceof Error ? err.message : String(err), info })
+  const errMsg = err instanceof Error ? `${err.message}\n${err.stack || ''}` : String(err)
+  logger.error('[App] onErrorCaptured 捕获错误', { error: errMsg, info })
+  capturedError.value = `[${info}] ${errMsg}`
   return false
 })
 
@@ -1817,103 +1783,9 @@ onUnmounted(() => {
   display: none;
 }
 
-/* 主导航栏 */
-.main-nav-bar {
-  position: relative;
-  z-index: 20;
-  flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.03);
-  transition: opacity 0.3s, height 0.3s;
-  overflow: hidden;
-  width: 500px;
-  margin: 16px auto;
-  border-radius: 10px;
-}
-
-.main-nav-bar.nav-hidden {
-  opacity: 0;
-  height: 0;
-  min-height: 0;
-  pointer-events: none;
-}
-
-.nav-bar-bottom {
-  width: 500px;
-  margin: 0 auto;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  margin-top: auto;
-}
-
-@media (max-width: 500px) {
-  .nav-bar-bottom {
-    width: 80%;
-  }
-}
-
-.nav-bar-bottom .nav-items-scroll {
-  justify-content: flex-start;
-}
-
-.nav-bar-bottom .nav-items-scroll::before,
-.nav-bar-bottom .nav-items-scroll::after {
-  content: '';
-  flex: 1;
-  min-width: 0;
-}
-
-.nav-items-scroll {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-behavior: smooth;
-  padding: 4px 12px;
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-.nav-items-scroll::-webkit-scrollbar {
-  display: none;
-}
-
-.nav-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: var(--chalk-white-60);
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: all 0.15s;
-  min-width: 52px;
-}
-
-.nav-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--chalk-white-85);
-}
-
-.nav-item.active {
-  background: transparent;
-  color: var(--chalk-white);
-  font-weight: 600;
-}
-
-.nav-item-icon {
-  font-size: 18px;
-  line-height: 1;
-}
-
-.nav-item-label {
-  font-size: 12px;
-  line-height: 1;
+/* 桌面端横向布局（导航栏在左侧） */
+.app-container.desktop-layout {
+  flex-direction: row;
 }
 
 .focus-status-indicator {
@@ -1968,6 +1840,29 @@ onUnmounted(() => {
 .panel-wrapper {
   width: 100%;
   height: 100%;
+}
+
+.captured-error {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow: auto;
+  padding: 16px;
+  background: rgba(40, 0, 0, 0.95);
+  border: 1px solid rgba(255, 80, 80, 0.5);
+  border-radius: 8px;
+}
+
+.captured-error pre {
+  margin: 0;
+  color: #ff8080;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .loading-container {
@@ -2236,12 +2131,6 @@ onUnmounted(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-
-.split-panel-nav-bar {
-  flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .split-panel-content {
