@@ -320,6 +320,28 @@ pnpm build && pnpm harmony:sync
 
 构建完成后，产物输出在 `harmony/entry/build/default/outputs/` 目录下。
 
+## 在 Windows 浏览器中运行（开发调试）
+
+### 环境要求
+
+- Node.js >= 18
+- pnpm
+
+### 启动步骤
+
+```
+# 安装依赖（首次）
+pnpm install
+
+# 构建 Web 资源
+pnpm build
+
+# 启动本地预览服务器（默认 http://localhost:4173）
+npx vite preview
+```
+
+浏览器端数据通过 Capacitor Filesystem 的 Web 实现存储（IndexedDB），与桌面端和移动端的存储方式不同，仅用于开发调试。
+
 ### 架构说明
 
 鸿蒙端采用 WebView 壳工程方案，与安卓端 Capacitor 方案对等：

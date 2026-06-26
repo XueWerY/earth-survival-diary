@@ -236,7 +236,12 @@ function panelNavigate(panelIndex: number, module: string) {
 }
 
 const isElectron = computed(() => typeof window !== 'undefined' && !!(window as any).electronAPI)
-const isMobile = computed(() => typeof window !== 'undefined' && (!!(window as any).Capacitor || !!(window as any).harmonyAPI))
+const isMobile = computed(() => {
+  if (typeof window === 'undefined') return false
+  if ((window as any).harmonyAPI) return true
+  const cap = (window as any).Capacitor
+  return !!(cap && cap.isNativePlatform && cap.isNativePlatform())
+})
 const isDesktop = computed(() => !isMobile.value)
 
 const navigateTo = (module: string) => {
