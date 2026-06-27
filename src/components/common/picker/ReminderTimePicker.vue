@@ -66,6 +66,7 @@ interface ReminderTime {
 
 const props = defineProps<{
   modelValue: ReminderTime
+  prefix?: string
 }>()
 
 const emit = defineEmits<{
@@ -83,12 +84,16 @@ const ITEM_HEIGHT = 32
 
 const displayText = computed(() => {
   const { days, hours, minutes } = props.modelValue
-  if (days === 0 && hours === 0 && minutes === 0) return '准时提醒'
-  const parts: string[] = []
-  if (days > 0) parts.push(`${days}天`)
-  if (hours > 0) parts.push(`${hours}小时`)
-  if (minutes > 0) parts.push(`${minutes}分钟`)
-  return parts.length ? parts.join('') : '0分钟'
+  let text: string
+  if (days === 0 && hours === 0 && minutes === 0) text = '准时提醒'
+  else {
+    const parts: string[] = []
+    if (days > 0) parts.push(`${days}天`)
+    if (hours > 0) parts.push(`${hours}小时`)
+    if (minutes > 0) parts.push(`${minutes}分钟`)
+    text = parts.length ? parts.join('') : '0分钟'
+  }
+  return props.prefix ? `${props.prefix} ${text}` : text
 })
 
 function open() {

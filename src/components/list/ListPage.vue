@@ -219,6 +219,7 @@
         <div class="dialog-header folder-dialog-header">
           <span class="dialog-header-title folder-dialog-title">添加任务</span>
         </div>
+        <div class="task-wavy-divider"></div>
         <div class="dialog-body">
           <TaskForm :list-id="listDialogListId" :group-id="listDialogGroupId" @submit="onTaskSubmit" @cancel="closeTaskDialog" />
         </div>
@@ -1184,7 +1185,9 @@ const handleConfirmAction = () => {
 .list-dialog-overlay::after { content: none; }
 
 .dialog-container { background: rgba(30, 28, 52, 0.98); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); width: 210px; max-width: 90vw; max-height: 90vh; display: flex; flex-direction: column; }
-.list-add-dialog { max-height: none; margin-top: auto; margin-bottom: auto; }
+.dialog-container.list-add-dialog { width: 400px; max-height: none; margin-top: auto; margin-bottom: auto; }
+.list-add-dialog .dialog-body { padding-top: 0; }
+.task-wavy-divider { height: 1px; background: rgba(255, 255, 255, 0.15); margin: 14px 20px; }
 .confirm-dialog-container { width: 380px; text-align: center; padding: 32px; }
 .dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 0; flex-shrink: 0; }
 .dialog-header-title { font-size: 16px; font-weight: 600; color: var(--chalk-white); }
