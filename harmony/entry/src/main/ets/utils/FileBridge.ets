@@ -32,21 +32,29 @@ export class FileBridge {
     return idx > 0 ? fullPath.substring(0, idx) : fullPath;
   }
 
-  /** 读取文本文件，文件不存在时抛出异常 */
+  /** 读取文本文件，文件不存在时返回空字符串（避免原生异常通过 javaScriptProxy 桥导致 WebView 崩溃） */
   readFile(relativePath: string): string {
-    return fs.readTextSync(this.resolve(relativePath));
+    try {
+      return fs.readTextSync(this.resolve(relativePath));
+    } catch (e) {
+      return '';
+    }
   }
 
   /** 写入文本文件，自动创建父目录 */
   writeFile(relativePath: string, data: string): void {
-    const fullPath = this.resolve(relativePath);
-    const dir = this.parentOf(fullPath);
-    if (!fs.accessSync(dir)) {
-      fs.mkdirSync(dir, true);
+    try {
+      const fullPath = this.resolve(relativePath);
+      const dir = this.parentOf(fullPath);
+      if (!fs.accessSync(dir)) {
+        fs.mkdirSync(dir, true);
+      }
+      const file = fs.openSync(fullPath, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
+      fs.writeSync(file.fd, data);
+      fs.closeSync(file);
+    } catch (e) {
+      // 写入失败，静默忽略
     }
-    const file = fs.openSync(fullPath, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
-    fs.writeSync(file.fd, data);
-    fs.closeSync(file);
   }
 
   /** 删除文件，文件不存在时静默忽略 */
@@ -58,10 +66,14 @@ export class FileBridge {
     }
   }
 
-  /** 获取路径类型，返回 'file' 或 'directory'，不存在时抛出异常 */
+  /** 获取路径类型，返回 'file' 或 'directory'，不存在时返回 'none'（避免原生异常通过 javaScriptProxy 桥导致 WebView 崩溃） */
   stat(relativePath: string): string {
-    const stat = fs.statSync(this.resolve(relativePath));
-    return stat.isDirectory() ? 'directory' : 'file';
+    try {
+      const s = fs.statSync(this.resolve(relativePath));
+      return s.isDirectory() ? 'directory' : 'file';
+    } catch (e) {
+      return 'none';
+    }
   }
 
   /** 创建目录 */
@@ -72,9 +84,12 @@ export class FileBridge {
     }
   }
 
-  /** 列出目录内容 */
+  /** 列出目录内容，目录不存在时返回空数组 */
   readdir(relativePath: string): DirEntry[] {
     const dirPath = this.resolve(relativePath);
+    if (!fs.accessSync(dirPath)) {
+      return [];
+    }
     const names: string[] = fs.listFileSync(dirPath);
     const result: DirEntry[] = [];
     for (const name of names) {

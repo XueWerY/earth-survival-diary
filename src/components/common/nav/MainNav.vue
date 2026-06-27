@@ -8,7 +8,7 @@
         v-for="m in MODULES"
         :key="m"
         class="nav-item"
-        :class="{ active: activeModule === m }"
+        :class="{ active: activeModule === m, 'nav-item-bottom': variant === 'left' && m === 'toolbox' }"
         @click="emit('navigate', m)"
       >
         <span class="nav-item-icon">{{ MODULE_ICONS[m] }}</span>
@@ -146,10 +146,17 @@ watch(() => props.activeModule, scrollToActive)
 
 /* 垂直导航栏：纵向滚动 */
 .nav-left .nav-items-scroll {
+  flex: 1;
   flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
   padding: 12px 4px;
+  gap: 8px;
+}
+
+/* 垂直导航栏：工具箱及之后的导航项推到底部 */
+.nav-left .nav-item-bottom {
+  margin-top: auto;
 }
 
 /* 底部导航栏：溢出时左对齐，否则居中 */

@@ -49,11 +49,11 @@ async function deleteFile(filePath: string) {
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
-    await Filesystem.stat({
+    const result = await Filesystem.stat({
       path: DATA_DIR + filePath,
       directory: Directory.Data
     })
-    return true
+    return result.type !== 'none'
   } catch {
     return false
   }

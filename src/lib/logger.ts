@@ -158,7 +158,7 @@ class Logger {
     switch (entry.level) {
       case LogLevel.TRACE:
       case LogLevel.DEBUG:
-        console.debug(formattedMessage, entry.meta || '');
+        console.log(formattedMessage, entry.meta || '');
         break;
       case LogLevel.INFO:
         console.info(formattedMessage, entry.meta || '');

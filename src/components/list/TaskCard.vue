@@ -83,10 +83,12 @@
           <el-input
             v-if="addingChecklist[list.id]"
             v-model="newChecklistText"
+            type="textarea"
+            autosize
             size="small"
-            placeholder="输入后回车确认"
+            placeholder="Ctrl+Enter 确认"
             :ref="(el: any) => { if (el && addingChecklistTaskId === list.id) { nextTick(() => { const input = (el as any).input || (el as any).textarea; if (input) input.focus() }) } }"
-            @keyup.enter="handleAddChecklist(list.id)"
+            @keyup.enter.ctrl="handleAddChecklist(list.id)"
             @keyup.escape="cancelAddChecklist(list.id)"
             @blur="cancelAddChecklist(list.id)"
           />
@@ -848,7 +850,7 @@ const cancelEditNotes = () => {
 .checklist-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--chalk-white-70); padding: 6px 8px; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; }
 .checklist-item:hover { background: rgba(255, 255, 255, 0.05); color: var(--chalk-white-90); }
 .checklist-item .check-icon { font-size: 16px; flex-shrink: 0; }
-.checklist-item .check-text { flex: 1; word-break: break-word; }
+.checklist-item .check-text { flex: 1; word-break: break-word; white-space: pre-wrap; }
 .checklist-item.completed { color: var(--chalk-muted); }
 .checklist-item.completed .check-text { text-decoration: line-through; }
 .checklist-item.completed .check-icon { color: var(--chalk-primary); }
