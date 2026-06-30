@@ -163,6 +163,7 @@ import { useRouter, useRoute } from 'vue-router'
 import AuthPage from './components/auth/AuthPage.vue'
 import { useTaskStore } from './stores/taskStore'
 import { useListStore, DEFAULT_LIST_COLORS } from './stores/listStore'
+import { useNoteStore } from './stores/noteStore'
 import ReminderCard from './components/common/card/ReminderCard.vue'
 import { useAuthStore } from './stores/authStore'
 import { useSettingsStore } from './stores/settingsStore'
@@ -183,7 +184,7 @@ import { ElMessage } from 'element-plus'
 const router = useRouter()
 const route = useRoute()
 
-const VALID_ROUTES = ['footprint', 'focus', 'list', 'countdown', 'course', 'statistics', 'toolbox', 'profile']
+const VALID_ROUTES = ['footprint', 'notes', 'focus', 'list', 'countdown', 'course', 'statistics', 'toolbox', 'profile']
 const MAX_SCHEDULE_DELAY = 20 * 24 * 3600 * 1000
 
 const pageNav = usePageNav()
@@ -191,6 +192,7 @@ const splitScreen = useSplitScreen()
 
 const moduleComponents: Record<string, ReturnType<typeof defineAsyncComponent>> = {
   footprint: defineAsyncComponent(() => import('./components/footprint/TaskList.vue')),
+  notes: defineAsyncComponent(() => import('./components/notes/NotesPage.vue')),
   focus: defineAsyncComponent(() => import('./components/focus/FocusTimer.vue')),
   list: defineAsyncComponent(() => import('./components/list/ListPage.vue')),
   countdown: defineAsyncComponent(() => import('./components/countdown/CountdownList.vue')),
@@ -256,6 +258,7 @@ const navigateTo = (module: string) => {
 
 const taskStore = useTaskStore()
 const listStore = useListStore()
+const noteStore = useNoteStore()
 const authStore = useAuthStore()
 const settingsStore = useSettingsStore()
 const focusStore = useFocusStore()
@@ -298,6 +301,7 @@ const handleLogout = async () => {
   // 重置所有 store 状态
   taskStore.reset()
   listStore.reset()
+  noteStore.reset()
   focusStore.reset()
   settingsStore.reset()
   // 清除所有缓存数据
@@ -1013,7 +1017,17 @@ const ensureDefaultData = async () => {
     })
     logger.info('[App] 已创建示例日记')
 
-    // 6. 标记为已初始化
+    // 6. 创建示例笔记
+    await noteStore.addNote({
+      title: '欢迎来到笔记',
+      content: '这里是你的第一篇笔记。\n点击右上角 + 可以新建笔记，使用分类管理不同主题的内容。',
+      color: '#667eea',
+      categoryId: 'personal',
+      pinned: true,
+    })
+    logger.info('[App] 已创建示例笔记')
+
+    // 7. 标记为已初始化
     await setSystemStateField('defaultsInitialized', true)
     logger.info('[App] 默认数据初始化完成')
   } catch (error) {
@@ -1054,6 +1068,7 @@ const initializeData = async () => {
       focusStore.loadData(),
       preloadCountdownData(),
       preloadCourseData(),
+      noteStore.loadData(),
     ])
 
     logger.debug('[App] 并行加载完成')

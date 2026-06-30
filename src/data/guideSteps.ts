@@ -8,7 +8,7 @@ export const guideSteps: GuideStep[] = [
     title: '全局导航栏',
     description: '导航栏包含所有功能模块的入口，点击图标可快速切换到相应页面。当前高亮的图标表示正在使用的模块。',
     padding: 0,
-    tooltipPosition: 'top-center'
+    tooltipPosition: 'right-center'
   },
   {
     route: '/footprint',
@@ -51,6 +51,20 @@ export const guideSteps: GuideStep[] = [
     selector: '.footprint-content',
     title: '足迹页面 - 日记内容区',
     description: '记录的足迹会在这个区域展示。按时段（上午/下午/晚上）分组，清晰呈现一天的活动安排，支持双击快捷编辑名称和备注，以及增删改操作。'
+  },
+
+  // ==================== 笔记 ====================
+  {
+    route: '/notes',
+    selector: '.notes-breadcrumb-bar',
+    title: '笔记页面 - 分类导航',
+    description: '笔记模块使用面包屑地址栏导航，点击">"可以弹出下拉列表快速切换分类。首页右侧"+"按钮可以添加自定义分类，进入分类后"+"按钮用于新建笔记。'
+  },
+  {
+    route: '/notes',
+    selector: '.card-grid',
+    title: '笔记页面 - 分类卡片',
+    description: '这里展示所有笔记分类卡片，点击进入查看该分类下的笔记。卡片上显示该分类下的笔记数量，自定义分类卡片右上角有编辑和删除按钮。'
   },
 
   // ==================== 专注 ====================

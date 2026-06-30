@@ -36,7 +36,7 @@ export interface GuideStep {
   title: string
   description: string
   padding?: number
-  tooltipPosition?: 'bottom-right' | 'bottom-center' | 'top-center'
+  tooltipPosition?: 'bottom-right' | 'bottom-center' | 'top-center' | 'right-center'
   onActivate?: () => void
 }
 
@@ -54,6 +54,12 @@ const emit = defineEmits<{
 
 const spotlight = ref({ x: 0, y: 0, w: 0, h: 0 })
 const foundTarget = ref(false)
+const isDesktop = computed(() => {
+  if (typeof window === 'undefined') return false
+  if ((window as any).harmonyAPI) return false
+  const cap = (window as any).Capacitor
+  return !(cap && cap.isNativePlatform && cap.isNativePlatform())
+})
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 let retryCount = 0
 const MAX_RETRIES = 15
@@ -102,8 +108,18 @@ const spotlightBlockerStyle = computed(() => ({
 
 const tooltipStyle = computed(() => {
   const gap = 16
-  if (currentStep.value.tooltipPosition === 'top-center' ||
-      currentStep.value.tooltipPosition === 'bottom-center') {
+  const pos = currentStep.value.tooltipPosition
+  // 桌面端 right-center：在高亮区域右侧垂直居中
+  if (pos === 'right-center' && isDesktop.value) {
+    return {
+      left: (spotlight.value.x + spotlight.value.w + gap) + 'px',
+      top: (spotlight.value.y + spotlight.value.h / 2) + 'px',
+      transform: 'translateY(-50%)',
+      right: 'auto',
+      bottom: 'auto'
+    }
+  }
+  if (pos === 'top-center' || pos === 'bottom-center' || pos === 'right-center') {
     const targetMidY = spotlight.value.y + spotlight.value.h / 2
     const viewportMid = window.innerHeight / 2
     if (targetMidY > viewportMid) {

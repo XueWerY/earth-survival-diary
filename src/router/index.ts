@@ -4,6 +4,7 @@ import { logger } from '../lib/logger'
 import { getPluginPageOverride } from '../lib/pluginLoader'
 
 const defaultTaskList = () => import('../components/footprint/TaskList.vue')
+const defaultNotesPage = () => import('../components/notes/NotesPage.vue')
 const defaultFocusTimer = () => import('../components/focus/FocusTimer.vue')
 const defaultListPage = () => import('../components/list/ListPage.vue')
 const defaultCountdownList = () => import('../components/countdown/CountdownList.vue')
@@ -14,6 +15,7 @@ const defaultProfilePage = () => import('../components/profile/ProfilePage.vue')
 
 const pageComponentNames: Record<string, string> = {
   footprint: 'TaskList',
+  notes: 'NotesPage',
   focus: 'FocusTimer',
   list: 'ListPage',
   countdown: 'CountdownList',
@@ -25,6 +27,7 @@ const pageComponentNames: Record<string, string> = {
 
 const defaultLoaders: Record<string, () => Promise<any>> = {
   footprint: defaultTaskList,
+  notes: defaultNotesPage,
   focus: defaultFocusTimer,
   list: defaultListPage,
   countdown: defaultCountdownList,
@@ -53,6 +56,7 @@ function resolveComponent(routeName: string) {
 const routes = [
   { path: '/', redirect: '/footprint' },
   { path: '/footprint', name: 'footprint', component: resolveComponent('footprint') },
+  { path: '/notes', name: 'notes', component: resolveComponent('notes') },
   { path: '/focus', name: 'focus', component: resolveComponent('focus') },
   { path: '/list', name: 'list', component: resolveComponent('list') },
   { path: '/countdown', name: 'countdown', component: resolveComponent('countdown') },
