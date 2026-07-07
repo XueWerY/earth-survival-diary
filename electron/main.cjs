@@ -1,7 +1,7 @@
-const { app, BrowserWindow, Menu, ipcMain, shell, dialog, Tray, screen } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, shell, dialog, Tray, screen, clipboard } = require('electron')
 const path = require('path')
 const fs = require('fs')
-const { spawn } = require('child_process')
+const { spawn, execSync } = require('child_process')
 const { autoUpdater } = require('electron-updater')
 
 Menu.setApplicationMenu(null)
@@ -190,6 +190,13 @@ ipcMain.handle('get-close-action', async () => {
   return closeAction
 })
 
+ipcMain.handle('set-window-title', async (_event, title) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setTitle(title)
+  }
+  return true
+})
+
 autoUpdater.autoDownload = false
 autoUpdater.channel = 'latest'
 
@@ -346,7 +353,38 @@ ipcMain.handle('read-text-file-path', async (_event, filePath) => {
     throw e
   }
 })
+
+// 获取系统已安装字体列表（Windows 端通过 PowerShell 枚举）
+ipcMain.handle('get-system-fonts', async () => {
+  try {
+    const psScript = 'Add-Type -AssemblyName System.Drawing; (New-Object System.Drawing.Text.InstalledFontCollection).Families | ForEach-Object { $_.Name }'
+    const output = execSync(psScript, { shell: 'powershell.exe', encoding: 'utf-8', timeout: 10000 })
+    return output.split(/\r?\n/).map(f => f.trim()).filter(Boolean)
+  } catch (e) {
+    errorLog('[Fonts] get-system-fonts 失败: ' + e.message)
+    return []
+  }
+})
 // ====== 文件管理器 IPC 结束 ======
+
+// ====== 剪贴板 IPC（用于 Electron 端粘贴系统剪贴板内容） ======
+ipcMain.handle('read-clipboard-text', async () => {
+  try {
+    return clipboard.readText()
+  } catch (e) {
+    errorLog('[Clipboard] read-clipboard-text 失败: ' + e.message)
+    return ''
+  }
+})
+
+ipcMain.handle('read-clipboard-html', async () => {
+  try {
+    return clipboard.readHTML()
+  } catch (e) {
+    errorLog('[Clipboard] read-clipboard-html 失败: ' + e.message)
+    return ''
+  }
+})
 
 // ====== 局域网传输 IPC ======
 const http = require('http')

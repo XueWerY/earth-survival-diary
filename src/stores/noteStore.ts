@@ -50,6 +50,210 @@ export const EXTENDED_NOTE_COLORS = [
 
 export const ALL_CATEGORY_VALUE = 'all'
 
+// 笔记页面（编辑器按页存储内容）
+export interface NotePage {
+  id: string
+  title: string
+  level: 1 | 2 | 3  // 1 = 一级页面, 2 = 二级页面（子页面）, 3 = 三级页面（孙页面）
+  parentId?: string  // 二级/三级页面所属的上一级页面 id
+  content: string  // HTML 内容
+  type?: 'cover' | 'thanks'  // 封面页 / 致谢页（特殊页面，自动管理内容）
+}
+
+// 将纯文本转换为 HTML 段落
+const textToHtml = (text: string): string => {
+  return text.split('\n').map(l => l.trim() ? `<p>${l}</p>` : '<p><br></p>').join('')
+}
+
+// 解析笔记内容为页面数组（兼容旧版 HTML/纯文本格式）
+export const parseNotePages = (content: string): NotePage[] => {
+  if (!content) return []
+  // 新版 JSON 格式
+  if (content.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(content)
+      if (parsed.pages && Array.isArray(parsed.pages)) return parsed.pages
+    } catch { /* 降级为 HTML 解析 */ }
+  }
+  // 旧版 HTML/纯文本格式：按标题拆分为页面
+  const html = (content.includes('<') && content.includes('>')) ? content : textToHtml(content)
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(html, 'text/html')
+  const body = doc.body
+  const pages: NotePage[] = []
+  let currentPage: NotePage | null = null
+  let currentLevel1Id: string | undefined
+  let currentLevel2Id: string | undefined
+  let pendingContent = ''
+
+  const flushPending = () => {
+    if (currentPage && pendingContent) {
+      currentPage.content += pendingContent
+      pendingContent = ''
+    }
+  }
+
+  const genId = () => 'p_' + Date.now() + Math.random().toString(36).slice(2, 8)
+
+  Array.from(body.childNodes).forEach(node => {
+    if (node.nodeType === Node.ELEMENT_NODE && /^H[1-6]$/.test((node as Element).tagName)) {
+      flushPending()
+      const el = node as Element
+      const text = el.textContent?.trim() || ''
+      if (!text) return
+      const levelNum = parseInt(el.tagName.charAt(1))
+      const level: 1 | 2 | 3 = levelNum === 1 ? 1 : (levelNum === 2 ? 2 : 3)
+      const id = genId()
+      if (level === 1) {
+        currentLevel1Id = id
+        currentLevel2Id = undefined
+      } else if (level === 2) {
+        currentLevel2Id = id
+      }
+      const parentId = level === 1 ? undefined : (level === 2 ? currentLevel1Id : currentLevel2Id)
+      currentPage = { id, title: text, level, parentId, content: '' }
+      pages.push(currentPage)
+    } else if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent?.trim()
+      if (text) pendingContent += `<p>${text}</p>`
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      pendingContent += (node as Element).outerHTML || ''
+    }
+  })
+  flushPending()
+
+  // 无标题但有内容：创建单个页面
+  if (pages.length === 0 && body.textContent?.trim()) {
+    pages.push({ id: genId(), title: '正文', level: 1, content: html })
+  }
+  return pages
+}
+
+// 序列化页面数组为笔记内容字符串
+export const serializeNotePages = (pages: NotePage[]): string => {
+  return JSON.stringify({ pages })
+}
+
+// 将所有页面合并为 HTML（用于字数统计、卡片预览）
+export const pagesToHtml = (pages: NotePage[]): string => {
+  return pages.map(p => `<h${p.level}>${p.title}</h${p.level}>${p.content}`).join('')
+}
+
+// 获取笔记纯文本（用于卡片预览和字数统计）
+export const getNotePlainText = (content: string): string => {
+  const pages = parseNotePages(content)
+  if (pages.length === 0) return ''
+  const tmp = document.createElement('div')
+  tmp.innerHTML = pagesToHtml(pages)
+  return (tmp.textContent || tmp.innerText || '').trim()
+}
+
+// 创建新页面
+export const createNotePage = (level: 1 | 2 | 3, parentId?: string): NotePage => {
+  return {
+    id: 'p_' + Date.now() + Math.random().toString(36).slice(2, 8),
+    title: '新页面',
+    level,
+    parentId,
+    content: '',
+  }
+}
+
+// 判断页面是否参与编号（封面页和致谢页不参与）
+const isCountedPage = (p: NotePage): boolean => p.type !== 'cover' && p.type !== 'thanks'
+
+// 计算页面序号（一级：1, 2, 3...；二级：1.1, 1.2, 2.1...；三级：1.1.1, 1.1.2...）
+// 封面页和致谢页不参与编号，返回空字符串
+export const computePageNumber = (pages: NotePage[], idx: number): string => {
+  const page = pages[idx]
+  if (!page) return ''
+  if (!isCountedPage(page)) return ''
+  if (page.level === 1) {
+    let num = 0
+    for (let i = 0; i <= idx; i++) {
+      if (pages[i].level === 1 && isCountedPage(pages[i])) num++
+    }
+    return String(num)
+  }
+  if (page.level === 2) {
+    const parentId = page.parentId
+    let parentNum = 0
+    let subNum = 0
+    for (let i = 0; i < pages.length; i++) {
+      if (pages[i].level === 1 && isCountedPage(pages[i])) {
+        parentNum++
+        subNum = 0
+        if (pages[i].id === parentId) {
+          for (let j = i + 1; j <= idx; j++) {
+            if (pages[j].level === 2 && pages[j].parentId === parentId) subNum++
+          }
+          return `${parentNum}.${subNum}`
+        }
+      }
+    }
+    return ''
+  }
+  // 三级页面：查找父级二级页面，再查二级页面的父级一级页面
+  const parent2Id = page.parentId
+  let parent2Idx = -1
+  for (let i = 0; i < pages.length; i++) {
+    if (pages[i].id === parent2Id && pages[i].level === 2) {
+      parent2Idx = i
+      break
+    }
+  }
+  if (parent2Idx === -1) return ''
+  const parent2 = pages[parent2Idx]
+  const parent1Id = parent2.parentId
+  let parent1Num = 0
+  let parent2Num = 0
+  let subNum = 0
+  for (let i = 0; i < pages.length; i++) {
+    if (pages[i].level === 1 && isCountedPage(pages[i])) {
+      parent1Num++
+      parent2Num = 0
+      if (pages[i].id === parent1Id) {
+        for (let j = i + 1; j <= parent2Idx; j++) {
+          if (pages[j].level === 2 && pages[j].parentId === parent1Id) {
+            parent2Num++
+            if (pages[j].id === parent2Id) {
+              for (let k = parent2Idx + 1; k <= idx; k++) {
+                if (pages[k].level === 3 && pages[k].parentId === parent2Id) subNum++
+              }
+              return `${parent1Num}.${parent2Num}.${subNum}`
+            }
+          }
+        }
+      }
+    }
+  }
+  return ''
+}
+
+// 封面页和致谢页共用的水平垂直居中样式
+const CENTER_STYLE = 'min-height:60vh;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;'
+
+// 生成封面页内容（根据其他页面生成大纲，noteTitle 为笔记标题）
+export const generateCoverContent = (pages: NotePage[], noteTitle: string): string => {
+  let outlineHtml = ''
+  pages.forEach((p, idx) => {
+    if (p.type === 'cover' || p.type === 'thanks') return
+    const num = computePageNumber(pages, idx)
+    const indent = (p.level - 1) * 20
+    outlineHtml += `<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px dashed rgba(255,255,255,0.1);padding-left:${indent}px;"><span style="font-weight:700;color:#93c5fd;min-width:36px;text-align:center;">${num}</span><span style="color:#cbd5e1;">${p.title}</span></div>`
+  })
+  return `<div style="${CENTER_STYLE}"><h1>${noteTitle || '新笔记'}</h1><p>大纲</p>${outlineHtml ? `<div style="max-width:500px;width:100%;">${outlineHtml}</div>` : ''}</div>`
+}
+
+// 确保致谢页内容被居中 div 包裹（强制水平垂直居中）
+export const wrapThanksContent = (content: string): string => {
+  if (!content) return `<div style="${CENTER_STYLE}"><p>感谢聆听！</p></div>`
+  if (content.includes(CENTER_STYLE)) return content
+  const tmp = document.createElement('div')
+  tmp.innerHTML = content
+  return `<div style="${CENTER_STYLE}">${tmp.innerHTML}</div>`
+}
+
 export const useNoteStore = defineStore('note', () => {
   const notes = ref<Note[]>([])
   const categories = ref<NoteCategory[]>([])

@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAutoLaunch: () => ipcRenderer.invoke('get-auto-launch'),
   setCloseAction: (action) => ipcRenderer.invoke('set-close-action', action),
   getCloseAction: () => ipcRenderer.invoke('get-close-action'),
+  setWindowTitle: (title) => ipcRenderer.invoke('set-window-title', title),
 
   // 文件管理器
   getDataDirPath: () => ipcRenderer.invoke('get-data-dir-path'),
@@ -43,6 +44,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteFilePath: (filePath) => ipcRenderer.invoke('delete-file-path', filePath),
   renameFilePath: (oldPath, newPath) => ipcRenderer.invoke('rename-file-path', oldPath, newPath),
   readTextFilePath: (filePath) => ipcRenderer.invoke('read-text-file-path', filePath),
+
+  // 系统字体
+  getSystemFonts: () => ipcRenderer.invoke('get-system-fonts'),
+
+  // 剪贴板（用于 Electron 端粘贴系统剪贴板内容）
+  readClipboardText: () => ipcRenderer.invoke('read-clipboard-text'),
+  readClipboardHTML: () => ipcRenderer.invoke('read-clipboard-html'),
 
   // 局域网传输
   startLanServer: (data) => ipcRenderer.invoke('start-lan-server', data),

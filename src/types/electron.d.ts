@@ -43,10 +43,18 @@ declare global {
       renameFilePath: (oldPath: string, newPath: string) => Promise<boolean>
       readTextFilePath: (filePath: string) => Promise<string>
 
+      // 系统字体
+      getSystemFonts: () => Promise<string[]>
+
+      // 剪贴板（用于 Electron 端粘贴系统剪贴板内容）
+      readClipboardText: () => Promise<string>
+      readClipboardHTML: () => Promise<string>
+
       // 局域网传输
       startLanServer: (data: any) => Promise<{ ip: string; port: number }>
       stopLanServer: () => Promise<boolean>
       fetchLanData: (url: string) => Promise<any>
+      setWindowTitle: (title: string) => Promise<boolean>
     }
 
     // 鸿蒙端原生文件操作桥接（通过 WebView JavaScript Proxy 注入）

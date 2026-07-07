@@ -1,7 +1,7 @@
 {
   "id": "file-manager",
   "name": "文件资源管理器",
-  "version": "1.8.7",
+  "version": "1.8.8",
   "description": "文件浏览、数据导出与导入（局域网传输）",
   "author": "官方",
   "tools": {

@@ -284,6 +284,13 @@ const MODULE_DEFS: ModuleGroupDef[] = [
     ]
   },
   {
+    key: 'notes',
+    label: '笔记',
+    children: [
+      { key: 'notes', label: '笔记数据', dataKeys: ['notes/notes', 'notes/categories'] }
+    ]
+  },
+  {
     key: 'course',
     label: '课程表',
     children: [

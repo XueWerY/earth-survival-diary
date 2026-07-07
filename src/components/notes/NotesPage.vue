@@ -66,17 +66,20 @@
                     class="note-card pinned"
                     @click="openDetail(note)"
                   >
-                    <div class="note-card-first-row">
-                      <div class="note-card-title">{{ note.title }}</div>
+                    <div class="note-card-row1">
+                      <span class="note-card-title" :title="note.title">{{ note.title }}</span>
                       <div class="note-card-actions">
                         <button class="card-icon-btn" title="取消置顶" @click.stop="handleTogglePin(note)"><el-icon><Star /></el-icon></button>
                         <button class="card-icon-btn" title="编辑" @click.stop="handleEditNote(note)"><el-icon><Edit /></el-icon></button>
                         <button class="card-icon-btn danger" title="删除" @click.stop="handleDeleteNote(note)"><el-icon><Delete /></el-icon></button>
                       </div>
                     </div>
-                    <div v-if="note.content" class="note-card-content" v-html="stripHtml(note.content)"></div>
-                    <div class="note-card-footer">
-                      <span class="note-card-date">{{ formatDate(note.updatedAt) }}</span>
+                    <div class="note-card-meta">
+                      <span>{{ getPageCount(note.content) }} 页</span>
+                      <span class="note-card-meta-sep">·</span>
+                      <span>{{ getWordCount(note.content) }} 字</span>
+                      <span class="note-card-meta-sep">·</span>
+                      <span>{{ formatDate(note.updatedAt) }}</span>
                     </div>
                   </div>
                 </div>
@@ -94,17 +97,20 @@
                     class="note-card"
                     @click="openDetail(note)"
                   >
-                    <div class="note-card-first-row">
-                      <div class="note-card-title">{{ note.title }}</div>
+                    <div class="note-card-row1">
+                      <span class="note-card-title" :title="note.title">{{ note.title }}</span>
                       <div class="note-card-actions">
                         <button class="card-icon-btn" title="置顶" @click.stop="handleTogglePin(note)"><el-icon><StarFilled /></el-icon></button>
                         <button class="card-icon-btn" title="编辑" @click.stop="handleEditNote(note)"><el-icon><Edit /></el-icon></button>
                         <button class="card-icon-btn danger" title="删除" @click.stop="handleDeleteNote(note)"><el-icon><Delete /></el-icon></button>
                       </div>
                     </div>
-                    <div v-if="note.content" class="note-card-content" v-html="stripHtml(note.content)"></div>
-                    <div class="note-card-footer">
-                      <span class="note-card-date">{{ formatDate(note.updatedAt) }}</span>
+                    <div class="note-card-meta">
+                      <span>{{ getPageCount(note.content) }} 页</span>
+                      <span class="note-card-meta-sep">·</span>
+                      <span>{{ getWordCount(note.content) }} 字</span>
+                      <span class="note-card-meta-sep">·</span>
+                      <span>{{ formatDate(note.updatedAt) }}</span>
                     </div>
                   </div>
                 </div>
@@ -115,43 +121,34 @@
       </div>
     </div>
 
-    <!-- 详情视图 -->
-    <div v-else-if="viewMode === 'detail' && detailNote" class="detail-view">
-      <div class="detail-header">
-        <button class="back-btn" @click="closeDetail" title="返回">
-          <el-icon><ArrowLeft /></el-icon>
-          <span>返回</span>
-        </button>
-        <span class="detail-title">{{ detailNote.title }}</span>
-        <div class="detail-actions">
-          <button class="card-icon-btn" :class="{ active: detailNote.pinned }" :title="detailNote.pinned ? '取消置顶' : '置顶'" @click="handleTogglePin(detailNote); detailNote = { ...detailNote, pinned: !detailNote.pinned }">
-            <el-icon><StarFilled v-if="detailNote.pinned" /><Star v-else /></el-icon>
-          </button>
-          <button class="card-icon-btn" title="编辑" @click="handleEditNote(detailNote)"><el-icon><Edit /></el-icon></button>
-          <button class="card-icon-btn danger" title="删除" @click="handleDeleteNote(detailNote)"><el-icon><Delete /></el-icon></button>
-        </div>
-      </div>
-      <div class="detail-divider"></div>
-      <div class="detail-body">
-        <div class="detail-meta">
-          <span>{{ getCategoryName(detailNote.categoryId) }}</span>
-          <span class="detail-dot">·</span>
-          <span>更新于 {{ formatDate(detailNote.updatedAt) }}</span>
-        </div>
-        <div class="detail-content" v-html="renderDetailContent(detailNote.content)"></div>
-      </div>
+    <!-- 详情/编辑视图 -->
+    <div v-else-if="viewMode === 'detail'" class="detail-view">
+      <NoteEditor
+        v-if="isEditing"
+        :note="detailNote"
+        :categories="noteStore.categories"
+        :clockDisplay="clockDisplay"
+        :totalWordCount="totalWordCount"
+        @save="handleSaveEdit"
+        @cancel="handleCancelEdit"
+        @back="closeDetail"
+        @togglePin="handleTogglePin(detailNote); detailNote = { ...detailNote, pinned: !detailNote.pinned }"
+        @preview="handlePreviewFromEditor"
+      />
+      <NotePreview
+        v-else-if="detailNote"
+        :note="detailNote"
+        :categories="noteStore.categories"
+        :clockDisplay="clockDisplay"
+        :totalWordCount="totalWordCount"
+        :isFullscreen="isFullscreen"
+        @close="closeDetail"
+        @edit="enterEditMode"
+        @delete="handleDeleteNote(detailNote)"
+        @togglePin="handleTogglePin(detailNote); detailNote = { ...detailNote, pinned: !detailNote.pinned }"
+        @toggleFullscreen="toggleFullscreen"
+      />
     </div>
-
-    <!-- 编辑/写笔记视图 -->
-    <NoteForm
-      v-else-if="viewMode === 'edit'"
-      :visible="noteFormVisible"
-      :note="editingNote"
-      :categories="noteStore.categories"
-      :default-category-id="currentCategoryFromPath"
-      @update:visible="onNoteFormVisibleChange"
-      @submit="handleNoteFormSubmit"
-    />
 
     <CategoryForm
       v-model:visible="categoryFormVisible"
@@ -179,12 +176,17 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, inject } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Edit, Delete, Star, StarFilled, Document, ArrowLeft } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
-import NoteForm from './NoteForm.vue'
+import NoteEditor from './NoteEditor.vue'
+import NotePreview from './NotePreview.vue'
 import CategoryForm from './CategoryForm.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
-import { useNoteStore, ALL_CATEGORY_VALUE, type Note, type NoteCategory } from '../../stores/noteStore'
+import { useNoteStore, ALL_CATEGORY_VALUE, getNotePlainText, parseNotePages, type Note, type NoteCategory } from '../../stores/noteStore'
 import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem } from '../../composables/usePageNav'
 import { logger } from '../../lib/logger'
+
+const emit = defineEmits<{
+  (e: 'fullscreen-change', val: boolean): void
+}>()
 
 const pageNav = usePageNav()
 const noteStore = useNoteStore()
@@ -210,9 +212,8 @@ const plusAction = computed(() => {
   return null
 })
 
-// 视图模式：list / detail / edit
-const viewMode = ref<'list' | 'detail' | 'edit'>('list')
-const noteFormVisible = ref(false)
+// 视图模式：list / detail
+const viewMode = ref<'list' | 'detail'>('list')
 
 const computeBreadcrumbSegments = (): BreadcrumbSegment[] => {
   const segments: BreadcrumbSegment[] = []
@@ -338,21 +339,15 @@ const formatDate = (date: string): string => {
   return d.format('YYYY-MM-DD')
 }
 
-const stripHtml = (html: string): string => {
-  const tmp = document.createElement('div')
-  tmp.innerHTML = html
-  const text = (tmp.textContent || tmp.innerText || '').trim()
-  return text.length > 120 ? text.slice(0, 120) + '...' : text
+// 获取笔记页面数
+const getPageCount = (content: string): number => {
+  return parseNotePages(content).length
 }
 
-const renderDetailContent = (content: string): string => {
-  if (!content) return '<p style="color:var(--chalk-muted)">（无内容）</p>'
-  if (content.includes('<') && content.includes('>')) return content
-  return content.split('\n').map((l) => l.trim() ? `<p>${l}</p>` : '<p><br></p>').join('')
-}
-
-const getCategoryName = (id: string): string => {
-  return noteStore.categories.find(c => c.id === id)?.name || '未分类'
+// 获取笔记全文字数（仅统计中文、字母、数字）
+const getWordCount = (content: string): number => {
+  const text = getNotePlainText(content)
+  return text.replace(/\s+/g, '').replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '').length
 }
 
 // 动态卡片列数
@@ -372,49 +367,100 @@ const updateWidth = () => {
   }
 }
 
-// 笔记编辑
-const editingNote = ref<Note | null>(null)
-
+// 笔记编辑（通过列表中的编辑按钮或详情视图编辑按钮）
 const handleAddNote = () => {
-  editingNote.value = null
-  viewMode.value = 'edit'
-  noteFormVisible.value = true
+  // "全部笔记"视图下 currentCategoryFromPath 返回 'all'，不是真实分类 id，需回退到默认分类
+  const catFromPath = currentCategoryFromPath.value
+  const validCategoryId = (catFromPath && catFromPath !== ALL_CATEGORY_VALUE)
+    ? catFromPath
+    : (noteStore.categories[0]?.id || 'personal')
+  detailNote.value = {
+    id: '',
+    title: '',
+    content: '',
+    color: '#ffffff',
+    categoryId: validCategoryId,
+    pinned: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }
+  isEditing.value = true
+  viewMode.value = 'detail'
 }
 
 const handleEditNote = (note: Note) => {
-  editingNote.value = { ...note }
-  viewMode.value = 'edit'
-  noteFormVisible.value = true
+  detailNote.value = { ...note }
+  isEditing.value = true
+  viewMode.value = 'detail'
 }
 
-const onNoteFormVisibleChange = (v: boolean) => {
-  noteFormVisible.value = v
-  if (!v) {
-    viewMode.value = 'list'
-    editingNote.value = null
+const enterEditMode = () => {
+  isEditing.value = true
+}
+
+const handleCancelEdit = () => {
+  if (detailNote.value?.id) {
+    isEditing.value = false
+  } else {
+    closeDetail()
   }
 }
 
-const handleNoteFormSubmit = async (data: { title: string; content: string; color: string; categoryId: string; pinned: boolean; id?: string }) => {
-  if (data.id) {
-    const ok = await noteStore.updateNote(data.id, {
+const handleSaveEdit = async (data: { title: string; content: string; categoryId: string; pinned: boolean }) => {
+  if (detailNote.value?.id) {
+    const ok = await noteStore.updateNote(detailNote.value.id, {
       title: data.title,
       content: data.content,
-      color: data.color,
       categoryId: data.categoryId,
       pinned: data.pinned,
     })
-    if (ok) ElMessage.success('笔记已保存')
+    if (ok) {
+      detailNote.value = noteStore.notes.find(n => n.id === detailNote.value!.id) || null
+      ElMessage.success('笔记已保存')
+    }
   } else {
     const note = await noteStore.addNote({
       title: data.title,
       content: data.content,
-      color: data.color,
       categoryId: data.categoryId,
       pinned: data.pinned,
     })
-    if (note) ElMessage.success('已添加笔记')
+    if (note) {
+      detailNote.value = note
+      ElMessage.success('已添加笔记')
+    }
   }
+}
+
+// 点击预览：先检查本地数据中有没有对应的笔记数据，保存/更新后切换到预览模式
+const handlePreviewFromEditor = async (data: { title: string; content: string; categoryId: string; pinned: boolean }) => {
+  if (detailNote.value?.id) {
+    // 已有笔记：检查本地数据中是否存在，存在则更新
+    const exists = noteStore.notes.some(n => n.id === detailNote.value!.id)
+    if (exists) {
+      const ok = await noteStore.updateNote(detailNote.value.id, {
+        title: data.title,
+        content: data.content,
+        categoryId: data.categoryId,
+        pinned: data.pinned,
+      })
+      if (ok) {
+        detailNote.value = noteStore.notes.find(n => n.id === detailNote.value!.id) || null
+      }
+    }
+  } else {
+    // 新笔记：本地数据中不存在，先保存到本地
+    const note = await noteStore.addNote({
+      title: data.title,
+      content: data.content,
+      categoryId: data.categoryId,
+      pinned: data.pinned,
+    })
+    if (note) {
+      detailNote.value = note
+    }
+  }
+  isEditing.value = false
 }
 
 const handleTogglePin = async (note: Note) => {
@@ -423,13 +469,27 @@ const handleTogglePin = async (note: Note) => {
 
 // 详情视图
 const detailNote = ref<Note | null>(null)
+const isEditing = ref(false)
+const isFullscreen = ref(false)
+const toggleFullscreen = () => {
+  isFullscreen.value = !isFullscreen.value
+  emit('fullscreen-change', isFullscreen.value)
+}
+
 const openDetail = (note: Note) => {
   detailNote.value = { ...note }
+  isEditing.value = false
   viewMode.value = 'detail'
 }
 const closeDetail = () => {
   detailNote.value = null
+  isEditing.value = false
   viewMode.value = 'list'
+  // 重置全屏状态，避免删除笔记后父组件仍处于全屏模式导致停留在预览界面
+  if (isFullscreen.value) {
+    isFullscreen.value = false
+    emit('fullscreen-change', false)
+  }
 }
 
 // 删除笔记
@@ -499,6 +559,24 @@ const onCategoryDeleteConfirmed = async () => {
 }
 
 // 初始化
+const clockDisplay = ref('')
+let clockTimer: ReturnType<typeof setInterval> | null = null
+const updateClock = () => {
+  const now = new Date()
+  const days = ['日', '一', '二', '三', '四', '五', '六']
+  clockDisplay.value = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日'
+    + ' 星期' + days[now.getDay()] + ' '
+    + String(now.getHours()).padStart(2, '0') + ':'
+    + String(now.getMinutes()).padStart(2, '0') + ':'
+    + String(now.getSeconds()).padStart(2, '0')
+}
+
+const totalWordCount = computed(() => {
+  if (!detailNote.value?.content) return 0
+  const text = getNotePlainText(detailNote.value.content)
+  return text.replace(/\s+/g, '').replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '').length
+})
+
 const initNavPath = async () => {
   if (pageNav.navPath.value.length > 1 && pageNav.navPath.value[0] === 'notes') {
     return
@@ -511,6 +589,8 @@ onMounted(async () => {
   await noteStore.loadData()
   await initNavPath()
   updateWidth()
+  updateClock()
+  clockTimer = setInterval(updateClock, 1000)
   if (containerRef.value && typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver(() => updateWidth())
     resizeObserver.observe(containerRef.value)
@@ -520,6 +600,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (resizeObserver) resizeObserver.disconnect()
+  if (clockTimer) { clearInterval(clockTimer); clockTimer = null }
 })
 </script>
 
@@ -696,7 +777,6 @@ onBeforeUnmount(() => {
 .folder-card:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(102, 126, 234, 0.3);
-  transform: translateY(-2px);
 }
 
 .card-top-actions {
@@ -810,7 +890,8 @@ onBeforeUnmount(() => {
   transition: all 0.2s;
   display: flex;
   flex-direction: column;
-  min-height: 120px;
+  gap: 8px;
+  min-height: 72px;
   overflow: hidden;
 }
 
@@ -825,11 +906,11 @@ onBeforeUnmount(() => {
   border-color: rgba(251, 191, 36, 0.18);
 }
 
-.note-card-first-row {
+.note-card-row1 {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
   gap: 8px;
+  min-height: 24px;
 }
 
 .note-card-actions {
@@ -848,42 +929,25 @@ onBeforeUnmount(() => {
   font-size: 15px;
   font-weight: 600;
   color: var(--chalk-white);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
 }
 
-.note-card-content {
-  flex: 1;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--chalk-white-70);
-  margin-top: 6px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  line-clamp: 4;
-  -webkit-box-orient: vertical;
-  word-break: break-word;
-}
-
-.note-card-footer {
+.note-card-meta {
   display: flex;
   align-items: center;
-  margin-top: 10px;
+  gap: 6px;
   padding-top: 8px;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.note-card-date {
   font-size: 11px;
   color: var(--chalk-muted);
+}
+
+.note-card-meta-sep {
+  opacity: 0.4;
 }
 
 /* 详情视图 */

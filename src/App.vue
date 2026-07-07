@@ -73,6 +73,13 @@
         </div>
         <div v-else class="panel-wrapper">
           <div v-if="capturedError" class="captured-error">
+            <div class="captured-error-header">
+              <span class="captured-error-title">应用发生错误</span>
+              <div class="captured-error-buttons">
+                <button class="error-btn copy" @click="copyError">复制错误</button>
+                <button class="error-btn close" @click="capturedError = null">关闭</button>
+              </div>
+            </div>
             <pre>{{ capturedError }}</pre>
           </div>
           <router-view v-slot="{ Component }">
@@ -148,11 +155,6 @@
         @navigate="navigateTo"
       />
 
-      <div v-if="isElectron && focusStore.timerState && route.path !== '/focus'" class="focus-status-indicator">
-        <span class="focus-status-icon">{{ focusStore.timerState.type === 'pomodoro' ? '🍅' : '⏱️' }}</span>
-        <span class="focus-status-text">{{ focusStore.timerState.name }}</span>
-        <span class="focus-status-time">{{ focusDisplayTime }}</span>
-      </div>
     </template>
   </div>
 </template>
@@ -274,6 +276,12 @@ const isInitializing = ref(false)
 const userKey = ref(0)
 
 const capturedError = ref<string | null>(null)
+
+const copyError = () => {
+  if (capturedError.value) {
+    navigator.clipboard.writeText(capturedError.value).catch(() => {})
+  }
+}
 
 onErrorCaptured((err, instance, info) => {
   const errMsg = err instanceof Error ? `${err.message}\n${err.stack || ''}` : String(err)
@@ -1445,7 +1453,7 @@ const isFocusFullscreen = ref(false)
 const isStatsFullscreen = ref(false)
 
 const handleFullscreenFromRoute = (fullscreen: boolean) => {
-  if (route.name === 'focus') {
+  if (route.name === 'focus' || route.name === 'notes') {
     isFocusFullscreen.value = fullscreen
   } else if (route.name === 'footprint') {
     isStatsFullscreen.value = fullscreen
@@ -1475,14 +1483,25 @@ const updateFocusDisplayTime = () => {
   const mins = Math.floor((totalSeconds % 3600) / 60)
   const secs = totalSeconds % 60
 
+  let timeStr: string
   if (days > 0 || totalSeconds >= 86400) {
-    focusDisplayTime.value = `${String(days).padStart(2, '0')}:${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+    timeStr = `${String(days).padStart(2, '0')}:${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
   } else if (hours > 0 || totalSeconds >= 3600) {
-    focusDisplayTime.value = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+    timeStr = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
   } else {
-    focusDisplayTime.value = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+    timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+  }
+  focusDisplayTime.value = timeStr
+
+  // 更新 Windows 窗口标题
+  if (isElectron.value && window.electronAPI?.setWindowTitle) {
+    const icon = state.type === 'pomodoro' ? '\u{1F345}' : '\u{23F1}'
+    const title = `${icon} ${state.name} ${timeStr} - 地球 Online 生存日记`
+    window.electronAPI.setWindowTitle(title)
   }
 }
+
+const APP_TITLE = '地球 Online 生存日记'
 
 watch(() => focusStore.timerState, (state) => {
   if (focusDisplayTimer) {
@@ -1494,6 +1513,10 @@ watch(() => focusStore.timerState, (state) => {
     focusDisplayTimer = setInterval(updateFocusDisplayTime, 1000)
   } else {
     focusDisplayTime.value = ''
+    // 恢复默认窗口标题
+    if (isElectron.value && window.electronAPI?.setWindowTitle) {
+      window.electronAPI.setWindowTitle(APP_TITLE)
+    }
   }
 }, { immediate: true })
 
@@ -1808,42 +1831,6 @@ onUnmounted(() => {
   flex-direction: row;
 }
 
-.focus-status-indicator {
-  position: fixed;
-  bottom: 16px;
-  right: 16px;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: rgba(30, 28, 52, 0.92);
-  border: 1px solid rgba(102, 126, 234, 0.3);
-  border-radius: 12px;
-  backdrop-filter: blur(8px);
-  pointer-events: none;
-}
-
-.focus-status-icon {
-  font-size: 16px;
-}
-
-.focus-status-text {
-  font-size: 13px;
-  color: var(--chalk-white);
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.focus-status-time {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--chalk-primary);
-  font-variant-numeric: tabular-nums;
-}
-
 /* 顶部页面导航栏 - 已废弃，保留以兼容旧引用 */
 .page-nav-bar {
   display: none;
@@ -1871,10 +1858,61 @@ onUnmounted(() => {
   max-width: 90vw;
   max-height: 80vh;
   overflow: auto;
-  padding: 16px;
+  padding: 12px;
   background: rgba(40, 0, 0, 0.95);
   border: 1px solid rgba(255, 80, 80, 0.5);
   border-radius: 8px;
+}
+
+.captured-error-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 80, 80, 0.3);
+}
+
+.captured-error-title {
+  color: #ffcccc;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.captured-error-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.captured-error-buttons .error-btn {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.captured-error-buttons .error-btn.copy {
+  background: rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.captured-error-buttons .error-btn.copy:hover {
+  background: rgba(59, 130, 246, 0.5);
+  color: #ffffff;
+}
+
+.captured-error-buttons .error-btn.close {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.captured-error-buttons .error-btn.close:hover {
+  background: rgba(239, 68, 68, 0.5);
+  color: #ffffff;
 }
 
 .captured-error pre {
