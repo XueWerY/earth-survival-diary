@@ -1,24 +1,5 @@
 <template>
   <div class="editor-wrap">
-    <!-- 顶部标题栏 -->
-    <div class="editor-top-header">
-      <select v-model="editCategoryId" class="editor-header-select">
-        <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.icon }} {{ cat.name }}</option>
-      </select>
-      <span class="editor-header-sep">·</span>
-      <span v-if="!editingTitle" class="editor-header-item clickable" @click="startEditTitle">{{ noteTitle || '新笔记' }}</span>
-      <input
-        v-else
-        ref="titleInputRef"
-        v-model="noteTitle"
-        class="editor-header-input"
-        :style="{ width: titleInputWidth }"
-        @blur="endEditTitle"
-        @keyup.enter="endEditTitle"
-      />
-      <span ref="titleMeasureRef" class="title-measure"></span>
-    </div>
-
     <!-- 主容器 -->
     <div class="editor-main">
       <!-- 侧边栏导航 -->
@@ -278,7 +259,7 @@ import { ArrowLeft, Star, StarFilled } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import type { Note, NoteCategory, NotePage } from '../../stores/noteStore'
 import { parseNotePages, serializeNotePages, createNotePage, computePageNumber, generateCoverContent, wrapThanksContent } from '../../stores/noteStore'
-import ColorPickerPanel from '../common/ColorPickerPanel.vue'
+import ColorPickerPanel from '../common/picker/ColorPickerPanel.vue'
 
 const props = defineProps<{
   note: Note | null
@@ -545,12 +526,15 @@ const restoreSelectionAndExec = (cmd: string, value: string) => {
       sel.addRange(pendingPasteRange)
     }
   } else {
-    // 内容区为空时没有选区，手动创建范围到开头
     const sel = window.getSelection()
     if (sel && contentRef.value) {
       const range = document.createRange()
-      range.selectNodeContents(contentRef.value)
-      range.collapse(true)
+      if (contentRef.value.childNodes.length === 0) {
+        range.setStart(contentRef.value, 0)
+      } else {
+        range.selectNodeContents(contentRef.value)
+        range.collapse(true)
+      }
       sel.removeAllRanges()
       sel.addRange(range)
     }
@@ -653,13 +637,13 @@ const updateSelectionPanel = () => {
     selectionPanelVisible.value = false
     return
   }
-  // 面板放在选区上方中间
+  // 面板放在选区下方中间
   const panelWidth = 420
   let x = rect.left + rect.width / 2 - panelWidth / 2
-  let y = rect.top - 44
+  let y = rect.bottom + 8
   if (x < 4) x = 4
   if (x + panelWidth > window.innerWidth - 4) x = window.innerWidth - panelWidth - 4
-  if (y < 4) y = rect.bottom + 8
+  if (y + 44 > window.innerHeight - 4) y = rect.top - 44
   selectionPanelPos.value = { x, y }
   selectionPanelVisible.value = true
 }
@@ -1707,7 +1691,8 @@ const handlePreview = () => {
   padding: 14px;
   overflow-y: auto;
   color: var(--chalk-white);
-  font-size: 14px;
+  font-size: 22pt;
+  font-family: '宋体', SimSun, 'Times New Roman', serif;
   line-height: 1.8;
   word-break: break-word;
   scrollbar-width: none;

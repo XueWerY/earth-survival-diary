@@ -1,8 +1,8 @@
 <template>
   <div class="notes-container" ref="containerRef">
     <!-- 面包屑 -->
-    <div v-if="showBreadcrumb && viewMode === 'list'" class="notes-breadcrumb-bar">
-      <button class="breadcrumb-module" @click="pageNav.setNavPath(['notes'])" title="回到笔记首页">📝</button>
+    <div v-if="showBreadcrumb" class="notes-breadcrumb-bar">
+      <button class="breadcrumb-module" @click="handleBreadcrumbModuleClick" title="回到笔记首页">📝</button>
       <div class="breadcrumb-scroll">
         <template v-for="(seg, idx) in localBreadcrumbSegments" :key="idx">
           <span v-if="seg.dropdownItems" class="breadcrumb-sep clickable" @click.stop="toggleSegmentDropdown(seg, $event)">{{ (activeDropdown === 'segment' && activeSegment === seg) ? '∨' : '>' }}</span>
@@ -15,6 +15,15 @@
           >{{ seg.label }}</span>
         </template>
       </div>
+      <button v-if="navPath.length >= 2 && viewMode === 'list'" class="breadcrumb-fav-btn" :class="{ active: isCurrentFavorited }" @click="toggleFavorite" title="收藏当前视图">
+        <el-icon><StarFilled v-if="isCurrentFavorited" /><Star v-else /></el-icon>
+      </button>
+      <button v-if="viewMode === 'list'" class="breadcrumb-quick-btn" @click="openFavoritesDropdown" title="快速访问">
+        <el-icon><CollectionTag /></el-icon>
+      </button>
+      <button v-if="isCategoryView && viewMode === 'list'" class="breadcrumb-sort-btn" @click="openSortDropdown" title="排序">
+        <el-icon><Sort /></el-icon>
+      </button>
       <button v-if="plusAction" class="breadcrumb-plus-btn" @click="plusAction" title="添加"><el-icon><Plus /></el-icon></button>
     </div>
 
@@ -22,6 +31,19 @@
       <div v-for="item in segmentDropdownItems" :key="item.id" class="page-dropdown-item" :class="{ current: item.current }" @click="handleSegmentDropdownSelect(item)">
         <span class="page-dropdown-dot" :style="{ background: item.color }"></span>
         <span>{{ item.name }}</span>
+      </div>
+    </div>
+
+    <div v-if="activeDropdown === 'sort'" class="page-dropdown" :style="sortDropdownPosStyle" @click.stop>
+      <div v-for="opt in sortOptions" :key="opt.value" class="page-dropdown-item" :class="{ current: currentSort === opt.value }" @click="selectSortOption(opt.value)">
+        <span>{{ opt.label }}</span>
+      </div>
+    </div>
+
+    <div v-if="activeDropdown === 'favorites'" class="page-dropdown" :style="dropdownPosStyle" @click.stop>
+      <div v-if="favorites.length === 0" class="page-dropdown-empty">暂无收藏</div>
+      <div v-for="fav in favorites" :key="fav.id" class="page-dropdown-item" @click="selectFavorite(fav)">
+        <span>{{ fav.name }}</span>
       </div>
     </div>
 
@@ -174,14 +196,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch, inject } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Edit, Delete, Star, StarFilled, Document, ArrowLeft } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, Star, StarFilled, Document, ArrowLeft, CollectionTag, Sort } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import NoteEditor from './NoteEditor.vue'
 import NotePreview from './NotePreview.vue'
 import CategoryForm from './CategoryForm.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
 import { useNoteStore, ALL_CATEGORY_VALUE, getNotePlainText, parseNotePages, type Note, type NoteCategory } from '../../stores/noteStore'
-import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem } from '../../composables/usePageNav'
+import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem, type FavoriteItem } from '../../composables/usePageNav'
+import { getData, setData } from '../../services/storageService'
 import { logger } from '../../lib/logger'
 
 const emit = defineEmits<{
@@ -208,9 +231,17 @@ const showBreadcrumb = computed(() => navPath.value[0] === 'notes')
 const plusAction = computed(() => {
   if (viewMode.value !== 'list') return null
   if (isNotesHome.value) return handleAddCategory
-  if (isCategoryView.value) return handleAddNote
+  if (isCategoryView.value && !isAllView.value) return handleAddNote
   return null
 })
+
+const handleBreadcrumbModuleClick = () => {
+  if (viewMode.value === 'detail') {
+    closeDetail()
+  } else {
+    pageNav.setNavPath(['notes'])
+  }
+}
 
 // 视图模式：list / detail
 const viewMode = ref<'list' | 'detail'>('list')
@@ -218,6 +249,49 @@ const viewMode = ref<'list' | 'detail'>('list')
 const computeBreadcrumbSegments = (): BreadcrumbSegment[] => {
   const segments: BreadcrumbSegment[] = []
   if (navPath.value[0] !== 'notes') return segments
+
+  if (viewMode.value === 'detail' && detailNote.value) {
+    const catId = detailNote.value.categoryId
+    const cat = noteStore.categories.find(c => c.id === catId)
+    const allDropdownItems: DropdownItem[] = [
+      {
+        id: ALL_CATEGORY_VALUE,
+        name: '全部笔记',
+        color: '#667eea',
+        current: catId === ALL_CATEGORY_VALUE,
+        onSelect: () => {
+          closeDetail()
+          pageNav.setNavPath(['notes', ALL_CATEGORY_VALUE])
+        }
+      },
+      ...noteStore.categories.map(c => ({
+        id: c.id,
+        name: c.name,
+        color: c.color,
+        current: catId === c.id,
+        onSelect: () => {
+          closeDetail()
+          pageNav.setNavPath(['notes', c.id])
+        }
+      }))
+    ]
+    segments.push({
+      label: cat?.name || '全部笔记',
+      color: cat?.color || '#667eea',
+      clickable: true,
+      onClick: () => closeDetail(),
+      dropdownItems: allDropdownItems
+    })
+    segments.push({
+      label: detailNote.value.title || '新笔记',
+      color: '#cbd5e1',
+      clickable: false,
+      onClick: null,
+      dropdownItems: null
+    })
+    return segments
+  }
+
   if (isNotesHome.value) return segments
 
   if (isCategoryView.value) {
@@ -298,22 +372,100 @@ const closeDropdown = () => {
   activeSegment.value = null
 }
 
-watch(
-  [navPath, () => noteStore.categories],
-  () => {
-    localBreadcrumbSegments.value = computeBreadcrumbSegments()
+// ====== 排序功能 ======
+type SortMode = 'updated' | 'created' | 'title'
+const sortOptions: { value: SortMode; label: string }[] = [
+  { value: 'updated', label: '按更新时间' },
+  { value: 'created', label: '按创建时间' },
+  { value: 'title', label: '按标题排序' },
+]
+const currentSort = ref<SortMode>('updated')
+const sortDropdownPos = ref({ top: 0, left: 0 })
+const sortDropdownPosStyle = computed(() => ({
+  top: sortDropdownPos.value.top + 'px',
+  left: sortDropdownPos.value.left + 'px'
+}))
+
+const openSortDropdown = (event: MouseEvent) => {
+  if (activeDropdown.value === 'sort') {
     closeDropdown()
-  },
-  { immediate: true, deep: true }
-)
+    return
+  }
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  sortDropdownPos.value = { top: rect.bottom + 4, left: rect.left - 8 }
+  activeDropdown.value = 'sort'
+}
+
+const selectSortOption = (val: SortMode) => {
+  currentSort.value = val
+  closeDropdown()
+}
+
+const sortNotes = (notes: Note[]): Note[] => {
+  return [...notes].sort((a, b) => {
+    if (currentSort.value === 'title') {
+      return a.title.localeCompare(b.title, 'zh-CN')
+    }
+    if (currentSort.value === 'created') {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    }
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  })
+}
+
+// ====== 收藏功能 ======
+const favorites = ref<FavoriteItem[]>([])
+
+const loadFavorites = async () => {
+  favorites.value = (await getData<FavoriteItem[]>('notes', 'favorites')) || []
+}
+
+const currentNavPathKey = computed(() => JSON.stringify(navPath.value))
+
+const isCurrentFavorited = computed(() => favorites.value.some(f => JSON.stringify(f.navPath) === currentNavPathKey.value))
+
+const toggleFavorite = async () => {
+  const key = currentNavPathKey.value
+  if (isCurrentFavorited.value) {
+    favorites.value = favorites.value.filter(f => JSON.stringify(f.navPath) !== key)
+  } else {
+    const name = localBreadcrumbSegments.value.length > 0 
+      ? localBreadcrumbSegments.value[localBreadcrumbSegments.value.length - 1].label 
+      : '笔记'
+    favorites.value.push({ id: 'fav-' + Date.now(), name, navPath: [...navPath.value] })
+  }
+  await setData('notes', 'favorites', favorites.value)
+}
+
+const openFavoritesDropdown = (event: MouseEvent) => {
+  if (activeDropdown.value === 'favorites') {
+    closeDropdown()
+    return
+  }
+  const target = event.currentTarget as HTMLElement
+  const rect = target.getBoundingClientRect()
+  dropdownPos.value = { top: rect.bottom + 4, left: rect.left - 8 }
+  activeDropdown.value = 'favorites'
+}
+
+const selectFavorite = (fav: FavoriteItem) => {
+  pageNav.setNavPath(fav.navPath)
+  closeDropdown()
+}
 
 const filteredNotes = computed(() => {
-  if (!currentCategoryFromPath.value || isAllView.value) return noteStore.notes
-  return noteStore.notes.filter(n => n.categoryId === currentCategoryFromPath.value)
+  let notes: Note[]
+  if (!currentCategoryFromPath.value || isAllView.value) {
+    notes = [...noteStore.notes]
+  } else {
+    notes = noteStore.notes.filter(n => n.categoryId === currentCategoryFromPath.value)
+  }
+  return sortNotes(notes)
 })
 
-const pinnedNotes = computed(() => filteredNotes.value.filter(n => n.pinned))
-const otherNotes = computed(() => filteredNotes.value.filter(n => !n.pinned))
+const pinnedNotes = computed(() => sortNotes(filteredNotes.value.filter(n => n.pinned)))
+const otherNotes = computed(() => sortNotes(filteredNotes.value.filter(n => !n.pinned)))
 
 // 时间自动更新
 const now = ref(Date.now())
@@ -492,6 +644,15 @@ const closeDetail = () => {
   }
 }
 
+watch(
+  [navPath, () => noteStore.categories, viewMode, detailNote],
+  () => {
+    localBreadcrumbSegments.value = computeBreadcrumbSegments()
+    closeDropdown()
+  },
+  { immediate: true, deep: true }
+)
+
 // 删除笔记
 const showDeleteNoteConfirm = ref(false)
 const deletingNoteId = ref<string | null>(null)
@@ -587,6 +748,7 @@ const initNavPath = async () => {
 
 onMounted(async () => {
   await noteStore.loadData()
+  await loadFavorites()
   await initNavPath()
   updateWidth()
   updateClock()
@@ -702,6 +864,52 @@ onBeforeUnmount(() => {
   color: var(--chalk-white);
 }
 
+.breadcrumb-fav-btn, .breadcrumb-quick-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--chalk-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+  font-size: 16px;
+  border-radius: 6px;
+}
+
+.breadcrumb-fav-btn:hover, .breadcrumb-quick-btn:hover {
+  color: var(--chalk-white);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.breadcrumb-fav-btn.active {
+  color: #fbbf24;
+}
+
+.breadcrumb-sort-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--chalk-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+  font-size: 16px;
+  border-radius: 6px;
+}
+
+.breadcrumb-sort-btn:hover {
+  color: var(--chalk-white);
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .page-dropdown {
   position: fixed;
   z-index: 100;
@@ -742,6 +950,13 @@ onBeforeUnmount(() => {
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+.page-dropdown-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--chalk-muted);
+  font-size: 13px;
 }
 
 .main-content {

@@ -1,12 +1,5 @@
 <template>
   <div class="preview-container">
-    <!-- 顶部标题栏 -->
-    <div class="preview-top-header">
-      <span class="preview-header-item">{{ categoryName }}</span>
-      <span class="preview-header-sep">·</span>
-      <span class="preview-header-item">{{ note?.title }}</span>
-    </div>
-
     <!-- 主容器 -->
     <div class="preview-main">
       <!-- 侧边栏导航 -->
@@ -42,11 +35,6 @@
               <div class="slide-content" v-html="page.content"></div>
             </div>
           </div>
-
-          <!-- 全屏退出按钮 -->
-          <button v-if="isFullscreen" class="fullscreen-exit-btn" @click="$emit('toggleFullscreen')" title="退出放映 (Esc)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
 
           <!-- 底部导航栏 -->
           <div class="slide-nav">
@@ -88,7 +76,6 @@
           <el-icon><StarFilled v-if="note?.pinned" /><Star v-else /></el-icon>
         </button>
         <button class="card-icon-btn" title="编辑" @click="$emit('edit')"><el-icon><Edit /></el-icon></button>
-        <button class="card-icon-btn danger" title="删除" @click="$emit('delete')"><el-icon><Delete /></el-icon></button>
         <span class="preview-status-sep">|</span>
         <button class="preview-status-btn" title="导出为 HTML 文件，可在浏览器中打开汇报" @click="exportToHtml">导出</button>
         <button class="preview-status-btn" @click="$emit('toggleFullscreen')">{{ isFullscreen ? '退出' : '放映' }}</button>
@@ -106,7 +93,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Star, StarFilled, Edit, Delete } from '@element-plus/icons-vue'
+import { ArrowLeft, Star, StarFilled, Edit } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import type { Note, NoteCategory, NotePage } from '../../stores/noteStore'
 import { parseNotePages, computePageNumber } from '../../stores/noteStore'
@@ -973,36 +960,7 @@ onBeforeUnmount(() => {
   z-index: 9999;
   border-radius: 0;
   border: none;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-}
-
-.fullscreen-exit-btn {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 10000;
-  width: 40px;
-  height: 40px;
-  border: 1.5px solid rgba(255, 255, 255, 0.2);
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.4);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(255, 255, 255, 0.7);
-  transition: all 0.2s;
-}
-
-.fullscreen-exit-btn:hover {
-  background: rgba(239, 68, 68, 0.3);
-  border-color: rgba(239, 68, 68, 0.5);
-  color: #fca5a5;
-}
-
-.fullscreen-exit-btn svg {
-  width: 18px;
-  height: 18px;
+  background: linear-gradient(to bottom, #0f0c29 0%, #302b63 50%, #24243e 100%);
 }
 
 .slide-container {
@@ -1101,11 +1059,16 @@ onBeforeUnmount(() => {
   color: #e0e0e0;
 }
 
-/* 封面页和致谢页：中文宋体五号，英文 Times New Roman 五号（10.5pt） */
-.slide[data-type="cover"] .slide-content,
-.slide[data-type="thanks"] .slide-content {
+/* 封面页：中文宋体五号，英文 Times New Roman 五号（10.5pt） */
+.slide[data-type="cover"] .slide-content {
   font-family: '宋体', SimSun, 'Times New Roman', serif;
   font-size: 10.5pt;
+}
+
+/* 致谢页：二号字（22pt） */
+.slide[data-type="thanks"] .slide-content {
+  font-family: '宋体', SimSun, 'Times New Roman', serif;
+  font-size: 22pt;
 }
 
 /* 覆盖内联 60vh 居中样式，使垂直居中容器填满幻灯片高度，实现真正垂直居中 */
