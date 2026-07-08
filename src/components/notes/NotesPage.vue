@@ -37,8 +37,13 @@
       <button v-if="isCategoryView && viewMode === 'list'" class="breadcrumb-sort-btn" @click="openSortDropdown" title="排序">
         <el-icon><Sort /></el-icon>
       </button>
+      <button v-if="isNotesHome" class="breadcrumb-import-btn" @click="triggerImportHtml" title="导入笔记 HTML 文件">
+        <el-icon><Upload /></el-icon>
+      </button>
       <button v-if="plusAction" class="breadcrumb-plus-btn" @click="plusAction" title="添加"><el-icon><Plus /></el-icon></button>
     </div>
+
+    <input ref="importFileInputRef" type="file" accept=".html,.htm" style="display:none" @change="handleImportHtml" />
 
     <div v-if="activeDropdown === 'segment'" class="page-dropdown" :style="dropdownPosStyle" @click.stop>
       <div v-for="item in segmentDropdownItems" :key="item.id" class="page-dropdown-item" :class="{ current: item.current }" @click="handleSegmentDropdownSelect(item)">
@@ -200,13 +205,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch, inject, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Edit, Delete, Star, StarFilled, Document, ArrowLeft, CollectionTag, Sort, EditPen } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, Star, StarFilled, Document, ArrowLeft, CollectionTag, Sort, EditPen, Upload } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import NoteEditor from './NoteEditor.vue'
 import NotePreview from './NotePreview.vue'
 import CategoryForm from './CategoryForm.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
-import { useNoteStore, ALL_CATEGORY_VALUE, getNotePlainText, parseNotePages, type Note, type NoteCategory } from '../../stores/noteStore'
+import { useNoteStore, ALL_CATEGORY_VALUE, getNotePlainText, parseNotePages, type Note, type NoteCategory, type NotePage } from '../../stores/noteStore'
 import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem, type FavoriteItem } from '../../composables/usePageNav'
 import { getData, setData, getSystemStateField, setSystemStateField } from '../../services/storageService'
 import { logger } from '../../lib/logger'
@@ -538,6 +543,90 @@ let resizeObserver: ResizeObserver | null = null
 const updateWidth = () => {
   if (containerRef.value) {
     containerWidth.value = containerRef.value.clientWidth
+  }
+}
+
+// ====== 导入笔记 HTML ======
+const importFileInputRef = ref<HTMLInputElement | null>(null)
+
+const triggerImportHtml = () => {
+  importFileInputRef.value?.click()
+}
+
+const handleImportHtml = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  // 重置 input 以便重复导入同一文件
+  input.value = ''
+
+  try {
+    const text = await file.text()
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(text, 'text/html')
+
+    // 提取笔记标题
+    const titleEl = doc.querySelector('title')
+    const noteTitle = titleEl?.textContent?.trim() || file.name.replace(/\.html?$/i, '')
+
+    // 提取所有幻灯片页面
+    const slideEls = doc.querySelectorAll('.slide')
+    if (slideEls.length === 0) {
+      ElMessage.error('未在 HTML 中找到笔记内容，请确认是导出的笔记文件')
+      return
+    }
+
+    const genId = () => 'p_' + Date.now() + Math.random().toString(36).slice(2, 8)
+    const pages: NotePage[] = []
+    let currentLevel1Id: string | undefined
+    let currentLevel2Id: string | undefined
+
+    slideEls.forEach((slide) => {
+      const pageTitle = slide.getAttribute('data-title') || ''
+      const pageType = slide.getAttribute('data-type') || ''
+      const levelNum = parseInt(slide.getAttribute('data-level') || '1', 10)
+      const level: 1 | 2 | 3 = levelNum === 2 ? 2 : (levelNum === 3 ? 3 : 1)
+      const contentEl = slide.querySelector('.slide-content')
+      const content = contentEl ? contentEl.innerHTML : ''
+
+      const id = genId()
+      let parentId: string | undefined
+      if (level === 1) {
+        currentLevel1Id = id
+        currentLevel2Id = undefined
+      } else if (level === 2) {
+        parentId = currentLevel1Id
+        currentLevel2Id = id
+      } else {
+        parentId = currentLevel2Id
+      }
+
+      const page: NotePage = {
+        id,
+        title: pageTitle,
+        level,
+        content,
+      }
+      if (parentId) page.parentId = parentId
+      if (pageType === 'cover' || pageType === 'thanks') page.type = pageType
+      pages.push(page)
+    })
+
+    const content = JSON.stringify({ pages })
+    const categoryId = noteStore.categories[0]?.id || 'personal'
+    const note = await noteStore.addNote({
+      title: noteTitle,
+      content,
+      color: '#667eea',
+      categoryId,
+      pinned: false,
+    })
+    if (note) {
+      ElMessage.success(`已导入笔记「${noteTitle}」(${pages.length} 页)`)
+    }
+  } catch (e) {
+    logger.error('[笔记] 导入 HTML 失败', { error: e instanceof Error ? e.message : String(e) })
+    ElMessage.error('导入失败，请检查文件格式')
   }
 }
 
@@ -1096,6 +1185,27 @@ onBeforeUnmount(() => {
 }
 
 .breadcrumb-sort-btn:hover {
+  color: var(--chalk-white);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.breadcrumb-import-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--chalk-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+  font-size: 16px;
+  border-radius: 6px;
+}
+
+.breadcrumb-import-btn:hover {
   color: var(--chalk-white);
   background: rgba(255, 255, 255, 0.06);
 }

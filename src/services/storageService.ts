@@ -159,6 +159,7 @@ export interface SystemState {
   guideCompleted?: boolean
   version?: string
   defaultsInitialized?: boolean
+  defaultNotesVersion?: number
 }
 
 async function loadSystemState(): Promise<SystemState> {

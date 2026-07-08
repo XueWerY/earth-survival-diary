@@ -304,9 +304,9 @@ const exportToHtml = async () => {
     return '<li class="nav-l' + page.level + '"><a data-idx="' + idx + '" class="' + (idx === 0 ? 'active' : '') + '">' + numHtml + '<span class="nav-title-text">' + page.title + '</span></a></li>'
   }).join('\n')
 
-  // 预计算幻灯片内容
+  // 预计算幻灯片内容（data-level 用于支持导入时还原页面层级）
   const slidesHtml = allPages.map((page, idx) => {
-    return '<div class="slide' + (idx === 0 ? ' active' : '') + '" data-title="' + page.title + '" data-type="' + (page.type || '') + '"><div class="slide-content">' + page.content + '</div></div>'
+    return '<div class="slide' + (idx === 0 ? ' active' : '') + '" data-title="' + page.title + '" data-type="' + (page.type || '') + '" data-level="' + page.level + '"><div class="slide-content">' + page.content + '</div></div>'
   }).join('\n')
 
   const html = `<!DOCTYPE html>
