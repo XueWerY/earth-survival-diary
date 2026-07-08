@@ -7,7 +7,17 @@
         <template v-for="(seg, idx) in localBreadcrumbSegments" :key="idx">
           <span v-if="seg.dropdownItems" class="breadcrumb-sep clickable" @click.stop="toggleSegmentDropdown(seg, $event)">{{ (activeDropdown === 'segment' && activeSegment === seg) ? '∨' : '>' }}</span>
           <span v-else class="breadcrumb-sep">></span>
+          <input
+            v-if="isRenamingNote && idx === localBreadcrumbSegments.length - 1"
+            :ref="(el) => setRenameInputRef(el as HTMLInputElement | null)"
+            v-model="renameInputValue"
+            class="breadcrumb-rename-input"
+            @click.stop
+            @keyup.enter="commitRenameNote"
+            @blur="commitRenameNote"
+          />
           <span
+            v-else
             class="breadcrumb-segment"
             :class="{ clickable: seg.clickable }"
             :style="{ color: seg.color }"
@@ -15,10 +25,13 @@
           >{{ seg.label }}</span>
         </template>
       </div>
-      <button v-if="navPath.length >= 2 && viewMode === 'list'" class="breadcrumb-fav-btn" :class="{ active: isCurrentFavorited }" @click="toggleFavorite" title="收藏当前视图">
+      <button v-if="isEditing && detailNote" class="breadcrumb-rename-btn" @click="startRenameNote" title="重命名笔记">
+        <el-icon><EditPen /></el-icon>
+      </button>
+      <button v-if="navPath.length >= 2" class="breadcrumb-fav-btn" :class="{ active: isCurrentFavorited }" @click="toggleFavorite" title="收藏当前视图">
         <el-icon><StarFilled v-if="isCurrentFavorited" /><Star v-else /></el-icon>
       </button>
-      <button v-if="viewMode === 'list'" class="breadcrumb-quick-btn" @click="openFavoritesDropdown" title="快速访问">
+      <button v-if="navPath.length >= 2" class="breadcrumb-quick-btn" @click="openFavoritesDropdown" title="快速访问">
         <el-icon><CollectionTag /></el-icon>
       </button>
       <button v-if="isCategoryView && viewMode === 'list'" class="breadcrumb-sort-btn" @click="openSortDropdown" title="排序">
@@ -96,13 +109,8 @@
                         <button class="card-icon-btn danger" title="删除" @click.stop="handleDeleteNote(note)"><el-icon><Delete /></el-icon></button>
                       </div>
                     </div>
-                    <div class="note-card-meta">
-                      <span>{{ getPageCount(note.content) }} 页</span>
-                      <span class="note-card-meta-sep">·</span>
-                      <span>{{ getWordCount(note.content) }} 字</span>
-                      <span class="note-card-meta-sep">·</span>
-                      <span>{{ formatDate(note.updatedAt) }}</span>
-                    </div>
+                    <div class="note-card-meta">总共{{ getPageCount(note.content) }}页，全文{{ getWordCount(note.content) }}字</div>
+                    <div class="note-card-meta-time">创建于{{ formatDate(note.createdAt) }} · 修改于{{ formatDate(note.updatedAt) }}</div>
                   </div>
                 </div>
               </div>
@@ -127,13 +135,8 @@
                         <button class="card-icon-btn danger" title="删除" @click.stop="handleDeleteNote(note)"><el-icon><Delete /></el-icon></button>
                       </div>
                     </div>
-                    <div class="note-card-meta">
-                      <span>{{ getPageCount(note.content) }} 页</span>
-                      <span class="note-card-meta-sep">·</span>
-                      <span>{{ getWordCount(note.content) }} 字</span>
-                      <span class="note-card-meta-sep">·</span>
-                      <span>{{ formatDate(note.updatedAt) }}</span>
-                    </div>
+                    <div class="note-card-meta">总共{{ getPageCount(note.content) }}页，全文{{ getWordCount(note.content) }}字</div>
+                    <div class="note-card-meta-time">创建于{{ formatDate(note.createdAt) }} · 修改于{{ formatDate(note.updatedAt) }}</div>
                   </div>
                 </div>
               </div>
@@ -147,6 +150,7 @@
     <div v-else-if="viewMode === 'detail'" class="detail-view">
       <NoteEditor
         v-if="isEditing"
+        ref="editorRef"
         :note="detailNote"
         :categories="noteStore.categories"
         :clockDisplay="clockDisplay"
@@ -194,9 +198,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch, inject } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, inject, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Edit, Delete, Star, StarFilled, Document, ArrowLeft, CollectionTag, Sort } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, Star, StarFilled, Document, ArrowLeft, CollectionTag, Sort, EditPen } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import NoteEditor from './NoteEditor.vue'
 import NotePreview from './NotePreview.vue'
@@ -204,7 +208,7 @@ import CategoryForm from './CategoryForm.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
 import { useNoteStore, ALL_CATEGORY_VALUE, getNotePlainText, parseNotePages, type Note, type NoteCategory } from '../../stores/noteStore'
 import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem, type FavoriteItem } from '../../composables/usePageNav'
-import { getData, setData } from '../../services/storageService'
+import { getData, setData, getSystemStateField, setSystemStateField } from '../../services/storageService'
 import { logger } from '../../lib/logger'
 
 const emit = defineEmits<{
@@ -235,12 +239,11 @@ const plusAction = computed(() => {
   return null
 })
 
-const handleBreadcrumbModuleClick = () => {
+const handleBreadcrumbModuleClick = async () => {
   if (viewMode.value === 'detail') {
-    closeDetail()
-  } else {
-    pageNav.setNavPath(['notes'])
+    await closeDetail()
   }
+  pageNav.setNavPath(['notes'])
 }
 
 // 视图模式：list / detail
@@ -259,8 +262,9 @@ const computeBreadcrumbSegments = (): BreadcrumbSegment[] => {
         name: '全部笔记',
         color: '#667eea',
         current: catId === ALL_CATEGORY_VALUE,
-        onSelect: () => {
-          closeDetail()
+        onSelect: async () => {
+          await saveCurrentEditorIfNeeded()
+          closeDetailSync()
           pageNav.setNavPath(['notes', ALL_CATEGORY_VALUE])
         }
       },
@@ -269,8 +273,9 @@ const computeBreadcrumbSegments = (): BreadcrumbSegment[] => {
         name: c.name,
         color: c.color,
         current: catId === c.id,
-        onSelect: () => {
-          closeDetail()
+        onSelect: async () => {
+          await saveCurrentEditorIfNeeded()
+          closeDetailSync()
           pageNav.setNavPath(['notes', c.id])
         }
       }))
@@ -279,15 +284,31 @@ const computeBreadcrumbSegments = (): BreadcrumbSegment[] => {
       label: cat?.name || '全部笔记',
       color: cat?.color || '#667eea',
       clickable: true,
-      onClick: () => closeDetail(),
+      onClick: async () => {
+        await saveCurrentEditorIfNeeded()
+        closeDetailSync()
+        pageNav.setNavPath(['notes', catId])
+      },
       dropdownItems: allDropdownItems
     })
+    // 笔记名称段：下拉显示当前分类下所有笔记
+    const notesInCategory = noteStore.notes.filter(n => n.categoryId === catId)
+    const noteDropdownItems: DropdownItem[] = notesInCategory.map(n => ({
+      id: n.id,
+      name: n.title || '新笔记',
+      color: '#cbd5e1',
+      current: n.id === detailNote.value!.id,
+      onSelect: async () => {
+        await saveCurrentEditorIfNeeded()
+        openDetail(n)
+      }
+    }))
     segments.push({
       label: detailNote.value.title || '新笔记',
       color: '#cbd5e1',
       clickable: false,
       onClick: null,
-      dropdownItems: null
+      dropdownItems: noteDropdownItems
     })
     return segments
   }
@@ -449,7 +470,8 @@ const openFavoritesDropdown = (event: MouseEvent) => {
   activeDropdown.value = 'favorites'
 }
 
-const selectFavorite = (fav: FavoriteItem) => {
+const selectFavorite = async (fav: FavoriteItem) => {
+  await saveCurrentEditorIfNeeded()
   pageNav.setNavPath(fav.navPath)
   closeDropdown()
 }
@@ -544,6 +566,10 @@ const handleEditNote = (note: Note) => {
   detailNote.value = { ...note }
   isEditing.value = true
   viewMode.value = 'detail'
+  // 持久化 navPath 第3层（笔记 id）
+  if (note.id) {
+    pageNav.setNavPath(['notes', note.categoryId, note.id])
+  }
 }
 
 const enterEditMode = () => {
@@ -579,6 +605,8 @@ const handleSaveEdit = async (data: { title: string; content: string; categoryId
     })
     if (note) {
       detailNote.value = note
+      // 新笔记保存后持久化 navPath 第3层
+      pageNav.setNavPath(['notes', note.categoryId, note.id])
       ElMessage.success('已添加笔记')
     }
   }
@@ -610,6 +638,8 @@ const handlePreviewFromEditor = async (data: { title: string; content: string; c
     })
     if (note) {
       detailNote.value = note
+      // 新笔记保存后持久化 navPath 第3层
+      pageNav.setNavPath(['notes', note.categoryId, note.id])
     }
   }
   isEditing.value = false
@@ -622,18 +652,22 @@ const handleTogglePin = async (note: Note) => {
 // 详情视图
 const detailNote = ref<Note | null>(null)
 const isEditing = ref(false)
+const editorRef = ref<InstanceType<typeof NoteEditor> | null>(null)
 const isFullscreen = ref(false)
 const toggleFullscreen = () => {
   isFullscreen.value = !isFullscreen.value
   emit('fullscreen-change', isFullscreen.value)
 }
 
-const openDetail = (note: Note) => {
-  detailNote.value = { ...note }
-  isEditing.value = false
-  viewMode.value = 'detail'
+// 编辑模式下保存当前编辑器内容到 store（用于切换地址/返回前）
+const saveCurrentEditorIfNeeded = async () => {
+  if (!isEditing.value || !editorRef.value || !detailNote.value) return
+  const data = editorRef.value.saveAndGetData()
+  await handleSaveEdit(data)
 }
-const closeDetail = () => {
+
+// 仅清空 detail 视图状态（不保存，不 setNavPath）
+const closeDetailSync = () => {
   detailNote.value = null
   isEditing.value = false
   viewMode.value = 'list'
@@ -643,6 +677,86 @@ const closeDetail = () => {
     emit('fullscreen-change', false)
   }
 }
+
+const openDetail = (note: Note) => {
+  detailNote.value = { ...note }
+  isEditing.value = false
+  viewMode.value = 'detail'
+  // 持久化 navPath 第3层（笔记 id）
+  if (note.id) {
+    pageNav.setNavPath(['notes', note.categoryId, note.id])
+  }
+}
+const closeDetail = async () => {
+  // 编辑模式下先保存当前内容再关闭
+  await saveCurrentEditorIfNeeded()
+  closeDetailSync()
+  // 持久化 navPath 第2层（移除笔记 id）
+  if (navPath.value.length >= 3 && navPath.value[0] === 'notes') {
+    pageNav.setNavPath(['notes', navPath.value[1]])
+  }
+}
+
+// ====== 面包屑重命名笔记 ======
+const isRenamingNote = ref(false)
+const renameInputValue = ref('')
+const renameInputRef = ref<HTMLInputElement | null>(null)
+
+const setRenameInputRef = (el: HTMLInputElement | null) => {
+  renameInputRef.value = el
+}
+
+const startRenameNote = () => {
+  if (!detailNote.value) return
+  renameInputValue.value = detailNote.value.title || ''
+  isRenamingNote.value = true
+  nextTick(() => {
+    renameInputRef.value?.focus()
+    renameInputRef.value?.select()
+  })
+}
+
+const commitRenameNote = () => {
+  if (!isRenamingNote.value) return
+  isRenamingNote.value = false
+  const newTitle = renameInputValue.value.trim()
+  if (!newTitle || !detailNote.value) return
+  if (newTitle === detailNote.value.title) return
+  // 更新编辑器内部 noteTitle（触发封面页大纲重新生成）
+  editorRef.value?.setNoteTitle(newTitle)
+  // 同步 detailNote 显示
+  detailNote.value = { ...detailNote.value, title: newTitle }
+}
+
+// 同步 detail 视图：根据 navPath 长度恢复或关闭 detail 视图
+const syncDetailFromNavPath = () => {
+  const path = pageNav.navPath.value
+  if (path[0] !== 'notes') return
+  if (path.length === 3) {
+    const noteId = path[2]
+    const note = noteStore.notes.find(n => n.id === noteId)
+    if (note) {
+      if (detailNote.value?.id !== noteId) {
+        detailNote.value = { ...note }
+        isEditing.value = false
+        viewMode.value = 'detail'
+      }
+    } else {
+      // 笔记不存在，回退到分类层
+      detailNote.value = null
+      isEditing.value = false
+      viewMode.value = 'list'
+      pageNav.setNavPath(['notes', path[1]])
+    }
+  } else if (path.length <= 2 && viewMode.value === 'detail' && !isEditing.value) {
+    // navPath 缩短到分类层，关闭预览模式 detail 视图（编辑模式由 closeDetail 处理）
+    detailNote.value = null
+    viewMode.value = 'list'
+  }
+}
+
+// 监听 navPath 变化，同步 detail 视图（用于从快速访问/收藏恢复 detail 视图）
+watch(navPath, syncDetailFromNavPath)
 
 watch(
   [navPath, () => noteStore.categories, viewMode, detailNote],
@@ -740,11 +854,52 @@ const totalWordCount = computed(() => {
 
 const initNavPath = async () => {
   if (pageNav.navPath.value.length > 1 && pageNav.navPath.value[0] === 'notes') {
+    // navPath 已存在（如从其他模块切回），手动同步 detail 视图
+    syncDetailFromNavPath()
+    await applyPersistedEditMode()
     return
   }
   const restored = await restoreModuleNavPath('notes')
   pageNav.setNavPath(restored)
+  // 等待 navPath watcher 触发 syncDetailFromNavPath 后再恢复编辑/预览模式
+  await nextTick()
+  await applyPersistedEditMode()
 }
+
+// 持久化笔记编辑/预览模式的定时器
+let editModePersistTimer: ReturnType<typeof setTimeout> | null = null
+
+// 恢复笔记预览/编辑模式（仅在 detail 视图且有笔记时生效）
+const applyPersistedEditMode = async () => {
+  if (viewMode.value !== 'detail' || !detailNote.value) return
+  // 取消待写的持久化定时器，避免在读取磁盘原值前把 isEditing=false 写入覆盖
+  if (editModePersistTimer) {
+    clearTimeout(editModePersistTimer)
+    editModePersistTimer = null
+  }
+  try {
+    const parsed = (await getSystemStateField('notes')) as Record<string, any> | undefined
+    if (parsed && typeof parsed.isEditing === 'boolean') {
+      isEditing.value = parsed.isEditing
+    }
+  } catch (e) {
+    logger.warn('[笔记] 恢复编辑模式失败', { error: e })
+  }
+}
+
+// 持久化笔记编辑/预览模式（detail 视图时记录 isEditing，离开 detail 时记录 false）
+watch([isEditing, viewMode, detailNote], () => {
+  if (editModePersistTimer) clearTimeout(editModePersistTimer)
+  editModePersistTimer = setTimeout(async () => {
+    try {
+      const existing = (await getSystemStateField('notes')) as Record<string, any> | undefined
+      const shouldEdit = (viewMode.value === 'detail' && detailNote.value) ? isEditing.value : false
+      await setSystemStateField('notes', { ...(existing || {}), isEditing: shouldEdit })
+    } catch (e) {
+      logger.warn('[笔记] 持久化编辑模式失败', { error: e })
+    }
+  }, 300)
+})
 
 onMounted(async () => {
   await noteStore.loadData()
@@ -842,6 +997,41 @@ onBeforeUnmount(() => {
 }
 
 .breadcrumb-segment.clickable:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.breadcrumb-rename-input {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(102, 126, 234, 0.5);
+  border-radius: 6px;
+  color: var(--chalk-white);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 4px 8px;
+  outline: none;
+  min-width: 80px;
+  max-width: 220px;
+  flex-shrink: 0;
+}
+
+.breadcrumb-rename-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--chalk-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+  font-size: 16px;
+  border-radius: 6px;
+}
+
+.breadcrumb-rename-btn:hover {
+  color: var(--chalk-white);
   background: rgba(255, 255, 255, 0.06);
 }
 
@@ -1152,17 +1342,17 @@ onBeforeUnmount(() => {
 }
 
 .note-card-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   padding-top: 8px;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 11px;
   color: var(--chalk-muted);
 }
 
-.note-card-meta-sep {
-  opacity: 0.4;
+.note-card-meta-time {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--chalk-muted);
+  opacity: 0.85;
 }
 
 /* 详情视图 */

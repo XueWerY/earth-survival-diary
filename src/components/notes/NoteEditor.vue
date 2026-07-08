@@ -154,12 +154,14 @@
     <!-- 底部状态栏 -->
     <div class="editor-status-bar">
       <div class="editor-status-left">
-        <button class="editor-back-btn" @click="$emit('back')" title="返回笔记列表">
+        <button class="editor-back-btn" @click="handleBack" title="返回笔记列表">
           <el-icon><ArrowLeft /></el-icon>
         </button>
         <span>{{ clockDisplay }}</span>
         <span class="editor-status-sep">|</span>
         <span>全文字数: {{ totalWordCount }}</span>
+        <span class="editor-status-sep">|</span>
+        <span>创建于 {{ formatTime(note?.createdAt) }}</span>
         <span class="editor-status-sep">|</span>
         <span>更新于 {{ formatTime(note?.updatedAt) }}</span>
       </div>
@@ -331,14 +333,19 @@ watch(noteTitle, () => {
 // 保存当前编辑器内容到当前页面
 const saveCurrentPageContent = () => {
   if (contentRef.value && pages.value[currentPageIdx.value]) {
-    pages.value[currentPageIdx.value].content = contentRef.value.innerHTML
+    const html = contentRef.value.innerHTML
+    // 无文本内容且无图片/表格等媒体元素时视为空内容
+    const text = (contentRef.value.textContent || '').trim()
+    const isEmpty = !text && !contentRef.value.querySelector('img,table,hr,video')
+    pages.value[currentPageIdx.value].content = isEmpty ? '' : html
   }
 }
 
 // 加载指定页面内容到编辑器
 const loadPageContent = (idx: number) => {
   if (contentRef.value && pages.value[idx]) {
-    contentRef.value.innerHTML = pages.value[idx].content || ''
+    // 空内容时使用 <div><br></div> 占位，提供块级容器确保 contenteditable 可聚焦光标并支持粘贴
+    contentRef.value.innerHTML = pages.value[idx].content || '<div><br></div>'
   }
 }
 
@@ -498,13 +505,23 @@ const handlePaste = async (e: ClipboardEvent) => {
   if (sel && sel.rangeCount) {
     pendingPasteRange = sel.getRangeAt(0).cloneRange()
     const rect = pendingPasteRange.getBoundingClientRect()
-    pasteMenuPos.value = {
-      x: rect.left || clientX,
-      y: (rect.bottom || clientY) + 4
+    // 空内容时光标 getBoundingClientRect 可能全为 0，使用编辑器位置兜底
+    if (rect.left === 0 && rect.top === 0 && contentRef.value) {
+      const editorRect = contentRef.value.getBoundingClientRect()
+      pasteMenuPos.value = { x: editorRect.left + 20, y: editorRect.top + 20 }
+    } else {
+      pasteMenuPos.value = {
+        x: rect.left || clientX,
+        y: (rect.bottom || clientY) + 4
+      }
     }
   } else {
     pendingPasteRange = null
-    pasteMenuPos.value = { x: clientX, y: clientY }
+    // 无选区时使用编辑器位置定位菜单，避免键盘粘贴时 clientX/clientY 为 0 导致菜单不可见
+    const editorRect = contentRef.value?.getBoundingClientRect()
+    pasteMenuPos.value = editorRect
+      ? { x: editorRect.left + 20, y: editorRect.top + 20 }
+      : { x: clientX, y: clientY }
   }
   pasteMenuVisible.value = true
 }
@@ -1269,6 +1286,38 @@ const handleSave = () => {
     pinned: props.note?.pinned || false,
   })
 }
+
+// 收集当前编辑数据但不触发 emit，供父组件在切换地址/返回前调用以保存内容
+const saveAndGetData = () => {
+  saveThanks()
+  saveCurrentPageContent()
+  const title = noteTitle.value.trim() || '新笔记'
+  const thanksIdx = pages.value.findIndex(p => p.type === 'thanks')
+  if (thanksIdx !== -1) {
+    pages.value[thanksIdx].content = wrapThanksContent(pages.value[thanksIdx].content)
+  }
+  justSaved = true
+  return {
+    title,
+    content: serializeNotePages(pages.value),
+    categoryId: editCategoryId.value,
+    pinned: props.note?.pinned || false,
+  }
+}
+
+// 父组件调用以更新笔记标题（如面包屑重命名）
+const setNoteTitle = (title: string) => {
+  noteTitle.value = title
+}
+
+// 返回前先保存当前页内容（实际保存由父组件 closeDetail 触发 saveAndGetData）
+const handleBack = () => {
+  saveThanks()
+  saveCurrentPageContent()
+  emit('back')
+}
+
+defineExpose({ saveAndGetData, setNoteTitle })
 
 // 点击预览：先检查本地数据中有没有对应的笔记数据，携带当前编辑数据交给父组件保存后再切预览
 const handlePreview = () => {

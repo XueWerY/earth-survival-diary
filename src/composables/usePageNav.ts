@@ -1,6 +1,6 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import type { Ref } from 'vue'
-import { getSystemStateField, setSystemStateField } from '../services/storageService'
+import { getSystemStateField, setSystemStateField, type SystemState } from '../services/storageService'
 import { logger } from '../lib/logger'
 
 export interface DropdownItem {
@@ -53,7 +53,7 @@ export const MODULE_ROUTES: Record<string, string> = {
   footprint: '/footprint', notes: '/notes', focus: '/focus', list: '/list', countdown: '/countdown', course: '/course', statistics: '/statistics', toolbox: '/toolbox', profile: '/profile'
 }
 
-const MODULE_PERSIST_KEYS: Record<string, string> = {
+const MODULE_PERSIST_KEYS: Partial<Record<string, keyof SystemState>> = {
   list: 'list',
   countdown: 'countdown',
   notes: 'notes'
@@ -80,8 +80,10 @@ watch(navPath, async () => {
     if (persistTimer) clearTimeout(persistTimer)
     persistTimer = setTimeout(async () => {
       if (key) {
+        // 合并已有数据，保留模块额外持久化字段（如笔记的 isEditing）
+        const existing = (await getSystemStateField(key)) as Record<string, any> | undefined
+        await setSystemStateField(key, { ...(existing || {}), navPath: navPath.value } as any)
         logger.debug('[PageNav] 持久化 navPath', { key, value: { navPath: navPath.value } })
-        await setSystemStateField(key, { navPath: navPath.value })
       }
     }, 300)
   }, { deep: true })
@@ -120,7 +122,7 @@ export async function restoreModuleNavPath(module: string): Promise<string[]> {
     return [module]
   }
   try {
-    const parsed = await getSystemStateField(key)
+    const parsed = (await getSystemStateField(key)) as Record<string, any> | undefined
     logger.debug('[PageNav] restoreModuleNavPath 读取存储', { module, key, parsed })
     if (parsed?.navPath && Array.isArray(parsed.navPath)) {
       if (parsed.navPath.length > 0 && parsed.navPath[0] === module) {

@@ -151,6 +151,7 @@ export interface SystemState {
   date?: Record<string, any>
   countdown?: Record<string, any>
   list?: Record<string, any>
+  notes?: Record<string, any>
   focusTimer?: Record<string, any> | null
   currentPage?: string
   statsActiveTab?: string

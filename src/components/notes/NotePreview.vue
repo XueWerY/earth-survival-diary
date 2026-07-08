@@ -69,6 +69,8 @@
         <span class="preview-status-sep">|</span>
         <span>全文字数: {{ totalWordCount }}</span>
         <span class="preview-status-sep">|</span>
+        <span>创建于 {{ formatTime(note?.createdAt) }}</span>
+        <span class="preview-status-sep">|</span>
         <span>更新于 {{ formatTime(note?.updatedAt) }}</span>
       </div>
       <div class="preview-status-right">
