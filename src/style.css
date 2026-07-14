@@ -750,3 +750,20 @@ body {
 .el-popper.lunar-date-picker-popover .el-popper__arrow {
   display: none !important;
 }
+
+/* ========== highlight.js 星空主题适配 ========== */
+.hljs {
+  color: #e2e8f0;
+  background: transparent;
+}
+.hljs-comment, .hljs-quote { color: #64748b; font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-section, .hljs-link { color: #a78bfa; }
+.hljs-string, .hljs-attr, .hljs-template-tag, .hljs-addition { color: #86efac; }
+.hljs-number, .hljs-symbol, .hljs-bullet, .hljs-meta { color: #fbbf24; }
+.hljs-title, .hljs-name, .hljs-type, .hljs-attribute { color: #93c5fd; }
+.hljs-variable, .hljs-template-variable, .hljs-property { color: #f9a8d4; }
+.hljs-built_in, .hljs-builtin-name { color: #67e8f9; }
+.hljs-deletion { color: #f87171; }
+.hljs-regexp { color: #fbbf24; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }

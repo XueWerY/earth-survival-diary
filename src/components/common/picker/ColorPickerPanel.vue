@@ -252,6 +252,8 @@ const onHexInput = (e: Event) => {
 <style scoped>
 .color-picker-panel {
   width: 280px;
+  max-height: 90vh;
+  overflow-y: auto;
   background: rgba(18, 16, 42, 0.96);
   backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -261,6 +263,24 @@ const onHexInput = (e: Event) => {
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+
+/* 自定义滚动条样式 */
+.color-picker-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.color-picker-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.color-picker-panel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+
+.color-picker-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .cpp-label {

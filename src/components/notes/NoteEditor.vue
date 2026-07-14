@@ -13,7 +13,7 @@
               <li
                 :class="['nav-l' + page.level, { 'nav-dragging': dragIdx === idx, 'nav-drop-target': dragOverIdx === idx && dragIdx !== -1 && dragIdx !== idx }]"
                 @pointerdown="onNavPointerDown($event, idx)"
-                @contextmenu.prevent.stop="openContextMenu($event, idx)"
+                @contextmenu.prevent.stop="handleNavContextmenu($event, idx)"
               >
                 <a :class="{ active: currentPageIdx === idx }" @click="goToSlide(idx)">
                   <span class="nav-num">{{ computePageNumber(pages, idx) }}</span>
@@ -41,7 +41,7 @@
           <div class="editor-body">
             <div class="editor-content-wrap">
               <div class="editor-toolbar" v-if="!isCoverPage && !isThanksPage">
-                <select class="editor-tb-select editor-tb-font" :value="currentFont" @change="onFontChange(($event.target as HTMLSelectElement).value)" title="字体">
+                <select class="editor-tb-select editor-tb-font" :disabled="!hasSelection" :value="currentFont" @change="onFontChange(($event.target as HTMLSelectElement).value)" title="字体">
                   <option value="" disabled hidden></option>
                   <option v-if="currentFont && !isFontInList(currentFont)" :value="currentFont" :style="{ fontFamily: currentFont }">{{ currentFont }}</option>
                   <optgroup v-if="usedFonts.length" label="页面正在使用的字体">
@@ -51,7 +51,7 @@
                     <option v-for="f in commonFonts" :key="f" :value="f" :style="{ fontFamily: f }">{{ f }}</option>
                   </optgroup>
                 </select>
-                <select class="editor-tb-select editor-tb-size" :value="currentFontSize" @change="onFontSizeChange(($event.target as HTMLSelectElement).value)" title="字号">
+                <select class="editor-tb-select editor-tb-size" :disabled="!hasSelection" :value="currentFontSize" @change="onFontSizeChange(($event.target as HTMLSelectElement).value)" title="字号">
                   <option value="" disabled hidden></option>
                   <option v-if="currentFontSize && !isSizeInList(currentFontSize)" :value="currentFontSize">{{ currentFontSize }}</option>
                   <optgroup label="中文字号">
@@ -70,13 +70,33 @@
                   <option value="H5">标题5</option>
                   <option value="H6">标题6</option>
                 </select>
-                <button class="editor-tb-btn" @click="exec('bold')" title="加粗"><b>B</b></button>
-                <button class="editor-tb-btn" @click="exec('italic')" title="斜体"><i>I</i></button>
-                <button class="editor-tb-btn" @click="exec('underline')" title="下划线"><u>U</u></button>
-                <button class="editor-tb-btn" @click="exec('strikeThrough')" title="删除线"><s>S</s></button>
+                <button class="editor-tb-btn" :disabled="!hasSelection" @click="exec('bold')" title="加粗"><b>B</b></button>
+                <button class="editor-tb-btn" :disabled="!hasSelection" @click="exec('italic')" title="斜体"><i>I</i></button>
+                <div class="editor-tb-underline-wrap">
+                  <button class="editor-tb-btn editor-tb-underline-btn" :disabled="!hasSelection" @click="toggleUnderlineMenu" title="下划线">
+                    <span class="editor-tb-underline-preview"><u>U</u></span>
+                  </button>
+                  <div v-if="underlineMenuVisible" class="underline-menu" @click.stop @mousedown.prevent>
+                    <div class="underline-menu-styles">
+                      <button v-for="s in underlineStyles" :key="s.name" class="underline-menu-item" @click="applyUnderlineStyle(s.css)">
+                        <span class="underline-menu-line" :style="s.lineStyle">{{ s.name === '波浪线' ? '\u00A0' : '' }}</span>
+                      </button>
+                    </div>
+                    <div class="underline-menu-divider"></div>
+                    <button class="underline-menu-item underline-menu-none" @click="removeUnderline">
+                      <span class="underline-menu-name">无</span>
+                    </button>
+                    <div class="underline-menu-divider"></div>
+                    <div class="underline-color-item" @click="toggleUnderlineColorPanel($event)">
+                      <span class="underline-menu-name">下划线颜色</span>
+                      <span class="underline-menu-arrow">›</span>
+                    </div>
+                  </div>
+                </div>
+                <button class="editor-tb-btn" :disabled="!hasSelection" @click="exec('strikeThrough')" title="删除线"><s>S</s></button>
                 
                 <div class="editor-tb-font-color-wrap">
-                  <button class="editor-tb-btn editor-tb-font-color-btn" :class="{ active: fontColorPanelVisible }" @click="toggleFontColorPanel" title="字体颜色">
+                  <button class="editor-tb-btn editor-tb-font-color-btn" :class="{ active: fontColorPanelVisible }" :disabled="!hasSelection" @click="toggleFontColorPanel" title="字体颜色">
                     <span class="editor-tb-font-color-swatch" :style="{ background: currentFontColor }">A</span>
                   </button>
                   <div v-if="fontColorPanelVisible" class="font-color-panel-wrap">
@@ -102,28 +122,21 @@
                 </div>
                 <div class="editor-tb-sep"></div>
                 <button class="editor-tb-btn" @click="exec('formatBlock', 'blockquote')" title="引用">❝</button>
+                <button class="editor-tb-btn" @click="insertHtmlCodeBlock" title="插入 HTML 代码">&lt;/&gt;</button>
                 <button class="editor-tb-btn" @click="exec('undo')" title="撤销">↶</button>
+                <div class="editor-tb-sep"></div>
+                <button class="editor-tb-btn" :disabled="!hasSelection" @click="copySelectionStyle" title="复制样式">📋</button>
+                <button class="editor-tb-btn" :disabled="!hasSelection || !savedStyle" @click="applySelectionStyle" title="应用样式">📌</button>
               </div>
               <div
                 v-if="!isThanksPage"
                 ref="contentRef"
                 class="editor-content"
                 :contenteditable="!isCoverPage"
-                @input="handleContentInput"
                 @paste="handlePaste"
               ></div>
               <div v-else class="editor-thanks-wrap">
-                <div v-if="editingThanks" class="editor-thanks-edit-center">
-                  <textarea
-                    ref="thanksInputRef"
-                    v-model="thanksInput"
-                    class="editor-thanks-input"
-                    :rows="thanksInputRows"
-                    @blur="saveThanks"
-                    placeholder="输入致谢内容..."
-                  ></textarea>
-                </div>
-                <div v-else class="editor-thanks-display" v-html="pages[currentPageIdx]?.content" @click="startEditThanks"></div>
+                <div class="editor-thanks-display" v-html="pages[currentPageIdx]?.content"></div>
               </div>
             </div>
           </div>
@@ -183,6 +196,7 @@
         @click.stop
         @contextmenu.prevent
       >
+        <button v-if="pages[ctxTargetIdx]?.type === 'thanks'" class="nav-ctx-item" @click="openThanksDialog"><span class="nav-ctx-icon">✏️</span>修改致谢内容</button>
         <button class="nav-ctx-item" @click="ctxCut"><span class="nav-ctx-icon">✂️</span>剪切幻灯片</button>
         <button class="nav-ctx-item" @click="ctxCopy"><span class="nav-ctx-icon">📋</span>复制幻灯片</button>
         <button class="nav-ctx-item" @click="ctxNewSameDown"><span class="nav-ctx-icon">➕</span>新建幻灯片</button>
@@ -192,6 +206,29 @@
         <button class="nav-ctx-item" :disabled="!clipboard" @click="ctxPasteDown"><span class="nav-ctx-icon">📎</span>粘贴幻灯片</button>
         <button class="nav-ctx-item" @click="ctxNewUp"><span class="nav-ctx-icon">⬆️</span>向上插入幻灯片</button>
       </div>
+      <!-- 致谢内容修改弹窗 -->
+      <div v-if="thanksDialogVisible" class="thanks-dialog-overlay" @click.self="thanksDialogVisible = false">
+        <div class="thanks-dialog">
+          <div class="thanks-dialog-title">修改致谢内容</div>
+          <div class="thanks-dialog-divider"></div>
+          <textarea
+            v-model="thanksDialogInput"
+            class="thanks-dialog-textarea"
+            :rows="thanksDialogRows"
+            placeholder="输入致谢内容..."
+          ></textarea>
+          <div class="thanks-dialog-actions">
+            <button class="thanks-dialog-btn cancel" @click="thanksDialogVisible = false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+              <span>取消</span>
+            </button>
+            <button class="thanks-dialog-btn save" @click="saveThanksDialog">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>保存</span>
+            </button>
+          </div>
+        </div>
+      </div>
       <!-- 粘贴选项菜单 -->
       <div
         v-if="pasteMenuVisible"
@@ -200,56 +237,22 @@
         @click.stop
         @contextmenu.prevent
       >
-        <button class="nav-ctx-item" @mousedown.prevent @click="pasteTargetFormat"><span class="nav-ctx-icon">🎯</span>使用目标格式</button>
         <button class="nav-ctx-item" @mousedown.prevent @click="pasteSourceFormat"><span class="nav-ctx-icon">📋</span>保留源格式</button>
         <button class="nav-ctx-item" @mousedown.prevent @click="pasteTextOnly"><span class="nav-ctx-icon">📝</span>只保留文本</button>
       </div>
-      <!-- 选中文本工具面板 -->
+      <!-- 下划线颜色选择面板（Teleport 到 body 以避免被编辑器容器 overflow:hidden 裁剪） -->
       <div
-        v-if="selectionPanelVisible"
-        class="selection-panel"
-        :style="{ left: selectionPanelPos.x + 'px', top: selectionPanelPos.y + 'px' }"
+        v-if="underlineColorPanelVisible"
+        class="underline-color-popover"
+        :style="underlineColorPanelStyle"
         @click.stop
         @mousedown.prevent
-        @mouseup.stop
       >
-        <select class="editor-tb-select editor-tb-font" :value="currentFont" @change="onFontChange(($event.target as HTMLSelectElement).value)" title="字体">
-          <option value="" disabled hidden></option>
-          <option v-if="currentFont && !isFontInList(currentFont)" :value="currentFont" :style="{ fontFamily: currentFont }">{{ currentFont }}</option>
-          <optgroup v-if="usedFonts.length" label="页面正在使用的字体">
-            <option v-for="f in usedFonts" :key="f" :value="f" :style="{ fontFamily: f }">{{ f }}</option>
-          </optgroup>
-          <optgroup label="常用字体">
-            <option v-for="f in commonFonts" :key="f" :value="f" :style="{ fontFamily: f }">{{ f }}</option>
-          </optgroup>
-        </select>
-        <select class="editor-tb-select editor-tb-size" :value="currentFontSize" @change="onFontSizeChange(($event.target as HTMLSelectElement).value)" title="字号">
-          <option value="" disabled hidden></option>
-          <option v-if="currentFontSize && !isSizeInList(currentFontSize)" :value="currentFontSize">{{ currentFontSize }}</option>
-          <optgroup label="中文字号">
-            <option v-for="s in cnFontSizes" :key="s.name" :value="s.pt + 'pt'">{{ s.name }}</option>
-          </optgroup>
-          <optgroup label="数字字号">
-            <option v-for="s in numFontSizes" :key="s" :value="s + 'pt'">{{ s }}</option>
-          </optgroup>
-        </select>
-        <button class="editor-tb-btn" @click="exec('bold')" title="加粗"><b>B</b></button>
-        <button class="editor-tb-btn" @click="exec('italic')" title="斜体"><i>I</i></button>
-        <button class="editor-tb-btn" @click="exec('underline')" title="下划线"><u>U</u></button>
-        <button class="editor-tb-btn" @click="exec('backColor', '#FFFF00')" title="文本突出显示颜色">🖍</button>
-        <button class="editor-tb-btn" @click="exec('insertUnorderedList')" title="项目符号">•</button>
-        <button class="editor-tb-btn" @click="exec('insertOrderedList')" title="编号">1.</button>
-        <select class="editor-tb-select" @change="exec('formatBlock', ($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''">
-          <option value="">正文</option>
-          <option value="H1">标题1</option>
-          <option value="H2">标题2</option>
-          <option value="H3">标题3</option>
-          <option value="H4">标题4</option>
-          <option value="H5">标题5</option>
-          <option value="H6">标题6</option>
-        </select>
-        <button class="editor-tb-btn" @click="copySelectionStyle" title="复制样式">📋</button>
-        <button class="editor-tb-btn" :disabled="!copiedStyle" @click="applySelectionStyle" title="应用样式">📌</button>
+        <ColorPickerPanel
+          :modelValue="currentUnderlineColor"
+          @apply="applyUnderlineColor"
+          @cancel="underlineColorPanelVisible = false"
+        />
       </div>
     </Teleport>
   </div>
@@ -262,6 +265,8 @@ import dayjs from 'dayjs'
 import type { Note, NoteCategory, NotePage } from '../../stores/noteStore'
 import { parseNotePages, serializeNotePages, createNotePage, computePageNumber, generateCoverContent, wrapThanksContent } from '../../stores/noteStore'
 import ColorPickerPanel from '../common/picker/ColorPickerPanel.vue'
+import { highlightCodeBlocks, serializeCodeBlocks } from '../../utils/codeBlock'
+import { deleteData, getData, setData } from '../../services/storageService'
 
 const props = defineProps<{
   note: Note | null
@@ -302,13 +307,11 @@ const currentPageIdx = ref(0)
 // 当前页是否为封面页（不可编辑）或致谢页（标题不可改，内容可改）
 const isCoverPage = computed(() => pages.value[currentPageIdx.value]?.type === 'cover')
 const isThanksPage = computed(() => pages.value[currentPageIdx.value]?.type === 'thanks')
-// 致谢页内容编辑（点击内容出现输入框）
-const editingThanks = ref(false)
-const thanksInput = ref('')
-const thanksInputRef = ref<HTMLTextAreaElement | null>(null)
-// 致谢页输入框行数（根据内容行数动态计算，仅占内容所在行高度）
-const thanksInputRows = computed(() => {
-  const lines = thanksInput.value.split('\n').length
+// 致谢内容修改弹窗
+const thanksDialogVisible = ref(false)
+const thanksDialogInput = ref('')
+const thanksDialogRows = computed(() => {
+  const lines = thanksDialogInput.value.split('\n').length
   return Math.max(1, Math.min(lines, 10))
 })
 
@@ -333,10 +336,15 @@ watch(noteTitle, () => {
 // 保存当前编辑器内容到当前页面
 const saveCurrentPageContent = () => {
   if (contentRef.value && pages.value[currentPageIdx.value]) {
-    const html = contentRef.value.innerHTML
+    // 克隆后序列化 HTML 代码块，避免破坏编辑器中的交互 UI
+    const clone = contentRef.value.cloneNode(true) as HTMLElement
+    serializeHtmlCodeBlocks(clone)
+    // 将 <pre> 内高亮标记还原为纯文本，避免 hljs span 持久化
+    serializeCodeBlocks(clone)
+    const html = clone.innerHTML
     // 无文本内容且无图片/表格等媒体元素时视为空内容
-    const text = (contentRef.value.textContent || '').trim()
-    const isEmpty = !text && !contentRef.value.querySelector('img,table,hr,video')
+    const text = (clone.textContent || '').trim()
+    const isEmpty = !text && !clone.querySelector('img,table,hr,video')
     pages.value[currentPageIdx.value].content = isEmpty ? '' : html
   }
 }
@@ -346,7 +354,62 @@ const loadPageContent = (idx: number) => {
   if (contentRef.value && pages.value[idx]) {
     // 空内容时使用 <div><br></div> 占位，提供块级容器确保 contenteditable 可聚焦光标并支持粘贴
     contentRef.value.innerHTML = pages.value[idx].content || '<div><br></div>'
+    // 将 HTML 代码块转换为可交互的代码/运行双视图
+    setupHtmlCodeBlocks(contentRef.value)
+    // 对原生 <pre> 代码块应用语法高亮与格式化（HTML 代码块内的代码视图不处理）
+    highlightCodeBlocks(contentRef.value)
   }
+}
+
+// ====== HTML 代码块（仅代码视图） ======
+// 存储格式：<div class="html-code-block">HTML 代码文本</div>
+// 编辑态：可编辑的代码视图
+// 预览/放映态：转为 <pre><code> 由 highlightCodeBlocks 处理高亮
+
+const setupHtmlCodeBlocks = (root: HTMLElement) => {
+  const blocks = root.querySelectorAll('.html-code-block')
+  blocks.forEach(block => {
+    const el = block as HTMLElement
+    // 已是交互态则跳过
+    if (el.querySelector('.html-code-codeview')) return
+    const code = el.textContent || ''
+    el.contentEditable = 'false'
+    el.innerHTML = '<div class="html-code-codeview" contenteditable="true"></div>'
+    const codeview = el.querySelector('.html-code-codeview') as HTMLElement
+    codeview.textContent = code
+  })
+}
+
+// 保存前将交互态代码块还原为存储格式（仅保留代码文本）
+const serializeHtmlCodeBlocks = (root: HTMLElement) => {
+  const blocks = root.querySelectorAll('.html-code-block')
+  blocks.forEach(block => {
+    const el = block as HTMLElement
+    const codeview = el.querySelector('.html-code-codeview') as HTMLElement | null
+    const code = codeview ? codeview.textContent : el.textContent || ''
+    el.innerHTML = ''
+    el.textContent = code
+    el.removeAttribute('contenteditable')
+  })
+}
+
+const insertHtmlCodeBlock = () => {
+  contentRef.value?.focus()
+  const sel = window.getSelection()
+  if (!sel || !sel.rangeCount) return
+  const range = sel.getRangeAt(0)
+  range.deleteContents()
+  const block = document.createElement('div')
+  block.className = 'html-code-block'
+  block.contentEditable = 'false'
+  block.innerHTML = '<div class="html-code-codeview" contenteditable="true"><br></div>'
+  range.insertNode(block)
+  // 后接空段落，方便继续编辑正文
+  const p = document.createElement('p')
+  p.innerHTML = '<br>'
+  if (block.parentNode) block.parentNode.insertBefore(p, block.nextSibling)
+  const codeview = block.querySelector('.html-code-codeview') as HTMLElement
+  codeview.focus()
 }
 
 
@@ -405,7 +468,6 @@ watch(
 
 const goToSlide = (idx: number) => {
   if (idx < 0 || idx >= pages.value.length) return
-  saveThanks()
   saveCurrentPageContent()
   currentPageIdx.value = idx
   nextTick(() => {
@@ -433,39 +495,6 @@ const formatTime = (date?: string): string => {
 const exec = (cmd: string, value?: string) => {
   contentRef.value?.focus()
   document.execCommand(cmd, false, value)
-}
-
-// 自动识别 HTML 代码并执行（渲染）
-const handleContentInput = () => {
-  if (!contentRef.value) return
-  const sel = window.getSelection()
-  if (!sel || !sel.rangeCount) return
-  let node: Node | null = sel.anchorNode
-  // 找到当前所在的块级元素
-  while (node && node !== contentRef.value) {
-    if (node.nodeType === 1) {
-      const el = node as HTMLElement
-      if (['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE'].includes(el.tagName)) {
-        const text = el.textContent || ''
-        // 检测是否包含完整的 HTML 标签（开闭标签）
-        if (/<(\w+)([^>]*)>([\s\S]*?)<\/\1>/.test(text)) {
-          // 保存光标偏移量
-          const caretOffset = sel.anchorOffset
-          el.innerHTML = text
-          // 尝试恢复光标到最接近的位置
-          const newRange = document.createRange()
-          newRange.selectNodeContents(el)
-          const maxOffset = newRange.endOffset
-          newRange.setStart(el, Math.min(caretOffset, maxOffset))
-          newRange.collapse(true)
-          sel.removeAllRanges()
-          sel.addRange(newRange)
-        }
-        break
-      }
-    }
-    node = node.parentNode
-  }
 }
 
 // ====== 粘贴选项 ======
@@ -559,25 +588,6 @@ const restoreSelectionAndExec = (cmd: string, value: string) => {
   document.execCommand(cmd, false, value)
 }
 
-// 使用目标格式：去掉内联样式后插入 HTML
-const pasteTargetFormat = () => {
-  if (!pasteMenuVisible.value) return
-  if (pendingPasteHtml) {
-    const tmp = document.createElement('div')
-    tmp.innerHTML = pendingPasteHtml
-    tmp.querySelectorAll('[style]').forEach(el => el.removeAttribute('style'))
-    tmp.querySelectorAll('font').forEach(el => {
-      const parent = el.parentNode!
-      while (el.firstChild) parent.insertBefore(el.firstChild, el)
-      parent.removeChild(el)
-    })
-    restoreSelectionAndExec('insertHTML', tmp.innerHTML)
-  } else {
-    restoreSelectionAndExec('insertText', pendingPasteText)
-  }
-  closePasteMenu()
-}
-
 // 保留源格式：直接插入原始 HTML
 const pasteSourceFormat = () => {
   if (!pasteMenuVisible.value) return
@@ -589,10 +599,27 @@ const pasteSourceFormat = () => {
   closePasteMenu()
 }
 
-// 只保留文本
+// 只保留文本：中文用宋体五号，英文用 Times New Roman 五号
 const pasteTextOnly = () => {
   if (!pasteMenuVisible.value) return
-  restoreSelectionAndExec('insertText', pendingPasteText)
+  const esc = pendingPasteText
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+  // 将文本按中英文字符分段，中文段用宋体，英文段用 Times New Roman；五号 = 10.5pt
+  const parts: string[] = []
+  let last = 0
+  const re = /([\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3000-\u303f\uff00-\uffef]+)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(esc)) !== null) {
+    if (m.index > last) {
+      parts.push('<span style="font-family: \'Times New Roman\'; font-size: 10.5pt">' + esc.slice(last, m.index) + '</span>')
+    }
+    parts.push('<span style="font-family: \'宋体\', SimSun; font-size: 10.5pt">' + m[1] + '</span>')
+    last = m.index + m[1].length
+  }
+  if (last < esc.length) {
+    parts.push('<span style="font-family: \'Times New Roman\'; font-size: 10.5pt">' + esc.slice(last) + '</span>')
+  }
+  restoreSelectionAndExec('insertHTML', parts.join(''))
   closePasteMenu()
 }
 
@@ -634,61 +661,154 @@ const handleSelectionChange = () => {
   updateCurrentAlign()
   updateCurrentFontAndSize()
   updateCurrentFontColor()
-  updateSelectionPanel()
+  updateHasSelection()
 }
 
-// ====== 选中文本工具面板 ======
-const selectionPanelVisible = ref(false)
-const selectionPanelPos = ref({ x: 0, y: 0 })
-const copiedStyle = ref<string | null>(null)
+// ====== 选中文本状态 ======
+// 当前是否有选中文本（用于主工具栏按钮禁用态）
+const hasSelection = ref(false)
 
-const updateSelectionPanel = () => {
+const updateHasSelection = () => {
   const sel = window.getSelection()
   if (!sel || sel.isCollapsed || !sel.rangeCount || !contentRef.value?.contains(sel.anchorNode)) {
-    selectionPanelVisible.value = false
+    hasSelection.value = false
     return
   }
   const range = sel.getRangeAt(0)
   const rect = range.getBoundingClientRect()
-  if (!rect || rect.width === 0) {
-    selectionPanelVisible.value = false
-    return
-  }
-  // 面板放在选区下方中间
-  const panelWidth = 420
-  let x = rect.left + rect.width / 2 - panelWidth / 2
-  let y = rect.bottom + 8
-  if (x < 4) x = 4
-  if (x + panelWidth > window.innerWidth - 4) x = window.innerWidth - panelWidth - 4
-  if (y + 44 > window.innerHeight - 4) y = rect.top - 44
-  selectionPanelPos.value = { x, y }
-  selectionPanelVisible.value = true
+  hasSelection.value = !!(rect && rect.width !== 0)
 }
 
-const copySelectionStyle = () => {
+// ====== 复制/应用样式（持久化） ======
+// 持久化的样式状态：字体、字号、加粗、斜体、下划线、删除线、文字颜色、项目符号、项目编号、对齐方式、引用
+interface SavedStyle {
+  fontFamily?: string
+  fontSize?: string
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  strikeThrough?: boolean
+  color?: string
+  list?: 'ul' | 'ol'
+  align?: 'left' | 'center' | 'right'
+  blockquote?: boolean
+}
+
+const savedStyle = ref<SavedStyle | null>(null)
+
+// 从选中文本提取样式状态
+const gatherStyle = (): SavedStyle | null => {
+  const sel = window.getSelection()
+  if (!sel || sel.isCollapsed || !sel.rangeCount || !contentRef.value) return null
+  const elements = getSelectionElements()
+  if (elements.length === 0) return null
+  const el = elements[0]
+  const style: SavedStyle = {}
+  // 字体/字号/颜色：向上查找最近设置了内联样式的元素（保留 pt 与 hex 单位）
+  let node: HTMLElement | null = el
+  while (node && node !== contentRef.value) {
+    if (node.style.fontFamily) {
+      style.fontFamily = node.style.fontFamily.split(',')[0].replace(/['"]/g, '').trim() || undefined
+      break
+    }
+    node = node.parentElement
+  }
+  node = el
+  while (node && node !== contentRef.value) {
+    if (node.style.fontSize) { style.fontSize = node.style.fontSize; break }
+    node = node.parentElement
+  }
+  node = el
+  while (node && node !== contentRef.value) {
+    if (node.style.color) { style.color = node.style.color; break }
+    node = node.parentElement
+  }
+  // 加粗/斜体/下划线/删除线：使用计算样式（兼容 <b>/<i>/<u>/<s> 标签与内联样式）
+  const cs = getComputedStyle(el)
+  const fw = cs.fontWeight
+  style.bold = parseInt(fw) >= 700 || fw === 'bold' || fw === 'bolder'
+  style.italic = cs.fontStyle === 'italic' || cs.fontStyle === 'oblique'
+  const td = cs.textDecorationLine || cs.textDecoration || ''
+  style.underline = td.includes('underline')
+  style.strikeThrough = td.includes('line-through')
+  // 项目符号/项目编号：向上查找最近的列表
+  let p: Node | null = el
+  while (p && p !== contentRef.value) {
+    if (p.nodeType === 1) {
+      const tag = (p as HTMLElement).tagName
+      if (tag === 'UL') { style.list = 'ul'; break }
+      if (tag === 'OL') { style.list = 'ol'; break }
+    }
+    p = p.parentNode
+  }
+  // 引用：向上查找最近的 blockquote
+  p = el
+  while (p && p !== contentRef.value) {
+    if (p.nodeType === 1 && (p as HTMLElement).tagName === 'BLOCKQUOTE') {
+      style.blockquote = true
+      break
+    }
+    p = p.parentNode
+  }
+  // 对齐方式：向上查找最近的块级元素
+  p = el
+  while (p && p !== contentRef.value) {
+    if (p.nodeType === 1) {
+      const e = p as HTMLElement
+      if (['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE'].includes(e.tagName)) {
+        const a = e.style.textAlign || getComputedStyle(e).textAlign || 'left'
+        style.align = (a === 'center' || a === 'right') ? a : 'left'
+        break
+      }
+    }
+    p = p.parentNode
+  }
+  return style
+}
+
+const copySelectionStyle = async () => {
   const sel = window.getSelection()
   if (!sel || sel.isCollapsed || !sel.rangeCount) return
-  const range = sel.getRangeAt(0)
-  const fragment = range.cloneContents()
-  const wrapper = document.createElement('div')
-  wrapper.appendChild(fragment)
-  // 提取第一个有样式的 span 的样式
-  const firstSpan = wrapper.querySelector('span[style]') as HTMLElement | null
-  if (firstSpan) {
-    copiedStyle.value = firstSpan.style.cssText
-  } else {
-    copiedStyle.value = ''
-  }
+  const style = gatherStyle()
+  savedStyle.value = style
+  if (style) await setData('notes', 'style', style)
 }
 
 const applySelectionStyle = () => {
-  if (!copiedStyle.value) return
+  const s = savedStyle.value
+  if (!s) return
   const sel = window.getSelection()
   if (!sel || sel.isCollapsed || !sel.rangeCount) return
   contentRef.value?.focus()
-  const markup = `<span style="${copiedStyle.value}">${sel.toString()}</span>`
-  document.execCommand('insertHTML', false, markup)
+  // 内联样式：文字颜色、字体、字号
+  if (s.color) {
+    document.execCommand('styleWithCSS', false, true)
+    document.execCommand('foreColor', false, s.color)
+    document.execCommand('styleWithCSS', false, false)
+  }
+  if (s.fontFamily) {
+    document.execCommand('styleWithCSS', false, true)
+    document.execCommand('fontName', false, s.fontFamily)
+    document.execCommand('styleWithCSS', false, false)
+  }
+  if (s.fontSize) applyFontSize(s.fontSize)
+  // 加粗/斜体/下划线/删除线：仅在当前状态与目标不一致时切换
+  if (s.bold !== undefined && document.queryCommandState('bold') !== s.bold) document.execCommand('bold')
+  if (s.italic !== undefined && document.queryCommandState('italic') !== s.italic) document.execCommand('italic')
+  if (s.underline !== undefined && document.queryCommandState('underline') !== s.underline) document.execCommand('underline')
+  if (s.strikeThrough !== undefined && document.queryCommandState('strikeThrough') !== s.strikeThrough) document.execCommand('strikeThrough')
+  // 块级：项目符号/项目编号、引用、对齐方式
+  if (s.list === 'ul') document.execCommand('insertUnorderedList')
+  else if (s.list === 'ol') document.execCommand('insertOrderedList')
+  if (s.blockquote) document.execCommand('formatBlock', false, 'blockquote')
+  if (s.align) execAlign(s.align)
   updateCurrentFontAndSize()
+}
+
+// 加载持久化的样式
+const loadSavedStyle = async () => {
+  const data = await getData<SavedStyle>('notes', 'style')
+  savedStyle.value = data || null
 }
 
 const updateCurrentFontColor = () => {
@@ -772,6 +892,98 @@ const applyFontColor = (color: string) => {
   document.execCommand('styleWithCSS', false, false)
   currentFontColor.value = color
   fontColorPanelVisible.value = false
+  updateCurrentFontAndSize()
+}
+
+// ====== 下划线样式菜单 ======
+const underlineStyles = [
+  { name: '单实线', css: 'text-decoration: underline solid;', lineStyle: 'border-bottom: 1px solid var(--chalk-white-90);' },
+  { name: '双实线', css: 'text-decoration: underline double;', lineStyle: 'border-bottom: 3px double var(--chalk-white-90);' },
+  { name: '粗实线', css: 'text-decoration: underline solid; text-decoration-thickness: 3px;', lineStyle: 'border-bottom: 3px solid var(--chalk-white-90);' },
+  { name: '虚线', css: 'text-decoration: underline dotted;', lineStyle: 'border-bottom: 1px dotted var(--chalk-white-90);' },
+  { name: '短虚线', css: 'text-decoration: underline dashed;', lineStyle: 'border-bottom: 1px dashed var(--chalk-white-90);' },
+  { name: '长虚线', css: 'text-decoration: underline dashed; text-decoration-thickness: 2px; text-underline-offset: 2px;', lineStyle: 'border-bottom: 2px dashed var(--chalk-white-90);' },
+  { name: '点划线', css: 'background-image: repeating-linear-gradient(90deg, currentColor 0, currentColor 1px, transparent 1px, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 12px); background-position: 0 100%; background-size: 12px 2px; background-repeat: repeat-x; padding-bottom: 2px;', lineStyle: 'background: repeating-linear-gradient(90deg, var(--chalk-white-90) 0px, var(--chalk-white-90) 2px, transparent 2px, transparent 6px, var(--chalk-white-90) 6px, var(--chalk-white-90) 10px, transparent 10px, transparent 14px); background-position: 0 100%; background-size: 14px 2px; background-repeat: repeat-x;' },
+  { name: '波浪线', css: 'text-decoration: underline wavy;', lineStyle: 'background: url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'8\' viewBox=\'0 0 24 8\'%3E%3Cpath d=\'M0 4 Q2 1 4 4 Q6 7 8 4 Q10 1 12 4 Q14 7 16 4 Q18 1 20 4 Q22 7 24 4\' fill=\'none\' stroke=\'rgba(255,255,255,0.9)\' stroke-width=\'1\'/%3E%3C/svg%3E") repeat-x; background-position: center bottom; background-size: 24px 8px;' },
+]
+// 主工具栏下拉菜单可见状态
+const underlineMenuVisible = ref(false)
+const underlineColorPanelVisible = ref(false)
+const currentUnderlineColor = ref('#667eea')
+// 下划线颜色面板（Teleport 到 body）的定位样式
+const underlineColorPanelStyle = ref<Record<string, string>>({})
+
+const toggleUnderlineMenu = () => {
+  underlineMenuVisible.value = !underlineMenuVisible.value
+}
+
+const applyUnderlineStyle = (css: string) => {
+  const sel = window.getSelection()
+  if (!sel || sel.isCollapsed || !sel.rangeCount) return
+  contentRef.value?.focus()
+  const span = document.createElement('span')
+  span.setAttribute('style', css)
+  span.textContent = sel.toString()
+  document.execCommand('insertHTML', false, span.outerHTML)
+  underlineMenuVisible.value = false
+  updateCurrentFontAndSize()
+}
+
+const removeUnderline = () => {
+  const sel = window.getSelection()
+  if (!sel || sel.isCollapsed || !sel.rangeCount) return
+  contentRef.value?.focus()
+  document.execCommand('underline', false)
+  const span = document.createElement('span')
+  span.style.cssText = 'text-decoration-line: none; border-bottom: none; background-image: none;'
+  span.textContent = sel.toString()
+  document.execCommand('insertHTML', false, span.outerHTML)
+  underlineMenuVisible.value = false
+  updateCurrentFontAndSize()
+}
+
+const toggleUnderlineColorPanel = (e?: MouseEvent) => {
+  if (!underlineColorPanelVisible.value) {
+    const trigger = (e?.currentTarget as HTMLElement) || null
+    const rect = trigger?.getBoundingClientRect()
+    const vpW = window.innerWidth
+    const vpH = window.innerHeight
+    const panelW = 280
+    let x = 8
+    let y = 8
+    if (rect) {
+      // 默认在触发器右侧展开，空间不足时切换到左侧
+      x = rect.right + 4
+      if (x + panelW > vpW - 8) x = rect.left - panelW - 4
+      if (x < 8) x = 8
+      y = rect.top
+    }
+    // 顶部过高时上移，确保至少 220px 可视高度，内容超出时面板自身滚动条出现
+    const minPanelH = 220
+    if (y + minPanelH > vpH - 8) y = Math.max(8, vpH - minPanelH - 8)
+    const maxH = vpH - y - 8
+    underlineColorPanelStyle.value = {
+      left: x + 'px',
+      top: y + 'px',
+      '--ucp-max-height': maxH + 'px'
+    }
+  }
+  underlineColorPanelVisible.value = !underlineColorPanelVisible.value
+}
+
+const applyUnderlineColor = (color: string) => {
+  if (!color) return
+  const sel = window.getSelection()
+  if (!sel || sel.isCollapsed || !sel.rangeCount) return
+  contentRef.value?.focus()
+  const span = document.createElement('span')
+  span.style.textDecoration = 'underline'
+  span.style.textDecorationColor = color
+  span.textContent = sel.toString()
+  document.execCommand('insertHTML', false, span.outerHTML)
+  currentUnderlineColor.value = color
+  underlineColorPanelVisible.value = false
+  underlineMenuVisible.value = false
   updateCurrentFontAndSize()
 }
 
@@ -971,31 +1183,26 @@ const commitRename = () => {
   renamingInput.value = ''
 }
 
-const startEditThanks = () => {
-  if (editingThanks.value) return
-  const page = pages.value[currentPageIdx.value]
+// 打开致谢内容修改弹窗
+const openThanksDialog = () => {
+  const page = pages.value[ctxTargetIdx.value]
   if (!page) return
   const tmp = document.createElement('div')
   tmp.innerHTML = page.content
-  // 将 <br> 转换为换行，便于在 textarea 中编辑
   tmp.querySelectorAll('br').forEach(br => br.replaceWith('\n'))
-  thanksInput.value = (tmp.textContent || '').trim()
-  editingThanks.value = true
-  nextTick(() => {
-    thanksInputRef.value?.focus()
-    thanksInputRef.value?.select()
-  })
+  thanksDialogInput.value = (tmp.textContent || '').trim()
+  thanksDialogVisible.value = true
+  ctxMenuVisible.value = false
 }
 
-// 致谢页：失焦或回车时保存输入框内容，重新用居中样式包裹
-const saveThanks = () => {
-  if (!editingThanks.value) return
-  const page = pages.value[currentPageIdx.value]
+// 保存致谢内容弹窗
+const saveThanksDialog = () => {
+  const page = pages.value[ctxTargetIdx.value]
   if (page) {
-    const text = thanksInput.value.trim() || '感谢聆听！'
+    const text = thanksDialogInput.value.trim() || '感谢聆听！'
     page.content = wrapThanksContent(`<p>${text.replace(/\n/g, '<br>')}</p>`)
   }
-  editingThanks.value = false
+  thanksDialogVisible.value = false
 }
 
 // ====== 右键菜单 ======
@@ -1022,9 +1229,13 @@ const closeCtxMenu = () => {
   ctxTargetIdx.value = -1
 }
 
+// 侧边导航栏右键：统一打开幻灯片菜单（致谢页的"修改致谢内容"已合并其中）
+const handleNavContextmenu = (e: MouseEvent, idx: number) => {
+  openContextMenu(e, idx)
+}
+
 // 选中指定索引页面（保存当前页内容并加载新页）
 const selectPage = (idx: number) => {
-  saveThanks()
   currentPageIdx.value = idx
   nextTick(() => {
     loadPageContent(idx)
@@ -1246,7 +1457,9 @@ onMounted(() => {
   document.addEventListener('contextmenu', closeCtxMenu)
   document.addEventListener('click', closePasteMenu)
   document.addEventListener('click', closeFontColorPanel)
+  document.addEventListener('click', closeUnderlineMenu)
   document.addEventListener('selectionchange', handleSelectionChange)
+  loadSavedStyle()
 })
 
 const closeFontColorPanel = (e: MouseEvent) => {
@@ -1254,6 +1467,14 @@ const closeFontColorPanel = (e: MouseEvent) => {
   const target = e.target as HTMLElement
   if (target.closest('.font-color-panel-wrap') || target.closest('.editor-tb-font-color-btn')) return
   fontColorPanelVisible.value = false
+}
+
+const closeUnderlineMenu = (e: MouseEvent) => {
+  if (!underlineMenuVisible.value && !underlineColorPanelVisible.value) return
+  const target = e.target as HTMLElement
+  if (target.closest('.underline-menu') || target.closest('.editor-tb-underline-btn') || target.closest('.underline-color-popover')) return
+  underlineMenuVisible.value = false
+  underlineColorPanelVisible.value = false
 }
 
 onBeforeUnmount(() => {
@@ -1264,11 +1485,14 @@ onBeforeUnmount(() => {
   document.removeEventListener('contextmenu', closeCtxMenu)
   document.removeEventListener('click', closePasteMenu)
   document.removeEventListener('click', closeFontColorPanel)
+  document.removeEventListener('click', closeUnderlineMenu)
   document.removeEventListener('selectionchange', handleSelectionChange)
+  // 离开编辑界面时清空保存的样式数据（仅当前编辑会话内有效）
+  savedStyle.value = null
+  void deleteData('notes', 'style')
 })
 
 const handleSave = () => {
-  saveThanks()
   saveCurrentPageContent()
   // 标题为空时使用默认标题"新笔记"，避免保存按钮无反应
   const title = noteTitle.value.trim() || '新笔记'
@@ -1289,7 +1513,6 @@ const handleSave = () => {
 
 // 收集当前编辑数据但不触发 emit，供父组件在切换地址/返回前调用以保存内容
 const saveAndGetData = () => {
-  saveThanks()
   saveCurrentPageContent()
   const title = noteTitle.value.trim() || '新笔记'
   const thanksIdx = pages.value.findIndex(p => p.type === 'thanks')
@@ -1312,7 +1535,6 @@ const setNoteTitle = (title: string) => {
 
 // 返回前先保存当前页内容（实际保存由父组件 closeDetail 触发 saveAndGetData）
 const handleBack = () => {
-  saveThanks()
   saveCurrentPageContent()
   emit('back')
 }
@@ -1321,7 +1543,6 @@ defineExpose({ saveAndGetData, setNoteTitle })
 
 // 点击预览：先检查本地数据中有没有对应的笔记数据，携带当前编辑数据交给父组件保存后再切预览
 const handlePreview = () => {
-  saveThanks()
   saveCurrentPageContent()
   const title = noteTitle.value.trim() || '新笔记'
   const thanksIdx = pages.value.findIndex(p => p.type === 'thanks')
@@ -1610,6 +1831,12 @@ const handlePreview = () => {
   color: var(--chalk-white);
 }
 
+.editor-tb-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+  pointer-events: none;
+}
+
 .editor-tb-select {
   height: 28px;
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -1627,6 +1854,12 @@ const handlePreview = () => {
   background: rgba(40, 36, 80, 0.75);
   color: var(--chalk-white);
   border-color: rgba(102, 126, 234, 0.4);
+}
+
+.editor-tb-select:disabled {
+  opacity: 0.3;
+  cursor: default;
+  pointer-events: none;
 }
 
 .editor-tb-select option,
@@ -1699,7 +1932,7 @@ const handlePreview = () => {
 .editor-content {
   flex: 1;
   padding: 14px;
-  color: var(--chalk-white);
+  color: #e2e8f0;
   font-family: '宋体', SimSun, 'Times New Roman', serif;
   font-size: 10.5pt;
   line-height: 1.8;
@@ -1709,22 +1942,59 @@ const handlePreview = () => {
   position: relative;
 }
 
-
-
-.editor-content :deep(h1) { font-size: 22px; font-weight: 700; margin: 12px 0 6px; }
-.editor-content :deep(h2) { font-size: 20px; font-weight: 700; margin: 10px 0 5px; }
-.editor-content :deep(h3) { font-size: 18px; font-weight: 600; margin: 8px 0 4px; }
+.editor-content :deep(h1) { font-size: 22px; font-weight: 700; margin: 12px 0 6px; color: #93c5fd; }
+.editor-content :deep(h2) { font-size: 20px; font-weight: 700; margin: 10px 0 5px; color: #93c5fd; }
+.editor-content :deep(h3) { font-size: 18px; font-weight: 600; margin: 8px 0 4px; color: #c4b5fd; }
+.editor-content :deep(h4) { font-size: 16px; font-weight: 600; margin: 8px 0 4px; color: #c4b5fd; }
+.editor-content :deep(h5) { font-size: 15px; font-weight: 600; margin: 8px 0 4px; color: #cbd5e1; }
+.editor-content :deep(h6) { font-size: 14px; font-weight: 600; margin: 8px 0 4px; color: #cbd5e1; }
 .editor-content :deep(blockquote) {
-  border-left: 3px solid #667eea; padding-left: 10px; margin: 6px 0; color: var(--chalk-white-70);
+  border-left: 3px solid #667eea; padding-left: 10px; margin: 6px 0; color: #94a3b8;
 }
 .editor-content :deep(pre) {
-  background: rgba(0,0,0,0.3); padding: 10px; border-radius: 6px; color: #a8edea;
-  font-family: monospace; white-space: pre-wrap; margin: 4px 0;
+  background: rgba(20, 18, 50, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  padding: 10px; border-radius: 6px; color: #e2e8f0;
+  font-family: 'Consolas', 'Monaco', monospace; white-space: pre-wrap; margin: 4px 0;
+  font-size: 13px; line-height: 1.6;
+}
+.editor-content :deep(pre code) {
+  background: transparent; padding: 0; border-radius: 0; color: inherit; font-size: inherit;
+}
+.editor-content :deep(code) {
+  background: rgba(102,126,234,0.2); padding: 2px 6px; border-radius: 4px; color: #93c5fd;
+  font-family: 'Consolas', 'Monaco', monospace; font-size: 0.92em;
 }
 .editor-content :deep(ul), .editor-content :deep(ol) { padding-left: 20px; margin: 4px 0; }
 .editor-content :deep(img) { max-width: 100%; border-radius: 6px; }
 .editor-content :deep(table) { border-collapse: collapse; width: 100%; margin: 4px 0; }
-.editor-content :deep(td) { border: 1px solid rgba(255,255,255,0.2); padding: 6px; }
+.editor-content :deep(th) { background: rgba(102,126,234,0.2); color: #93c5fd; font-weight: 600; border: 1px solid rgba(255,255,255,0.15); padding: 6px; }
+.editor-content :deep(td) { border: 1px solid rgba(255,255,255,0.1); padding: 6px; }
+.editor-content :deep(strong) { color: #fbbf24; }
+.editor-content :deep(em) { color: #f9a8d4; }
+
+/* ====== HTML 代码块 ====== */
+.editor-content :deep(.html-code-block) {
+  margin: 8px 0;
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(20, 18, 50, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.editor-content :deep(.html-code-codeview) {
+  padding: 10px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  outline: none;
+  min-height: 40px;
+}
 
 /* ====== 致谢页内容区 ====== */
 .editor-thanks-wrap {
@@ -1739,7 +2009,7 @@ const handlePreview = () => {
   flex: 1;
   padding: 14px;
   overflow-y: auto;
-  color: var(--chalk-white);
+  color: #e2e8f0;
   font-size: 22pt;
   font-family: '宋体', SimSun, 'Times New Roman', serif;
   line-height: 1.8;
@@ -1749,16 +2019,43 @@ const handlePreview = () => {
 
 .editor-thanks-display::-webkit-scrollbar { display: none; }
 
-.editor-thanks-edit-center {
-  flex: 1;
+/* ====== 致谢内容修改弹窗 ====== */
+.thanks-dialog-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 10002;
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
-  flex-direction: column;
-  justify-content: center;
   align-items: center;
-  padding: 14px;
+  justify-content: center;
 }
 
-.editor-thanks-input {
+.thanks-dialog {
+  background: #1e1c34;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 20px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.thanks-dialog-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #e0e0e0;
+  margin-bottom: 14px;
+  text-align: center;
+}
+
+.thanks-dialog-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin-bottom: 14px;
+}
+
+.thanks-dialog-textarea {
+  width: 100%;
   padding: 12px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -1770,9 +2067,56 @@ const handlePreview = () => {
   outline: none;
   resize: none;
   text-align: center;
-  width: 100%;
-  max-width: 500px;
   box-sizing: border-box;
+  margin-bottom: 14px;
+}
+
+.thanks-dialog-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.thanks-dialog-btn {
+  height: 32px;
+  border-radius: 16px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  transition: all 0.2s;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: var(--chalk-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 14px;
+}
+
+.thanks-dialog-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.thanks-dialog-btn.cancel:hover {
+  color: #93c5fd;
+  background: rgba(102, 126, 234, 0.15);
+  border-color: #93c5fd;
+}
+
+.thanks-dialog-btn.save {
+  background: rgba(102, 126, 234, 0.25);
+  border-color: rgba(102, 126, 234, 0.5);
+  color: #93c5fd;
+}
+
+.thanks-dialog-btn.save:hover {
+  background: rgba(102, 126, 234, 0.4);
+  border-color: rgba(102, 126, 234, 0.7);
+  color: var(--chalk-white);
 }
 
 /* ====== 底部导航栏 ====== */
@@ -2115,6 +2459,116 @@ const handlePreview = () => {
   z-index: 10001;
 }
 
+/* ====== 下划线样式下拉菜单 ====== */
+.editor-tb-underline-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.editor-tb-underline-preview {
+  display: inline-flex;
+  align-items: center;
+}
+
+.underline-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  z-index: 10002;
+  min-width: 140px;
+  padding: 6px;
+  background: rgba(20, 18, 50, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(102, 126, 234, 0.25);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.underline-menu-styles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.underline-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--chalk-white-85);
+  font-size: 12px;
+  transition: background 0.15s;
+  width: 100%;
+  text-align: left;
+}
+
+.underline-menu-item:hover {
+  background: rgba(102, 126, 234, 0.2);
+  color: var(--chalk-white);
+}
+
+.underline-menu-none {
+  justify-content: center;
+  text-align: center;
+}
+
+.underline-menu-line {
+  display: block;
+  width: 100%;
+  height: 18px;
+}
+
+.underline-menu-name {
+  flex: 1;
+}
+
+.underline-menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 0;
+}
+
+.underline-color-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--chalk-white-85);
+  font-size: 12px;
+  position: relative;
+  transition: background 0.15s;
+}
+
+.underline-color-item:hover {
+  background: rgba(102, 126, 234, 0.2);
+  color: var(--chalk-white);
+}
+
+.underline-menu-arrow {
+  margin-left: auto;
+  color: var(--chalk-white-60);
+  font-size: 14px;
+}
+
+/* 下划线颜色面板（Teleport 到 body，避免被编辑器容器 overflow:hidden 裁剪） */
+.underline-color-popover {
+  position: fixed;
+  z-index: 10003;
+}
+
+.underline-color-popover :deep(.color-picker-panel) {
+  max-height: var(--ucp-max-height, 90vh);
+}
+
 .editor-tb-font-color-btn {
   position: relative;
 }
@@ -2131,37 +2585,5 @@ const handlePreview = () => {
   background: #000;
   border-radius: 2px;
   text-shadow: 0 0 1px rgba(0,0,0,0.5);
-}
-
-/* ====== 选中文本工具面板 ====== */
-.selection-panel {
-  position: fixed;
-  z-index: 10001;
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 3px;
-  padding: 5px 8px;
-  background: rgba(18, 16, 42, 0.96);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-  align-items: center;
-  white-space: nowrap;
-}
-
-.selection-panel .editor-tb-btn {
-  width: 26px;
-  height: 26px;
-  font-size: 11px;
-}
-
-.selection-panel .editor-tb-select {
-  height: 26px;
-  font-size: 11px;
-}
-
-.selection-panel .editor-tb-btn:disabled {
-  opacity: 0.3;
 }
 </style>

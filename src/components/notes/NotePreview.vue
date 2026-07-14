@@ -25,7 +25,7 @@
           <div class="slide-container" ref="slideContainerRef">
             <!-- 幻灯片（封面页内容已包含大纲，由编辑器自动生成） -->
             <div
-              v-for="(page, idx) in pages"
+              v-for="(page, idx) in processedPages"
               :key="page.id"
               class="slide"
               :class="{ active: idx === 0 }"
@@ -99,6 +99,7 @@ import { ArrowLeft, Star, StarFilled, Edit } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import type { Note, NoteCategory, NotePage } from '../../stores/noteStore'
 import { parseNotePages, computePageNumber } from '../../stores/noteStore'
+import { highlightCodeBlocks } from '../../utils/codeBlock'
 
 const props = defineProps<{
   note: Note | null
@@ -141,6 +142,32 @@ const pages = computed<NotePage[]>(() => {
   return parseNotePages(props.note.content)
 })
 
+// 将 HTML 代码块转为 <pre><code> 以便语法高亮（预览/放映态仅显示代码）
+const processHtmlContent = (content: string): string => {
+  if (!content) return ''
+  const tmp = document.createElement('div')
+  tmp.innerHTML = content
+  const blocks = tmp.querySelectorAll('.html-code-block')
+  if (blocks.length === 0) return content
+  blocks.forEach(block => {
+    const code = block.textContent || ''
+    const pre = document.createElement('pre')
+    const codeEl = document.createElement('code')
+    codeEl.textContent = code
+    pre.appendChild(codeEl)
+    block.replaceWith(pre)
+  })
+  return tmp.innerHTML
+}
+
+// 渲染用页面数据（处理 HTML 代码自动渲染）
+const processedPages = computed<NotePage[]>(() => {
+  return pages.value.map(page => ({
+    ...page,
+    content: processHtmlContent(page.content)
+  }))
+})
+
 // 幻灯片管理
 const slideViewportRef = ref<HTMLElement | null>(null)
 const slideContainerRef = ref<HTMLElement | null>(null)
@@ -155,6 +182,8 @@ const slides = ref<HTMLElement[]>([])
 const refreshSlides = () => {
   if (!slideContainerRef.value) return
   slides.value = Array.from(slideContainerRef.value.querySelectorAll('.slide')) as HTMLElement[]
+  // 对所有幻灯片内的 <pre> 代码块应用语法高亮与格式化
+  slides.value.forEach(s => highlightCodeBlocks(s))
 }
 
 // 笔记变化时（如从编辑模式切回预览）重新渲染幻灯片
@@ -305,8 +334,13 @@ const exportToHtml = async () => {
   }).join('\n')
 
   // 预计算幻灯片内容（data-level 用于支持导入时还原页面层级）
+  // 对原生 <pre> 代码块应用语法高亮与格式化
   const slidesHtml = allPages.map((page, idx) => {
-    return '<div class="slide' + (idx === 0 ? ' active' : '') + '" data-title="' + page.title + '" data-type="' + (page.type || '') + '" data-level="' + page.level + '"><div class="slide-content">' + page.content + '</div></div>'
+    const processed = processHtmlContent(page.content)
+    const tmp = document.createElement('div')
+    tmp.innerHTML = processed
+    highlightCodeBlocks(tmp)
+    return '<div class="slide' + (idx === 0 ? ' active' : '') + '" data-title="' + page.title + '" data-type="' + (page.type || '') + '" data-level="' + page.level + '"><div class="slide-content">' + tmp.innerHTML + '</div></div>'
   }).join('\n')
 
   const html = `<!DOCTYPE html>
@@ -355,7 +389,7 @@ body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; color: #e0e0e0
 .preview-sidebar-nav .nav-title-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .preview-content-area { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .slide-viewport { display: flex; flex-direction: column; height: 100%; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; overflow: hidden; }
-.slide-viewport.fullscreen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999; border-radius: 0; border: none; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); }
+.slide-viewport.fullscreen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999; border-radius: 0; border: none; background: linear-gradient(135deg, #0f0c29 0%, #141230 50%, #1a1438 100%); }
 .slide-container { flex: 1; overflow-y: auto; position: relative; scrollbar-width: none; }
 .slide-container::-webkit-scrollbar { display: none; }
 .slide { display: none; animation: slideFadeIn 0.35s ease; min-height: 100%; flex-direction: column; justify-content: flex-start; padding: 20px 40px 30px; box-sizing: border-box; }
@@ -369,28 +403,29 @@ body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; color: #e0e0e0
 .cover-outline-row:last-child { border-bottom: none; }
 .cover-outline-num { font-size: 16px; font-weight: 700; color: #93c5fd; min-width: 36px; text-align: center; }
 .cover-outline-name { font-size: 14px; color: #cbd5e1; }
-.cover-empty { color: rgba(255,255,255,0.5); font-size: 14px; margin-top: 16px; }
-.slide-content { flex: 1; display: flex; flex-direction: column; font-size: 14px; line-height: 1.8; color: #e0e0e0; }
+.cover-empty { color: var(--chalk-muted, rgba(255,255,255,0.5)); font-size: 14px; margin-top: 16px; }
+.slide-content { flex: 1; display: flex; flex-direction: column; font-size: 14px; line-height: 1.8; color: #e2e8f0; }
 .slide[data-type="cover"] .slide-content, .slide[data-type="thanks"] .slide-content { font-family: '宋体', SimSun, 'Times New Roman', serif; font-size: 10.5pt; }
 .slide-content [style*="60vh"] { min-height: 0 !important; flex: 1; }
 .slide-content h1 { font-size: 22px; color: #93c5fd; margin: 20px 0 12px; padding-bottom: 8px; border-bottom: 2px solid rgba(102,126,234,0.3); }
 .slide-content h2 { font-size: 20px; color: #93c5fd; margin: 18px 0 10px; }
-.slide-content h3 { font-size: 18px; color: #a78bfa; margin: 16px 0 8px; }
-.slide-content h4 { font-size: 16px; color: #a78bfa; margin: 14px 0 8px; }
+.slide-content h3 { font-size: 18px; color: #c4b5fd; margin: 16px 0 8px; }
+.slide-content h4 { font-size: 16px; color: #c4b5fd; margin: 14px 0 8px; }
 .slide-content h5 { font-size: 15px; color: #cbd5e1; margin: 12px 0 6px; }
 .slide-content h6 { font-size: 14px; color: #cbd5e1; margin: 10px 0 6px; }
 .slide-content p { margin: 6px 0; text-align: justify; }
 .slide-content ul, .slide-content ol { margin: 8px 0 12px 1.5em; }
 .slide-content li { margin-bottom: 4px; }
 .slide-content blockquote { border-left: 3px solid #667eea; padding-left: 12px; margin: 8px 0; color: #94a3b8; }
-.slide-content pre { background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; color: #a8edea; font-family: 'Consolas', 'Monaco', monospace; white-space: pre-wrap; margin: 8px 0; font-size: 13px; }
-.slide-content code { background: rgba(102,126,234,0.15); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+.slide-content pre { background: rgba(20, 18, 50, 0.45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(102, 126, 234, 0.2); padding: 12px; border-radius: 8px; color: #e2e8f0; font-family: 'Consolas', 'Monaco', monospace; white-space: pre-wrap; margin: 8px 0; font-size: 13px; line-height: 1.6; }
+.slide-content pre code { background: transparent; padding: 0; border-radius: 0; color: inherit; font-size: inherit; }
+.slide-content code { background: rgba(102,126,234,0.2); padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #93c5fd; font-family: 'Consolas', 'Monaco', monospace; }
 .slide-content table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px; }
-.slide-content th { background: rgba(102,126,234,0.15); color: #93c5fd; font-weight: 600; border: 1px solid rgba(255,255,255,0.15); padding: 8px 10px; text-align: left; }
+.slide-content th { background: rgba(102,126,234,0.2); color: #93c5fd; font-weight: 600; border: 1px solid rgba(255,255,255,0.15); padding: 8px 10px; text-align: left; }
 .slide-content td { border: 1px solid rgba(255,255,255,0.1); padding: 8px 10px; }
 .slide-content img { max-width: 100%; border-radius: 8px; margin: 8px 0; }
 .slide-content strong { color: #fbbf24; }
-.slide-content em { color: #f472b6; }
+.slide-content em { color: #f9a8d4; }
 .slide-nav { display: flex; align-items: center; padding: 10px 16px; border-top: 1px solid rgba(255,255,255,0.06); flex-shrink: 0; }
 .slide-nav-side { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
 .slide-nav-left { justify-content: flex-start; }
@@ -432,6 +467,18 @@ body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; color: #e0e0e0
   .preview-status-bar { padding: 6px 10px; font-size: 11px; flex-wrap: wrap; gap: 4px; }
   .preview-status-left { gap: 6px; }
 }
+.hljs { color: #e2e8f0; background: transparent; }
+.hljs-comment, .hljs-quote { color: #64748b; font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-section, .hljs-link { color: #a78bfa; }
+.hljs-string, .hljs-attr, .hljs-template-tag, .hljs-addition { color: #86efac; }
+.hljs-number, .hljs-symbol, .hljs-bullet, .hljs-meta { color: #fbbf24; }
+.hljs-title, .hljs-name, .hljs-type, .hljs-attribute { color: #93c5fd; }
+.hljs-variable, .hljs-template-variable, .hljs-property { color: #f9a8d4; }
+.hljs-built_in, .hljs-builtin-name { color: #67e8f9; }
+.hljs-deletion { color: #f87171; }
+.hljs-regexp { color: #fbbf24; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
 </style>
 </head>
 <body>
@@ -962,7 +1009,7 @@ onBeforeUnmount(() => {
   z-index: 9999;
   border-radius: 0;
   border: none;
-  background: linear-gradient(to bottom, #0f0c29 0%, #302b63 50%, #24243e 100%);
+  background: linear-gradient(135deg, #0f0c29 0%, #141230 50%, #1a1438 100%);
 }
 
 .slide-container {
@@ -1058,7 +1105,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   font-size: 14px;
   line-height: 1.8;
-  color: #e0e0e0;
+  color: #e2e8f0;
 }
 
 /* 封面页：中文宋体五号，英文 Times New Roman 五号（10.5pt） */
@@ -1081,8 +1128,8 @@ onBeforeUnmount(() => {
 
 .slide-content :deep(h1) { font-size: 22px; color: #93c5fd; margin: 20px 0 12px; padding-bottom: 8px; border-bottom: 2px solid rgba(102, 126, 234, 0.3); }
 .slide-content :deep(h2) { font-size: 20px; color: #93c5fd; margin: 18px 0 10px; }
-.slide-content :deep(h3) { font-size: 18px; color: #a78bfa; margin: 16px 0 8px; }
-.slide-content :deep(h4) { font-size: 16px; color: #a78bfa; margin: 14px 0 8px; }
+.slide-content :deep(h3) { font-size: 18px; color: #c4b5fd; margin: 16px 0 8px; }
+.slide-content :deep(h4) { font-size: 16px; color: #c4b5fd; margin: 14px 0 8px; }
 .slide-content :deep(h5) { font-size: 15px; color: #cbd5e1; margin: 12px 0 6px; }
 .slide-content :deep(h6) { font-size: 14px; color: #cbd5e1; margin: 10px 0 6px; }
 .slide-content :deep(p) { margin: 6px 0; text-align: justify; }
@@ -1092,17 +1139,26 @@ onBeforeUnmount(() => {
   border-left: 3px solid #667eea; padding-left: 12px; margin: 8px 0; color: #94a3b8;
 }
 .slide-content :deep(pre) {
-  background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; color: #a8edea;
+  background: rgba(20, 18, 50, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  padding: 12px; border-radius: 8px; color: #e2e8f0;
   font-family: 'Consolas', 'Monaco', monospace; white-space: pre-wrap; margin: 8px 0; font-size: 13px;
+  line-height: 1.6;
+}
+.slide-content :deep(pre code) {
+  background: transparent; padding: 0; border-radius: 0; color: inherit; font-size: inherit;
 }
 .slide-content :deep(code) {
-  background: rgba(102, 126, 234, 0.15); padding: 2px 6px; border-radius: 4px; font-size: 13px;
+  background: rgba(102, 126, 234, 0.2); padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #93c5fd;
+  font-family: 'Consolas', 'Monaco', monospace;
 }
 .slide-content :deep(table) {
   border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px;
 }
 .slide-content :deep(th) {
-  background: rgba(102, 126, 234, 0.15); color: #93c5fd; font-weight: 600;
+  background: rgba(102, 126, 234, 0.2); color: #93c5fd; font-weight: 600;
   border: 1px solid rgba(255,255,255,0.15); padding: 8px 10px; text-align: left;
 }
 .slide-content :deep(td) {
@@ -1110,7 +1166,7 @@ onBeforeUnmount(() => {
 }
 .slide-content :deep(img) { max-width: 100%; border-radius: 8px; margin: 8px 0; }
 .slide-content :deep(strong) { color: #fbbf24; }
-.slide-content :deep(em) { color: #f472b6; }
+.slide-content :deep(em) { color: #f9a8d4; }
 
 /* ====== 底部导航栏 ====== */
 .slide-nav {

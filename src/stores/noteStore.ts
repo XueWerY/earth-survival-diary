@@ -240,7 +240,7 @@ export const generateCoverContent = (pages: NotePage[], noteTitle: string): stri
     if (p.type === 'cover' || p.type === 'thanks') return
     const num = computePageNumber(pages, idx)
     const indent = (p.level - 1) * 20
-    outlineHtml += `<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px dashed rgba(255,255,255,0.1);padding-left:${indent}px;"><span style="font-weight:700;color:#93c5fd;min-width:36px;text-align:center;">${num}</span><span style="color:#cbd5e1;">${p.title}</span></div>`
+    outlineHtml += `<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px dashed rgba(0,0,0,0.1);padding-left:${indent}px;"><span style="font-weight:700;color:#1e40af;min-width:36px;text-align:center;">${num}</span><span style="color:#334155;">${p.title}</span></div>`
   })
   return `<div style="${CENTER_STYLE}"><h1>${noteTitle || '新笔记'}</h1><p>大纲</p>${outlineHtml ? `<div style="max-width:500px;width:100%;">${outlineHtml}</div>` : ''}</div>`
 }

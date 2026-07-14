@@ -181,7 +181,6 @@ import changelogContent from '../CHANGELOG.md?raw'
 import appVersion from 'virtual:version'
 import GuideOverlay from './components/common/overlay/GuideOverlay.vue'
 import { guideSteps } from './data/guideSteps'
-import { DEFAULT_NOTES_VERSION, getProjectSpecNoteContent, getUserGuideNoteContent } from './data/defaultNotes'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()
@@ -1026,65 +1025,11 @@ const ensureDefaultData = async () => {
     })
     logger.info('[App] 已创建示例日记')
 
-    // 6. 创建示例笔记
-    await noteStore.addNote({
-      title: '欢迎来到笔记',
-      content: '这里是你的第一篇笔记。\n点击右上角 + 可以新建笔记，使用分类管理不同主题的内容。',
-      color: '#667eea',
-      categoryId: 'personal',
-      pinned: true,
-    })
-    logger.info('[App] 已创建示例笔记')
-
-    // 7. 标记为已初始化
+    // 6. 标记为已初始化
     await setSystemStateField('defaultsInitialized', true)
     logger.info('[App] 默认数据初始化完成')
   } catch (error) {
     logger.error('[App] 创建默认数据失败', { error: error instanceof Error ? error.message : String(error) })
-  }
-}
-
-/** 确保项目规范和使用指南笔记存在且内容为最新版本（基于版本号自动创建/更新） */
-const ensureDefaultNotes = async () => {
-  try {
-    const savedVersion = await getSystemStateField('defaultNotesVersion')
-    if (savedVersion && savedVersion >= DEFAULT_NOTES_VERSION) return
-
-    const specContent = getProjectSpecNoteContent()
-    const guideContent = getUserGuideNoteContent()
-
-    // 项目规范
-    const existingSpec = noteStore.notes.find(n => n.title === '项目规范')
-    if (existingSpec) {
-      await noteStore.updateNote(existingSpec.id, { content: specContent, pinned: true, categoryId: 'study' })
-    } else {
-      await noteStore.addNote({
-        title: '项目规范',
-        content: specContent,
-        color: '#667eea',
-        categoryId: 'study',
-        pinned: true,
-      })
-    }
-
-    // 使用指南
-    const existingGuide = noteStore.notes.find(n => n.title === '使用指南')
-    if (existingGuide) {
-      await noteStore.updateNote(existingGuide.id, { content: guideContent, pinned: true, categoryId: 'study' })
-    } else {
-      await noteStore.addNote({
-        title: '使用指南',
-        content: guideContent,
-        color: '#667eea',
-        categoryId: 'study',
-        pinned: true,
-      })
-    }
-
-    await setSystemStateField('defaultNotesVersion', DEFAULT_NOTES_VERSION)
-    logger.info('[App] 默认笔记已创建/更新', { version: DEFAULT_NOTES_VERSION })
-  } catch (error) {
-    logger.error('[App] 创建/更新默认笔记失败', { error: error instanceof Error ? error.message : String(error) })
   }
 }
 
@@ -1128,9 +1073,6 @@ const initializeData = async () => {
 
     // 为新用户创建默认数据
     await ensureDefaultData()
-
-    // 确保项目规范和使用指南笔记存在且为最新版本
-    await ensureDefaultNotes()
 
     logger.info('[App] 数据初始化完成')
 
