@@ -7,16 +7,13 @@ const RELEASE_DIR = path.join(ROOT, 'release')
 
 // ========== install-deps ==========
 function installDeps() {
-  const SERVER_DIR = path.join(ROOT, 'electron', 'prod-server')
-  const DEPS_OK = path.join(SERVER_DIR, '.deps-ok')
-  if (fs.existsSync(DEPS_OK)) { console.log('Prod server deps already installed.'); return }
-  if (!fs.existsSync(SERVER_DIR)) fs.mkdirSync(SERVER_DIR)
-  const pkgJson = { name: 'earth-survival-diary-server', version: '1.0.0', private: true }
-  fs.writeFileSync(path.join(SERVER_DIR, 'package.json'), JSON.stringify(pkgJson, null, 2))
-  console.log('Installing prod server dependencies...')
-  execSync('npm install --no-package-lock --no-audit --no-fund express cors', { cwd: SERVER_DIR, stdio: 'inherit' })
-  fs.writeFileSync(DEPS_OK, '')
-  console.log('Prod server deps installed.')
+  const ELECTRON_DIR = path.join(ROOT, 'electron')
+  const ELECTRON_DEPS_OK = path.join(ELECTRON_DIR, '.deps-ok')
+  if (fs.existsSync(ELECTRON_DEPS_OK)) { console.log('Electron deps already installed.'); return }
+  console.log('Installing electron main process dependencies...')
+  execSync('npm install --no-package-lock --no-audit --no-fund', { cwd: ELECTRON_DIR, stdio: 'inherit' })
+  fs.writeFileSync(ELECTRON_DEPS_OK, '')
+  console.log('Electron deps installed.')
 }
 
 // ========== make-ico ==========
@@ -86,11 +83,11 @@ releaseDate: ${releaseDate}
 function cleanupRelease() {
   if (!fs.existsSync(RELEASE_DIR)) return
   const keepFiles = ['latest.yml']
-  const keepExts = ['.exe', '.blockmap']
+  const keepExts = ['.exe', '.blockmap', '.deb']
   for (const f of fs.readdirSync(RELEASE_DIR)) {
     const p = path.join(RELEASE_DIR, f), s = fs.statSync(p)
     if (s.isFile() && !keepFiles.includes(f) && !keepExts.some(ext => f.endsWith(ext))) fs.rmSync(p)
-    if (s.isDirectory() && (f.startsWith('.') || f === 'win-unpacked')) fs.rmSync(p, { recursive: true })
+    if (s.isDirectory() && (f.startsWith('.') || f === 'win-unpacked' || f === 'linux-unpacked')) fs.rmSync(p, { recursive: true })
   }
 }
 

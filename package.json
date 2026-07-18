@@ -1,7 +1,8 @@
 {
   "name": "earth-survival-diary",
   "private": true,
-  "version": "2026.7.10-9",
+  "version": "2026.7.18-21",
+  "author": "XueWerY <3073820063@qq.com>",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -9,6 +10,7 @@
     "harmony:sync": "node scripts/harmony-sync.cjs",
     "harmony:build": "npm run build && npm run harmony:sync",
     "electron:build:win": "node scripts/build-tools.cjs pre-clean-release && npm run build && node scripts/build-tools.cjs install-deps && node scripts/generate-icons.js && node scripts/build-tools.cjs make-ico && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --win && node scripts/build-tools.cjs fix-latest-yml && node scripts/build-tools.cjs cleanup-release",
+    "electron:build:linux": "node scripts/build-tools.cjs pre-clean-release && npm run build && node scripts/build-tools.cjs install-deps && node scripts/generate-icons.js && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --linux && node scripts/build-tools.cjs cleanup-release",
     "publish-release": "node scripts/build-tools.cjs publish-release"
   },
   "dependencies": {
@@ -67,6 +69,7 @@
       "package.json",
       "!node_modules/**/*"
     ],
+    "afterPack": "scripts/linux-after-pack.cjs",
     "extraResources": [
       {
         "from": "build/icon.png",
@@ -88,8 +91,19 @@
       "createStartMenuShortcut": true,
       "deleteAppDataOnUninstall": false,
       "include": "scripts/installer.nsh",
-      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "artifactName": "Earth-Survival-Diary-Setup-${version}.${ext}",
       "runAfterFinish": false
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "Earth-Survival-Diary-${version}.${ext}",
+      "category": "Utility"
     },
     "publish": {
       "provider": "generic",

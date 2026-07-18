@@ -460,7 +460,7 @@
     <!-- 自动更新 -->
     <section id="feat-update">
       <h2><span class="num">🔄</span>自动更新</h2>
-      <p>Windows 桌面端支持自动更新，通过 electron-updater 实现。</p>
+      <p>Windows 桌面端支持自动更新，通过 electron-updater 实现。Linux 桌面端需手动下载安装 deb 包。</p>
       <h3>核心功能</h3>
       <ul>
         <li>自动检查更新：启动时自动检查</li>
@@ -510,7 +510,7 @@
       </ul>
       <h3>跨平台</h3>
       <ul>
-        <li>Electron：Windows 桌面端</li>
+        <li>Electron：Windows / Linux 桌面端</li>
         <li>Capacitor：Android</li>
         <li>HarmonyOS：鸿蒙原生</li>
       </ul>
@@ -527,7 +527,7 @@
       <h2><span class="num">03</span>数据存储</h2>
       <h3>存储方式</h3>
       <ul>
-        <li>Windows 桌面端：本地文件系统（YAML 后端），通过 Express HTTP 服务器读写</li>
+        <li>Windows / Linux 桌面端：本地文件系统（YAML 后端），通过 Express HTTP 服务器读写</li>
         <li>Android / HarmonyOS：本地 localStorage 存储</li>
         <li>浏览器：通过 API 请求存储到服务端</li>
       </ul>

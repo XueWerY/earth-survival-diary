@@ -4,6 +4,12 @@ const fs = require('fs')
 const { spawn, execSync } = require('child_process')
 const { autoUpdater } = require('electron-updater')
 
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('no-sandbox')
+  app.commandLine.appendSwitch('no-zygote')
+  app.commandLine.appendSwitch('disable-dev-shm-usage')
+}
+
 Menu.setApplicationMenu(null)
 
 let appTray = null
@@ -218,8 +224,82 @@ autoUpdater.on('error', (err) => {
   sendUpdateStatusToMain({ status: 'error', message: err.message })
 })
 
+// ========== 跨平台版本检测（从发布文件名提取版本号） ==========
+const RELEASES_API = 'https://api.github.com/repos/XueWerY/earth-survival-diary/releases'
+/** 从构建产物文件名中提取版本号，如 Earth-Survival-Diary-Setup-2026.7.18-20.exe */
+function extractVersionFromFilename(filename) {
+  const match = filename.match(/Earth-Survival-Diary(?:-Setup)?-(\d{4}\.\d{1,2}\.\d{1,2}-\d+)/)
+  return match ? match[1] : null
+}
+/** 解析 YYYY.M.DD-X 版本号为可比较对象 */
+function parseVersion(version) {
+  const match = version.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})-(\d+)$/)
+  if (!match) return null
+  return {
+    year: parseInt(match[1], 10),
+    month: parseInt(match[2], 10),
+    day: parseInt(match[3], 10),
+    patch: parseInt(match[4], 10)
+  }
+}
+/** 比较两个版本号：负数=v1<v2, 0=相等, 正数=v1>v2 */
+function compareVersions(v1, v2) {
+  const a = parseVersion(v1), b = parseVersion(v2)
+  if (!a || !b) return v1.localeCompare(v2)
+  if (a.year !== b.year) return a.year - b.year
+  if (a.month !== b.month) return a.month - b.month
+  if (a.day !== b.day) return a.day - b.day
+  return a.patch - b.patch
+}
+/** 检查 Linux 端更新：从 GitHub Releases 的 .deb 资产文件名中提取版本号 */
+async function checkLinuxUpdate() {
+  try {
+    const res = await fetch(RELEASES_API)
+    if (!res.ok) return null
+    const releases = await res.json()
+    if (!Array.isArray(releases)) return null
+    const currentVersion = app.getVersion()
+    let best = null
+    for (const release of releases) {
+      if (release.prerelease) continue
+      for (const asset of release.assets || []) {
+        if (!asset.name || !asset.name.endsWith('.deb')) continue
+        const version = extractVersionFromFilename(asset.name)
+        if (!version) continue
+        if (compareVersions(version, currentVersion) > 0) {
+          if (!best || compareVersions(version, best.version) > 0) {
+            best = { version, downloadUrl: asset.browser_download_url }
+          }
+        }
+      }
+    }
+    return best
+  } catch (e) {
+    debugLog('[Main] Linux 更新检查失败: ' + e.message)
+    return null
+  }
+}
+
 ipcMain.handle('check-for-update', async () => {
   debugLog('[Main] 收到手动检查更新请求')
+  if (process.platform === 'linux') {
+    try {
+      const update = await checkLinuxUpdate()
+      if (update) {
+        debugLog('[Main] Linux 检测到新版本: ' + update.version)
+        sendUpdateStatusToMain({ status: 'available', version: update.version })
+        return { updateAvailable: true, version: update.version }
+      } else {
+        debugLog('[Main] Linux 已是最新版本: ' + app.getVersion())
+        sendUpdateStatusToMain({ status: 'no-update' })
+        return { updateAvailable: false }
+      }
+    } catch (e) {
+      debugLog('[Main] Linux 更新检查出错: ' + e.message)
+      sendUpdateStatusToMain({ status: 'error', message: e.message })
+      return { error: e.message }
+    }
+  }
   try {
     const result = await autoUpdater.checkForUpdates()
     if (!result || result.updateInfo.version === app.getVersion()) {
@@ -596,7 +676,7 @@ function createWindow(url) {
 }
 
 function setupTray() {
-  const iconPath = path.join(__dirname, '..', 'build', 'icon.png')
+  const iconPath = path.join(process.resourcesPath, 'build', 'icon.png')
   appTray = new Tray(iconPath)
   appTray.setToolTip('地球 Online 生存日记')
   appTray.on('click', () => {
@@ -1373,7 +1453,16 @@ app.whenReady().then(async () => {
     setupTray()
 
     setTimeout(() => {
-      autoUpdater.checkForUpdates().catch(e => debugLog('[Updater] Check failed: ' + e.message))
+      if (process.platform !== 'linux') {
+        autoUpdater.checkForUpdates().catch(e => debugLog('[Updater] Check failed: ' + e.message))
+      } else {
+        checkLinuxUpdate().then(update => {
+          if (update) {
+            debugLog('[Updater] Linux 发现新版本: ' + update.version)
+            sendUpdateStatusToMain({ status: 'available', version: update.version })
+          }
+        }).catch(e => debugLog('[Updater] Linux check failed: ' + e.message))
+      }
     }, 5000)
   } catch (err) {
     errorLog('[Electron] Fatal error: ' + err.message)

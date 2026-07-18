@@ -171,6 +171,7 @@ import { useAuthStore } from './stores/authStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useFocusStore } from './stores/focusStore'
 import { getData, setData, preloadData, clearCache, getSystemStateField, setSystemStateField } from './services/storageService'
+import { fetchLatestReleaseVersion, RELEASES_PAGE_URL } from './services/versionChecker'
 import { logger } from './lib/logger'
 import { usePageNav, MODULE_ROUTES } from './composables/usePageNav'
 import { useSplitScreen } from './composables/useSplitScreen'
@@ -407,7 +408,6 @@ const updateDialogVisible = ref(false)
 const updateStatus = ref<'checking' | 'available' | 'error' | 'no-update'>('checking')
 const updateVersion = ref('')
 const updateMessage = ref('')
-const RELEASES_URL = 'https://github.com/XueWerY/earth-survival-diary/releases'
 
 const updateStatusText = computed(() => {
   switch (updateStatus.value) {
@@ -423,9 +423,9 @@ let updateNoUpdateTimer: ReturnType<typeof setTimeout> | null = null
 const openReleasesUrl = () => {
   logger.info('[App] 用户点击更新链接')
   if (window.electronAPI?.openExternal) {
-    window.electronAPI.openExternal(RELEASES_URL)
+    window.electronAPI.openExternal(RELEASES_PAGE_URL)
   } else {
-    window.open(RELEASES_URL, '_blank')
+    window.open(RELEASES_PAGE_URL, '_blank')
   }
 }
 
@@ -453,7 +453,7 @@ const startVersionChecks = async () => {
         console.error('[App] 版本更新检测失败:', e)
       }
     } else {
-      // 非 Electron 端：检查持久化的版本号
+      // 非 Electron 端（Android/Capacitor）：检查持久化的版本号
       try {
         const storedVersion = await getSystemStateField('version')
         if (storedVersion !== appVersion) {
@@ -464,23 +464,25 @@ const startVersionChecks = async () => {
       } catch (e) {
         logger.warn('[App] 非 Electron 版本检测失败', { error: e instanceof Error ? e.message : String(e) })
       }
-      // 检查 GitHub 是否有新版本
-      try {
-        const res = await fetch('https://api.github.com/repos/XueWerY/earth-survival-diary/releases/latest')
-        if (res.ok) {
-          const data = await res.json()
-          const latestVersion = (data.tag_name || '').replace(/^v/, '')
-          if (latestVersion && latestVersion !== appVersion) {
-            updateStatus.value = 'available'
-            updateVersion.value = latestVersion
-            updateDialogVisible.value = true
-          }
-        }
-      } catch { /* GitHub 不可达，静默跳过 */ }
+      // 检查远程仓库是否有新版本（从发布资产文件名提取版本号）
+      checkRemoteUpdate(appVersion)
     }
   }
 
   setupUpdateStatusListener()
+}
+
+/** 从远程仓库 Releases 资产文件名中提取版本号并比对 */
+const checkRemoteUpdate = async (currentVersion: string) => {
+  try {
+    const result = await fetchLatestReleaseVersion(currentVersion)
+    if (result.hasUpdate && result.latestVersion) {
+      updateStatus.value = 'available'
+      updateVersion.value = result.latestVersion
+      updateDialogVisible.value = true
+      logger.info('[更新] 检测到远程新版本', { current: currentVersion, latest: result.latestVersion })
+    }
+  } catch { /* 网络不可达，静默跳过 */ }
 }
 
 const setupUpdateStatusListener = () => {
@@ -511,13 +513,10 @@ const setupUpdateStatusListener = () => {
   updateStatus.value = 'checking'
   updateDialogVisible.value = true
   try {
-    const res = await fetch('https://api.github.com/repos/XueWerY/earth-survival-diary/releases/latest')
-    if (!res.ok) throw new Error('网络请求失败')
-    const data = await res.json()
-    const latestVersion = (data.tag_name || '').replace(/^v/, '')
-    if (latestVersion && latestVersion !== appVersion) {
+    const result = await fetchLatestReleaseVersion(appVersion)
+    if (result.hasUpdate && result.latestVersion) {
       updateStatus.value = 'available'
-      updateVersion.value = latestVersion
+      updateVersion.value = result.latestVersion
     } else {
       updateStatus.value = 'no-update'
     }

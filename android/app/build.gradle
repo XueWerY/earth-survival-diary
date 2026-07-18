@@ -28,6 +28,11 @@ android {
             signingConfig signingConfigs.debug
         }
     }
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            outputFileName = "Earth-Survival-Diary-${variant.versionName}.apk"
+        }
+    }
 }
 
 dependencies {

@@ -86,11 +86,10 @@
             type="textarea"
             autosize
             size="small"
-            placeholder="Ctrl+Enter 确认"
+            placeholder="输入检查事项，点击空白处保存"
             :ref="(el: any) => { if (el && addingChecklistTaskId === list.id) { nextTick(() => { const input = (el as any).input || (el as any).textarea; if (input) input.focus() }) } }"
-            @keyup.enter.ctrl="handleAddChecklist(list.id)"
             @keyup.escape="cancelAddChecklist(list.id)"
-            @blur="cancelAddChecklist(list.id)"
+            @blur="handleAddChecklistBlur(list.id)"
           />
           <div v-else class="checklist-add-btn" @click.stop="showAddChecklist(list.id)">
             <el-icon><Plus /></el-icon>
@@ -687,6 +686,13 @@ const handleAddChecklist = async (listId: string) => {
   logger.info('[清单] 快速添加检查事项', { listId, text })
   addingChecklistTaskId.value = ''
   cancelAddChecklist(listId)
+}
+
+// 退出编辑（blur）时保存：内容为空或纯空格则不保存
+const handleAddChecklistBlur = (listId: string) => {
+  const text = newChecklistText.value.trim()
+  if (!text) { cancelAddChecklist(listId); return }
+  handleAddChecklist(listId)
 }
 
 const dragSourceTaskId = ref('')
