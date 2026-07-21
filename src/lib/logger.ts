@@ -57,14 +57,13 @@ class Logger {
     return [...this.logBuffer]
   }
 
-  // 写入日志到本地磁盘文件（安卓端和鸿蒙端使用）
+  // 写入日志到本地磁盘文件（安卓端使用）
   // 使用 1 秒防抖合并短时间内的多次写入请求，减少原生调用频率
   // 每次写入完整的内存缓冲区，先尝试写文件，失败（目录不存在）时自动创建目录后重试
   // 首次写入时自动读取磁盘上已有的历史日志，合并后写入，确保重启后历史日志不丢失
   private writeToDisk() {
     const isCapacitorNative = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.()
-    const isHarmony = typeof window !== 'undefined' && !!(window as any).harmonyAPI
-    if (!isCapacitorNative && !isHarmony) return
+    if (!isCapacitorNative) return
     this.scheduleFlush()
   }
 

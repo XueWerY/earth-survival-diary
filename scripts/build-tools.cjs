@@ -83,11 +83,11 @@ releaseDate: ${releaseDate}
 function cleanupRelease() {
   if (!fs.existsSync(RELEASE_DIR)) return
   const keepFiles = ['latest.yml']
-  const keepExts = ['.exe', '.blockmap', '.deb']
+  const keepExts = ['.exe', '.blockmap']
   for (const f of fs.readdirSync(RELEASE_DIR)) {
     const p = path.join(RELEASE_DIR, f), s = fs.statSync(p)
     if (s.isFile() && !keepFiles.includes(f) && !keepExts.some(ext => f.endsWith(ext))) fs.rmSync(p)
-    if (s.isDirectory() && (f.startsWith('.') || f === 'win-unpacked' || f === 'linux-unpacked')) fs.rmSync(p, { recursive: true })
+    if (s.isDirectory() && (f.startsWith('.') || f === 'win-unpacked')) fs.rmSync(p, { recursive: true })
   }
 }
 

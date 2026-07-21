@@ -494,7 +494,7 @@ const savePhone = async () => {
     logger.info('[我的] 修改手机号')
     ElMessage.success('手机号已保存')
   } catch (error) {
-    console.error('保存手机号失败:', error)
+    console.error('Failed to save phone number:', error)
     ElMessage.error('保存失败')
   }
 }
@@ -522,7 +522,7 @@ const changeEmail = async () => {
     emailForm.password = ''
     ElMessage.success('账号修改成功')
   } catch (error: any) {
-    console.error('修改账号失败:', error)
+    console.error('Failed to change account:', error)
     ElMessage.error(error?.response?.data?.error || '修改账号失败')
   } finally {
     changingEmail.value = false
@@ -558,7 +558,7 @@ const changePassword = async () => {
     passwordForm.confirmPassword = ''
     ElMessage.success('密码修改成功')
   } catch (error: any) {
-    console.error('修改密码失败:', error)
+    console.error('Failed to change password:', error)
     ElMessage.error(error?.response?.data?.error || '修改密码失败')
   } finally {
     changingPassword.value = false
@@ -612,7 +612,7 @@ const handleDeleteAccount = async () => {
     }
   } catch (err: any) {
     if (err !== 'cancel') {
-      console.error('注销账号失败:', err)
+      console.error('Failed to delete account:', err)
       ElMessage.error(err?.response?.data?.error || '注销账号失败')
     }
   } finally {
@@ -660,7 +660,7 @@ const autoSaveProfile = async () => {
       }
       logger.info('[我的] 个人资料自动保存')
     } catch (error) {
-      console.error('自动保存失败:', error)
+      console.error('Auto-save failed:', error)
     }
   }, 800)
 }

@@ -50,7 +50,7 @@ export const useAuthStore = defineStore('auth', () => {
             const { profile: userProfile } = await api.getProfile()
             profile.value = userProfile
         } catch (error) {
-            console.error('获取用户配置失败:', error)
+            console.error('Failed to get user profile:', error)
         }
     }
 

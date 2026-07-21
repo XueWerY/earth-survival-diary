@@ -57,16 +57,6 @@ declare global {
       setWindowTitle: (title: string) => Promise<boolean>
     }
 
-    // 鸿蒙端原生文件操作桥接（通过 WebView JavaScript Proxy 注入）
-    harmonyAPI: {
-      readFile: (path: string) => string
-      writeFile: (path: string, data: string) => void
-      deleteFile: (path: string) => void
-      stat: (path: string) => string
-      mkdir: (path: string, recursive: boolean) => void
-      readdir: (path: string) => { name: string; type: string }[]
-      rmdir: (path: string, recursive: boolean) => void
-    }
   }
 }
 

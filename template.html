@@ -677,7 +677,7 @@
             try {
                 localStorage.setItem(SLIDE_STORAGE_KEY, current.toString());
             } catch(e) {
-                console.error('保存幻灯片索引失败:', e);
+                console.error('Failed to save slide index:', e);
             }
         }
 
@@ -755,7 +755,7 @@
                 }
             }
         } catch(e) {
-            console.error('读取幻灯片索引失败:', e);
+            console.error('Failed to read slide index:', e);
         }
         showSlide(savedSlideIdx);
 
@@ -825,7 +825,7 @@
                     localStorage.setItem('template_wavy_state', slideContainer.innerHTML);
                 }
             } catch(e) {
-                console.error('保存失败:', e);
+                console.error('Save failed:', e);
             }
         }
         
@@ -842,7 +842,7 @@
                     }
                 }
             } catch(e) {
-                console.error('恢复失败:', e);
+                console.error('Restore failed:', e);
             }
         }
         

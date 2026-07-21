@@ -216,7 +216,7 @@ const handleSubmit = async () => {
     }
     emit('success')
   } catch (error: any) {
-    console.error('认证失败:', error)
+    console.error('Authentication failed:', error)
     ElMessage.error(error.message || (mode.value === 'login' ? '登录失败' : '注册失败'))
   } finally {
     submitting.value = false

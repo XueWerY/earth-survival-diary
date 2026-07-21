@@ -539,10 +539,10 @@ export const useListStore = defineStore('list', () => {
 
     try {
       const orders = list.groups.map(g => ({ id: g.id, order: g.order }))
-      console.log('[ListStore] moveGroupUp 完成', { listId, groupId, fromIndex: index, toIndex: index - 1, orders })
+      console.log('[ListStore] moveGroupUp completed', { listId, groupId, fromIndex: index, toIndex: index - 1, orders })
       await api.reorderGroups(listId, orders)
     } catch (error) {
-      console.error('[ListStore] moveGroupUp 同步失败', error)
+      console.error('[ListStore] moveGroupUp sync failed', error)
     }
   }
 
@@ -559,10 +559,10 @@ export const useListStore = defineStore('list', () => {
 
     try {
       const orders = list.groups.map(g => ({ id: g.id, order: g.order }))
-      console.log('[ListStore] moveGroupDown 完成', { listId, groupId, fromIndex: index, toIndex: index + 1, orders })
+      console.log('[ListStore] moveGroupDown completed', { listId, groupId, fromIndex: index, toIndex: index + 1, orders })
       await api.reorderGroups(listId, orders)
     } catch (error) {
-      console.error('[ListStore] moveGroupDown 同步失败', error)
+      console.error('[ListStore] moveGroupDown sync failed', error)
     }
   }
 

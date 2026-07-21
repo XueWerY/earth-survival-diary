@@ -167,7 +167,7 @@ const handleSubmit = async () => {
     dialogVisible.value = false
     emit('submit')
   } catch (e: any) {
-    console.error('[RecordForm] 保存失败', e.message)
+    console.error('[RecordForm] Save failed', e.message)
     ElMessage.error('保存失败，请重试')
   }
 }

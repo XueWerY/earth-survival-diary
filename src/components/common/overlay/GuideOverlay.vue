@@ -56,7 +56,6 @@ const spotlight = ref({ x: 0, y: 0, w: 0, h: 0 })
 const foundTarget = ref(false)
 const isDesktop = computed(() => {
   if (typeof window === 'undefined') return false
-  if ((window as any).harmonyAPI) return false
   const cap = (window as any).Capacitor
   return !(cap && cap.isNativePlatform && cap.isNativePlatform())
 })

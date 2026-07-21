@@ -184,7 +184,7 @@ const handleSubmit = async () => {
     dialogVisible.value = false
     emit('submit')
   } catch (e: any) {
-    console.error('[DiaryForm] 保存失败', e.message)
+    console.error('[DiaryForm] Save failed', e.message)
     ElMessage.error('保存失败，请重试')
   }
 }

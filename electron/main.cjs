@@ -4,12 +4,6 @@ const fs = require('fs')
 const { spawn, execSync } = require('child_process')
 const { autoUpdater } = require('electron-updater')
 
-if (process.platform === 'linux') {
-  app.commandLine.appendSwitch('no-sandbox')
-  app.commandLine.appendSwitch('no-zygote')
-  app.commandLine.appendSwitch('disable-dev-shm-usage')
-}
-
 Menu.setApplicationMenu(null)
 
 let appTray = null
@@ -34,11 +28,11 @@ function saveCloseAction(action) {
 
 const gotTheLock = app.requestSingleInstanceLock()
 if (!gotTheLock) {
-  debugLog('[Main] 另一个实例已在运行，退出当前实例')
+  debugLog('[Main] Another instance is already running, exiting current instance')
   app.quit()
 } else {
   app.on('second-instance', () => {
-    debugLog('[Main] 收到第二实例启动请求，显示主窗口')
+    debugLog('[Main] Received second instance request, showing main window')
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore()
       mainWindow.show()
@@ -50,6 +44,7 @@ if (!gotTheLock) {
 
 let mainWindow
 let serverInstance = null
+let serverPort = 5000
 
 // ====== 窗口分辨率设置 ======
 function getUserSettingsPath(userId) {
@@ -159,7 +154,7 @@ ipcMain.handle('apply-window-size', async (_event, userId) => {
 // ====== 窗口分辨率设置结束 ======
 
 ipcMain.on('restart-app', () => { 
-  debugLog('[Main] 收到重启请求')
+  debugLog('[Main] Received restart request')
   closeAction = 'exit'
   app.relaunch()
   app.quit()
@@ -168,10 +163,10 @@ ipcMain.on('restart-app', () => {
 ipcMain.handle('set-auto-launch', async (_event, enable) => {
   try {
     app.setLoginItemSettings({ openAtLogin: enable })
-    debugLog('[Main] 设置开机自启动', { enabled: enable })
+    debugLog('[Main] Set auto-launch', { enabled: enable })
     return true
   } catch (e) {
-    errorLog('[Main] 设置开机自启动失败: ' + e.message)
+    errorLog('[Main] Failed to set auto-launch: ' + e.message)
     return false
   }
 })
@@ -188,7 +183,7 @@ ipcMain.handle('get-auto-launch', async () => {
 ipcMain.handle('set-close-action', async (_event, action) => {
   closeAction = action
   saveCloseAction(action)
-  debugLog('[Main] 设置关闭按钮行为', { action })
+  debugLog('[Main] Set close button behavior', { action })
   return true
 })
 
@@ -210,17 +205,17 @@ function sendUpdateStatusToMain(data) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('update-status', data)
   } else {
-    debugLog('[Main] mainWindow 不可用，无法发送更新状态')
+    debugLog('[Main] mainWindow is not available, cannot send update status')
   }
 }
 
 autoUpdater.on('update-available', (info) => {
-  debugLog('[Main] autoUpdater: 检测到新版本 ' + info.version)
+  debugLog('[Main] autoUpdater: New version detected ' + info.version)
   sendUpdateStatusToMain({ status: 'available', version: info.version })
 })
 
 autoUpdater.on('error', (err) => {
-  debugLog('[Main] autoUpdater 错误: ' + err.message)
+  debugLog('[Main] autoUpdater error: ' + err.message)
   sendUpdateStatusToMain({ status: 'error', message: err.message })
 })
 
@@ -251,74 +246,27 @@ function compareVersions(v1, v2) {
   if (a.day !== b.day) return a.day - b.day
   return a.patch - b.patch
 }
-/** 检查 Linux 端更新：从 GitHub Releases 的 .deb 资产文件名中提取版本号 */
-async function checkLinuxUpdate() {
-  try {
-    const res = await fetch(RELEASES_API)
-    if (!res.ok) return null
-    const releases = await res.json()
-    if (!Array.isArray(releases)) return null
-    const currentVersion = app.getVersion()
-    let best = null
-    for (const release of releases) {
-      if (release.prerelease) continue
-      for (const asset of release.assets || []) {
-        if (!asset.name || !asset.name.endsWith('.deb')) continue
-        const version = extractVersionFromFilename(asset.name)
-        if (!version) continue
-        if (compareVersions(version, currentVersion) > 0) {
-          if (!best || compareVersions(version, best.version) > 0) {
-            best = { version, downloadUrl: asset.browser_download_url }
-          }
-        }
-      }
-    }
-    return best
-  } catch (e) {
-    debugLog('[Main] Linux 更新检查失败: ' + e.message)
-    return null
-  }
-}
-
 ipcMain.handle('check-for-update', async () => {
-  debugLog('[Main] 收到手动检查更新请求')
-  if (process.platform === 'linux') {
-    try {
-      const update = await checkLinuxUpdate()
-      if (update) {
-        debugLog('[Main] Linux 检测到新版本: ' + update.version)
-        sendUpdateStatusToMain({ status: 'available', version: update.version })
-        return { updateAvailable: true, version: update.version }
-      } else {
-        debugLog('[Main] Linux 已是最新版本: ' + app.getVersion())
-        sendUpdateStatusToMain({ status: 'no-update' })
-        return { updateAvailable: false }
-      }
-    } catch (e) {
-      debugLog('[Main] Linux 更新检查出错: ' + e.message)
-      sendUpdateStatusToMain({ status: 'error', message: e.message })
-      return { error: e.message }
-    }
-  }
+  debugLog('[Main] Received manual update check request')
   try {
     const result = await autoUpdater.checkForUpdates()
     if (!result || result.updateInfo.version === app.getVersion()) {
-      debugLog('[Main] 已是最新版本: ' + app.getVersion())
+      debugLog('[Main] Already up to date: ' + app.getVersion())
       sendUpdateStatusToMain({ status: 'no-update' })
       return { updateAvailable: false }
     }
-    debugLog('[Main] 发现新版本: ' + result.updateInfo.version)
+    debugLog('[Main] New version found: ' + result.updateInfo.version)
     sendUpdateStatusToMain({ status: 'available', version: result.updateInfo.version })
     return { updateAvailable: true, version: result.updateInfo.version }
   } catch (e) {
-    debugLog('[Main] 检查更新失败: ' + e.message)
+    debugLog('[Main] Update check failed: ' + e.message)
     sendUpdateStatusToMain({ status: 'error', message: e.message })
     return { error: e.message }
   }
 })
 
 ipcMain.handle('open-external', async (_event, url) => {
-  debugLog('[Main] 打开外部链接: ' + url)
+  debugLog('[Main] Opening external link: ' + url)
   await shell.openExternal(url)
 })
 
@@ -378,7 +326,7 @@ ipcMain.handle('get-log-dir-path', async () => {
 
 ipcMain.handle('read-directory', async (_event, dirPath) => {
   try {
-    if (!isPathAllowed(dirPath)) throw new Error('访问被拒绝：不允许的目录')
+    if (!isPathAllowed(dirPath)) throw new Error('Access denied: directory not allowed')
     if (!fs.existsSync(dirPath)) return []
     const entries = fs.readdirSync(dirPath, { withFileTypes: true })
     return entries.map(entry => ({
@@ -388,15 +336,15 @@ ipcMain.handle('read-directory', async (_event, dirPath) => {
       size: entry.isFile() ? fs.statSync(path.join(dirPath, entry.name)).size : 0
     }))
   } catch (e) {
-    errorLog('[FileManager] read-directory 失败: ' + e.message)
+    errorLog('[FileManager] read-directory failed: ' + e.message)
     throw e
   }
 })
 
 ipcMain.handle('delete-file-path', async (_event, filePath) => {
   try {
-    if (!isPathAllowed(filePath)) throw new Error('访问被拒绝：不允许的目录')
-    if (!fs.existsSync(filePath)) throw new Error('文件不存在')
+    if (!isPathAllowed(filePath)) throw new Error('Access denied: directory not allowed')
+    if (!fs.existsSync(filePath)) throw new Error('File does not exist')
     const stat = fs.statSync(filePath)
     if (stat.isDirectory()) {
       fs.rmSync(filePath, { recursive: true, force: true })
@@ -405,7 +353,7 @@ ipcMain.handle('delete-file-path', async (_event, filePath) => {
     }
     return true
   } catch (e) {
-    errorLog('[FileManager] delete-file-path 失败: ' + e.message)
+    errorLog('[FileManager] delete-file-path failed: ' + e.message)
     throw e
   }
 })
@@ -413,23 +361,23 @@ ipcMain.handle('delete-file-path', async (_event, filePath) => {
 ipcMain.handle('rename-file-path', async (_event, oldPath, newPath) => {
   try {
     if (!isPathAllowed(oldPath)) throw new Error('访问被拒绝：不允许的目录')
-    if (!isPathAllowed(newPath)) throw new Error('目标路径不被允许')
+    if (!isPathAllowed(newPath)) throw new Error('Target path is not allowed')
     if (!fs.existsSync(oldPath)) throw new Error('文件不存在')
     fs.renameSync(oldPath, newPath)
     return true
   } catch (e) {
-    errorLog('[FileManager] rename-file-path 失败: ' + e.message)
+    errorLog('[FileManager] rename-file-path failed: ' + e.message)
     throw e
   }
 })
 
 ipcMain.handle('read-text-file-path', async (_event, filePath) => {
   try {
-    if (!isPathAllowed(filePath)) throw new Error('访问被拒绝：不允许的目录')
-    if (!fs.existsSync(filePath)) throw new Error('文件不存在')
+    if (!isPathAllowed(filePath)) throw new Error('Access denied: directory not allowed')
+    if (!fs.existsSync(filePath)) throw new Error('File does not exist')
     return fs.readFileSync(filePath, 'utf-8')
   } catch (e) {
-    errorLog('[FileManager] read-text-file-path 失败: ' + e.message)
+    errorLog('[FileManager] read-text-file-path failed: ' + e.message)
     throw e
   }
 })
@@ -441,7 +389,7 @@ ipcMain.handle('get-system-fonts', async () => {
     const output = execSync(psScript, { shell: 'powershell.exe', encoding: 'utf-8', timeout: 10000 })
     return output.split(/\r?\n/).map(f => f.trim()).filter(Boolean)
   } catch (e) {
-    errorLog('[Fonts] get-system-fonts 失败: ' + e.message)
+    errorLog('[Fonts] get-system-fonts failed: ' + e.message)
     return []
   }
 })
@@ -452,7 +400,7 @@ ipcMain.handle('read-clipboard-text', async () => {
   try {
     return clipboard.readText()
   } catch (e) {
-    errorLog('[Clipboard] read-clipboard-text 失败: ' + e.message)
+    errorLog('[Clipboard] read-clipboard-text failed: ' + e.message)
     return ''
   }
 })
@@ -461,7 +409,7 @@ ipcMain.handle('read-clipboard-html', async () => {
   try {
     return clipboard.readHTML()
   } catch (e) {
-    errorLog('[Clipboard] read-clipboard-html 失败: ' + e.message)
+    errorLog('[Clipboard] read-clipboard-html failed: ' + e.message)
     return ''
   }
 })
@@ -510,17 +458,17 @@ ipcMain.handle('start-lan-server', async (_event, data) => {
           }
           if (localIP !== '127.0.0.1') break
         }
-        debugLog('[LAN] 局域网传输服务器已启动: ' + localIP + ':5789')
+        debugLog('[LAN] LAN transfer server started: ' + localIP + ':5789')
         resolve({ ip: localIP, port: 5789 })
       })
 
       server.on('error', (err) => {
-        errorLog('[LAN] 启动局域网服务器失败: ' + err.message)
+        errorLog('[LAN] Failed to start LAN server: ' + err.message)
         reject(err)
       })
     })
   } catch (e) {
-    errorLog('[LAN] start-lan-server 失败: ' + e.message)
+    errorLog('[LAN] start-lan-server failed: ' + e.message)
     throw e
   }
 })
@@ -531,11 +479,11 @@ ipcMain.handle('stop-lan-server', async () => {
       lanTransferServer.close()
       lanTransferServer = null
       lanTransferData = null
-      debugLog('[LAN] 局域网传输服务器已关闭')
+      debugLog('[LAN] LAN transfer server stopped')
     }
     return true
   } catch (e) {
-    errorLog('[LAN] stop-lan-server 失败: ' + e.message)
+    errorLog('[LAN] stop-lan-server failed: ' + e.message)
     return false
   }
 })
@@ -550,15 +498,15 @@ ipcMain.handle('fetch-lan-data', async (_event, url) => {
           try {
             resolve(JSON.parse(data))
           } catch {
-            reject(new Error('从局域网接收到的数据格式错误'))
+            reject(new Error('Invalid data format received from LAN'))
           }
         })
       }).on('error', (err) => {
-        reject(new Error('连接局域网服务器失败: ' + err.message))
+        reject(new Error('Failed to connect to LAN server: ' + err.message))
       })
     })
   } catch (e) {
-    errorLog('[LAN] fetch-lan-data 失败: ' + e.message)
+    errorLog('[LAN] fetch-lan-data failed: ' + e.message)
     throw e
   }
 })
@@ -594,36 +542,66 @@ async function startServer() {
     throw new Error('Server module not found at: ' + serverModulePath)
   }
 
-  const asarDistPath = path.join(process.resourcesPath, 'app.asar', 'dist')
+  const isPackaged = app.isPackaged
+  const resourcesPath = isPackaged ? process.resourcesPath : __dirname
+  const distPath = isPackaged
+    ? path.join(process.resourcesPath, 'app.asar', 'dist')
+    : path.join(__dirname, '..', 'dist')
 
   const { createProdServer } = require(serverModulePath)
-  const { server } = createProdServer({
-    port: 5000,
-    dataDir: path.join(app.getPath('userData'), 'data'),
-    distPath: asarDistPath,
-    resourcesPath: process.resourcesPath
-  })
+  const portsToTry = [5000, 5001, 5002, 5003]
 
-  return new Promise((resolve, reject) => {
-    server.listen(5000, '127.0.0.1', () => {
-      debugLog('[Electron] Server started on port 5000')
-      serverInstance = server
-      resolve(5000)
-    })
-    server.on('error', (err) => {
+  for (const port of portsToTry) {
+    try {
+      const { server } = createProdServer({
+        port: port,
+        dataDir: path.join(app.getPath('userData'), 'data'),
+        distPath: distPath,
+        resourcesPath: resourcesPath
+      })
+
+      await new Promise((resolve, reject) => {
+        server.listen(port, '127.0.0.1', () => {
+          debugLog('[Electron] Server started on port ' + port)
+          serverInstance = server
+          serverPort = port
+          resolve(port)
+        })
+        server.on('error', (err) => {
+          reject(err)
+        })
+      })
+
+      return port
+    } catch (err) {
+      if (err.code === 'EADDRINUSE') {
+        debugLog('[Electron] Port ' + port + ' is in use, trying next...')
+        continue
+      }
       errorLog('[Electron] Server listen error: ' + err.message)
-      reject(err)
-    })
-  })
+      throw err
+    }
+  }
+
+  throw new Error('Failed to start server: all ports (5000-5003) are in use')
 }
 
 function createWindow(url) {
   const primaryDisplay = screen.getPrimaryDisplay()
   const { width: screenW, height: screenH } = primaryDisplay.size
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'build', 'icon.png')
+    : path.join(__dirname, '..', 'build', 'icon.png')
+
+  const defaultW = 1920
+  const defaultH = 1080
+  const winW = Math.min(defaultW, screenW)
+  const winH = Math.min(defaultH, screenH)
 
   mainWindow = new BrowserWindow({
-    width: screenW,
-    height: screenH,
+    width: winW,
+    height: winH,
+    icon: iconPath,
     maximizable: false,
     resizable: false,
     title: '地球 Online 生存日记',
@@ -637,6 +615,12 @@ function createWindow(url) {
   })
 
   mainWindow.loadURL(url)
+
+  // Center window on screen
+  mainWindow.setPosition(
+    Math.round((screenW - winW) / 2),
+    Math.round((screenH - winH) / 2)
+  )
 
   mainWindow.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
     const parsed = new URL(targetUrl)
@@ -676,7 +660,9 @@ function createWindow(url) {
 }
 
 function setupTray() {
-  const iconPath = path.join(process.resourcesPath, 'build', 'icon.png')
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'build', 'icon.png')
+    : path.join(__dirname, '..', 'build', 'icon.png')
   appTray = new Tray(iconPath)
   appTray.setToolTip('地球 Online 生存日记')
   appTray.on('click', () => {
@@ -699,7 +685,7 @@ function setupTray() {
     { label: '退出', click: () => { closeAction = 'exit'; cancelAllReminderTimers(); if (serverInstance) { try { serverInstance.close() } catch (e) {} }; app.exit(0) } }
   ])
   appTray.setContextMenu(contextMenu)
-  debugLog('[Main] 系统托盘已创建')
+  debugLog('[Main] System tray created')
 }
 
 ipcMain.on('resize-window', (event, width, height) => {
@@ -851,7 +837,7 @@ ipcMain.handle('get-module-sizes', async () => {
 
     return { users, totalDataSize, moduleGroups: MODULE_GROUP_DEF }
   } catch (e) {
-    errorLog('[Main] get-module-sizes 失败: ' + e.message)
+    errorLog('[Main] get-module-sizes failed: ' + e.message)
     return { users: [], totalDataSize: 0, moduleGroups: MODULE_GROUP_DEF }
   }
 })
@@ -1141,7 +1127,7 @@ let _versionUpdateNotified = false
 ipcMain.handle('check-version-update', async (_event, userId) => {
   try {
     if (_versionUpdateNotified) {
-      debugLog('[Main] check-version-update 已通知过，跳过')
+      debugLog('[Main] check-version-update already notified, skipping')
       return { isUpdated: false, oldVersion: null, newVersion: null }
     }
 
@@ -1180,7 +1166,7 @@ ipcMain.handle('check-version-update', async (_event, userId) => {
     debugLog('[Main] check-version-update', { userId, storedVersion, currentVersion, isUpdated })
     return { isUpdated, oldVersion: storedVersion, newVersion: currentVersion }
   } catch (e) {
-    errorLog('[Main] check-version-update 失败: ' + e.message)
+    errorLog('[Main] check-version-update failed: ' + e.message)
     return { isUpdated: false, oldVersion: null, newVersion: null }
   }
 })
@@ -1275,13 +1261,13 @@ function cancelAllReminderTimers() {
 function showNextReminder() {
   if (isShowingReminder) return
   if (reminderQueue.length === 0) {
-    debugLog('[提醒] 队列为空，提醒流程结束')
+    debugLog('[Reminder] Queue is empty, reminder flow ended')
     return
   }
 
   isShowingReminder = true
   const reminder = reminderQueue.shift()
-  debugLog('[提醒] 发送提醒到主窗口: ' + reminder.name + ' (id=' + reminder.id + ', 剩余=' + reminderQueue.length + ')')
+  debugLog('[Reminder] Sending reminder to main window: ' + reminder.name + ' (id=' + reminder.id + ', remaining=' + reminderQueue.length + ')')
 
   if (reminder.repeatStrategy && reminder.repeatStrategy !== 'none') {
     scheduleNextRepeat(reminder)
@@ -1300,7 +1286,7 @@ function showNextReminder() {
 
 function scheduleNextRepeat(reminder) {
   if (reminder.repeatEndStrategy === 'count' && reminder.repeatCount && reminder.repeatCompletedCount >= reminder.repeatCount) {
-    debugLog('[提醒] 重复已结束（次数达到）: ' + reminder.name)
+    debugLog('[Reminder] Repeat ended (count reached): ' + reminder.name)
     return
   }
 
@@ -1326,7 +1312,7 @@ function scheduleNextRepeat(reminder) {
 
   if (reminder.repeatEndStrategy === 'date' && reminder.repeatEndDate) {
     if (nextTrigger > new Date(reminder.repeatEndDate + 'T23:59:59')) {
-      debugLog('[提醒] 重复已结束（超过结束日期）: ' + reminder.name)
+      debugLog('[Reminder] Repeat ended (past end date): ' + reminder.name)
       return
     }
   }
@@ -1338,33 +1324,33 @@ function scheduleNextRepeat(reminder) {
 
   const delay = nextTrigger.getTime() - Date.now()
   if (delay <= 0) {
-    debugLog('[提醒] 下一轮提醒已过期: ' + reminder.name)
+    debugLog('[Reminder] Next round reminder has expired: ' + reminder.name)
     return
   }
 
   if (delay > MAX_SCHEDULE_DELAY) {
-    debugLog('[提醒] 下一轮提醒过于远期（' + formatDelay(delay) + '）: ' + reminder.name + '，下次启动时重新调度')
+    debugLog('[Reminder] Next round reminder too far in future (' + formatDelay(delay) + '): ' + reminder.name + ', will reschedule on next launch')
     return
   }
 
-  debugLog('[提醒] 下一轮提醒: ' + reminder.name + ' 在 ' + formatDelay(delay) + '后')
+  debugLog('[Reminder] Next round: ' + reminder.name + ' in ' + formatDelay(delay))
   const nextReminder = { ...reminder, triggerTime: nextTrigger.toISOString() }
   if (reminder.repeatStrategy === 'hourly' && reminder.focusStartTimestamp) {
     const elapsedHours = Math.round((nextTrigger.getTime() - reminder.focusStartTimestamp) / 3600000)
-    nextReminder.body = `您已专注${elapsedHours}小时，请放松一下吧！`
+    nextReminder.body = `You have been focused for ${elapsedHours} hour(s), please take a break!`
   }
   const timer = setTimeout(() => enqueueReminder(nextReminder), delay)
   reminderTimers.push({ id: reminder.id, timeout: timer })
 }
 
 function enqueueReminder(reminder) {
-  debugLog('[提醒] 加入队列: ' + (reminder.name || reminder.id))
+  debugLog('[Reminder] Enqueued: ' + (reminder.name || reminder.id))
   reminderQueue.push(reminder)
   showNextReminder()
 }
 
 ipcMain.handle('schedule-reminders', async (_event, reminders, persistDuration) => {
-  debugLog('[提醒] 收到调度请求，共 ' + (reminders ? reminders.length : 0) + ' 条提醒')
+  debugLog('[Reminder] Received schedule request, total ' + (reminders ? reminders.length : 0) + ' reminders')
   cancelAllReminderTimers()
   if (persistDuration != null) reminderPersistDuration = persistDuration
   allScheduledReminders = reminders || []
@@ -1374,12 +1360,12 @@ ipcMain.handle('schedule-reminders', async (_event, reminders, persistDuration) 
   reminders.forEach(r => {
     const delay = new Date(r.triggerTime).getTime() - Date.now()
     if (delay <= 0) {
-      debugLog('[提醒] 立即触发: ' + (r.name || r.id))
+      debugLog('[Reminder] Triggering immediately: ' + (r.name || r.id))
       enqueueReminder(r)
     } else if (delay > MAX_SCHEDULE_DELAY) {
-      debugLog('[提醒] 跳过远期提醒: ' + (r.name || r.id) + ' (' + formatDelay(delay) + ')，下次启动时重新调度')
+      debugLog('[Reminder] Skipping far-future reminder: ' + (r.name || r.id) + ' (' + formatDelay(delay) + '), will reschedule on next launch')
     } else {
-      debugLog('[提醒] 计划提醒: ' + (r.name || r.id) + ' 在 ' + formatDelay(delay) + '后')
+      debugLog('[Reminder] Scheduled: ' + (r.name || r.id) + ' in ' + formatDelay(delay))
       const timer = setTimeout(() => enqueueReminder(r), delay)
       reminderTimers.push({ id: r.id, timeout: timer })
     }
@@ -1388,7 +1374,7 @@ ipcMain.handle('schedule-reminders', async (_event, reminders, persistDuration) 
 })
 
 ipcMain.handle('cancel-all-reminders', async () => {
-  debugLog('[提醒] 取消所有提醒')
+  debugLog('[Reminder] Cancelling all reminders')
   cancelAllReminderTimers()
   return { ok: true }
 })
@@ -1412,10 +1398,10 @@ function formatDelay(ms) {
   const hours = Math.floor((totalSec % 86400) / 3600)
   const minutes = Math.floor((totalSec % 3600) / 60)
   const seconds = totalSec % 60
-  if (days > 0) return days + '天' + hours + '小时' + minutes + '分' + seconds + '秒'
-  if (hours > 0) return hours + '小时' + minutes + '分' + seconds + '秒'
-  if (minutes > 0) return minutes + '分' + seconds + '秒'
-  return seconds + '秒'
+  if (days > 0) return days + 'd' + hours + 'h' + minutes + 'm' + seconds + 's'
+  if (hours > 0) return hours + 'h' + minutes + 'm' + seconds + 's'
+  if (minutes > 0) return minutes + 'm' + seconds + 's'
+  return seconds + 's'
 }
 
 const MAX_SCHEDULE_DELAY = 20 * 24 * 3600 * 1000
@@ -1423,15 +1409,15 @@ const MAX_SCHEDULE_DELAY = 20 * 24 * 3600 * 1000
 
 app.whenReady().then(async () => {
   if (!gotTheLock) {
-    debugLog('[Main] 没有获取单实例锁，跳过启动')
+    debugLog('[Main] Did not obtain single instance lock, skipping launch')
     return
   }
   closeAction = getCloseAction()
-  debugLog('[Main] 关闭按钮行为', { action: closeAction })
+  debugLog('[Main] Close button behavior', { action: closeAction })
   const sep = '─'.repeat(60)
   const dir = path.dirname(logFile)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  fs.appendFileSync(logFile, `\n${sep}\n[${formatTs()}] [INFO] ===== 应用启动 =====\n${sep}\n`)
+  fs.appendFileSync(logFile, `\n${sep}\n[${formatTs()}] [INFO] ===== App Launch =====\n${sep}\n`)
   debugLog('[Electron] App ready')
 
   try {
@@ -1453,16 +1439,7 @@ app.whenReady().then(async () => {
     setupTray()
 
     setTimeout(() => {
-      if (process.platform !== 'linux') {
-        autoUpdater.checkForUpdates().catch(e => debugLog('[Updater] Check failed: ' + e.message))
-      } else {
-        checkLinuxUpdate().then(update => {
-          if (update) {
-            debugLog('[Updater] Linux 发现新版本: ' + update.version)
-            sendUpdateStatusToMain({ status: 'available', version: update.version })
-          }
-        }).catch(e => debugLog('[Updater] Linux check failed: ' + e.message))
-      }
+      autoUpdater.checkForUpdates().catch(e => debugLog('[Updater] Check failed: ' + e.message))
     }, 5000)
   } catch (err) {
     errorLog('[Electron] Fatal error: ' + err.message)
@@ -1472,13 +1449,13 @@ app.whenReady().then(async () => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow('http://127.0.0.1:5000')
+      createWindow('http://127.0.0.1:' + serverPort)
     }
   })
 })
 
 app.on('before-quit', async () => {
-  debugLog('[Electron] 应用即将退出（系统关机/用户退出）')
+  debugLog('[Electron] App is about to quit (system shutdown/user exit)')
   isQuitting = true
   cancelAllReminderTimers()
   if (serverInstance) {

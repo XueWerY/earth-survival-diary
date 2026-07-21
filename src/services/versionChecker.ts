@@ -1,7 +1,7 @@
 /**
  * 跨平台版本检测工具
  *
- * 统一 Windows、Linux、Android 三端的版本号提取与比对逻辑：
+ * 统一 Windows、Android 两端的版本号提取与比对逻辑：
  * 1. 从远程仓库 Releases 资源文件名中提取版本号
  * 2. 与本地版本号进行比对，判断是否需要更新
  */
@@ -59,10 +59,8 @@ function getPlatformAssetExt(): string {
   // 在浏览器/Capacitor 环境中判断
   if (typeof window !== 'undefined') {
     if ((window as any).electronAPI) {
-      // Electron 端：根据操作系统选扩展名
-      // navigator.platform 在 Electron 中反映宿主系统
-      const plat = (typeof navigator !== 'undefined' ? navigator.platform : '') || ''
-      if (plat.includes('Linux') || plat.includes('linux')) return '.deb'
+      // Electron 端（Windows）：返回 .exe
+      return '.exe'
     } else {
       // Capacitor/移动端
       return '.apk'
@@ -133,7 +131,7 @@ export function isNewerVersion(latest: string, current: string): boolean {
  *
  * @param assets Release 中的 assets 数组
  * @param currentVersion 当前本地版本号，只返回比它更新的版本
- * @param platformExt 目标平台的文件扩展名（如 .exe、.deb、.apk）
+ * @param platformExt 目标平台的文件扩展名（如 .exe、.apk）
  * @returns 最高版本号，无可用更新时返回 null
  */
 export function findLatestVersionFromAssets(
@@ -162,7 +160,7 @@ export function findLatestVersionFromAssets(
 /**
  * 从 GitHub Releases API 获取最新版本信息
  *
- * 对 Windows/Linux Electron 端在 Node.js 环境中调用时，
+ * 对 Windows Electron 端在 Node.js 环境中调用时，
  * HTTP 请求由 Electron 主进程处理（参见 electron/main.cjs）。
  *
  * @param currentVersion 当前本地版本号

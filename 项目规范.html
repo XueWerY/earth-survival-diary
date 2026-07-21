@@ -379,11 +379,9 @@
   <p><strong>地球 Online 生存日记</strong>是一款跨平台生活管理应用，将地球 Online 的游戏化概念融入日常时间管理，帮助玩家（用户）记录足迹、管理任务、专注计时、规划课程。</p>
 
   <h3>支持平台</h3>
-  <div class="grid grid-4">
+  <div class="grid grid-2">
     <div class="platform-card pc-win"><div class="pc-h"><span class="ico">⊞</span><h4>Windows</h4></div><p>Electron 桌面端</p></div>
-    <div class="platform-card pc-linux"><div class="pc-h"><span class="ico">🐧</span><h4>Linux</h4></div><p>Electron 桌面端</p></div>
     <div class="platform-card pc-android"><div class="pc-h"><span class="ico">🤖</span><h4>Android</h4></div><p>Capacitor</p></div>
-    <div class="platform-card pc-harmony"><div class="pc-h"><span class="ico">🔷</span><h4>HarmonyOS</h4></div><p>ArkWeb</p></div>
   </div>
 
   <h3>功能模块</h3>
@@ -440,10 +438,6 @@ npx electron electron/main.cjs</code></pre>
     </ul>
   </div>
 
-  <h3>HarmonyOS 端开发</h3>
-  <pre><code>pnpm harmony:build</code></pre>
-  <p>用 DevEco Studio 打开鸿蒙工程，编译运行。仅同步代码：<code>pnpm harmony:sync</code></p>
-
   <h3>Android 端开发</h3>
   <pre><code>pnpm build
 npx cap sync android</code></pre>
@@ -454,7 +448,6 @@ npx cap sync android</code></pre>
     <li>浏览器端与 Electron 端数据存储相互隔离，不互通</li>
     <li><code>vite.config.ts</code> 中 <code>base: './'</code> 确保打包后资源路径正确，请勿修改</li>
     <li><code>virtual:version</code> 虚拟模块在构建时从 <code>package.json</code> 注入版本号</li>
-    <li>HarmonyOS 构建产物为 IIFE 格式，需后处理 <code>import.meta.url</code> 与 <code>__vitePreload</code></li>
   </ul>
 </section>
 
@@ -489,7 +482,6 @@ npx cap sync android</code></pre>
 │   └── main.ts                 # 入口文件
 ├── electron/                   # Electron 主进程
 ├── android/                    # Android (Capacitor)
-├── harmony/                    # HarmonyOS (ArkWeb)
 ├── scripts/                    # 构建工具脚本
 ├── build/                      # 图标资源
 ├── public/                     # 静态资源
@@ -527,7 +519,7 @@ npx cap sync android</code></pre>
     <div class="card">
       <h4>编辑器与图表</h4>
       <ul style="margin:0.5rem 0 0 1rem;">
-        <li>Vditor — 笔记编辑器</li>
+        <li>自研 Markdown 编辑器 — 笔记编辑器</li>
         <li>ECharts — 统计图表</li>
         <li>lunar-javascript — 农历计算</li>
       </ul>
@@ -535,9 +527,8 @@ npx cap sync android</code></pre>
     <div class="card">
       <h4>跨平台方案</h4>
       <ul style="margin:0.5rem 0 0 1rem;">
-        <li>Electron — Win / Linux 桌面</li>
+        <li>Electron — Windows 桌面</li>
         <li>Capacitor — Android</li>
-        <li>ArkWeb — HarmonyOS</li>
       </ul>
     </div>
   </div>
@@ -635,19 +626,6 @@ npx cap sync android</code></pre>
       <p style="font-size:0.82rem;">清理 → vite build → 安装依赖 → 生成图标 → electron-builder → 修复 latest.yml</p>
     </div>
     <div class="card">
-      <h4>Linux</h4>
-      <pre style="margin:0.5rem 0 0.3rem;font-size:0.85rem;"><code>pnpm electron:build:linux</code></pre>
-      <p style="font-size:0.82rem;">清理 → vite build → 安装依赖 → 生成图标 → deb 打包（含沙箱参数）→ 不生成 latest.yml</p>
-    </div>
-  </div>
-
-  <div class="grid grid-2" style="margin-top:0.5rem;">
-    <div class="card">
-      <h4>HarmonyOS</h4>
-      <pre style="margin:0.5rem 0 0.3rem;font-size:0.85rem;"><code>pnpm harmony:build</code></pre>
-      <p style="font-size:0.82rem;">vite build → harmony-sync 同步，需处理 IIFE import.meta.url 与 __vitePreload</p>
-    </div>
-    <div class="card">
       <h4>Android</h4>
       <p style="margin:0.8rem 0 0;">通过 Android Studio 打开 <code>android/</code> 目录，执行 Gradle 构建。</p>
     </div>
@@ -662,10 +640,7 @@ npx cap sync android</code></pre>
   │   └─► android mipmap（5密度×3变体）       → Android
   │
   ├─► scripts/build-tools.cjs make-ico
-  │   └─► build/icon.ico                      → Windows 安装包
-  │
-  └─► scripts/harmony-sync.cjs
-      └─► harmony/.../app_icon.png             → 鸿蒙</code></pre>
+  │   └─► build/icon.ico                      → Windows 安装包</code></pre>
   <p>更换图标：替换 <code>build/app-icon.png</code> 后重新构建即可。</p>
 
   <h3>发布</h3>

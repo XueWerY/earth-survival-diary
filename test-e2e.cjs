@@ -53,80 +53,80 @@ async function run() {
   })
   console.log('Server started on port ' + PORT)
 
-  console.log('\n-- 注册 --')
+  console.log('\n-- Signup --')
   let r = await post('/auth/signup', { email: 'test@test.com', password: '123456' })
-  assert('注册成功', r.status === 200 && r.data.user && r.data.session)
+  assert('Signup success', r.status === 200 && r.data.user && r.data.session)
   token = r.data.session.access_token
   userId = r.data.user.id
 
   r = await post('/auth/signup', { email: 'test@test.com', password: '123456' })
-  assert('重复注册失败', r.status === 400)
+  assert('Duplicate signup fails', r.status === 400)
 
-  console.log('\n-- 登录 --')
+  console.log('\n-- Login --')
   r = await post('/auth/signin', { email: 'test@test.com', password: '123456' })
-  assert('登录成功', r.status === 200 && r.data.session)
+  assert('Login success', r.status === 200 && r.data.session)
   token = r.data.session.access_token
 
   r = await post('/auth/signin', { email: 'test@test.com', password: 'wrong' })
-  assert('密码错误', r.status === 400)
+  assert('Wrong password', r.status === 400)
 
-  console.log('\n-- 资料 --')
+  console.log('\n-- Profile --')
   r = await get('/profile')
-  assert('获取资料', r.status === 200 && r.data.profile && r.data.profile.id === userId)
+  assert('Get profile', r.status === 200 && r.data.profile && r.data.profile.id === userId)
 
-  console.log('\n-- 足迹 --')
-  r = await post('/tasks', { name: '测试足迹', date: '2026-05-01', startTime: '09:00', endTime: '10:00', notes: '备注' })
-  assert('添加足迹', r.status === 200 && r.data.task)
+  console.log('\n-- Footprint --')
+  r = await post('/tasks', { name: 'Test Footprint', date: '2026-05-01', startTime: '09:00', endTime: '10:00', notes: 'Note' })
+  assert('Add footprint', r.status === 200 && r.data.task)
   const fpId = r.data.task.id
 
   r = await get('/tasks')
-  assert('获取足迹列表', r.status === 200 && r.data.tasks && r.data.tasks.length >= 1)
+  assert('Get footprint list', r.status === 200 && r.data.tasks && r.data.tasks.length >= 1)
 
-  console.log('\n-- 清单 --')
-  r = await post('/list-lists', { name: '测试清单' })
-  assert('添加清单', r.status === 200 && r.data.list)
+  console.log('\n-- Lists --')
+  r = await post('/list-lists', { name: 'Test List' })
+  assert('Add list', r.status === 200 && r.data.list)
   const listId = r.data.list.id
 
-  r = await post('/list-tasks', { listId, name: '测试任务' })
-  assert('添加任务', r.status === 200 && r.data.listTask)
+  r = await post('/list-tasks', { listId, name: 'Test Task' })
+  assert('Add task', r.status === 200 && r.data.listTask)
 
-  console.log('\n-- 通用数据 --')
+  console.log('\n-- General Data --')
   r = await post('/data/course/courses', { data: { semesterStart: '2026-02-15' } })
-  assert('保存课程', r.status === 200)
+  assert('Save course', r.status === 200)
 
   r = await get('/data/course/courses')
-  assert('获取课程', r.status === 200)
+  assert('Get course', r.status === 200)
 
-  r = await post('/data/countdown/countdowns', { data: { event: '生日' } })
-  assert('保存倒数日', r.status === 200)
+  r = await post('/data/countdown/countdowns', { data: { event: 'Birthday' } })
+  assert('Save countdown', r.status === 200)
 
-  r = await post('/data/focus/favorites', { data: { name: '阅读' } })
-  assert('保存专注', r.status === 200)
+  r = await post('/data/focus/favorites', { data: { name: 'Reading' } })
+  assert('Save focus', r.status === 200)
 
   r = await post('/data/system/state', { data: { lastActive: '2026-05-01' } })
-  assert('保存系统状态', r.status === 200)
+  assert('Save system state', r.status === 200)
 
-  console.log('\n-- 垃圾 token --')
+  console.log('\n-- Bogus Token --')
   const bogusRes = await fetch(API_BASE + '/profile', {
     headers: { 'authorization': 'Bearer invalid-token-value' },
     signal: AbortSignal.timeout(5000)
   })
-  assert('垃圾 token 被拒绝', bogusRes.status === 401)
+  assert('Bogus token rejected', bogusRes.status === 401)
 
-  console.log('\n-- 文件验证 --')
+  console.log('\n-- File Verification --')
   const dir = tmpDataDir
 
-  assert('users.json 存在', fs.existsSync(path.join(dir, 'users', 'test@test.com.json')))
-  assert('footprint.json 存在', fs.existsSync(path.join(dir, userId, 'footprint', 'footprint.json')))
-  assert('lists.json 存在', fs.existsSync(path.join(dir, userId, 'list', 'lists.json')))
-  assert('tasks.json 存在', fs.existsSync(path.join(dir, userId, 'list', 'tasks.json')))
-  assert('course.json 存在', fs.existsSync(path.join(dir, userId, 'course', 'courses.json')))
-  assert('countdown.json 存在', fs.existsSync(path.join(dir, userId, 'countdown', 'countdowns.json')))
-  assert('focus.json 存在', fs.existsSync(path.join(dir, userId, 'focus', 'favorites.json')))
-  assert('system.json 存在', fs.existsSync(path.join(dir, userId, 'system', 'state.json')))
+  assert('users.json exists', fs.existsSync(path.join(dir, 'users', 'test@test.com.json')))
+  assert('footprint.json exists', fs.existsSync(path.join(dir, userId, 'footprint', 'footprint.json')))
+  assert('lists.json exists', fs.existsSync(path.join(dir, userId, 'list', 'lists.json')))
+  assert('tasks.json exists', fs.existsSync(path.join(dir, userId, 'list', 'tasks.json')))
+  assert('course.json exists', fs.existsSync(path.join(dir, userId, 'course', 'courses.json')))
+  assert('countdown.json exists', fs.existsSync(path.join(dir, userId, 'countdown', 'countdowns.json')))
+  assert('focus.json exists', fs.existsSync(path.join(dir, userId, 'focus', 'favorites.json')))
+  assert('system.json exists', fs.existsSync(path.join(dir, userId, 'system', 'state.json')))
 
   console.log('\n' + '='.repeat(40))
-  console.log('总计: ' + total + ' | 通过: ' + passed + ' | ' + (passed === total ? '✅ 全部通过' : '❌ 存在失败'))
+  console.log('Total: ' + total + ' | Passed: ' + passed + ' | ' + (passed === total ? '✅ All passed' : '❌ Some failed'))
   console.log('='.repeat(40))
 }
 

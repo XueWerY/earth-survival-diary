@@ -317,88 +317,88 @@ const DEFAULT_CATEGORIES = [
 function main() {
   const rootDir = path.join(__dirname, '..')
 
-  console.log('===== 文档迁移到笔记系统 =====\n')
+  console.log('===== Docs Migration to Notes System =====\n')
 
   // 1. 读取源文件
   const specPath = path.join(rootDir, '项目规范.md')
   const readmePath = path.join(rootDir, 'README.md')
 
   if (!fs.existsSync(specPath)) {
-    console.error('错误: 项目规范.md 不存在')
+    console.error('Error: 项目规范.md does not exist')
     process.exit(1)
   }
   if (!fs.existsSync(readmePath)) {
-    console.error('错误: README.md 不存在')
+    console.error('Error: README.md does not exist')
     process.exit(1)
   }
 
-  console.log('读取 项目规范.md ...')
+  console.log('Reading 项目规范.md ...')
   const specText = fs.readFileSync(specPath, 'utf-8')
-  console.log('读取 README.md ...')
+  console.log('Reading README.md ...')
   const readmeText = fs.readFileSync(readmePath, 'utf-8')
 
-  // 2. 解析章节
-  console.log('\n解析 项目规范 章节...')
+  // 2. Parse sections
+  console.log('\nParsing project spec sections...')
   const specParsed = parseMdSections(specText)
   const specPages = buildSpecPages(specParsed.headings, specParsed.h1Title)
-  console.log(`  → ${specPages.length} 个页面 (含封面和致谢)`)
+  console.log(`  → ${specPages.length} pages (incl. cover & credits)`)
 
-  console.log('解析 使用指南 章节...')
+  console.log('Parsing user guide sections...')
   const readmeParsed = parseMdSections(readmeText)
   const readmePages = buildReadmePages(readmeParsed.headings, readmeParsed.h1Title)
-  console.log(`  → ${readmePages.length} 个页面 (含封面和致谢)`)
+  console.log(`  → ${readmePages.length} pages (incl. cover & credits)`)
 
   // 3. 查找数据目录
   const dataDir = getDataDir()
   if (!dataDir) {
-    console.warn('\n警告: 未找到数据目录 (%APPDATA%/earth-survival-diary/data 或 ./data)')
-    console.warn('笔记创建将跳过。首次启动应用注册用户后，笔记会自动创建。')
-    console.log('\n删除源文件...')
+    console.warn('\nWarning: Data directory not found (%APPDATA%/earth-survival-diary/data or ./data)')
+    console.warn('Note creation skipped. Notes will be auto-created after first user registration on app launch.')
+    console.log('\nDeleting source files...')
     fs.unlinkSync(specPath)
     fs.unlinkSync(readmePath)
-    console.log('完成 (无用户数据，仅删除源文件)')
+    console.log('Done (no user data, source files deleted only)')
     return
   }
-  console.log(`\n数据目录: ${dataDir}`)
+  console.log(`\nData directory: ${dataDir}`)
 
-  // 4. 获取用户
+  // 4. Get users
   const users = getUsers(dataDir)
   if (users.length === 0) {
-    console.warn('\n警告: 未找到已注册用户')
-    console.warn('笔记创建将跳过。首次启动应用注册用户后，笔记会自动创建。')
-    console.log('\n删除源文件...')
+    console.warn('\nWarning: No registered users found')
+    console.warn('Note creation skipped. Notes will be auto-created after first user registration on app launch.')
+    console.log('\nDeleting source files...')
     fs.unlinkSync(specPath)
     fs.unlinkSync(readmePath)
-    console.log('完成 (无用户数据，仅删除源文件)')
+    console.log('Done (no user data, source files deleted only)')
     return
   }
-  console.log(`找到 ${users.length} 个用户: ${users.map(u => u.email).join(', ')}`)
+  console.log(`Found ${users.length} user(s): ${users.map(u => u.email).join(', ')}`)
 
-  // 5. 为每个用户创建笔记
+  // 5. Create notes for each user
   const now = new Date().toISOString()
 
   for (const user of users) {
-    console.log(`\n处理用户: ${user.email} (${user.id})`)
+    console.log(`\nProcessing user: ${user.email} (${user.id})`)
 
-    // 确保分类存在
+    // Ensure categories exist
     const catPath = path.join(dataDir, user.id, 'notes', 'categories.json')
     let categories = readJson(catPath)
     if (!categories || categories.length === 0) {
       categories = [...DEFAULT_CATEGORIES]
       writeJson(catPath, categories)
-      console.log('  → 初始化默认分类')
+      console.log('  → Initialized default categories')
     }
 
-    // 读取现有笔记
+    // Read existing notes
     const notesPath = path.join(dataDir, user.id, 'notes', 'notes.json')
     let notes = readJson(notesPath, [])
 
-    // 检查是否已有同名笔记
+    // Check for existing notes with same title
     const hasSpec = notes.some(n => n.title === '项目规范')
     const hasGuide = notes.some(n => n.title === '使用指南')
 
     if (hasSpec) {
-      console.log('  → 项目规范 笔记已存在，跳过')
+      console.log('  → Project spec note already exists, skipping')
     } else {
       const specNote = {
         id: genId('n_'),
@@ -411,11 +411,11 @@ function main() {
         updatedAt: now,
       }
       notes.unshift(specNote)
-      console.log(`  → 创建笔记「项目规范」(${specPages.length} 页)`)
+      console.log(`  → Created note "Project Spec" (${specPages.length} pages)`)
     }
 
     if (hasGuide) {
-      console.log('  → 使用指南 笔记已存在，跳过')
+      console.log('  → User guide note already exists, skipping')
     } else {
       const guideNote = {
         id: genId('n_'),
@@ -428,21 +428,21 @@ function main() {
         updatedAt: now,
       }
       notes.unshift(guideNote)
-      console.log(`  → 创建笔记「使用指南」(${readmePages.length} 页)`)
+      console.log(`  → Created note "User Guide" (${readmePages.length} pages)`)
     }
 
-    // 保存笔记
+    // Save notes
     writeJson(notesPath, notes)
   }
 
-  // 6. 删除源文件
-  console.log('\n删除源文件...')
+  // 6. Delete source files
+  console.log('\nDeleting source files...')
   fs.unlinkSync(specPath)
-  console.log('  → 项目规范.md 已删除')
+  console.log('  → 项目规范.md deleted')
   fs.unlinkSync(readmePath)
-  console.log('  → README.md 已删除')
+  console.log('  → README.md deleted')
 
-  console.log('\n===== 迁移完成 =====')
+  console.log('\n===== Migration complete =====')
 }
 
 main()

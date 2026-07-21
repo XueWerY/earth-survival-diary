@@ -243,7 +243,6 @@ function panelNavigate(panelIndex: number, module: string) {
 const isElectron = computed(() => typeof window !== 'undefined' && !!(window as any).electronAPI)
 const isMobile = computed(() => {
   if (typeof window === 'undefined') return false
-  if ((window as any).harmonyAPI) return true
   const cap = (window as any).Capacitor
   return !!(cap && cap.isNativePlatform && cap.isNativePlatform())
 })
@@ -450,7 +449,7 @@ const startVersionChecks = async () => {
           showAppChangelogDialog.value = true
         }
       } catch (e) {
-        console.error('[App] 版本更新检测失败:', e)
+        console.error('[App] Version update check failed:', e)
       }
     } else {
       // 非 Electron 端（Android/Capacitor）：检查持久化的版本号
@@ -583,8 +582,7 @@ const getNextOccurrence = (baseDate: string, strategy: string, customDays: numbe
 
 const scheduleListReminders = async () => {
   const isAndroidCapacitor = typeof window !== 'undefined' && !(window as any).electronAPI && typeof (window as any).Capacitor !== 'undefined'
-  const isHarmony = typeof window !== 'undefined' && !!(window as any).harmonyAPI
-  if (!window.electronAPI?.scheduleReminders && !isAndroidCapacitor && !isHarmony) return
+  if (!window.electronAPI?.scheduleReminders && !isAndroidCapacitor) return
   try {
     const now = dayjs()
     const today = now.startOf('day')
@@ -833,8 +831,8 @@ const scheduleListReminders = async () => {
     logger.info('[提醒] 调度提醒任务', { count: reminders.length, persistDuration })
     if (window.electronAPI?.scheduleReminders) {
       window.electronAPI.scheduleReminders(reminders, persistDuration)
-    } else if (isAndroidCapacitor || isHarmony) {
-      // Android 端和鸿蒙端：使用 JS 定时器调度提醒（替代系统通知）
+    } else if (isAndroidCapacitor) {
+      // Android 端：使用 JS 定时器调度提醒（替代系统通知）
       reminderTimers.forEach(t => clearTimeout(t))
       reminderTimers.length = 0
       const nowMs = Date.now()

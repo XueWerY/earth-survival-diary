@@ -25,7 +25,7 @@
           >{{ seg.label }}</span>
         </template>
       </div>
-      <button v-if="isEditing && detailNote" class="breadcrumb-rename-btn" @click="startRenameNote" title="重命名笔记">
+      <button v-if="detailNote" class="breadcrumb-rename-btn" @click="startRenameNote" title="重命名笔记">
         <el-icon><EditPen /></el-icon>
       </button>
       <button v-if="navPath.length >= 2" class="breadcrumb-fav-btn" :class="{ active: isCurrentFavorited }" @click="toggleFavorite" title="收藏当前视图">
@@ -37,13 +37,8 @@
       <button v-if="isCategoryView && viewMode === 'list'" class="breadcrumb-sort-btn" @click="openSortDropdown" title="排序">
         <el-icon><Sort /></el-icon>
       </button>
-      <button v-if="isNotesHome" class="breadcrumb-import-btn" @click="triggerImportHtml" title="导入笔记 HTML 文件">
-        <el-icon><Upload /></el-icon>
-      </button>
-      <button v-if="plusAction" class="breadcrumb-plus-btn" @click="plusAction" title="添加"><el-icon><Plus /></el-icon></button>
+      <button v-if="plusAction" class="breadcrumb-plus-btn" @click="plusAction" :title="plusActionTitle"><el-icon><Plus /></el-icon></button>
     </div>
-
-    <input ref="importFileInputRef" type="file" accept=".html,.htm" style="display:none" @change="handleImportHtml" />
 
     <div v-if="activeDropdown === 'segment'" class="page-dropdown" :style="dropdownPosStyle" @click.stop>
       <div v-for="item in segmentDropdownItems" :key="item.id" class="page-dropdown-item" :class="{ current: item.current }" @click="handleSegmentDropdownSelect(item)">
@@ -89,7 +84,7 @@
           <el-scrollbar>
             <template v-if="isCategoryView">
               <el-empty
-                v-if="filteredNotes.length === 0"
+                v-if="filteredNotes.length === 0 && !isAllView"
                 description="还没有笔记，点击右上角 + 写第一条吧"
                 :image-size="120"
               />
@@ -114,7 +109,7 @@
                         <button class="card-icon-btn danger" title="删除" @click.stop="handleDeleteNote(note)"><el-icon><Delete /></el-icon></button>
                       </div>
                     </div>
-                    <div class="note-card-meta">总共{{ getPageCount(note.content) }}页，全文{{ getWordCount(note.content) }}字</div>
+                    <div class="note-card-meta">{{ getPageCount(note.content) }} 个标题，全文 {{ getWordCount(note.content) }} 字</div>
                     <div class="note-card-meta-time">创建于{{ formatDate(note.createdAt) }} · 修改于{{ formatDate(note.updatedAt) }}</div>
                   </div>
                 </div>
@@ -140,7 +135,7 @@
                         <button class="card-icon-btn danger" title="删除" @click.stop="handleDeleteNote(note)"><el-icon><Delete /></el-icon></button>
                       </div>
                     </div>
-                    <div class="note-card-meta">总共{{ getPageCount(note.content) }}页，全文{{ getWordCount(note.content) }}字</div>
+                    <div class="note-card-meta">{{ getPageCount(note.content) }} 个标题，全文 {{ getWordCount(note.content) }} 字</div>
                     <div class="note-card-meta-time">创建于{{ formatDate(note.createdAt) }} · 修改于{{ formatDate(note.updatedAt) }}</div>
                   </div>
                 </div>
@@ -154,30 +149,13 @@
     <!-- 详情/编辑视图 -->
     <div v-else-if="viewMode === 'detail'" class="detail-view">
       <NoteEditor
-        v-if="isEditing"
         ref="editorRef"
         :note="detailNote"
-        :categories="noteStore.categories"
         :clockDisplay="clockDisplay"
         :totalWordCount="totalWordCount"
         @save="handleSaveEdit"
-        @cancel="handleCancelEdit"
         @back="closeDetail"
         @togglePin="handleTogglePin(detailNote); detailNote = { ...detailNote, pinned: !detailNote.pinned }"
-        @preview="handlePreviewFromEditor"
-      />
-      <NotePreview
-        v-else-if="detailNote"
-        :note="detailNote"
-        :categories="noteStore.categories"
-        :clockDisplay="clockDisplay"
-        :totalWordCount="totalWordCount"
-        :isFullscreen="isFullscreen"
-        @close="closeDetail"
-        @edit="enterEditMode"
-        @delete="handleDeleteNote(detailNote)"
-        @togglePin="handleTogglePin(detailNote); detailNote = { ...detailNote, pinned: !detailNote.pinned }"
-        @toggleFullscreen="toggleFullscreen"
       />
     </div>
 
@@ -205,20 +183,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch, inject, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Edit, Delete, Star, StarFilled, Document, ArrowLeft, CollectionTag, Sort, EditPen, Upload } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, Star, StarFilled, Document, ArrowLeft, CollectionTag, Sort, EditPen } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import NoteEditor from './NoteEditor.vue'
-import NotePreview from './NotePreview.vue'
 import CategoryForm from './CategoryForm.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
-import { useNoteStore, ALL_CATEGORY_VALUE, getNotePlainText, parseNotePages, type Note, type NoteCategory, type NotePage } from '../../stores/noteStore'
+import { useNoteStore, ALL_CATEGORY_VALUE, getMdPlainText, extractMdOutline, type Note, type NoteCategory } from '../../stores/noteStore'
 import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem, type FavoriteItem } from '../../composables/usePageNav'
-import { getData, setData, getSystemStateField, setSystemStateField } from '../../services/storageService'
+import { getData, setData } from '../../services/storageService'
 import { logger } from '../../lib/logger'
-
-const emit = defineEmits<{
-  (e: 'fullscreen-change', val: boolean): void
-}>()
 
 const pageNav = usePageNav()
 const noteStore = useNoteStore()
@@ -242,6 +215,11 @@ const plusAction = computed(() => {
   if (isNotesHome.value) return handleAddCategory
   if (isCategoryView.value && !isAllView.value) return handleAddNote
   return null
+})
+
+const plusActionTitle = computed(() => {
+  if (isNotesHome.value) return '新建分类'
+  return '新建笔记'
 })
 
 const handleBreadcrumbModuleClick = async () => {
@@ -381,8 +359,7 @@ const toggleSegmentDropdown = (seg: BreadcrumbSegment, event: MouseEvent) => {
     return
   }
   const target = event.currentTarget as HTMLElement
-  const rect = target.getBoundingClientRect()
-  dropdownPos.value = { top: rect.bottom + 4, left: rect.left - 8 }
+  dropdownPos.value = safeDropdownPos(target)
   activeDropdown.value = 'segment'
   activeSegment.value = seg
 }
@@ -396,6 +373,15 @@ const handleSegmentDropdownSelect = (item: DropdownItem) => {
 const closeDropdown = () => {
   activeDropdown.value = null
   activeSegment.value = null
+}
+
+const safeDropdownPos = (target: HTMLElement, minWidth = 140) => {
+  const rect = target.getBoundingClientRect()
+  const vw = window.innerWidth
+  let left = rect.left - 8
+  if (left + minWidth > vw - 8) left = vw - minWidth - 8
+  if (left < 8) left = 8
+  return { top: rect.bottom + 4, left }
 }
 
 // ====== 排序功能 ======
@@ -418,8 +404,7 @@ const openSortDropdown = (event: MouseEvent) => {
     return
   }
   const target = event.currentTarget as HTMLElement
-  const rect = target.getBoundingClientRect()
-  sortDropdownPos.value = { top: rect.bottom + 4, left: rect.left - 8 }
+  sortDropdownPos.value = safeDropdownPos(target)
   activeDropdown.value = 'sort'
 }
 
@@ -470,8 +455,7 @@ const openFavoritesDropdown = (event: MouseEvent) => {
     return
   }
   const target = event.currentTarget as HTMLElement
-  const rect = target.getBoundingClientRect()
-  dropdownPos.value = { top: rect.bottom + 4, left: rect.left - 8 }
+  dropdownPos.value = safeDropdownPos(target)
   activeDropdown.value = 'favorites'
 }
 
@@ -518,14 +502,14 @@ const formatDate = (date: string): string => {
   return d.format('YYYY-MM-DD')
 }
 
-// 获取笔记页面数
+// 获取笔记标题数（大纲条目数）
 const getPageCount = (content: string): number => {
-  return parseNotePages(content).length
+  return extractMdOutline(content).length
 }
 
 // 获取笔记全文字数（仅统计中文、字母、数字）
 const getWordCount = (content: string): number => {
-  const text = getNotePlainText(content)
+  const text = getMdPlainText(content)
   return text.replace(/\s+/g, '').replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '').length
 }
 
@@ -546,90 +530,6 @@ const updateWidth = () => {
   }
 }
 
-// ====== 导入笔记 HTML ======
-const importFileInputRef = ref<HTMLInputElement | null>(null)
-
-const triggerImportHtml = () => {
-  importFileInputRef.value?.click()
-}
-
-const handleImportHtml = async (event: Event) => {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
-  // 重置 input 以便重复导入同一文件
-  input.value = ''
-
-  try {
-    const text = await file.text()
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(text, 'text/html')
-
-    // 提取笔记标题
-    const titleEl = doc.querySelector('title')
-    const noteTitle = titleEl?.textContent?.trim() || file.name.replace(/\.html?$/i, '')
-
-    // 提取所有幻灯片页面
-    const slideEls = doc.querySelectorAll('.slide')
-    if (slideEls.length === 0) {
-      ElMessage.error('未在 HTML 中找到笔记内容，请确认是导出的笔记文件')
-      return
-    }
-
-    const genId = () => 'p_' + Date.now() + Math.random().toString(36).slice(2, 8)
-    const pages: NotePage[] = []
-    let currentLevel1Id: string | undefined
-    let currentLevel2Id: string | undefined
-
-    slideEls.forEach((slide) => {
-      const pageTitle = slide.getAttribute('data-title') || ''
-      const pageType = slide.getAttribute('data-type') || ''
-      const levelNum = parseInt(slide.getAttribute('data-level') || '1', 10)
-      const level: 1 | 2 | 3 = levelNum === 2 ? 2 : (levelNum === 3 ? 3 : 1)
-      const contentEl = slide.querySelector('.slide-content')
-      const content = contentEl ? contentEl.innerHTML : ''
-
-      const id = genId()
-      let parentId: string | undefined
-      if (level === 1) {
-        currentLevel1Id = id
-        currentLevel2Id = undefined
-      } else if (level === 2) {
-        parentId = currentLevel1Id
-        currentLevel2Id = id
-      } else {
-        parentId = currentLevel2Id
-      }
-
-      const page: NotePage = {
-        id,
-        title: pageTitle,
-        level,
-        content,
-      }
-      if (parentId) page.parentId = parentId
-      if (pageType === 'cover' || pageType === 'thanks') page.type = pageType
-      pages.push(page)
-    })
-
-    const content = JSON.stringify({ pages })
-    const categoryId = noteStore.categories[0]?.id || 'personal'
-    const note = await noteStore.addNote({
-      title: noteTitle,
-      content,
-      color: '#667eea',
-      categoryId,
-      pinned: false,
-    })
-    if (note) {
-      ElMessage.success(`已导入笔记「${noteTitle}」(${pages.length} 页)`)
-    }
-  } catch (e) {
-    logger.error('[笔记] 导入 HTML 失败', { error: e instanceof Error ? e.message : String(e) })
-    ElMessage.error('导入失败，请检查文件格式')
-  }
-}
-
 // 笔记编辑（通过列表中的编辑按钮或详情视图编辑按钮）
 const handleAddNote = () => {
   // "全部笔记"视图下 currentCategoryFromPath 返回 'all'，不是真实分类 id，需回退到默认分类
@@ -647,29 +547,15 @@ const handleAddNote = () => {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }
-  isEditing.value = true
   viewMode.value = 'detail'
 }
 
 const handleEditNote = (note: Note) => {
   detailNote.value = { ...note }
-  isEditing.value = true
   viewMode.value = 'detail'
   // 持久化 navPath 第3层（笔记 id）
   if (note.id) {
     pageNav.setNavPath(['notes', note.categoryId, note.id])
-  }
-}
-
-const enterEditMode = () => {
-  isEditing.value = true
-}
-
-const handleCancelEdit = () => {
-  if (detailNote.value?.id) {
-    isEditing.value = false
-  } else {
-    closeDetail()
   }
 }
 
@@ -701,56 +587,17 @@ const handleSaveEdit = async (data: { title: string; content: string; categoryId
   }
 }
 
-// 点击预览：先检查本地数据中有没有对应的笔记数据，保存/更新后切换到预览模式
-const handlePreviewFromEditor = async (data: { title: string; content: string; categoryId: string; pinned: boolean }) => {
-  if (detailNote.value?.id) {
-    // 已有笔记：检查本地数据中是否存在，存在则更新
-    const exists = noteStore.notes.some(n => n.id === detailNote.value!.id)
-    if (exists) {
-      const ok = await noteStore.updateNote(detailNote.value.id, {
-        title: data.title,
-        content: data.content,
-        categoryId: data.categoryId,
-        pinned: data.pinned,
-      })
-      if (ok) {
-        detailNote.value = noteStore.notes.find(n => n.id === detailNote.value!.id) || null
-      }
-    }
-  } else {
-    // 新笔记：本地数据中不存在，先保存到本地
-    const note = await noteStore.addNote({
-      title: data.title,
-      content: data.content,
-      categoryId: data.categoryId,
-      pinned: data.pinned,
-    })
-    if (note) {
-      detailNote.value = note
-      // 新笔记保存后持久化 navPath 第3层
-      pageNav.setNavPath(['notes', note.categoryId, note.id])
-    }
-  }
-  isEditing.value = false
-}
-
 const handleTogglePin = async (note: Note) => {
   await noteStore.togglePin(note.id)
 }
 
 // 详情视图
 const detailNote = ref<Note | null>(null)
-const isEditing = ref(false)
 const editorRef = ref<InstanceType<typeof NoteEditor> | null>(null)
-const isFullscreen = ref(false)
-const toggleFullscreen = () => {
-  isFullscreen.value = !isFullscreen.value
-  emit('fullscreen-change', isFullscreen.value)
-}
 
 // 编辑模式下保存当前编辑器内容到 store（用于切换地址/返回前）
 const saveCurrentEditorIfNeeded = async () => {
-  if (!isEditing.value || !editorRef.value || !detailNote.value) return
+  if (!editorRef.value || !detailNote.value) return
   const data = editorRef.value.saveAndGetData()
   await handleSaveEdit(data)
 }
@@ -758,20 +605,12 @@ const saveCurrentEditorIfNeeded = async () => {
 // 仅清空 detail 视图状态（不保存，不 setNavPath）
 const closeDetailSync = () => {
   detailNote.value = null
-  isEditing.value = false
   viewMode.value = 'list'
-  // 重置全屏状态，避免删除笔记后父组件仍处于全屏模式导致停留在预览界面
-  if (isFullscreen.value) {
-    isFullscreen.value = false
-    emit('fullscreen-change', false)
-  }
 }
 
 const openDetail = (note: Note) => {
   detailNote.value = { ...note }
-  isEditing.value = false
   viewMode.value = 'detail'
-  // 持久化 navPath 第3层（笔记 id）
   if (note.id) {
     pageNav.setNavPath(['notes', note.categoryId, note.id])
   }
@@ -827,18 +666,14 @@ const syncDetailFromNavPath = () => {
     if (note) {
       if (detailNote.value?.id !== noteId) {
         detailNote.value = { ...note }
-        isEditing.value = false
         viewMode.value = 'detail'
       }
     } else {
-      // 笔记不存在，回退到分类层
       detailNote.value = null
-      isEditing.value = false
       viewMode.value = 'list'
       pageNav.setNavPath(['notes', path[1]])
     }
-  } else if (path.length <= 2 && viewMode.value === 'detail' && !isEditing.value) {
-    // navPath 缩短到分类层，关闭预览模式 detail 视图（编辑模式由 closeDetail 处理）
+  } else if (path.length <= 2 && viewMode.value === 'detail') {
     detailNote.value = null
     viewMode.value = 'list'
   }
@@ -937,58 +772,19 @@ const updateClock = () => {
 
 const totalWordCount = computed(() => {
   if (!detailNote.value?.content) return 0
-  const text = getNotePlainText(detailNote.value.content)
+  const text = getMdPlainText(detailNote.value.content)
   return text.replace(/\s+/g, '').replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '').length
 })
 
 const initNavPath = async () => {
   if (pageNav.navPath.value.length > 1 && pageNav.navPath.value[0] === 'notes') {
-    // navPath 已存在（如从其他模块切回），手动同步 detail 视图
     syncDetailFromNavPath()
-    await applyPersistedEditMode()
     return
   }
   const restored = await restoreModuleNavPath('notes')
   pageNav.setNavPath(restored)
-  // 等待 navPath watcher 触发 syncDetailFromNavPath 后再恢复编辑/预览模式
   await nextTick()
-  await applyPersistedEditMode()
 }
-
-// 持久化笔记编辑/预览模式的定时器
-let editModePersistTimer: ReturnType<typeof setTimeout> | null = null
-
-// 恢复笔记预览/编辑模式（仅在 detail 视图且有笔记时生效）
-const applyPersistedEditMode = async () => {
-  if (viewMode.value !== 'detail' || !detailNote.value) return
-  // 取消待写的持久化定时器，避免在读取磁盘原值前把 isEditing=false 写入覆盖
-  if (editModePersistTimer) {
-    clearTimeout(editModePersistTimer)
-    editModePersistTimer = null
-  }
-  try {
-    const parsed = (await getSystemStateField('notes')) as Record<string, any> | undefined
-    if (parsed && typeof parsed.isEditing === 'boolean') {
-      isEditing.value = parsed.isEditing
-    }
-  } catch (e) {
-    logger.warn('[笔记] 恢复编辑模式失败', { error: e })
-  }
-}
-
-// 持久化笔记编辑/预览模式（detail 视图时记录 isEditing，离开 detail 时记录 false）
-watch([isEditing, viewMode, detailNote], () => {
-  if (editModePersistTimer) clearTimeout(editModePersistTimer)
-  editModePersistTimer = setTimeout(async () => {
-    try {
-      const existing = (await getSystemStateField('notes')) as Record<string, any> | undefined
-      const shouldEdit = (viewMode.value === 'detail' && detailNote.value) ? isEditing.value : false
-      await setSystemStateField('notes', { ...(existing || {}), isEditing: shouldEdit })
-    } catch (e) {
-      logger.warn('[笔记] 持久化编辑模式失败', { error: e })
-    }
-  }, 300)
-})
 
 onMounted(async () => {
   await noteStore.loadData()
@@ -1185,27 +981,6 @@ onBeforeUnmount(() => {
 }
 
 .breadcrumb-sort-btn:hover {
-  color: var(--chalk-white);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.breadcrumb-import-btn {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  color: var(--chalk-muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: all 0.2s;
-  font-size: 16px;
-  border-radius: 6px;
-}
-
-.breadcrumb-import-btn:hover {
   color: var(--chalk-white);
   background: rgba(255, 255, 255, 0.06);
 }

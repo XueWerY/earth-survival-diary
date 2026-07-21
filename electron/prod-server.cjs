@@ -731,7 +731,7 @@ function createProdServer(options = {}) {
           data.defaultsInitialized = true
           await setUserKV(req.userId, 'system', 'state', data)
           try { fs.unlinkSync(legacyDefaultsPath) } catch {}
-          console.log(`[Data] defaultsInitialized 已从 defaultsInitialized.json 迁移到 state.json: ${req.userId}`)
+          console.log(`[Data] defaultsInitialized migrated from defaultsInitialized.json to state.json: ${req.userId}`)
         }
         if (!data || data.guideCompleted === undefined) {
           const legacyPath = path.join(DATA_DIR, req.userId, 'system', 'guideState.json')
@@ -741,7 +741,7 @@ function createProdServer(options = {}) {
             data.guideCompleted = legacy.guideCompleted
             await setUserKV(req.userId, 'system', 'state', data)
             try { fs.unlinkSync(legacyPath) } catch {}
-            console.log(`[Data] 引导状态已从 guideState.json 迁移到 state.json: ${req.userId}`)
+            console.log(`[Data] Guide state migrated from guideState.json to state.json: ${req.userId}`)
           }
         }
       }
