@@ -1,40 +1,59 @@
 <template>
   <div
     class="main-nav-bar"
-    :class="[`nav-${variant}`, { 'nav-hidden': hidden, 'no-hover': noHover }]"
+    :class="[`nav-${variant}`, { 'nav-hidden': hidden, 'no-hover': noHover, 'nav-collapsed': collapsed }]"
   >
+    <div v-if="variant === 'left'" class="nav-header">
+      <img class="nav-header-logo" :src="appIconUrl" alt="logo" />
+      <span class="nav-header-title">地球Online生存日记</span>
+    </div>
     <div class="nav-items-scroll" ref="scrollRef">
       <button
         v-for="m in MODULES"
         :key="m"
         class="nav-item"
-        :class="{ active: activeModule === m, 'nav-item-bottom': variant === 'left' && m === 'toolbox' }"
+        :class="{ active: activeModule === m }"
         @click="emit('navigate', m)"
       >
-        <span class="nav-item-icon">{{ MODULE_ICONS[m] }}</span>
+        <span class="nav-item-icon">
+          <component :is="MODULE_ICONS[m]" />
+        </span>
         <span class="nav-item-label">{{ MODULE_LABELS[m] }}</span>
       </button>
     </div>
+    <button
+      v-if="variant === 'left'"
+      class="nav-collapse-toggle"
+      :title="collapsed ? '展开导航栏' : '收起导航栏'"
+      @click="emit('toggle-collapse')"
+    >
+      <component :is="collapsed ? Expand : Fold" />
+    </button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
+import { Fold, Expand } from '@element-plus/icons-vue'
 import { MODULES, MODULE_ICONS, MODULE_LABELS } from '../../../composables/usePageNav'
+import appIconUrl from '../../../../build/app-icon.png'
 
 const props = withDefaults(defineProps<{
   activeModule: string
   variant?: 'left' | 'bottom' | 'split'
   hidden?: boolean
   noHover?: boolean
+  collapsed?: boolean
 }>(), {
   variant: 'bottom',
   hidden: false,
   noHover: false,
+  collapsed: false,
 })
 
 const emit = defineEmits<{
   (e: 'navigate', module: string): void
+  (e: 'toggle-collapse'): void
 }>()
 
 const scrollRef = ref<HTMLElement | null>(null)
@@ -74,12 +93,38 @@ watch(() => props.activeModule, scrollToActive)
 
 /* === 桌面端左侧垂直导航栏 === */
 .nav-left {
-  width: 84px;
+  width: 210px;
   height: 100%;
   margin: 0;
   border-radius: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
+}
+
+.nav-left .nav-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 4px 12px;
+  margin: 0 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.nav-left .nav-header-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  flex-shrink: 0;
+}
+
+.nav-left .nav-header-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--chalk-white);
+  line-height: 1.3;
+  white-space: nowrap;
 }
 
 /* === 移动端底部水平导航栏 === */
@@ -97,6 +142,61 @@ watch(() => props.activeModule, scrollToActive)
   margin: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 0;
+}
+
+/* === 桌面端左侧导航栏收起状态 === */
+.nav-left.nav-collapsed {
+  width: 60px;
+}
+
+.nav-left.nav-collapsed .nav-header {
+  justify-content: center;
+  padding: 16px 0 12px;
+  margin: 0 8px;
+}
+
+.nav-left.nav-collapsed .nav-header-title {
+  display: none;
+}
+
+.nav-left.nav-collapsed .nav-items-scroll {
+  padding: 10px 6px 12px;
+}
+
+.nav-left.nav-collapsed .nav-item {
+  justify-content: center;
+  padding: 8px 0;
+  gap: 0;
+}
+
+.nav-left.nav-collapsed .nav-item-label {
+  display: none;
+}
+
+/* === 收起/展开按钮 === */
+.nav-collapse-toggle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  margin: 0 8px 8px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--chalk-white-60);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.nav-collapse-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--chalk-white-85);
+}
+
+.nav-collapse-toggle svg {
+  width: 16px;
+  height: 16px;
 }
 
 @media (max-width: 500px) {
@@ -148,15 +248,11 @@ watch(() => props.activeModule, scrollToActive)
 .nav-left .nav-items-scroll {
   flex: 1;
   flex-direction: column;
+  justify-content: flex-start;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 12px 4px;
+  padding: 10px 8px 12px;
   gap: 8px;
-}
-
-/* 垂直导航栏：工具箱及之后的导航项推到底部 */
-.nav-left .nav-item-bottom {
-  margin-top: auto;
 }
 
 /* 底部导航栏：溢出时左对齐，否则居中 */
@@ -174,10 +270,10 @@ watch(() => props.activeModule, scrollToActive)
 /* === 导航项 === */
 .nav-item {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 2px;
-  padding: 6px 10px;
+  gap: 10px;
+  padding: 8px 12px;
   border-radius: 8px;
   border: none;
   background: transparent;
@@ -186,22 +282,27 @@ watch(() => props.activeModule, scrollToActive)
   white-space: nowrap;
   flex-shrink: 0;
   transition: all 0.15s;
-  min-width: 52px;
+  width: 100%;
+  min-width: 0;
 }
 
-.nav-item:hover {
+.nav-item:not(.active):hover {
   background: rgba(255, 255, 255, 0.08);
   color: var(--chalk-white-85);
 }
 
-/* 桌面端取消鼠标悬停效果 */
+/* 桌面端取消鼠标悬停效果（高亮项除外） */
 .no-hover .nav-item:hover {
   background: transparent;
   color: var(--chalk-white-60);
 }
+.no-hover .nav-item.active:hover {
+  background: rgba(102, 126, 234, 0.18);
+  color: var(--chalk-white);
+}
 
 .nav-item.active {
-  background: transparent;
+  background: rgba(102, 126, 234, 0.18);
   color: var(--chalk-white);
   font-weight: 600;
 }
@@ -209,10 +310,19 @@ watch(() => props.activeModule, scrollToActive)
 .nav-item-icon {
   font-size: 18px;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.nav-item-icon svg {
+  width: 18px;
+  height: 18px;
 }
 
 .nav-item-label {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1;
 }
 </style>

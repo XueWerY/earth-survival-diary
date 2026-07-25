@@ -1,5 +1,8 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import type { Ref } from 'vue'
+import {
+  MapLocation, Notebook, Timer, List, AlarmClock, Calendar, Histogram, Grid, User
+} from '@element-plus/icons-vue'
 import { getSystemStateField, setSystemStateField, type SystemState } from '../services/storageService'
 import { logger } from '../lib/logger'
 
@@ -41,8 +44,8 @@ export interface NavContext {
 
 export const MODULES = ['footprint', 'notes', 'focus', 'list', 'countdown', 'course', 'statistics', 'toolbox', 'profile']
 
-export const MODULE_ICONS: Record<string, string> = {
-  footprint: '👣', notes: '📝', focus: '🧘', list: '📋', countdown: '⏳', course: '📖', statistics: '📊', toolbox: '🧰', profile: '👤'
+export const MODULE_ICONS: Record<string, any> = {
+  footprint: MapLocation, notes: Notebook, focus: Timer, list: List, countdown: AlarmClock, course: Calendar, statistics: Histogram, toolbox: Grid, profile: User
 }
 
 export const MODULE_LABELS: Record<string, string> = {

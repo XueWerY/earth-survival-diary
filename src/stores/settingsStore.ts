@@ -30,6 +30,8 @@ export interface ExtendedUserSettings {
     }
     // 提醒持续显示时间（秒）
     reminderPersistDuration: number
+    // 桌面端左侧导航栏是否收起
+    sidebarCollapsed: boolean
 }
 
 // 默认设置
@@ -56,7 +58,8 @@ export const defaultSettings: ExtendedUserSettings = {
             evening: 2
         }
     },
-    reminderPersistDuration: 30
+    reminderPersistDuration: 30,
+    sidebarCollapsed: false
 }
 
 export const useSettingsStore = defineStore('settings', () => {

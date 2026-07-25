@@ -7,17 +7,7 @@
         <template v-for="(seg, idx) in localBreadcrumbSegments" :key="idx">
           <span v-if="seg.dropdownItems" class="breadcrumb-sep clickable" @click.stop="toggleSegmentDropdown(seg, $event)">{{ (activeDropdown === 'segment' && activeSegment === seg) ? '∨' : '>' }}</span>
           <span v-else class="breadcrumb-sep">></span>
-          <input
-            v-if="isRenamingNote && idx === localBreadcrumbSegments.length - 1"
-            :ref="(el) => setRenameInputRef(el as HTMLInputElement | null)"
-            v-model="renameInputValue"
-            class="breadcrumb-rename-input"
-            @click.stop
-            @keyup.enter="commitRenameNote"
-            @blur="commitRenameNote"
-          />
           <span
-            v-else
             class="breadcrumb-segment"
             :class="{ clickable: seg.clickable }"
             :style="{ color: seg.color }"
@@ -177,6 +167,19 @@
       :message="`确定要删除该分类吗？分类下的笔记将自动归入其他分类。`"
       @confirm="onCategoryDeleteConfirmed"
     />
+
+    <el-dialog v-model="showRenameDialog" width="420px" :show-close="false" @open="onRenameDialogOpen">
+      <template #header>
+        <div style="text-align: center; font-size: 16px; font-weight: 600; color: #fff; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.08);">重命名笔记</div>
+      </template>
+      <el-input v-model="renameInputValue" placeholder="输入笔记名称" @keyup.enter="commitRenameNote" />
+      <template #footer>
+        <div style="display: flex; justify-content: center; gap: 12px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.08);">
+          <el-button @click="showRenameDialog = false">取消</el-button>
+          <el-button type="primary" @click="commitRenameNote">确定</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -625,27 +628,25 @@ const closeDetail = async () => {
   }
 }
 
-// ====== 面包屑重命名笔记 ======
+// ====== 弹窗重命名笔记 ======
 const isRenamingNote = ref(false)
 const renameInputValue = ref('')
-const renameInputRef = ref<HTMLInputElement | null>(null)
-
-const setRenameInputRef = (el: HTMLInputElement | null) => {
-  renameInputRef.value = el
-}
+const showRenameDialog = ref(false)
 
 const startRenameNote = () => {
   if (!detailNote.value) return
   renameInputValue.value = detailNote.value.title || ''
+  showRenameDialog.value = true
+}
+
+const onRenameDialogOpen = () => {
+  // el-dialog 打开后自动聚焦输入框
   isRenamingNote.value = true
-  nextTick(() => {
-    renameInputRef.value?.focus()
-    renameInputRef.value?.select()
-  })
 }
 
 const commitRenameNote = () => {
   if (!isRenamingNote.value) return
+  showRenameDialog.value = false
   isRenamingNote.value = false
   const newTitle = renameInputValue.value.trim()
   if (!newTitle || !detailNote.value) return
@@ -883,20 +884,6 @@ onBeforeUnmount(() => {
 
 .breadcrumb-segment.clickable:hover {
   background: rgba(255, 255, 255, 0.06);
-}
-
-.breadcrumb-rename-input {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(102, 126, 234, 0.5);
-  border-radius: 6px;
-  color: var(--chalk-white);
-  font-size: 14px;
-  font-weight: 500;
-  padding: 4px 8px;
-  outline: none;
-  min-width: 80px;
-  max-width: 220px;
-  flex-shrink: 0;
 }
 
 .breadcrumb-rename-btn {

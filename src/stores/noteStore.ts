@@ -2,6 +2,9 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { logger } from '../lib/logger'
 import { getData, setData } from '../services/storageService'
+import { guideContent } from '../data/guideContent'
+
+const GUIDE_NOTE_ID = 'guide-note'
 
 // 笔记
 export interface Note {
@@ -30,6 +33,7 @@ export const DEFAULT_NOTE_CATEGORIES: NoteCategory[] = [
   { id: 'work', name: '工作', icon: '💼', color: '#3b82f6', isCustom: false },
   { id: 'study', name: '学习', icon: '📚', color: '#10b981', isCustom: false },
   { id: 'ideas', name: '灵感', icon: '💡', color: '#f59e0b', isCustom: false },
+  { id: 'guide', name: '攻略', icon: '📖', color: '#ec4899', isCustom: false },
 ]
 
 // 笔记可选颜色（12 色，与默认清单颜色一致）
@@ -110,9 +114,18 @@ export const useNoteStore = defineStore('note', () => {
         await setData('notes', 'categories', categories.value)
       } else {
         categories.value = savedCategories
+        // 已有用户补齐缺失的默认分类
+        if (!categories.value.some(c => c.id === 'guide')) {
+          categories.value.push(DEFAULT_NOTE_CATEGORIES.find(c => c.id === 'guide')!)
+          await saveCategories()
+        }
       }
 
       notes.value = savedNotes || []
+
+      // 首次启动：自动创建使用指南笔记到攻略分类
+      await ensureGuideNote()
+
       isLoaded.value = true
       logger.info('[笔记] 数据加载完成', { notes: notes.value.length, categories: categories.value.length })
     } catch (e) {
@@ -256,6 +269,24 @@ export const useNoteStore = defineStore('note', () => {
   const getCategoryCount = (categoryId: string): number => {
     if (categoryId === ALL_CATEGORY_VALUE) return notes.value.length
     return notes.value.filter(n => n.categoryId === categoryId).length
+  }
+
+  const ensureGuideNote = async () => {
+    if (notes.value.some(n => n.id === GUIDE_NOTE_ID)) return
+    const now = new Date().toISOString()
+    const note: Note = {
+      id: GUIDE_NOTE_ID,
+      title: '使用指南',
+      content: guideContent,
+      color: '#ec4899',
+      categoryId: 'guide',
+      pinned: false,
+      createdAt: now,
+      updatedAt: now,
+    }
+    notes.value.unshift(note)
+    await saveNotes()
+    logger.info('[笔记] 初始化使用指南笔记')
   }
 
   const getNotesByCategory = (categoryId: string): Note[] => {

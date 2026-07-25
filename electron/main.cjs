@@ -2,7 +2,7 @@ const { app, BrowserWindow, Menu, ipcMain, shell, dialog, Tray, screen, clipboar
 const path = require('path')
 const fs = require('fs')
 const { spawn, execSync } = require('child_process')
-const { autoUpdater } = require('electron-updater')
+let autoUpdater = null
 
 Menu.setApplicationMenu(null)
 
@@ -84,15 +84,27 @@ ipcMain.handle('set-window-size', async (_event, userId, w, h) => {
     const display = screen.getPrimaryDisplay()
     const { width: maxW, height: maxH } = display.size
     const scaleFactor = display.scaleFactor
+    // w=0,h=0 表示全屏有边框模式
+    const isBordered = w === 0 && h === 0
     // w/h 的单位与 display.size 一致，直接比较
-    const isMax = w >= maxW - 1 && h >= maxH - 1
+    const isMax = !isBordered && w >= maxW - 1 && h >= maxH - 1
 
     // 保存物理分辨率（前端展示用）
     const settings = readUserSettings(userId)
-    settings.windowSize = { width: Math.round(w * scaleFactor), height: Math.round(h * scaleFactor) }
+    if (isBordered) {
+      settings.windowSize = { width: Math.round(maxW * scaleFactor), height: Math.round(maxH * scaleFactor), mode: 'bordered' }
+    } else {
+      settings.windowSize = { width: Math.round(w * scaleFactor), height: Math.round(h * scaleFactor) }
+    }
     writeUserSettings(userId, settings)
 
-    if (isMax) {
+    if (isBordered) {
+      // 全屏有边框：最大化窗口，保留边框和标题栏
+      if (mainWindow.isFullScreen()) mainWindow.setFullScreen(false)
+      mainWindow.setResizable(true)
+      mainWindow.maximize()
+      mainWindow.setResizable(false)
+    } else if (isMax) {
       // 临时启用可调整，防止 resizable:false 时 setFullScreen 无效
       mainWindow.setResizable(true)
       if (!mainWindow.isFullScreen()) mainWindow.setFullScreen(true)
@@ -123,10 +135,19 @@ ipcMain.handle('apply-window-size', async (_event, userId) => {
   const settings = readUserSettings(userId)
   if (!settings.windowSize) return false
 
+  const isBordered = settings.windowSize.mode === 'bordered'
   const { width: savedPhysW, height: savedPhysH } = settings.windowSize
   const display = screen.getPrimaryDisplay()
   const { width: maxW, height: maxH } = display.size
   const scaleFactor = display.scaleFactor
+
+  if (isBordered) {
+    if (mainWindow.isFullScreen()) mainWindow.setFullScreen(false)
+    mainWindow.setResizable(true)
+    mainWindow.maximize()
+    mainWindow.setResizable(false)
+    return true
+  }
 
   // 物理值转回逻辑值，与 set-window-size 存储时的转换相反
   const logicalW = Math.round(savedPhysW / scaleFactor)
@@ -198,8 +219,24 @@ ipcMain.handle('set-window-title', async (_event, title) => {
   return true
 })
 
-autoUpdater.autoDownload = false
-autoUpdater.channel = 'latest'
+function ensureAutoUpdater() {
+  if (autoUpdater) return autoUpdater
+  autoUpdater = require('electron-updater').autoUpdater
+  autoUpdater.autoDownload = false
+  autoUpdater.channel = 'latest'
+
+  autoUpdater.on('update-available', (info) => {
+    debugLog('[Main] autoUpdater: New version detected ' + info.version)
+    sendUpdateStatusToMain({ status: 'available', version: info.version })
+  })
+
+  autoUpdater.on('error', (err) => {
+    debugLog('[Main] autoUpdater error: ' + err.message)
+    sendUpdateStatusToMain({ status: 'error', message: err.message })
+  })
+
+  return autoUpdater
+}
 
 function sendUpdateStatusToMain(data) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -208,16 +245,6 @@ function sendUpdateStatusToMain(data) {
     debugLog('[Main] mainWindow is not available, cannot send update status')
   }
 }
-
-autoUpdater.on('update-available', (info) => {
-  debugLog('[Main] autoUpdater: New version detected ' + info.version)
-  sendUpdateStatusToMain({ status: 'available', version: info.version })
-})
-
-autoUpdater.on('error', (err) => {
-  debugLog('[Main] autoUpdater error: ' + err.message)
-  sendUpdateStatusToMain({ status: 'error', message: err.message })
-})
 
 // ========== 跨平台版本检测（从发布文件名提取版本号） ==========
 const RELEASES_API = 'https://api.github.com/repos/XueWerY/earth-survival-diary/releases'
@@ -249,7 +276,7 @@ function compareVersions(v1, v2) {
 ipcMain.handle('check-for-update', async () => {
   debugLog('[Main] Received manual update check request')
   try {
-    const result = await autoUpdater.checkForUpdates()
+    const result = await ensureAutoUpdater().checkForUpdates()
     if (!result || result.updateInfo.version === app.getVersion()) {
       debugLog('[Main] Already up to date: ' + app.getVersion())
       sendUpdateStatusToMain({ status: 'no-update' })
@@ -548,6 +575,10 @@ async function startServer() {
     ? path.join(process.resourcesPath, 'app.asar', 'dist')
     : path.join(__dirname, '..', 'dist')
 
+  const nodeModulesPath = isPackaged
+    ? path.join(process.resourcesPath, 'node_modules')
+    : path.join(__dirname, '..', 'node_modules')
+
   const { createProdServer } = require(serverModulePath)
   const portsToTry = [5000, 5001, 5002, 5003]
 
@@ -557,7 +588,8 @@ async function startServer() {
         port: port,
         dataDir: path.join(app.getPath('userData'), 'data'),
         distPath: distPath,
-        resourcesPath: resourcesPath
+        resourcesPath: resourcesPath,
+        nodeModulesPath: nodeModulesPath
       })
 
       await new Promise((resolve, reject) => {
@@ -590,8 +622,8 @@ function createWindow(url) {
   const primaryDisplay = screen.getPrimaryDisplay()
   const { width: screenW, height: screenH } = primaryDisplay.size
   const iconPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'build', 'icon.png')
-    : path.join(__dirname, '..', 'build', 'icon.png')
+    ? path.join(process.resourcesPath, 'build', 'icon.ico')
+    : path.join(__dirname, '..', 'build', 'icon.ico')
 
   const defaultW = 1920
   const defaultH = 1080
@@ -1337,7 +1369,7 @@ function scheduleNextRepeat(reminder) {
   const nextReminder = { ...reminder, triggerTime: nextTrigger.toISOString() }
   if (reminder.repeatStrategy === 'hourly' && reminder.focusStartTimestamp) {
     const elapsedHours = Math.round((nextTrigger.getTime() - reminder.focusStartTimestamp) / 3600000)
-    nextReminder.body = `You have been focused for ${elapsedHours} hour(s), please take a break!`
+    nextReminder.body = `您已专注 ${elapsedHours} 小时，请注意休息！`
   }
   const timer = setTimeout(() => enqueueReminder(nextReminder), delay)
   reminderTimers.push({ id: reminder.id, timeout: timer })
@@ -1439,7 +1471,7 @@ app.whenReady().then(async () => {
     setupTray()
 
     setTimeout(() => {
-      autoUpdater.checkForUpdates().catch(e => debugLog('[Updater] Check failed: ' + e.message))
+      ensureAutoUpdater().checkForUpdates().catch(e => debugLog('[Updater] Check failed: ' + e.message))
     }, 5000)
   } catch (err) {
     errorLog('[Electron] Fatal error: ' + err.message)

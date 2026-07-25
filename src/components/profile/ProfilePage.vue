@@ -1,6 +1,6 @@
 <template>
   <div class="profile-page">
-    <div class="profile-content" v-show="!showGuideHtml">
+    <div class="profile-content">
       <el-scrollbar>
         <div class="profile-section" id="section-profile">
           <h3 class="section-title">个人信息</h3>
@@ -168,10 +168,6 @@
               <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
               <span>新手引导</span>
             </button>
-            <button class="capsule-btn" @click="showGuideHtml = true" :disabled="isGuideActive">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-              <span>使用指南</span>
-            </button>
           </div>
         </div>
 
@@ -248,14 +244,6 @@
         <button class="changelog-panel-close" @click="showChangelogDialog = false">&times;</button>
       </div>
       <div class="changelog-panel-body" v-html="changelogHtml"></div>
-    </div>
-
-    <div v-if="showGuideHtml" class="guide-html-panel">
-      <div class="guide-html-header">
-        <span class="guide-html-title">使用指南</span>
-        <button class="guide-html-close" @click="showGuideHtml = false">&times;</button>
-      </div>
-      <iframe class="guide-html-iframe" :src="guideHtmlSrc" title="使用指南"></iframe>
     </div>
 
   </div>
@@ -339,9 +327,10 @@ function generateResolutionOptions(screenW: number, screenH: number, scaleFactor
     [1024, 576]
   ]
   const options: { label: string; value: string }[] = []
+  options.push({ label: '全屏有边框', value: 'bordered' })
   // 最大分辨率：label 用物理值展示，value 用逻辑值（与 Electron API 单位一致）
   const nativeKey = `${screenW}x${screenH}`
-  options.push({ label: '全屏', value: nativeKey })
+  options.push({ label: '全屏无边框', value: nativeKey })
   // 添加小于等于物理分辨率的预设
   for (const [pw, ph] of presets) {
     if (pw === physicalW && ph === physicalH) continue // 跳过已添加的最大分辨率
@@ -362,7 +351,9 @@ const loadWindowSize = async () => {
   }
   if (window.electronAPI?.getWindowSize) {
     const pref = await window.electronAPI.getWindowSize(authStore.user.id)
-    if (pref && window.electronAPI?.getScreenInfo) {
+    if (pref && pref.mode === 'bordered') {
+      windowResolution.value = 'bordered'
+    } else if (pref && window.electronAPI?.getScreenInfo) {
       // 存储的是物理值，转回逻辑值匹配选项
       const screenInfo = await window.electronAPI.getScreenInfo()
       const logicalW = Math.round(pref.width / screenInfo.scaleFactor)
@@ -377,6 +368,11 @@ const loadWindowSize = async () => {
 
 const handleResolutionChange = async (val: string) => {
   if (!window.electronAPI?.setWindowSize || !authStore.user?.id) return
+  if (val === 'bordered') {
+    await window.electronAPI.setWindowSize(authStore.user.id, 0, 0)
+    logger.info('[设置] 修改窗口分辨率为全屏有边框')
+    return
+  }
   const parts = val.split('x')
   if (parts.length === 2) {
     const w = parseInt(parts[0], 10)
@@ -425,8 +421,6 @@ const checkForUpdate = async () => {
 }
 
 const showChangelogDialog = ref(false)
-const showGuideHtml = ref(false)
-const guideHtmlSrc = './使用指南.html?embed=1'
 
 const changelogHtml = computed(() => {
   const content = changelogContent.replace(/^# 更新日志\n*/, '')
@@ -1265,62 +1259,5 @@ watch(() => form.birthday, () => {
 .changelog-panel-body :deep(.cl-list li) { font-size: 12px; line-height: 1.7; padding: 2px 0; position: relative; padding-left: 14px; }
 .changelog-panel-body :deep(.cl-list li)::before { content: '•'; position: absolute; left: 0; color: rgba(255,255,255,0.25); font-size: 10px; top: 5px; }
 
-/* 使用指南 HTML 替换面板：在 profile-page 内替换原内容，保留星空背景 */
-.guide-html-panel {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 20;
-  background: transparent;
-  display: flex;
-  flex-direction: column;
-  animation: guideHtmlFadeIn 0.25s ease-out;
-}
 
-@keyframes guideHtmlFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.guide-html-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(7, 11, 23, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  flex-shrink: 0;
-}
-
-.guide-html-title {
-  color: #f0c040;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.guide-html-close {
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 26px;
-  cursor: pointer;
-  padding: 0 4px;
-  line-height: 1;
-  transition: color 0.2s;
-}
-
-.guide-html-close:hover {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.guide-html-iframe {
-  flex: 1;
-  width: 100%;
-  border: none;
-  background: transparent;
-}
 </style>

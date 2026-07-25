@@ -403,14 +403,20 @@ watch([pickerYear, pickerMonth], () => {
 
 .jump-toggle {
   display: flex;
-  justify-content: center;
   padding: 0 0 12px 0;
   gap: 8px;
 }
 
+.jump-toggle .capsule-btn {
+  flex: 1;
+  border-radius: 8px;
+  height: 36px;
+  font-size: 13px;
+}
+
 .jump-scrolls {
   display: flex;
-  height: 180px;
+  height: 108px;
   overflow: hidden;
 }
 
@@ -426,7 +432,7 @@ watch([pickerYear, pickerMonth], () => {
 }
 
 .jump-scroll-spacer {
-  height: 72px;
+  height: 36px;
   flex-shrink: 0;
 }
 

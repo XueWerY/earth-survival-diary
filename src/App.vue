@@ -26,9 +26,11 @@
         variant="left"
         :activeModule="pageNav.currentModule.value"
         :hidden="isFocusFullscreen"
+        :collapsed="sidebarCollapsed"
         noHover
         @navigate="navigateTo"
         @contextmenu="handleNavContextMenu"
+        @toggle-collapse="toggleSidebarCollapse"
       />
 
       <!-- 上下文菜单 -->
@@ -264,6 +266,12 @@ const noteStore = useNoteStore()
 const authStore = useAuthStore()
 const settingsStore = useSettingsStore()
 const focusStore = useFocusStore()
+
+// 桌面端左侧导航栏收起状态（持久化在用户设置中）
+const sidebarCollapsed = computed(() => !!settingsStore.settings.sidebarCollapsed)
+const toggleSidebarCollapse = () => {
+  settingsStore.updateSettings({ sidebarCollapsed: !sidebarCollapsed.value })
+}
 
 // 星星画布显示条件
 const showStarCanvas = computed(() => {
@@ -1521,7 +1529,6 @@ interface Meteor {
 }
 
 onMounted(async () => {
-
   // 注册倒数日刷新回调
   (window as any).__countdownRefresh = () => {
     scheduleListReminders()
@@ -2190,4 +2197,5 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.06);
   flex-shrink: 0;
 }
+
 </style>

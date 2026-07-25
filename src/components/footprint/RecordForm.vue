@@ -16,12 +16,14 @@
                   placeholder="今天做了什么？"
               />
             </el-form-item>
-            <el-form-item label="开始时间">
-              <TimePickerPopover v-model="form.startTime" :offset-minutes="0" />
-            </el-form-item>
-            <el-form-item label="结束时间">
-              <TimePickerPopover v-model="form.endTime" :offset-minutes="60" />
-            </el-form-item>
+            <div class="time-range-row">
+              <el-form-item label="开始时间" class="time-range-item">
+                <TimePickerPopover v-model="form.startTime" :offset-minutes="0" placeholder="--:--" />
+              </el-form-item>
+              <el-form-item label="结束时间" class="time-range-item">
+                <TimePickerPopover v-model="form.endTime" :offset-minutes="60" placeholder="--:--" />
+              </el-form-item>
+            </div>
             <el-form-item label="备注" prop="notes">
               <el-input
                   v-model="form.notes"
@@ -84,18 +86,11 @@ const dialogTitle = computed(() => {
   return isEdit.value ? '编辑记录' : '记录足迹'
 })
 
-const getDefaultTimes = () => {
-  const now = new Date()
-  const later = new Date(now.getTime() + 60 * 60 * 1000)
-  const fmt = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-  return { startTime: fmt(now), endTime: fmt(later) }
-}
-
 const form = reactive({
   name: '',
   date: dayjs().format('YYYY-MM-DD'),
-  startTime: getDefaultTimes().startTime,
-  endTime: getDefaultTimes().endTime,
+  startTime: '',
+  endTime: '',
   notes: ''
 })
 
@@ -115,9 +110,8 @@ watch(() => props.visible, (val) => {
     isEdit.value = false
     form.name = ''
     form.date = props.defaultDate || dayjs().format('YYYY-MM-DD')
-    const defaults = getDefaultTimes()
-    form.startTime = defaults.startTime
-    form.endTime = defaults.endTime
+    form.startTime = ''
+    form.endTime = ''
     form.notes = ''
   } else {
     isEdit.value = false
@@ -176,13 +170,18 @@ const handleSubmit = async () => {
 <style scoped>
 .dialog-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
 .dialog-container { background: rgba(30, 28, 52, 0.98); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); max-width: 90vw; }
-.task-form-dialog { width: min(500px, 80vw); }
+.task-form-dialog { width: min(400px, 90vw); }
 .dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 12px; flex-shrink: 0; }
 .dialog-header-title { font-size: 16px; font-weight: 600; color: var(--chalk-white); }
 .folder-dialog-header { justify-content: center; }
 .folder-dialog-title { text-align: center; }
 .dialog-body { padding: 12px 16px 16px; }
 .dialog-divider { height: 1px; background: rgba(255, 255, 255, 0.12); margin: 0 16px; }
+
+.time-range-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end; margin-bottom: 20px; }
+.time-range-row :deep(.el-form-item) { margin-bottom: 0; min-width: 0; }
+.time-range-row :deep(.el-form-item__content) { align-items: flex-end; }
+.time-range-row :deep(.time-picker-wrapper) { width: 100%; display: block; }
 
 .form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
 

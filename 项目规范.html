@@ -519,7 +519,7 @@ npx cap sync android</code></pre>
     <div class="card">
       <h4>编辑器与图表</h4>
       <ul style="margin:0.5rem 0 0 1rem;">
-        <li>自研 Markdown 编辑器 — 笔记编辑器</li>
+        <li>自研 Markdown 编辑器 — 通用组件（笔记、日记共用）</li>
         <li>ECharts — 统计图表</li>
         <li>lunar-javascript — 农历计算</li>
       </ul>
@@ -597,7 +597,7 @@ npx cap sync android</code></pre>
   <h3>常用组件</h3>
   <table class="ver-table">
     <tr><th>组件</th><th>说明</th></tr>
-    <tr><td><code>MainNav</code></td><td>全局底部导航栏</td></tr>
+    <tr><td><code>MainNav</code></td><td>全局导航栏（桌面左侧/移动底部/拆分顶部），桌面端左侧支持收起为图标窄条，通过 <code>collapsed</code> prop 与 <code>toggle-collapse</code> 事件控制，收起状态持久化在用户设置 <code>sidebarCollapsed</code> 字段</td></tr>
     <tr><td><code>ReminderCard</code></td><td>提醒卡片，每 5 秒弹出</td></tr>
     <tr><td><code>ConfirmDialog</code></td><td>确认弹窗，v-model:visible 控制</td></tr>
     <tr><td><code>ColorPickerPanel</code></td><td>颜色选择面板，自带 max-height: 90vh + overflow-y: auto</td></tr>

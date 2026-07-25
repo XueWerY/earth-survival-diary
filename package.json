@@ -1,7 +1,7 @@
 {
   "name": "earth-survival-diary",
   "private": true,
-  "version": "2026.7.21-13",
+  "version": "2026.7.26-1",
   "author": "XueWerY <3073820063@qq.com>",
   "type": "module",
   "main": "electron/main.cjs",
@@ -47,13 +47,6 @@
     "vite": "^8.0.8",
     "vue-tsc": "^3.1.0"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron",
-      "esbuild",
-      "sharp"
-    ]
-  },
   "build": {
     "appId": "com.earth-survival-diary.app",
     "productName": "地球 Online 生存日记",
@@ -71,6 +64,10 @@
       {
         "from": "build/icon.png",
         "to": "build/icon.png"
+      },
+      {
+        "from": "build/icon.ico",
+        "to": "build/icon.ico"
       },
       {
         "from": "electron/node_modules",

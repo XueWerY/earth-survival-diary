@@ -9,7 +9,7 @@ const RELEASE_DIR = path.join(ROOT, 'release')
 function installDeps() {
   const ELECTRON_DIR = path.join(ROOT, 'electron')
   const ELECTRON_DEPS_OK = path.join(ELECTRON_DIR, '.deps-ok')
-  if (fs.existsSync(ELECTRON_DEPS_OK)) { console.log('Electron deps already installed.'); return }
+  if (fs.existsSync(ELECTRON_DEPS_OK) && fs.existsSync(path.join(ELECTRON_DIR, 'node_modules', 'express'))) { console.log('Electron deps already installed.'); return }
   console.log('Installing electron main process dependencies...')
   execSync('npm install --no-package-lock --no-audit --no-fund', { cwd: ELECTRON_DIR, stdio: 'inherit' })
   fs.writeFileSync(ELECTRON_DEPS_OK, '')
@@ -82,11 +82,9 @@ releaseDate: ${releaseDate}
 // ========== cleanup-release ==========
 function cleanupRelease() {
   if (!fs.existsSync(RELEASE_DIR)) return
-  const keepFiles = ['latest.yml']
-  const keepExts = ['.exe', '.blockmap']
   for (const f of fs.readdirSync(RELEASE_DIR)) {
     const p = path.join(RELEASE_DIR, f), s = fs.statSync(p)
-    if (s.isFile() && !keepFiles.includes(f) && !keepExts.some(ext => f.endsWith(ext))) fs.rmSync(p)
+    if (s.isFile() && !f.endsWith('.exe')) fs.rmSync(p)
     if (s.isDirectory() && (f.startsWith('.') || f === 'win-unpacked')) fs.rmSync(p, { recursive: true })
   }
 }

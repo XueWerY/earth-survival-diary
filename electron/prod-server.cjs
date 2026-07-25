@@ -173,9 +173,9 @@ function createProdServer(options = {}) {
 
   // ============ Create HTTP server ============
 
-  const nodeModulesRoot = path.join(resourcesPath, 'node_modules')
-  const express = require(path.join(nodeModulesRoot, 'express'))
-  const corsPkg = require(path.join(nodeModulesRoot, 'cors'))
+  const nodeModulesPath = options.nodeModulesPath || path.join(resourcesPath, 'node_modules')
+  const express = require(path.join(nodeModulesPath, 'express'))
+  const corsPkg = require(path.join(nodeModulesPath, 'cors'))
 
   const app = express()
   const server = http.createServer(app)

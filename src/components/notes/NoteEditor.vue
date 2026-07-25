@@ -3,23 +3,28 @@
     <!-- 主容器 -->
     <div class="editor-main">
       <!-- 侧边栏大纲 -->
-      <aside class="editor-sidebar">
+      <aside class="editor-sidebar" :class="{ collapsed: sidebarCollapsed }">
         <div class="editor-sidebar-inner">
           <div class="editor-sidebar-header">
-            <span class="editor-sidebar-title">大纲</span>
+            <span v-if="!sidebarCollapsed" class="editor-sidebar-title">大纲</span>
+            <button class="sidebar-toggle-btn" @click="sidebarCollapsed = !sidebarCollapsed" :title="sidebarCollapsed ? '展开大纲' : '收起大纲'">
+              <el-icon><ArrowLeft v-if="!sidebarCollapsed" /><ArrowRight v-else /></el-icon>
+            </button>
           </div>
-          <ul v-if="outline.length > 0" class="editor-sidebar-nav">
-            <li
-              v-for="(item, idx) in outline"
-              :key="idx"
-              :class="['nav-l' + item.level]"
-            >
-              <a @click="scrollToHeading(item)" :title="item.text">
-                <span class="nav-title-text">{{ item.text || '未命名' }}</span>
-              </a>
-            </li>
-          </ul>
-          <div v-else class="outline-empty">输入标题以生成大纲</div>
+          <template v-if="!sidebarCollapsed">
+            <ul v-if="outline.length > 0" class="editor-sidebar-nav">
+              <li
+                v-for="(item, idx) in outline"
+                :key="idx"
+                :class="['nav-l' + item.level]"
+              >
+                <a @click="scrollToHeading(item)" :title="item.text">
+                  <span class="nav-title-text">{{ item.text || '未命名' }}</span>
+                </a>
+              </li>
+            </ul>
+            <div v-else class="outline-empty">输入标题以生成大纲</div>
+          </template>
         </div>
       </aside>
 
@@ -62,11 +67,11 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
-import { ArrowLeft, Star, StarFilled } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import type { Note, MdOutlineItem } from '../../stores/noteStore'
 import { extractMdOutline } from '../../stores/noteStore'
-import MarkdownEditor from './MarkdownEditor.vue'
+import MarkdownEditor from '../common/MarkdownEditor.vue'
 
 const props = defineProps<{
   note: Note | null
@@ -89,6 +94,7 @@ let justSaved = false
 
 // 大纲
 const outline = ref<MdOutlineItem[]>([])
+const sidebarCollapsed = ref(false)
 
 const refreshOutline = () => {
   outline.value = extractMdOutline(editorContent.value)
@@ -222,6 +228,11 @@ defineExpose({ saveAndGetData, setNoteTitle })
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: width 0.25s ease;
+}
+
+.editor-sidebar.collapsed {
+  width: 40px;
 }
 
 .editor-sidebar-inner {
@@ -231,12 +242,17 @@ defineExpose({ saveAndGetData, setNoteTitle })
   scrollbar-width: none;
 }
 
+.editor-sidebar.collapsed .editor-sidebar-inner {
+  padding: 8px 6px;
+  overflow: hidden;
+}
+
 .editor-sidebar-inner::-webkit-scrollbar { display: none; }
 
 .editor-sidebar-title {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.65);
   text-transform: uppercase;
   letter-spacing: 2px;
 }
@@ -247,6 +263,39 @@ defineExpose({ saveAndGetData, setNoteTitle })
   justify-content: space-between;
   margin-bottom: 12px;
   padding-left: 4px;
+}
+
+.sidebar-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle-btn:hover {
+  background: rgba(102, 126, 234, 0.18);
+  color: #93c5fd;
+}
+
+.editor-sidebar.collapsed .editor-sidebar-header {
+  margin-bottom: 0;
+  padding-left: 0;
+  justify-content: center;
+}
+
+.editor-sidebar.collapsed .sidebar-toggle-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 13px;
 }
 
 .editor-sidebar-nav {
@@ -262,9 +311,9 @@ defineExpose({ saveAndGetData, setNoteTitle })
   display: flex;
   align-items: center;
   padding: 5px 8px;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
-  color: #e2e8f0;
+  color: rgba(255, 255, 255, 0.88);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
@@ -276,9 +325,9 @@ defineExpose({ saveAndGetData, setNoteTitle })
   display: flex;
   align-items: center;
   padding: 4px 8px 4px 22px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.72);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
@@ -290,9 +339,9 @@ defineExpose({ saveAndGetData, setNoteTitle })
   display: flex;
   align-items: center;
   padding: 3px 8px 3px 32px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
-  color: #64748b;
+  color: rgba(255, 255, 255, 0.58);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
@@ -306,9 +355,9 @@ defineExpose({ saveAndGetData, setNoteTitle })
   display: flex;
   align-items: center;
   padding: 3px 8px 3px 42px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
-  color: #475569;
+  color: rgba(255, 255, 255, 0.45);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
@@ -327,8 +376,8 @@ defineExpose({ saveAndGetData, setNoteTitle })
 }
 
 .outline-empty {
-  color: #64748b;
-  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 13px;
   padding: 8px 4px;
 }
 
@@ -472,6 +521,11 @@ defineExpose({ saveAndGetData, setNoteTitle })
     scrollbar-width: none;
   }
 
+  .editor-sidebar.collapsed {
+    width: 40px;
+    overflow: hidden;
+  }
+
   .editor-sidebar::-webkit-scrollbar { display: none; }
 
   .editor-sidebar-inner {
@@ -488,9 +542,9 @@ defineExpose({ saveAndGetData, setNoteTitle })
   }
 
   .editor-sidebar-nav li { margin: 0; white-space: nowrap; }
-  .editor-sidebar-nav .nav-l1 a { padding: 4px 10px; font-size: 12px; }
-  .editor-sidebar-nav .nav-l2 a { padding: 4px 8px 4px 10px; font-size: 11px; }
-  .editor-sidebar-nav .nav-l3 a { padding: 4px 6px 4px 14px; font-size: 10px; }
+  .editor-sidebar-nav .nav-l1 a { padding: 4px 10px; font-size: 13px; }
+  .editor-sidebar-nav .nav-l2 a { padding: 4px 8px 4px 10px; font-size: 12px; }
+  .editor-sidebar-nav .nav-l3 a { padding: 4px 6px 4px 14px; font-size: 11px; }
 
   .editor-status-bar { padding: 6px 10px; font-size: 11px; flex-wrap: wrap; gap: 4px; }
   .editor-status-left { gap: 6px; }

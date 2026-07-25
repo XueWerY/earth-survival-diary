@@ -16,23 +16,11 @@
                   placeholder="给日记起个名字"
               />
             </el-form-item>
-            <el-form-item label="内容" prop="content">
-              <div class="content-input-wrapper">
-                <el-input
-                    v-model="form.content"
-                    type="textarea"
-                    :rows="4"
-                    placeholder="记录今天的心情和故事"
-                />
-                <button class="expand-btn" type="button" @click.stop="isContentExpanded = true" title="放大编辑">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="expand-svg">
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <polyline points="9 21 3 21 3 15"></polyline>
-                    <line x1="21" y1="3" x2="14" y2="10"></line>
-                    <line x1="3" y1="21" x2="10" y2="14"></line>
-                  </svg>
-                </button>
-              </div>
+            <el-form-item label="内容" class="content-editor-form-item">
+              <MarkdownEditor
+                  v-model="form.content"
+                  placeholder="记录今天的心情和故事"
+              />
             </el-form-item>
             <el-form-item label="备注" prop="notes">
               <el-input
@@ -62,23 +50,6 @@
         </div>
       </div>
     </div>
-    <div v-if="isContentExpanded" class="content-expanded-overlay">
-      <div class="content-expanded-header">
-        <span class="content-expanded-title">编辑内容</span>
-        <button class="capsule-btn" type="button" @click.stop="isContentExpanded = false">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-          <span>收起</span>
-        </button>
-      </div>
-      <textarea
-          v-model="form.content"
-          class="content-expanded-textarea"
-          placeholder="记录今天的心情和故事"
-      ></textarea>
-    </div>
   </Teleport>
 </template>
 
@@ -87,6 +58,7 @@ import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import dayjs from 'dayjs'
 import { useTaskStore, type Task } from '../../stores/taskStore'
+import MarkdownEditor from '../common/MarkdownEditor.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -107,7 +79,6 @@ const dialogVisible = computed({
   set: (val) => emit('update:visible', val)
 })
 const isEdit = ref(false)
-const isContentExpanded = ref(false)
 
 const dialogTitle = computed(() => {
   return isEdit.value ? '编辑日记' : '写日记'
@@ -191,17 +162,24 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
-.dialog-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
-.dialog-container { background: rgba(30, 28, 52, 0.98); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); max-width: 90vw; }
-.task-form-dialog { width: min(500px, 80vw); }
+.dialog-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6); z-index: 9999; }
+.dialog-container { width: 100vw; height: 100vh; display: flex; flex-direction: column; background: rgba(30, 28, 52, 0.98); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 0; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); }
+.task-form-dialog { width: 100vw; height: 100vh; }
 .dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 12px; flex-shrink: 0; }
 .dialog-header-title { font-size: 16px; font-weight: 600; color: var(--chalk-white); }
 .folder-dialog-header { justify-content: center; }
 .folder-dialog-title { text-align: center; }
-.dialog-body { padding: 12px 16px 16px; }
-.dialog-divider { height: 1px; background: rgba(255, 255, 255, 0.12); margin: 0 16px; }
+.dialog-body { flex: 1; display: flex; flex-direction: column; padding: 12px 16px 16px; min-height: 0; overflow: hidden; }
+.dialog-divider { height: 1px; background: rgba(255, 255, 255, 0.12); margin: 0 16px; flex-shrink: 0; }
 
-.form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
+.form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.12); flex-shrink: 0; }
+
+:deep(.el-form) { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.content-editor-form-item { flex: 1; min-height: 0; }
+.content-editor-form-item :deep(.el-form-item__content) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.content-editor-form-item :deep(.md-editor) { width: 100%; }
+.content-editor-form-item :deep(.md-block) { padding-left: 0; }
+.content-editor-form-item :deep(.md-block-preview) { padding-left: 11px; padding-right: 11px; }
 
 .capsule-btn {
   height: 32px;
@@ -254,15 +232,4 @@ const handleSubmit = async () => {
 :deep(.el-autocomplete) { width: 100%; }
 :deep(.el-input__count),
 :deep(.el-input__count-inner) { background: transparent !important; color: var(--chalk-subtle) !important; }
-
-.content-input-wrapper { position: relative; width: 100%; }
-.expand-btn { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.08); border: none; border-radius: 4px; cursor: pointer; opacity: 0.6; transition: all 0.2s; z-index: 1; }
-.expand-btn:hover { opacity: 1; background: rgba(255, 255, 255, 0.15); }
-.expand-svg { width: 12px; height: 12px; color: var(--chalk-white-60); }
-
-.content-expanded-overlay { position: fixed; top: 10vh; left: 10%; width: 80%; height: 80vh; background: rgba(30, 28, 52, 0.99); display: flex; flex-direction: column; z-index: 10001; }
-.content-expanded-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
-.content-expanded-title { font-size: 14px; font-weight: 600; color: var(--chalk-white); }
-.content-expanded-textarea { flex: 1; width: 100%; padding: 16px; background: transparent; border: none; color: var(--chalk-white-90); font-size: 15px; line-height: 1.6; resize: none; outline: none; box-sizing: border-box; font-family: inherit; }
-.content-expanded-textarea::placeholder { color: var(--chalk-subtle); }
 </style>

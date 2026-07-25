@@ -6,6 +6,10 @@
     <Teleport to="body">
       <div v-if="visible" class="time-picker-overlay" @mousedown.self="cancel">
         <div class="drum-picker">
+          <div class="drum-header">
+            <span class="drum-title">选择时间</span>
+          </div>
+          <div class="drum-divider"></div>
           <div class="drum-container">
             <div class="drum-scroll-wrapper">
               <div
@@ -47,6 +51,7 @@
               </div>
             </div>
           </div>
+          <div class="drum-divider"></div>
           <div class="drum-actions">
             <button class="icon-capsule-btn" @click="cancel">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg">
@@ -233,11 +238,28 @@ if (typeof window !== 'undefined') {
 .drum-picker {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
+}
+
+.drum-header {
+  padding: 14px 16px 12px;
+  text-align: center;
+}
+
+.drum-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--chalk-white);
+}
+
+.drum-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 16px;
 }
 
 .drum-container {
-  padding: 4px 12px;
+  padding: 12px 12px 8px;
   width: 100%;
 }
 
@@ -298,7 +320,9 @@ if (typeof window !== 'undefined') {
 .drum-actions {
   display: flex;
   gap: 8px;
-  margin-top: 14px;
+  justify-content: center;
+  margin-top: 0;
+  padding: 12px 16px 16px;
 }
 
 .icon-capsule-btn {
@@ -344,6 +368,7 @@ if (typeof window !== 'undefined') {
   height: 32px;
   display: flex;
   align-items: center;
+  justify-content: center;
   padding: 0 12px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 4px;
@@ -383,7 +408,8 @@ if (typeof window !== 'undefined') {
   background: rgba(30, 28, 52, 0.98);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
-  padding: 16px;
+  padding: 0;
+  overflow: hidden;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 </style>
