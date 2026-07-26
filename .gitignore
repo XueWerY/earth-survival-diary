@@ -48,3 +48,6 @@ __screenshots__/
 /data/
 /release/*.exe
 /release/*.blockmap
+
+# WorkBuddy
+.workbuddy/

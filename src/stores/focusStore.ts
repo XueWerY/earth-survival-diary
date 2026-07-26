@@ -23,6 +23,7 @@ export interface FavoriteFocus {
     id: string
     name: string
     notes: string
+    tags?: string
     type: 'pomodoro' | 'stopwatch'
     targetDuration: number // 目标时长（分钟）
     createdAt: string

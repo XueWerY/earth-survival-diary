@@ -3,74 +3,81 @@
     <!-- 主内容区 -->
     <div class="focus-content">
       <el-scrollbar>
-        <!-- 非计时状态：显示计时器 -->
+        <!-- 风格切换（仅空闲时） -->
+        <div v-if="timerState === 'idle'" class="mode-row">
+          <span class="mode-label">计时器风格</span>
+          <div class="style-toggle">
+            <button v-for="s in timerStyles" :key="s.value" class="style-btn" :class="{ active: timerStyle === s.value }" @click="setTimerStyle(s.value)">{{ s.label }}</button>
+          </div>
+        </div>
+
+                <!-- 翻转时钟（抖音风格：上片翻走 + 下片展开） -->
+        <div v-if="timerStyle === 'flip'" class="timer-flip" :style="{ color: timerColor }">
+          <span v-for="(ch, i) in timeChars" :key="i"
+            class="fd" :class="{ 'fd-sep': ch === ' ', 'fd-flip': ch !== ' ' && flippingChars.has(i) }">
+            <span v-if="ch === ' '" class="fd-sep-inner" />
+            <template v-else>
+              <span class="fd-s fd-up"><span class="fd-v">{{ ch }}</span></span>
+              <span class="fd-s fd-dn"><span class="fd-v fd-vd">{{ ch }}</span></span>
+              <span class="fd-s fd-old"><span class="fd-v">{{ prevTimeChars[i] || ch }}</span></span>
+              <span class="fd-s fd-new"><span class="fd-v fd-vd">{{ ch }}</span></span>
+            </template>
+          </span>
+        </div>
+
+        <!-- LED 数码 -->
+        <div v-else-if="timerStyle === 'led'" class="timer-led">{{ displayTime }}</div>
+
+        <!-- 简约纯白 -->
+        <div v-else class="timer-time" :style="{ color: timerColor }">{{ displayTime }}</div>
+
+        <!-- 非计时状态 -->
         <div v-if="timerState === 'idle'" class="idle-view">
-          <!-- 番茄钟视觉 -->
-          <template v-if="focusType === 'pomodoro'">
-            <div class="star-ring-container">
-              <svg viewBox="0 0 260 260" class="star-ring-svg">
-                <circle v-for="(star, i) in starRingStars" :key="i"
-                  :cx="star.cx" :cy="star.cy" r="3"
-                  :class="star.lit ? 'ring-star-lit' : 'ring-star-dim'"
-                  :style="star.lit ? { animationDelay: `${i * 0.03}s` } : null"
-                />
-              </svg>
-              <div class="emoji-earth">🌍</div>
-              <div class="moon-orbit-container" :style="moonOrbitStyle">
-                <div class="emoji-moon">🌙</div>
-              </div>
+          <!-- 模式切换 -->
+          <div class="mode-row">
+            <span class="mode-label">模式</span>
+            <div class="type-toggle" :class="{ 'active-right': focusType === 'stopwatch' }">
+              <div class="toggle-slider" />
+              <button class="type-btn" :class="{ active: focusType === 'pomodoro' }" @click="focusType = 'pomodoro'">🍅 番茄钟</button>
+              <button class="type-btn" :class="{ active: focusType === 'stopwatch' }" @click="focusType = 'stopwatch'">⏱️ 正计时</button>
             </div>
-          </template>
-
-          <!-- 正计时视觉：星轨环（全亮） -->
-          <template v-else>
-            <div class="star-ring-container">
-              <svg viewBox="0 0 260 260" class="star-ring-svg">
-                <circle v-for="(star, i) in stopwatchStars" :key="i"
-                  :cx="star.cx" :cy="star.cy" r="3"
-                  class="ring-star-lit ring-star-static"
-                />
-              </svg>
-              <div class="emoji-earth">🌍</div>
-              <div class="moon-orbit-container" :style="stopwatchMoonStyle">
-                <div class="emoji-moon">🌙</div>
-              </div>
-            </div>
-          </template>
-
-          <!-- 控制按钮 - 放在时钟下方 -->
-          <div class="focus-control-buttons">
-            <button class="focus-ctrl-btn" :class="{ active: focusType === 'pomodoro' }" @click="focusType = 'pomodoro'">🍅 番茄钟</button>
-            <button class="focus-ctrl-btn" :class="{ active: focusType === 'stopwatch' }" @click="focusType = 'stopwatch'">⏱️ 正计时</button>
           </div>
 
-          <!-- 专注名称输入 -->
           <div class="focus-input-section">
+            <div class="input-label">事项名称</div>
             <el-input
                 v-model="focusName"
                 placeholder="输入专注事项（必填）"
                 size="large"
-                clearable
-                maxlength="50"
-                show-word-limit
+                type="textarea"
+                :autosize="{ minRows: 1, maxRows: 3 }"
                 :disabled="isGuideActive"
             />
+            <div v-if="focusType === 'pomodoro'" class="input-label" style="margin-top: 16px">番茄时长（分钟）</div>
+            <el-input-number
+                v-if="focusType === 'pomodoro'"
+                v-model="localPomodoroDuration"
+                :min="1"
+                :max="120"
+                :step="5"
+                size="large"
+                :disabled="isGuideActive"
+                style="margin-top: 0; width: 100%"
+            />
+            <div class="input-label" style="margin-top: 16px">备注</div>
             <el-input
                 v-model="focusNotes"
                 placeholder="添加备注（可选）"
                 size="large"
                 clearable
+                type="textarea"
+                :autosize="{ minRows: 1, maxRows: 3 }"
                 :disabled="isGuideActive"
-                maxlength="200"
-                style="margin-top: 12px"
+                style="margin-top: 0"
             />
           </div>
 
           <div class="focus-start-wrapper">
-            <button class="focus-ctrl-btn settings-trigger-btn" @click="showFocusSettings = true">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-              <span>设置</span>
-            </button>
             <button class="focus-ctrl-btn focus-start-btn" @click="startFocus">▶️ 开始专注</button>
           </div>
 
@@ -80,7 +87,7 @@
               <el-icon><Star /></el-icon>
               常用专注
             </div>
-            <div class="favorites-grid">
+            <div ref="favoritesGridRef" class="favorites-grid" :style="{ gridTemplateColumns: `repeat(${favoritesCols}, 1fr)` }">
               <div
                   v-for="fav in favorites"
                   :key="fav.id"
@@ -106,52 +113,11 @@
 
         <!-- 计时中状态 -->
         <div v-else class="timing-view">
-          <!-- 番茄钟：星轨环 -->
-          <template v-if="focusType === 'pomodoro'">
-            <div class="star-ring-container">
-              <svg viewBox="0 0 260 260" class="star-ring-svg">
-                <circle v-for="(star, i) in starRingStars" :key="i"
-                  :cx="star.cx" :cy="star.cy" r="3"
-                  :class="star.lit ? 'ring-star-lit' : 'ring-star-dim'"
-                  :style="star.lit ? { animationDelay: `${i * 0.03}s` } : null"
-                />
-              </svg>
-              <div class="emoji-earth">🌍</div>
-              <div class="moon-orbit-container" :style="moonOrbitStyle">
-                <div class="emoji-moon">🌙</div>
-              </div>
-            </div>
-
-            <div class="focus-info-inline">
-              <span class="focus-name-inline">{{ focusName }}</span>
-              <span class="focus-sep-inline">:</span>
-              <span class="focus-time-inline">{{ displayTime }}</span>
-              <span v-if="focusNotes" class="focus-notes-inline">· {{ focusNotes }}</span>
-            </div>
-          </template>
-
-          <!-- 正计时：星轨环（全亮） -->
-          <template v-else>
-            <div class="star-ring-container">
-              <svg viewBox="0 0 260 260" class="star-ring-svg">
-                <circle v-for="(star, i) in stopwatchStars" :key="i"
-                  :cx="star.cx" :cy="star.cy" r="3"
-                  class="ring-star-lit ring-star-static"
-                />
-              </svg>
-              <div class="emoji-earth">🌍</div>
-              <div class="moon-orbit-container moon-orbit-animated" :style="stopwatchMoonStyle">
-                <div class="emoji-moon">🌙</div>
-              </div>
-            </div>
-
-            <div class="focus-info-inline">
-              <span class="focus-name-inline">{{ focusName }}</span>
-              <span class="focus-sep-inline">:</span>
-              <span class="focus-time-inline">{{ displayTime }}</span>
-              <span v-if="focusNotes" class="focus-notes-inline">· {{ focusNotes }}</span>
-            </div>
-          </template>
+          <!-- 专注信息 -->
+          <div class="focus-info-card">
+            <div class="focus-info-name">{{ focusName }}</div>
+            <div v-if="focusNotes" class="focus-info-notes">{{ focusNotes }}</div>
+          </div>
 
           <!-- 操作按钮 -->
           <div class="action-buttons">
@@ -175,44 +141,6 @@
         <el-button type="primary" @click="saveAsFavorite">保存</el-button>
       </template>
     </el-dialog>
-
-    <!-- 专注设置弹窗 -->
-    <Teleport to="body">
-      <div v-if="showFocusSettings" class="dialog-overlay" @click.self="cancelFocusSettings">
-        <div class="dialog-container focus-settings-dialog">
-          <div class="dialog-header folder-dialog-header">
-            <span class="dialog-header-title folder-dialog-title">专注设置</span>
-          </div>
-          <div class="dialog-body">
-            <div class="setting-item">
-              <div class="setting-info">
-                <span class="setting-label">番茄时长</span>
-                <span class="setting-desc">每个番茄钟的默认工作时长（分钟）</span>
-              </div>
-              <div class="setting-control">
-                <el-input-number
-                    v-model="focusSettingsDraft.pomodoroDuration"
-                    :min="1"
-                    :max="120"
-                    :step="5"
-                    size="default"
-                />
-              </div>
-            </div>
-            <div class="form-footer">
-              <button class="capsule-btn cancel-btn" @click="cancelFocusSettings">
-                <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                <span>取消</span>
-              </button>
-              <button class="capsule-btn submit-btn" @click="confirmFocusSettings">
-                <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
-                <span>确认</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
@@ -265,153 +193,110 @@ const localPomodoroDuration = ref(settingsStore.settings.focus?.pomodoroDuration
 const showSaveFavorite = ref(false)
 const lastCompletedFocus = ref<{ name: string; notes: string; type: FocusType; targetDuration: number } | null>(null)
 
-const showFocusSettings = ref(false)
-const focusSettingsDraft = ref({
-  pomodoroDuration: 25
-})
-
-const cancelFocusSettings = () => {
-  showFocusSettings.value = false
-}
-
-const confirmFocusSettings = async () => {
-  await settingsStore.updateFocusSettings({ pomodoroDuration: focusSettingsDraft.value.pomodoroDuration })
-  localPomodoroDuration.value = focusSettingsDraft.value.pomodoroDuration
-  logger.info('[设置] 修改专注时长', { pomodoroDuration: focusSettingsDraft.value.pomodoroDuration })
-  showFocusSettings.value = false
-}
-
-watch(showFocusSettings, (val) => {
-  if (val) {
-    focusSettingsDraft.value.pomodoroDuration = settingsStore.settings.focus?.pomodoroDuration || 25
-  }
-})
-
 const timeChars = ref<string[]>([])
 const prevTimeChars = ref<string[]>([])
 const flippingChars = ref(new Set<number>())
 
-// 星轨环 60 星
-const STAR_COUNT = 60
-const RING_RADIUS = 110
-const RING_CX = 130
-const RING_CY = 130
-
-interface RingStar { cx: number; cy: number; lit: boolean }
-
-const starRingStars = computed<RingStar[]>(() => {
-  const total = localPomodoroDuration.value * 60
-  const litCount = timerState.value === 'idle' ? 0 : Math.floor(((total - remainingSeconds.value) / total) * STAR_COUNT)
-  return Array.from({ length: STAR_COUNT }, (_, i) => {
-    const angle = (i / STAR_COUNT) * Math.PI * 2 - Math.PI / 2
-    return {
-      cx: RING_CX + Math.cos(angle) * RING_RADIUS,
-      cy: RING_CY + Math.sin(angle) * RING_RADIUS,
-      lit: i < litCount
-    }
-  })
-})
+const timerStyle = ref<'flip' | 'plain' | 'led'>('flip')
+const timerStyles = [
+  { value: 'flip', label: '🃏 翻页' },
+  { value: 'plain', label: '▫️ 简约' },
+  { value: 'led', label: '🔢 数码' },
+]
+const setTimerStyle = async (s: 'flip' | 'plain' | 'led') => {
+  timerStyle.value = s
+  await settingsStore.updateFocusSettings({ timerStyle: s })
+}
 
 // 常用专注
 const favorites = computed(() => focusStore.favorites)
+const favoritesGridRef = ref<HTMLDivElement>()
+const favoritesCols = ref(4)
+const CARD_GAP = 24
+const updateFavoritesCols = () => {
+  if (!favoritesGridRef.value) return
+  const w = favoritesGridRef.value.clientWidth
+  let k = 1
+  while (w >= 300 + (k - 1) * 150 + k * CARD_GAP) k++
+  favoritesCols.value = Math.max(1, k - 1)
+}
+let favGridObs: ResizeObserver | null = null
 
 // 显示时间
 const displayTime = computed(() => {
+  let totalSeconds: number
   if (timerState.value === 'idle') {
-    if (focusType.value === 'pomodoro') {
-      const minutes = localPomodoroDuration.value
-      return `${minutes.toString().padStart(2, '0')}:00`
-    } else {
-      return '00:00'
-    }
+    totalSeconds = focusType.value === 'pomodoro' ? localPomodoroDuration.value * 60 : 0
   } else {
-    const seconds = focusType.value === 'pomodoro' ? remainingSeconds.value : elapsedSeconds.value
-    const totalSeconds = Math.abs(seconds)
-
-    // 计算天、小时、分钟、秒
-    const days = Math.floor(totalSeconds / 86400)
-    const hours = Math.floor((totalSeconds % 86400) / 3600)
-    const mins = Math.floor((totalSeconds % 3600) / 60)
-    const secs = totalSeconds % 60
-
-    // 动态时间格式
-    if (days > 0 || totalSeconds >= 86400) {
-      // >= 24小时：dd:hh:mm:ss
-      return `${days.toString().padStart(2, '0')}:${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-    } else if (hours > 0 || totalSeconds >= 3600) {
-      // >= 60分钟但 < 24小时：hh:mm:ss
-      return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-    } else {
-      // < 60分钟：mm:ss
-      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-    }
+    totalSeconds = focusType.value === 'pomodoro' ? remainingSeconds.value : elapsedSeconds.value
   }
+  totalSeconds = Math.abs(totalSeconds)
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  return `${h.toString().padStart(2, '0')} ${m.toString().padStart(2, '0')} ${s.toString().padStart(2, '0')}`
 })
 
-// 定时器 ID
-// 进度条偏移
-const progressOffset = computed(() => {
-  if (focusType.value === 'pomodoro') {
-    const totalSeconds = localPomodoroDuration.value * 60
-    const progress = remainingSeconds.value / totalSeconds
-    const circumference = 2 * Math.PI * 90
-    return circumference * (1 - progress)
-  } else {
-    // 正计时模式：进度环不显示
+// 沙漏进度（0=上满下空，1=上空下满）
+const sandProgress = computed(() => {
+  if (timerState.value !== 'running') {
     return 0
   }
+  if (focusType.value === 'pomodoro') {
+    const totalSeconds = localPomodoroDuration.value * 60
+    if (totalSeconds <= 0) return 0
+    return 1 - Math.max(0, Math.min(1, remainingSeconds.value / totalSeconds))
+  }
+  return 0
+})
+
+// 时间颜色：番茄钟绿→红渐变，正计时白→蓝渐变
+const timerColor = computed(() => {
+  if (timerState.value !== 'running') return '#fff'
+  if (focusType.value === 'pomodoro') {
+    const total = localPomodoroDuration.value * 60
+    const ratio = Math.max(0, Math.min(1, remainingSeconds.value / total))
+    // 绿 #34d399 → 红 #f87171
+    const r = Math.round(0xf8 * (1 - ratio) + 0x34 * ratio)
+    const g = Math.round(0x71 * (1 - ratio) + 0xd3 * ratio)
+    const b = Math.round(0x71 * (1 - ratio) + 0x99 * ratio)
+    return `rgb(${r},${g},${b})`
+  }
+  // 正计时：白 → 蓝 #93c5fd（2小时内渐变）
+  const hours = elapsedSeconds.value / 3600
+  const t = Math.min(1, hours / 2)
+  const r = Math.round(255 * (1 - t) + 0x93 * t)
+  const g = Math.round(255 * (1 - t) + 0xc5 * t)
+  const b = Math.round(255 * (1 - t) + 0xfd * t)
+  return `rgb(${r},${g},${b})`
 })
 
 watch(displayTime, (val, old) => {
   if (timerState.value === 'running') {
     focusStore.focusDisplayTime = val
   }
-  if (!old || timerState.value !== 'running' || focusType.value !== 'stopwatch') return
   const nc = val.split('')
-  const oc = old.split('')
+  const oc = old?.split('') || []
+  // 上半保存旧值用于翻页动画
   prevTimeChars.value = [...timeChars.value]
   const flips = new Set<number>()
-  const maxLen = Math.max(nc.length, oc.length)
-  for (let i = 0; i < maxLen; i++) {
-    if ((nc[i] || '') !== (oc[i] || '')) flips.add(i)
+  for (let i = 0; i < nc.length; i++) {
+    if (nc[i] !== (oc[i] || '')) flips.add(i)
   }
   flippingChars.value = flips
-  setTimeout(() => { flippingChars.value = new Set() }, 600)
+  // 上半片 0→-90° 消失后换内容
+  setTimeout(() => {
+    // 禁用过渡，上半片瞬间复位（此时已显示新值）
+    document.querySelectorAll('.fd-flip .fd-old, .fd-flip .fd-new').forEach(el => {
+      const e = el as HTMLElement
+      e.style.transition = 'none'; e.style.transform = ''
+      requestAnimationFrame(() => { e.style.transition = '' })
+    })
+    prevTimeChars.value = [...nc]
+    flippingChars.value = new Set()
+  }, 350)
   timeChars.value = nc
-})
-
-watch(focusType, () => {
-})
-
-const moonOrbitAngle = computed(() => {
-  const total = localPomodoroDuration.value * 60
-  if (total <= 0) return 0
-  const progress = (total - remainingSeconds.value) / total
-  return progress * 360
-})
-
-const moonOrbitStyle = computed(() => ({
-  transform: `rotate(${moonOrbitAngle.value}deg)`
-}))
-
-const stopwatchStars = computed<RingStar[]>(() => {
-  return Array.from({ length: STAR_COUNT }, (_, i) => {
-    const angle = (i / STAR_COUNT) * Math.PI * 2 - Math.PI / 2
-    return {
-      cx: RING_CX + Math.cos(angle) * RING_RADIUS,
-      cy: RING_CY + Math.sin(angle) * RING_RADIUS,
-      lit: true
-    }
-  })
-})
-
-const stopwatchMoonStyle = computed(() => {
-  if (timerState.value !== 'running' || focusType.value !== 'stopwatch') {
-    return { transform: 'rotate(0deg)' }
-  }
-  const elapsedMs = (Date.now() - startTimestamp.value) % 60000
-  return { animationDelay: `${-(elapsedMs / 1000)}s` }
-})
+}, { immediate: true })
 
 // 选择常用专注
 const selectFavorite = (fav: FavoriteFocus) => {
@@ -484,10 +369,8 @@ const startCountdown = () => {
     }
   }
 
-  updateTimer() // 立即执行一次
+  updateTimer()
   timerInterval = setInterval(updateTimer, 1000)
-  timeChars.value = '00:00'.split('')
-  prevTimeChars.value = [...timeChars.value]
 }
 
 // 开始正计时 - 使用时间戳计算
@@ -524,8 +407,6 @@ const cancelFocus = async () => {
   // 清除 store 中的计时状态
   await focusStore.clearTimerState()
   focusStore.focusDisplayTime = ''
-
-  timeChars.value = '00:00'.split('')
 
   refreshReminders()
 
@@ -660,8 +541,6 @@ const completeFocus = async () => {
   await focusStore.clearTimerState()
   focusStore.focusDisplayTime = ''
 
-  timeChars.value = '00:00'.split('')
-
   refreshReminders()
 
   logger.info('[专注] 完成专注', { name: focusName.value, duration: totalDuration })
@@ -690,10 +569,11 @@ const saveAsFavorite = async () => {
   })
 
   showSaveFavorite.value = false
+  const savedName = lastCompletedFocus.value.name
   lastCompletedFocus.value = null
 
   if (result) {
-    logger.info('[专注] 添加常用专注', { name: lastCompletedFocus.value.name })
+    logger.info('[专注] 添加常用专注', { name: savedName })
     ElMessage.success('已保存为常用专注')
   } else {
     ElMessage.info('该专注已在常用列表中')
@@ -708,6 +588,7 @@ onMounted(async () => {
 
   await focusStore.loadData()
   await settingsStore.loadSettings()
+  timerStyle.value = settingsStore.settings.focus?.timerStyle || 'flip'
 
   // 恢复计时状态
   const savedState = focusStore.timerState
@@ -750,8 +631,12 @@ onMounted(async () => {
   // 监听页面可见性变化，确保后台计时准确
   document.addEventListener('visibilitychange', handleVisibilityChange)
 
-  timeChars.value = '00:00'.split('')
-  prevTimeChars.value = [...timeChars.value]
+  // 响应式卡片列数
+  if (favoritesGridRef.value) {
+    favGridObs = new ResizeObserver(updateFavoritesCols)
+    favGridObs.observe(favoritesGridRef.value)
+    updateFavoritesCols()
+  }
 })
 
 // 页面可见性变化处理
@@ -803,6 +688,7 @@ onUnmounted(async () => {
   }
 
   document.removeEventListener('visibilitychange', handleVisibilityChange)
+  favGridObs?.disconnect()
 
   // 如果计时正在进行中，保存当前状态
   if (timerState.value === 'running' && startTimestamp.value) {
@@ -825,32 +711,177 @@ onUnmounted(async () => {
   height: 100%;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   background: transparent;
+  padding: 0 24px;
 }
 
 .focus-content {
-  flex: 1;
   overflow: hidden;
 }
 
-/* 空闲视图 */
+/* ========== 类型切换 ========== */
+.mode-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.mode-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.65);
+  flex-shrink: 0;
+}
+
+.type-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 100px;
+  overflow: hidden;
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  height: calc(100% - 6px);
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.35) 0%, rgba(192, 132, 252, 0.35) 100%);
+  border-radius: 100px;
+  transition: left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 14px rgba(167, 139, 250, 0.3);
+}
+
+.type-toggle.active-right .toggle-slider {
+  left: calc(50% + 0px);
+}
+
+.type-btn {
+  position: relative;
+  z-index: 1;
+  padding: 6px 20px;
+  font-size: 13px;
+  border: none;
+  background: transparent;
+  color: var(--chalk-white-60);
+  cursor: pointer;
+  transition: color 0.35s;
+  font-family: inherit;
+  white-space: nowrap;
+  flex: 1;
+  text-align: center;
+}
+
+.type-btn:hover {
+  color: var(--chalk-white);
+}
+
+.type-btn.active {
+  color: var(--chalk-white);
+}
+
+/* 时间数字（简约） */
+.timer-time {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-weight: 700;
+  font-size: 72px;
+  color: #fff;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 2px;
+  line-height: 1;
+  margin-bottom: 48px;
+}
+
+/* ========== 风格选择器 ========== */
+.style-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.style-btn {
+  padding: 4px 14px;
+  font-size: 12px;
+  border-radius: 100px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: var(--chalk-white-60);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.style-btn:hover {
+  color: var(--chalk-white);
+  border-color: rgba(167, 139, 250, 0.3);
+}
+
+.style-btn.active {
+  background: rgba(167, 139, 250, 0.15);
+  border-color: rgba(167, 139, 250, 0.4);
+  color: #c4b5fd;
+}
+
+/* ====== 翻页时钟（抖音风格） ====== */
+.timer-flip { display:flex; justify-content:center; gap:6px; margin-bottom:48px; }
+
+.fd { position:relative; width:52px; height:84px; perspective:600px; }
+.fd-sep { width:16px; }
+.fd-sep-inner { display:none; }
+
+.fd-s { position:absolute; left:0; right:0; height:50%; overflow:hidden; }
+.fd-s .fd-v { display:block; font-size:64px; line-height:84px; text-align:center; font-family:'SF Mono','Monaco','Consolas',monospace; font-weight:800; color:inherit; }
+.fd-vd { transform:translateY(-50%); }
+
+/* 静态上下半 */
+.fd-up { top:0; }
+.fd-dn { bottom:0; }
+
+/* 旧数字上半：绕底边往上翻走 */
+.fd-old { top:0; transform-origin:50% 100%; transition:transform 0.35s ease-in; backface-visibility:hidden; }
+.fd-flip .fd-old { transform:rotateX(-180deg); }
+
+/* 新数字下半：绕顶边往下展开 */
+.fd-new { bottom:0; transform-origin:50% 0; transform:rotateX(180deg); transition:transform 0.35s ease-out 0.1s; backface-visibility:hidden; }
+.fd-flip .fd-new { transform:rotateX(0); }
+
+/* ========== LED 数码 ========== */
+.timer-led {
+  font-family: 'Courier New', monospace;
+  font-weight: 700;
+  font-size: 72px;
+  color: #fbbf24;
+  text-align: center;
+  white-space: nowrap;
+  letter-spacing: 4px;
+  line-height: 1;
+  margin-bottom: 48px;
+  text-shadow:
+    0 0 8px rgba(251, 191, 36, 0.8),
+    0 0 20px rgba(251, 191, 36, 0.4),
+    0 0 40px rgba(251, 191, 36, 0.2);
+}
+
+/* ========== 空闲视图 ========== */
 .idle-view {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 40px 24px;
+  padding: 0 0 40px;
 }
 
-.focus-control-buttons {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 12px;
-  margin-bottom: 12px;
-}
-
+/* ========== 通用按钮 ========== */
 .focus-ctrl-btn {
-  padding: 10px 16px;
+  padding: 10px 18px;
   font-size: 14px;
   border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -862,6 +893,7 @@ onUnmounted(async () => {
   justify-content: center;
   gap: 6px;
   transition: all 0.2s;
+  font-family: inherit;
 }
 
 .focus-ctrl-btn:hover {
@@ -869,292 +901,69 @@ onUnmounted(async () => {
   color: var(--chalk-white);
 }
 
-.focus-ctrl-btn.active {
-  background: rgba(102, 126, 234, 0.2);
-  border-color: #667eea;
-  color: var(--chalk-white);
-}
-
-.focus-start-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-top: 16px;
-}
-
-.focus-start-wrapper .focus-ctrl-btn {
-  border-color: rgba(102, 126, 234, 0.3);
-}
-
-/* 计时器圆环 */
-.timer-ring {
-  position: relative;
-  width: 320px;
-  height: 320px;
-  margin-bottom: 32px;
-}
-
-.timer-svg {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-
-.timer-bg {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.1);
-  stroke-width: 8;
-}
-
-.timer-progress {
-  fill: none;
-  stroke: #667eea;
-  stroke-width: 8;
-  stroke-linecap: round;
-  stroke-dasharray: 565.48;
-  stroke-dashoffset: 0;
-  transition: stroke-dashoffset 1s linear;
-}
-
-.timer-ring.stopwatch-mode .timer-progress {
-  stroke: #10b981;
-}
-
-.timer-display {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-}
-
-.timer-time {
-  font-size: 36px;
-  font-weight: 700;
-  color: #fff;
-  font-family: 'SF Mono', 'Monaco', monospace;
-  display: block;
-  letter-spacing: 2px;
-  line-height: 1.2;
-}
-
-.timer-label {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.5);
-  margin-top: 8px;
-  display: block;
-}
-
-/* 番茄钟视觉区（星轨环+星空） */
-.star-ring-container {
-  position: relative;
-  width: 260px;
-  height: 260px;
-  margin: 0 auto;
-}
-
-.star-ring-svg {
-  width: 100%;
-  height: 100%;
-  animation: ring-rotate 30s linear infinite;
-  will-change: transform;
-}
-
-@keyframes ring-rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.ring-star-dim {
-  fill: rgba(255, 255, 255, 0.12);
-}
-
-.ring-star-lit {
-  fill: #a4b4ff;
-  animation: star-breathe 1.5s ease-in-out infinite;
-}
-
-@keyframes star-breathe {
-  0%, 100% { opacity: 0.8; r: 3; }
-  50% { opacity: 1; r: 3.5; }
-}
-
-.emoji-earth {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 48px;
-  line-height: 1;
-  user-select: none;
-  z-index: 3;
-  animation: earth-spin 12s linear infinite;
-}
-
-@keyframes earth-spin {
-  from { transform: translate(-50%, -50%) rotate(0deg); }
-  to { transform: translate(-50%, -50%) rotate(360deg); }
-}
-
-.moon-orbit-container {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  transform-origin: 0 0;
-}
-
-.emoji-moon {
-  position: absolute;
-  top: -85px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 16px;
-  user-select: none;
-  z-index: 4;
-}
-
-@keyframes moon-rotate-sw {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.moon-orbit-animated {
-  animation: moon-rotate-sw 60s linear infinite;
-}
-
-.ring-star-static {
-  fill: #a4b4ff;
-  animation: none;
-  opacity: 0.9;
-}
-
-/* 番茄钟信息行 */
-.focus-info-inline {
-  text-align: center;
-  margin-bottom: 32px;
-}
-
-.focus-name-inline {
-  font-size: 18px;
-  font-weight: 600;
-  color: #fff;
-}
-
-.focus-sep-inline {
-  font-size: 18px;
-  color: rgba(255,255,255,0.4);
-  margin: 0 8px;
-}
-
-.focus-time-inline {
-  font-size: 20px;
-  font-weight: 700;
-  color: #82d8e8;
-  font-family: 'SF Mono', 'Monaco', monospace;
-  letter-spacing: 2px;
-}
-
-.focus-notes-inline {
-  display: block;
-  font-size: 13px;
-  color: rgba(255,255,255,0.5);
-  margin-top: 4px;
-}
-
-/* 翻页时钟（正计时） */
-.flip-clock-container {
-  z-index: 1;
-}
-
-.flip-clock {
-  display: flex;
-  align-items: stretch;
-  gap: 4px;
-}
-
-.flip-sep {
-  font-size: 56px;
-  font-weight: 700;
-  color: #a4b4ff;
-  font-family: 'SF Mono', 'Monaco', monospace;
-  line-height: 1;
-  padding: 0 2px;
-  text-shadow: 0 0 12px rgba(102, 126, 234, 0.5);
-  animation: sep-blink 1s step-end infinite;
-}
-
-@keyframes sep-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
-
-.flip-digit {
-  position: relative;
-  width: 46px;
-  height: 68px;
-  border-radius: 6px;
-  background: linear-gradient(180deg, #12102a 0%, #1a1640 50%, #12102a 100%);
-  box-shadow: 0 3px 8px rgba(0,0,0,0.5), inset 0 -2px 4px rgba(0,0,0,0.4), 0 0 10px rgba(102,126,234,0.1);
-  overflow: hidden;
-  perspective: 400px;
-}
-
-.flip-digit::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 6px;
-  background: linear-gradient(180deg, transparent 48%, rgba(102,126,234,0.15) 49%, rgba(102,126,234,0.15) 51%, transparent 52%);
-  pointer-events: none;
-  z-index: 2;
-}
-
-.flip-digit-top,
-.flip-digit-bottom {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 50%;
-  font-size: 52px;
-  font-weight: 700;
-  font-family: 'SF Mono', 'Monaco', monospace;
-  color: #c8d6ff;
-  text-align: center;
-  line-height: 68px;
-  backface-visibility: hidden;
-  perspective: 400px;
-}
-
-.flip-digit-top {
-  top: 0;
-  transform-origin: bottom;
-}
-
-.flip-digit-bottom {
-  bottom: 0;
-  line-height: 0;
-}
-
-.flip-digit.flip .flip-digit-top {
-  animation: digit-flip 0.6s ease-in forwards;
-}
-
-@keyframes digit-flip {
-  0% { transform: perspective(400px) rotateX(0deg); }
-  100% { transform: perspective(400px) rotateX(-90deg); opacity: 0; }
-}
-
-/* 常用专注 */
+/* 输入区 */
 .focus-input-section {
   width: 100%;
-  max-width: 500px;
+}
+
+.input-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: 6px;
+}
+
+.focus-input-section :deep(.el-textarea__inner) {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+  color: #fff;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.focus-input-section :deep(.el-textarea__inner:hover) {
+  border-color: rgba(167, 139, 250, 0.4);
+}
+
+.focus-input-section :deep(.el-textarea__inner:focus) {
+  border-color: rgba(167, 139, 250, 0.6);
+  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.12);
+}
+
+.focus-input-section :deep(.el-textarea__inner::placeholder) {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.focus-input-section :deep(.el-input-number .el-input__wrapper) {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+.focus-input-section :deep(.el-input-number .el-input__inner) {
+  color: #fff;
+}
+.focus-input-section :deep(.el-input-number__decrease),
+.focus-input-section :deep(.el-input-number__increase) {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .focus-input-section :deep(.el-input__wrapper) {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: none;
+  transition: all 0.2s ease;
+}
+
+.focus-input-section :deep(.el-input__wrapper:hover) {
+  border-color: rgba(167, 139, 250, 0.4);
+}
+
+.focus-input-section :deep(.el-input__wrapper.is-focus) {
+  border-color: rgba(167, 139, 250, 0.6);
+  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.12);
 }
 
 .focus-input-section :deep(.el-input__inner) {
@@ -1165,16 +974,31 @@ onUnmounted(async () => {
   color: rgba(255, 255, 255, 0.4);
 }
 
-.focus-input-section :deep(.el-input__count),
-.focus-input-section :deep(.el-input__count-inner) {
-  background: transparent !important;
-  color: rgba(255, 255, 255, 0.4) !important;
+/* 开始按钮 + 设置按钮 */
+.focus-start-wrapper {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 20px;
 }
 
-/* 常用专注 */
+.focus-start-btn {
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.3) 0%, rgba(192, 132, 252, 0.3) 100%);
+  border-color: rgba(167, 139, 250, 0.5);
+  color: var(--chalk-white);
+  font-weight: 600;
+}
+
+.focus-start-btn:hover {
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.45) 0%, rgba(192, 132, 252, 0.45) 100%);
+  border-color: rgba(167, 139, 250, 0.7);
+  box-shadow: 0 0 18px rgba(167, 139, 250, 0.35);
+  color: var(--chalk-white);
+}
+
+/* ========== 常用专注 ========== */
 .favorites-section {
   width: 100%;
-  max-width: 500px;
   margin-top: 32px;
 }
 
@@ -1190,8 +1014,7 @@ onUnmounted(async () => {
 
 .favorites-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
+  gap: 24px;
 }
 
 .favorite-card {
@@ -1206,8 +1029,9 @@ onUnmounted(async () => {
 
 .favorite-card:hover {
   background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(102, 126, 234, 0.5);
+  border-color: rgba(167, 139, 250, 0.5);
   transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(167, 139, 250, 0.15);
 }
 
 .fav-name {
@@ -1237,55 +1061,44 @@ onUnmounted(async () => {
   opacity: 1;
 }
 
-/* 计时中视图 */
+/* ========== 计时中视图 ========== */
 .timing-view {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 40px 24px;
-  position: relative;
-  overflow: hidden;
+  padding: 0 0 40px;
 }
 
-.timing-view::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(1.5px 1.5px at 15% 25%, rgba(255,255,255,0.3), transparent),
-    radial-gradient(2px 2px at 75% 15%, rgba(255,255,255,0.2), transparent),
-    radial-gradient(1px 1px at 35% 70%, rgba(255,255,255,0.25), transparent),
-    radial-gradient(1.5px 1.5px at 85% 60%, rgba(255,255,255,0.15), transparent),
-    radial-gradient(2px 2px at 20% 80%, rgba(255,255,255,0.2), transparent),
-    radial-gradient(1px 1px at 60% 40%, rgba(255,255,255,0.3), transparent),
-    radial-gradient(1.5px 1.5px at 50% 85%, rgba(255,255,255,0.15), transparent),
-    radial-gradient(1px 1px at 90% 30%, rgba(255,255,255,0.25), transparent);
-  pointer-events: none;
-  z-index: 0;
-}
-
-.focus-name-display {
+.focus-info-card {
+  margin-top: 12px;
+  padding: 14px 24px;
   text-align: center;
-  margin-top: 24px;
-  margin-bottom: 32px;
+  max-width: 420px;
+  width: 100%;
 }
 
-.focus-name-display h3 {
-  font-size: 20px;
+.focus-info-name {
+  font-size: 18px;
   font-weight: 600;
-  color: #fff;
-  margin: 0;
+  color: var(--chalk-white);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.focus-name-display p {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.5);
-  margin: 8px 0 0;
+.focus-info-notes {
+  margin-top: 4px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .action-buttons {
   display: flex;
   gap: 12px;
+  margin-top: 24px;
 }
 
 .focus-cancel-btn:hover {
@@ -1295,55 +1108,17 @@ onUnmounted(async () => {
 }
 
 .focus-complete-btn {
-  border-color: rgba(102, 126, 234, 0.3);
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.3) 0%, rgba(192, 132, 252, 0.3) 100%);
+  border-color: rgba(167, 139, 250, 0.5);
   color: var(--chalk-white);
+  font-weight: 600;
 }
 
 .focus-complete-btn:hover {
-  background: rgba(102, 126, 234, 0.2) !important;
-  border-color: #667eea !important;
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.45) 0%, rgba(192, 132, 252, 0.45) 100%);
+  border-color: rgba(167, 139, 250, 0.7);
+  box-shadow: 0 0 18px rgba(167, 139, 250, 0.35);
   color: var(--chalk-white) !important;
-}
-
-.settings-trigger-btn {
-  margin-right: 12px;
-  white-space: nowrap;
-  gap: 6px;
-}
-
-.settings-trigger-btn .capsule-icon {
-  width: 16px;
-  height: 16px;
-}
-
-.dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
-.dialog-container { background: rgba(30,28,52,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; }
-.focus-settings-dialog { width: 400px; }
-
-.dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 0; flex-shrink: 0; }
-.dialog-header-title { font-size: 16px; font-weight: 600; color: var(--chalk-white); }
-.folder-dialog-header { justify-content: center; }
-.folder-dialog-title { text-align: center; }
-.dialog-body { padding: 12px 16px 16px; overflow-y: auto; flex: 1; scrollbar-width: none; -ms-overflow-style: none; }
-.dialog-body::-webkit-scrollbar { display: none; }
-
-.setting-item { display: flex; align-items: center; justify-content: space-between; padding: 16px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; gap: 16px; }
-.setting-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-.setting-label { font-size: 14px; font-weight: 500; color: #fff; }
-.setting-desc { font-size: 12px; color: rgba(255, 255, 255, 0.5); }
-.setting-control { flex-shrink: 0; }
-
-.form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); }
-.capsule-btn { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 18px; border: 1px solid rgba(255,255,255,0.15); border-radius: 20px; background: transparent; color: var(--chalk-white-70); cursor: pointer; font-size: 13px; font-family: inherit; transition: all 0.2s; }
-.capsule-btn:hover { background: rgba(255,255,255,0.08); color: var(--chalk-white); }
-.capsule-btn .capsule-icon { width: 14px; height: 14px; }
-.submit-btn { background: rgba(102,126,234,0.2); border-color: rgba(102,126,234,0.4); color: #93c5fd; }
-.submit-btn:hover { background: rgba(102,126,234,0.35); color: var(--chalk-white); }
-
-/* 对话框深色主题 */
-.duration-unit {
-  margin-left: 8px;
-  color: rgba(255, 255, 255, 0.5);
 }
 
 .dialog-text {
