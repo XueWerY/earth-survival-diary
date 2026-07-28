@@ -3,33 +3,54 @@
     <!-- 主内容区 -->
     <div class="focus-content">
       <el-scrollbar>
-        <!-- 风格切换（仅空闲时） -->
+
+        <!-- 计时器风格选择 -->
         <div v-if="timerState === 'idle'" class="mode-row">
           <span class="mode-label">计时器风格</span>
-          <div class="style-toggle">
-            <button v-for="s in timerStyles" :key="s.value" class="style-btn" :class="{ active: timerStyle === s.value }" @click="setTimerStyle(s.value)">{{ s.label }}</button>
+          <div class="type-toggle style-2-seg" :class="styleToggleClass">
+            <div class="toggle-slider" />
+            <button class="type-btn" :class="{ active: timerStyle === 'ring' }" @click="setTimerStyle('ring')">⭕ 圆环</button>
+            <button class="type-btn" :class="{ active: timerStyle === 'plain' }" @click="setTimerStyle('plain')">🔢 数字</button>
           </div>
         </div>
 
-                <!-- 翻转时钟（抖音风格：上片翻走 + 下片展开） -->
-        <div v-if="timerStyle === 'flip'" class="timer-flip" :style="{ color: timerColor }">
-          <span v-for="(ch, i) in timeChars" :key="i"
-            class="fd" :class="{ 'fd-sep': ch === ' ', 'fd-flip': ch !== ' ' && flippingChars.has(i) }">
-            <span v-if="ch === ' '" class="fd-sep-inner" />
-            <template v-else>
-              <span class="fd-s fd-up"><span class="fd-v">{{ ch }}</span></span>
-              <span class="fd-s fd-dn"><span class="fd-v fd-vd">{{ ch }}</span></span>
-              <span class="fd-s fd-old"><span class="fd-v">{{ prevTimeChars[i] || ch }}</span></span>
-              <span class="fd-s fd-new"><span class="fd-v fd-vd">{{ ch }}</span></span>
-            </template>
-          </span>
-        </div>
+        <!-- 进度圆环（仅 idle 时显示在 el-scrollbar 顶部；running 时由 timing-view 内的计时器展示） -->
+        <template v-if="timerState === 'idle'">
+          <div v-if="timerStyle === 'ring'" class="timer-ring">
+            <svg class="ring-svg" viewBox="0 0 120 120">
+              <defs>
+                <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#667eea" />
+                  <stop offset="100%" stop-color="#a78bfa" />
+                </linearGradient>
+                <filter id="ringGlow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+              <circle class="ring-track" cx="60" cy="60" r="54" />
+              <circle class="ring-progress" cx="60" cy="60" r="54"
+                stroke="url(#ringGradient)"
+                filter="url(#ringGlow)"
+                :stroke-dasharray="ringCircumference"
+                :stroke-dashoffset="ringCircumference * (1 - ringProgress)" />
+              <circle class="ring-dot" :cx="ringDotStyle.cx" :cy="ringDotStyle.cy" r="5" filter="url(#ringGlow)" />
+            </svg>
+            <span class="ring-time">
+              <span v-for="(g, i) in displayTime.split(' ')" :key="i" class="time-group">{{ g }}</span>
+            </span>
+          </div>
 
-        <!-- LED 数码 -->
-        <div v-else-if="timerStyle === 'led'" class="timer-led">{{ displayTime }}</div>
+          <!-- 数字 -->
+          <div v-else class="timer-time">{{ displayTime }}</div>
 
-        <!-- 简约纯白 -->
-        <div v-else class="timer-time" :style="{ color: timerColor }">{{ displayTime }}</div>
+          <div class="focus-start-wrapper">
+            <button class="focus-ctrl-btn focus-start-btn" @click="startFocus">▶️ 开始专注</button>
+          </div>
+        </template>
 
         <!-- 非计时状态 -->
         <div v-if="timerState === 'idle'" class="idle-view">
@@ -77,10 +98,6 @@
             />
           </div>
 
-          <div class="focus-start-wrapper">
-            <button class="focus-ctrl-btn focus-start-btn" @click="startFocus">▶️ 开始专注</button>
-          </div>
-
           <!-- 常用专注 -->
           <div v-if="favorites.length > 0" class="favorites-section">
             <div class="section-title">
@@ -111,8 +128,40 @@
           </div>
         </div>
 
-        <!-- 计时中状态 -->
+        <!-- 计时中状态（计时器+信息+按钮整体居中） -->
         <div v-else class="timing-view">
+          <!-- 进度圆环 -->
+          <div v-if="timerStyle === 'ring'" class="timer-ring">
+            <svg class="ring-svg" viewBox="0 0 120 120">
+              <defs>
+                <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#667eea" />
+                  <stop offset="100%" stop-color="#a78bfa" />
+                </linearGradient>
+                <filter id="ringGlow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+              <circle class="ring-track" cx="60" cy="60" r="54" />
+              <circle class="ring-progress" cx="60" cy="60" r="54"
+                stroke="url(#ringGradient)"
+                filter="url(#ringGlow)"
+                :stroke-dasharray="ringCircumference"
+                :stroke-dashoffset="ringCircumference * (1 - ringProgress)" />
+              <circle class="ring-dot" :cx="ringDotStyle.cx" :cy="ringDotStyle.cy" r="5" filter="url(#ringGlow)" />
+            </svg>
+            <span class="ring-time">
+              <span v-for="(g, i) in displayTime.split(' ')" :key="i" class="time-group">{{ g }}</span>
+            </span>
+          </div>
+
+          <!-- 数字 -->
+          <div v-else class="timer-time">{{ displayTime }}</div>
+
           <!-- 专注信息 -->
           <div class="focus-info-card">
             <div class="focus-info-name">{{ focusName }}</div>
@@ -129,18 +178,18 @@
     </div>
 
     <!-- 完成后保存常用对话框 -->
-    <el-dialog
-        v-model="showSaveFavorite"
+    <BaseDialog
+        :visible="showSaveFavorite"
         title="保存为常用专注？"
-        width="400px"
-        class="dark-dialog"
+        :width="400"
+        @update:visible="showSaveFavorite = $event"
     >
       <p class="dialog-text">是否将此专注保存为常用？方便下次快速开始。</p>
       <template #footer>
         <el-button @click="showSaveFavorite = false">跳过</el-button>
         <el-button type="primary" @click="saveAsFavorite">保存</el-button>
       </template>
-    </el-dialog>
+    </BaseDialog>
   </div>
 </template>
 
@@ -154,6 +203,7 @@ import { useTaskStore } from '../../stores/taskStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { usePageNav } from '../../composables/usePageNav'
 import { logger } from '../../lib/logger'
+import BaseDialog from '../common/BaseDialog.vue'
 
 const emit = defineEmits<{
   (e: 'fullscreen-change', fullscreen: boolean): void
@@ -193,17 +243,11 @@ const localPomodoroDuration = ref(settingsStore.settings.focus?.pomodoroDuration
 const showSaveFavorite = ref(false)
 const lastCompletedFocus = ref<{ name: string; notes: string; type: FocusType; targetDuration: number } | null>(null)
 
-const timeChars = ref<string[]>([])
-const prevTimeChars = ref<string[]>([])
-const flippingChars = ref(new Set<number>())
-
-const timerStyle = ref<'flip' | 'plain' | 'led'>('flip')
-const timerStyles = [
-  { value: 'flip', label: '🃏 翻页' },
-  { value: 'plain', label: '▫️ 简约' },
-  { value: 'led', label: '🔢 数码' },
-]
-const setTimerStyle = async (s: 'flip' | 'plain' | 'led') => {
+const timerStyle = ref<'ring' | 'plain'>('ring')
+const styleToggleClass = computed(() => {
+  return timerStyle.value === 'plain' ? 'active-right' : ''
+})
+const setTimerStyle = async (s: 'ring' | 'plain') => {
   timerStyle.value = s
   await settingsStore.updateFocusSettings({ timerStyle: s })
 }
@@ -250,53 +294,21 @@ const sandProgress = computed(() => {
   return 0
 })
 
-// 时间颜色：番茄钟绿→红渐变，正计时白→蓝渐变
-const timerColor = computed(() => {
-  if (timerState.value !== 'running') return '#fff'
-  if (focusType.value === 'pomodoro') {
-    const total = localPomodoroDuration.value * 60
-    const ratio = Math.max(0, Math.min(1, remainingSeconds.value / total))
-    // 绿 #34d399 → 红 #f87171
-    const r = Math.round(0xf8 * (1 - ratio) + 0x34 * ratio)
-    const g = Math.round(0x71 * (1 - ratio) + 0xd3 * ratio)
-    const b = Math.round(0x71 * (1 - ratio) + 0x99 * ratio)
-    return `rgb(${r},${g},${b})`
-  }
-  // 正计时：白 → 蓝 #93c5fd（2小时内渐变）
-  const hours = elapsedSeconds.value / 3600
-  const t = Math.min(1, hours / 2)
-  const r = Math.round(255 * (1 - t) + 0x93 * t)
-  const g = Math.round(255 * (1 - t) + 0xc5 * t)
-  const b = Math.round(255 * (1 - t) + 0xfd * t)
-  return `rgb(${r},${g},${b})`
+// 圆环进度：番茄钟按剩余时间递减（满→空），正计时无目标恒为满圈
+const ringCircumference = 2 * Math.PI * 54
+const ringProgress = computed(() => {
+  if (focusType.value === 'stopwatch') return 1
+  return 1 - sandProgress.value
 })
 
-watch(displayTime, (val, old) => {
-  if (timerState.value === 'running') {
-    focusStore.focusDisplayTime = val
+// 进度末端小球坐标（以圆心 60,60 半径 54 计算，从 SVG 内 3 点顺时针；与 circle-progress 起点对齐）
+const ringDotStyle = computed(() => {
+  const angleRad = (ringProgress.value * 360 * Math.PI) / 180
+  return {
+    cx: (60 + 54 * Math.cos(angleRad)).toFixed(1),
+    cy: (60 + 54 * Math.sin(angleRad)).toFixed(1),
   }
-  const nc = val.split('')
-  const oc = old?.split('') || []
-  // 上半保存旧值用于翻页动画
-  prevTimeChars.value = [...timeChars.value]
-  const flips = new Set<number>()
-  for (let i = 0; i < nc.length; i++) {
-    if (nc[i] !== (oc[i] || '')) flips.add(i)
-  }
-  flippingChars.value = flips
-  // 上半片 0→-90° 消失后换内容
-  setTimeout(() => {
-    // 禁用过渡，上半片瞬间复位（此时已显示新值）
-    document.querySelectorAll('.fd-flip .fd-old, .fd-flip .fd-new').forEach(el => {
-      const e = el as HTMLElement
-      e.style.transition = 'none'; e.style.transform = ''
-      requestAnimationFrame(() => { e.style.transition = '' })
-    })
-    prevTimeChars.value = [...nc]
-    flippingChars.value = new Set()
-  }, 350)
-  timeChars.value = nc
-}, { immediate: true })
+})
 
 // 选择常用专注
 const selectFavorite = (fav: FavoriteFocus) => {
@@ -406,7 +418,6 @@ const cancelFocus = async () => {
 
   // 清除 store 中的计时状态
   await focusStore.clearTimerState()
-  focusStore.focusDisplayTime = ''
 
   refreshReminders()
 
@@ -539,7 +550,6 @@ const completeFocus = async () => {
 
   // 清除 store 中的计时状态
   await focusStore.clearTimerState()
-  focusStore.focusDisplayTime = ''
 
   refreshReminders()
 
@@ -588,7 +598,8 @@ onMounted(async () => {
 
   await focusStore.loadData()
   await settingsStore.loadSettings()
-  timerStyle.value = settingsStore.settings.focus?.timerStyle || 'flip'
+  const savedStyle = settingsStore.settings.focus?.timerStyle || 'ring'
+  timerStyle.value = (savedStyle === 'plain') ? 'plain' : 'ring'
 
   // 恢复计时状态
   const savedState = focusStore.timerState
@@ -709,15 +720,31 @@ onUnmounted(async () => {
 <style scoped>
 .focus-container {
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
   background: transparent;
   padding: 0 24px;
 }
 
 .focus-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+}
+
+.focus-content :deep(.el-scrollbar) {
+  flex: 1;
+  min-height: 0;
+}
+
+.focus-content :deep(.el-scrollbar__view) {
+  display: block;
+  min-height: 100%;
+}
+/* 禁用浏览器滚动锚定，防止内容高度变化时顶部元素意外下移 */
+.focus-content :deep(.el-scrollbar__wrap) {
+  height: 100%;
+  position: relative;
+  overflow-anchor: none;
 }
 
 /* ========== 类型切换 ========== */
@@ -726,6 +753,7 @@ onUnmounted(async () => {
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
+  margin-top: 16px;
   margin-bottom: 20px;
   width: 100%;
 }
@@ -788,94 +816,90 @@ onUnmounted(async () => {
   color: var(--chalk-white);
 }
 
-/* 时间数字（简约） */
+/* 两段式风格切换（圆环 / 数字） */
+.style-2-seg .toggle-slider {
+  width: calc(50% - 3px);
+  transition: left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 时间数字 */
 .timer-time {
   font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
   font-weight: 700;
   font-size: 72px;
-  color: #fff;
-  text-align: center;
+  color: #a78bfa;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   letter-spacing: 2px;
   line-height: 1;
-  margin-bottom: 48px;
-}
-
-/* ========== 风格选择器 ========== */
-.style-toggle {
+  height: 180px;
   display: flex;
-  gap: 4px;
-}
-
-.style-btn {
-  padding: 4px 14px;
-  font-size: 12px;
-  border-radius: 100px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: transparent;
-  color: var(--chalk-white-60);
-  cursor: pointer;
-  font-family: inherit;
-  transition: all 0.2s;
-}
-
-.style-btn:hover {
-  color: var(--chalk-white);
-  border-color: rgba(167, 139, 250, 0.3);
-}
-
-.style-btn.active {
-  background: rgba(167, 139, 250, 0.15);
-  border-color: rgba(167, 139, 250, 0.4);
-  color: #c4b5fd;
-}
-
-/* ====== 翻页时钟（抖音风格） ====== */
-.timer-flip { display:flex; justify-content:center; gap:6px; margin-bottom:48px; }
-
-.fd { position:relative; width:52px; height:84px; perspective:600px; }
-.fd-sep { width:16px; }
-.fd-sep-inner { display:none; }
-
-.fd-s { position:absolute; left:0; right:0; height:50%; overflow:hidden; }
-.fd-s .fd-v { display:block; font-size:64px; line-height:84px; text-align:center; font-family:'SF Mono','Monaco','Consolas',monospace; font-weight:800; color:inherit; }
-.fd-vd { transform:translateY(-50%); }
-
-/* 静态上下半 */
-.fd-up { top:0; }
-.fd-dn { bottom:0; }
-
-/* 旧数字上半：绕底边往上翻走 */
-.fd-old { top:0; transform-origin:50% 100%; transition:transform 0.35s ease-in; backface-visibility:hidden; }
-.fd-flip .fd-old { transform:rotateX(-180deg); }
-
-/* 新数字下半：绕顶边往下展开 */
-.fd-new { bottom:0; transform-origin:50% 0; transform:rotateX(180deg); transition:transform 0.35s ease-out 0.1s; backface-visibility:hidden; }
-.fd-flip .fd-new { transform:rotateX(0); }
-
-/* ========== LED 数码 ========== */
-.timer-led {
-  font-family: 'Courier New', monospace;
-  font-weight: 700;
-  font-size: 72px;
-  color: #fbbf24;
-  text-align: center;
-  white-space: nowrap;
-  letter-spacing: 4px;
-  line-height: 1;
+  align-items: center;
+  justify-content: center;
   margin-bottom: 48px;
-  text-shadow:
-    0 0 8px rgba(251, 191, 36, 0.8),
-    0 0 20px rgba(251, 191, 36, 0.4),
-    0 0 40px rgba(251, 191, 36, 0.2);
+}
+
+/* ========== 进度圆环 ========== */
+.timer-ring {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  margin: 0 auto 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #a78bfa;
+}
+
+.ring-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ring-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 6;
+}
+
+.ring-progress {
+  fill: none;
+  stroke-width: 6;
+  transition: stroke-dashoffset 0.3s ease;
+}
+
+.ring-dot {
+  fill: #a78bfa;
+}
+
+.ring-time {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-weight: 800;
+  font-size: 32px;
+  color: currentColor;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 2px;
+  white-space: nowrap;
+}
+
+.time-group {
+  position: relative;
+  display: inline-block;
 }
 
 /* ========== 空闲视图 ========== */
 .idle-view {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   padding: 0 0 40px;
 }
 
@@ -980,6 +1004,7 @@ onUnmounted(async () => {
   justify-content: center;
   gap: 12px;
   margin-top: 20px;
+  width: 100%;
 }
 
 .focus-start-btn {
@@ -1063,10 +1088,16 @@ onUnmounted(async () => {
 
 /* ========== 计时中视图 ========== */
 .timing-view {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0 0 40px;
+  width: calc(100% - 48px);
+  padding: 40px 0;
+  z-index: 1;
 }
 
 .focus-info-card {
@@ -1124,76 +1155,6 @@ onUnmounted(async () => {
 .dialog-text {
   color: rgba(255, 255, 255, 0.7);
   line-height: 1.6;
-}
-
-/* 深色对话框全局样式 */
-:deep(.dark-dialog) {
-  --el-dialog-bg-color: rgba(30, 30, 50, 0.95);
-  --el-dialog-title-font-size: 18px;
-}
-
-:deep(.dark-dialog .el-dialog) {
-  background: rgba(30, 30, 50, 0.95) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-}
-
-:deep(.dark-dialog .el-dialog__header) {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 20px 24px;
-}
-
-:deep(.dark-dialog .el-dialog__title) {
-  color: rgba(255, 255, 255, 0.95);
-  font-weight: 600;
-}
-
-:deep(.dark-dialog .el-dialog__headerbtn .el-dialog__close) {
-  color: rgba(255, 255, 255, 0.5);
-}
-
-:deep(.dark-dialog .el-dialog__headerbtn:hover .el-dialog__close) {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-:deep(.dark-dialog .el-dialog__body) {
-  padding: 24px;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-:deep(.dark-dialog .el-dialog__footer) {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 16px 24px;
-}
-
-:deep(.dark-dialog .el-form-item__label) {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-:deep(.dark-dialog .el-input-number) {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-:deep(.dark-dialog .el-input-number .el-input__wrapper) {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: none;
-}
-
-:deep(.dark-dialog .el-input-number .el-input__inner) {
-  color: #fff;
-}
-
-:deep(.dark-dialog .el-input-number__decrease),
-:deep(.dark-dialog .el-input-number__increase) {
-  background: transparent;
-  border-color: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.7);
-}
-
-:deep(.dark-dialog .el-input-number__decrease:hover),
-:deep(.dark-dialog .el-input-number__increase:hover) {
-  color: #fff;
 }
 
 /* 按钮样式 - 适配深色主题 */

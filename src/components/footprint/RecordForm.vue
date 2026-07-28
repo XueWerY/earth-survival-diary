@@ -1,58 +1,54 @@
 <template>
-  <Teleport to="body">
-    <div v-if="dialogVisible" class="dialog-overlay" @click.self="dialogVisible = false">
-      <div class="dialog-container task-form-dialog">
-        <div class="dialog-header folder-dialog-header">
-          <span class="dialog-header-title folder-dialog-title">{{ dialogTitle }}</span>
-        </div>
-        <div class="dialog-divider"></div>
-        <div class="dialog-body">
-          <el-form :model="form" :rules="rules" ref="formRef" label-width="80px">
-            <el-form-item label="名称" prop="name">
-              <el-input
-                  v-model="form.name"
-                  type="textarea"
-                  :rows="2"
-                  placeholder="今天做了什么？"
-              />
-            </el-form-item>
-            <div class="time-range-row">
-              <el-form-item label="开始时间" class="time-range-item">
-                <TimePickerPopover v-model="form.startTime" :offset-minutes="0" placeholder="--:--" />
-              </el-form-item>
-              <el-form-item label="结束时间" class="time-range-item">
-                <TimePickerPopover v-model="form.endTime" :offset-minutes="60" placeholder="--:--" />
-              </el-form-item>
-            </div>
-            <el-form-item label="备注" prop="notes">
-              <el-input
-                  v-model="form.notes"
-                  type="textarea"
-                  :rows="3"
-                  placeholder="添加备注"
-              />
-            </el-form-item>
-          </el-form>
-          <div class="form-footer">
-            <button class="capsule-btn" @click="dialogVisible = false">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-              <span>取消</span>
-            </button>
-            <button class="capsule-btn capsule-btn-primary" @click="handleSubmit">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              <span>{{ isEdit ? '更新' : '添加' }}</span>
-            </button>
-          </div>
-        </div>
+  <BaseDialog
+    :visible="dialogVisible"
+    :title="dialogTitle"
+    :width="400"
+    teleport
+    @update:visible="dialogVisible = $event"
+  >
+    <el-form :model="form" :rules="rules" ref="formRef" label-width="80px">
+      <el-form-item label="名称" prop="name">
+        <el-input
+            v-model="form.name"
+            type="textarea"
+            :rows="2"
+            placeholder="今天做了什么？"
+        />
+      </el-form-item>
+      <div class="time-range-row">
+        <el-form-item label="开始时间" class="time-range-item">
+          <TimePickerPopover v-model="form.startTime" :offset-minutes="0" placeholder="--:--" />
+        </el-form-item>
+        <el-form-item label="结束时间" class="time-range-item">
+          <TimePickerPopover v-model="form.endTime" :offset-minutes="60" placeholder="--:--" />
+        </el-form-item>
       </div>
-    </div>
-  </Teleport>
+      <el-form-item label="备注" prop="notes">
+        <el-input
+            v-model="form.notes"
+            type="textarea"
+            :rows="3"
+            placeholder="添加备注"
+        />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <button class="capsule-btn" @click="dialogVisible = false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+        <span>取消</span>
+      </button>
+      <button class="capsule-btn capsule-btn-primary" @click="handleSubmit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <span>{{ isEdit ? '更新' : '添加' }}</span>
+      </button>
+    </template>
+  </BaseDialog>
 </template>
 
 <script setup lang="ts">
@@ -61,6 +57,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import dayjs from 'dayjs'
 import { useTaskStore, type Task } from '../../stores/taskStore'
 import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
+import BaseDialog from '../common/BaseDialog.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -168,22 +165,10 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
-.dialog-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
-.dialog-container { background: rgba(30, 28, 52, 0.98); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); max-width: 90vw; }
-.task-form-dialog { width: min(400px, 90vw); }
-.dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 12px; flex-shrink: 0; }
-.dialog-header-title { font-size: 16px; font-weight: 600; color: var(--chalk-white); }
-.folder-dialog-header { justify-content: center; }
-.folder-dialog-title { text-align: center; }
-.dialog-body { padding: 12px 16px 16px; }
-.dialog-divider { height: 1px; background: rgba(255, 255, 255, 0.12); margin: 0 16px; }
-
 .time-range-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end; margin-bottom: 20px; }
 .time-range-row :deep(.el-form-item) { margin-bottom: 0; min-width: 0; }
 .time-range-row :deep(.el-form-item__content) { align-items: flex-end; }
 .time-range-row :deep(.time-picker-wrapper) { width: 100%; display: block; }
-
-.form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
 
 .capsule-btn {
   height: 32px;

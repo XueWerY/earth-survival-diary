@@ -1,56 +1,52 @@
 <template>
-  <Teleport to="body">
-    <div v-if="dialogVisible" class="dialog-overlay" @click.self="dialogVisible = false">
-      <div class="dialog-container task-form-dialog">
-        <div class="dialog-header folder-dialog-header">
-          <span class="dialog-header-title folder-dialog-title">{{ dialogTitle }}</span>
-        </div>
-        <div class="dialog-divider"></div>
-        <div class="dialog-body">
-          <el-form :model="form" :rules="rules" ref="formRef" label-width="60px">
-            <el-form-item label="名称" prop="name">
-              <el-input
-                  v-model="form.name"
-                  type="textarea"
-                  :rows="2"
-                  placeholder="给日记起个名字"
-              />
-            </el-form-item>
-            <el-form-item label="内容" class="content-editor-form-item">
-              <MarkdownEditor
-                  v-model="form.content"
-                  placeholder="记录今天的心情和故事"
-              />
-            </el-form-item>
-            <el-form-item label="备注" prop="notes">
-              <el-input
-                  v-model="form.notes"
-                  type="textarea"
-                  :rows="3"
-                  placeholder="添加备注"
-              />
-            </el-form-item>
-          </el-form>
-          <div class="form-footer">
-            <button class="capsule-btn" @click="dialogVisible = false">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-              <span>取消</span>
-            </button>
-            <button class="capsule-btn capsule-btn-primary" @click="handleSubmit">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              <span>{{ isEdit ? '更新' : '添加' }}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </Teleport>
+  <BaseDialog
+    :visible="dialogVisible"
+    :title="dialogTitle"
+    teleport
+    fullscreen
+    @update:visible="dialogVisible = $event"
+  >
+    <el-form :model="form" :rules="rules" ref="formRef" label-position="top">
+      <el-form-item label="名称" prop="name">
+        <el-input
+            v-model="form.name"
+            type="textarea"
+            :rows="2"
+            placeholder="给日记起个名字"
+        />
+      </el-form-item>
+      <el-form-item label="内容" class="content-editor-form-item">
+        <MarkdownEditor
+            v-model="form.content"
+            placeholder="记录今天的心情和故事"
+        />
+      </el-form-item>
+      <el-form-item label="备注" prop="notes">
+        <el-input
+            v-model="form.notes"
+            type="textarea"
+            :rows="3"
+            placeholder="添加备注"
+        />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <button class="capsule-btn" @click="dialogVisible = false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+        <span>取消</span>
+      </button>
+      <button class="capsule-btn capsule-btn-primary" @click="handleSubmit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <span>{{ isEdit ? '更新' : '添加' }}</span>
+      </button>
+    </template>
+  </BaseDialog>
 </template>
 
 <script setup lang="ts">
@@ -59,6 +55,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import dayjs from 'dayjs'
 import { useTaskStore, type Task } from '../../stores/taskStore'
 import MarkdownEditor from '../common/MarkdownEditor.vue'
+import BaseDialog from '../common/BaseDialog.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -162,17 +159,7 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
-.dialog-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6); z-index: 9999; }
-.dialog-container { width: 100vw; height: 100vh; display: flex; flex-direction: column; background: rgba(30, 28, 52, 0.98); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 0; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); }
-.task-form-dialog { width: 100vw; height: 100vh; }
-.dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 12px; flex-shrink: 0; }
-.dialog-header-title { font-size: 16px; font-weight: 600; color: var(--chalk-white); }
-.folder-dialog-header { justify-content: center; }
-.folder-dialog-title { text-align: center; }
-.dialog-body { flex: 1; display: flex; flex-direction: column; padding: 12px 16px 16px; min-height: 0; overflow: hidden; }
-.dialog-divider { height: 1px; background: rgba(255, 255, 255, 0.12); margin: 0 16px; flex-shrink: 0; }
-
-.form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.12); flex-shrink: 0; }
+:deep(.dialog-body) { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 
 :deep(.el-form) { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .content-editor-form-item { flex: 1; min-height: 0; }

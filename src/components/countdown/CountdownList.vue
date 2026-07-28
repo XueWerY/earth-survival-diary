@@ -228,52 +228,51 @@
       @confirm="onDeleteConfirmed"
     />
 
-    <div v-if="categoryFormVisible" class="dialog-overlay" @click.self="categoryFormVisible = false">
-      <div class="dialog-container" style="max-width: 440px;">
-        <div class="dialog-header" style="justify-content: center;">
-          <span class="dialog-header-title">{{ editingCategory ? '编辑分类' : '添加分类' }}</span>
-        </div>
-        <div class="dialog-body">
-          <el-form :model="categoryForm" label-width="80px">
-            <el-form-item label="分类名称">
-              <el-input v-model="categoryForm.label" placeholder="输入分类名称" maxlength="10" />
-            </el-form-item>
-            <el-form-item label="图标">
-              <div class="icon-picker">
-                <div
-                    v-for="icon in ICON_OPTIONS"
-                    :key="icon"
-                    class="icon-option"
-                    :class="{ active: categoryForm.icon === icon }"
-                    @click="categoryForm.icon = icon"
-                >
-                  {{ icon }}
-                </div>
-              </div>
-              <div class="custom-icon-row">
-                <span class="custom-icon-label">自定义</span>
-                <el-input
-                  v-model="categoryForm.icon"
-                  placeholder="输入表情符号"
-                  maxlength="4"
-                  class="custom-icon-input"
-                />
-              </div>
-            </el-form-item>
-          </el-form>
-        </div>
-        <div class="form-footer">
-          <button class="capsule-btn" @click="categoryFormVisible = false">
-            <el-icon><Close /></el-icon>
-            <span>取消</span>
-          </button>
-          <button class="capsule-btn submit-btn" @click="handleCategoryFormSubmit">
-            <el-icon><Check /></el-icon>
-            <span>确定</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    <BaseDialog
+      :visible="categoryFormVisible"
+      :title="editingCategory ? '编辑分类' : '添加分类'"
+      :width="440"
+      teleport
+      @update:visible="categoryFormVisible = $event"
+    >
+      <el-form :model="categoryForm" label-width="80px">
+        <el-form-item label="分类名称">
+          <el-input v-model="categoryForm.label" placeholder="输入分类名称" maxlength="10" />
+        </el-form-item>
+        <el-form-item label="图标">
+          <div class="icon-picker">
+            <div
+                v-for="icon in ICON_OPTIONS"
+                :key="icon"
+                class="icon-option"
+                :class="{ active: categoryForm.icon === icon }"
+                @click="categoryForm.icon = icon"
+            >
+              {{ icon }}
+            </div>
+          </div>
+          <div class="custom-icon-row">
+            <span class="custom-icon-label">自定义</span>
+            <el-input
+              v-model="categoryForm.icon"
+              placeholder="输入表情符号"
+              maxlength="4"
+              class="custom-icon-input"
+            />
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <button class="capsule-btn" @click="categoryFormVisible = false">
+          <el-icon><Close /></el-icon>
+          <span>取消</span>
+        </button>
+        <button class="capsule-btn submit-btn" @click="handleCategoryFormSubmit">
+          <el-icon><Check /></el-icon>
+          <span>确定</span>
+        </button>
+      </template>
+    </BaseDialog>
   </div>
 </template>
 
@@ -284,6 +283,7 @@ import { Calendar, Clock, Timer, Star, Sunny, Delete, Plus, Check, Close } from 
 import dayjs from 'dayjs'
 import CountdownForm from './CountdownForm.vue'
 import CountdownCard from './CountdownCard.vue'
+import BaseDialog from '../common/BaseDialog.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import { setData } from '../../services/storageService'
@@ -425,6 +425,7 @@ const showBreadcrumb = computed(() => {
 
 const plusAction = computed(() => {
   if (isCountdownHome.value) return handleAddCategory
+  if (isAllView.value) return null
   if (isCategoryView.value) return handleAddMilestone
   return null
 })
@@ -1192,63 +1193,6 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
-}
-
-.icon-picker {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-}
-
-.dialog-container {
-  background: rgba(30, 28, 52, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  max-width: 90vw;
-}
-
-.dialog-body {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 16px 0;
-  flex-shrink: 0;
-}
-
-.dialog-header-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--chalk-white);
-}
-
-.folder-dialog-header {
-  justify-content: center;
-}
-
-.folder-dialog-title {
-  text-align: center;
-}
-
-.dialog-body {
-  padding: 12px 16px 16px;
-}
-
-.form-footer {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 14px;
-  padding-top: 12px;
-  padding-bottom: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .capsule-btn {

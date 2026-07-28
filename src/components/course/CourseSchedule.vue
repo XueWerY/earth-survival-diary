@@ -197,6 +197,7 @@
         <div class="dialog-header folder-dialog-header">
           <span class="dialog-header-title folder-dialog-title">课程表设置</span>
         </div>
+        <div class="dialog-divider"></div>
         <div class="dialog-body">
           <div class="setting-item">
             <span class="setting-label">开学日期</span>
@@ -366,39 +367,36 @@
   </Teleport>
 
   <!-- 自由课间休息时长设置弹窗 -->
-  <Teleport to="body">
-    <div v-if="showCourseCustomBreakDialog" class="dialog-overlay" @click.self="showCourseCustomBreakDialog = false" style="z-index: 10000;">
-      <div class="dialog-container custom-break-dialog">
-        <div class="dialog-header folder-dialog-header">
-          <span class="dialog-header-title folder-dialog-title">自由课间休息时长设置</span>
-        </div>
-        <div class="dialog-body">
-          <div v-if="courseCustomBreakGaps.length === 0" class="custom-break-empty">课表节数不足，无需设置课间休息</div>
-          <div v-for="(gap, idx) in courseCustomBreakGaps" :key="idx" class="custom-break-item">
-            <span class="custom-break-label">{{ gap.label }}</span>
-            <el-input-number
-                v-model="courseCustomBreakDurationsDraft[idx]"
-                :min="0"
-                :max="60"
-                :step="5"
-                size="small"
-                controls-position="right"
-            />
-          </div>
-          <div class="form-footer" style="margin-top: 16px; border-top: none;">
-            <button class="capsule-btn cancel-btn" @click="showCourseCustomBreakDialog = false">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-              <span>取消</span>
-            </button>
-            <button class="capsule-btn submit-btn" @click="confirmCourseCustomBreak">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
-              <span>确认</span>
-            </button>
-          </div>
-        </div>
-      </div>
+<BaseDialog
+  :visible="showCourseCustomBreakDialog"
+  title="自由课间休息时长设置"
+  :width="400"
+  teleport
+  @update:visible="showCourseCustomBreakDialog = $event"
+>
+    <div v-if="courseCustomBreakGaps.length === 0" class="custom-break-empty">课表节数不足，无需设置课间休息</div>
+    <div v-for="(gap, idx) in courseCustomBreakGaps" :key="idx" class="custom-break-item">
+      <span class="custom-break-label">{{ gap.label }}</span>
+      <el-input-number
+          v-model="courseCustomBreakDurationsDraft[idx]"
+          :min="0"
+          :max="60"
+          :step="5"
+          size="small"
+          controls-position="right"
+      />
     </div>
-  </Teleport>
+    <template #footer>
+      <button class="capsule-btn cancel-btn" style="border-radius: 8px;" @click="showCourseCustomBreakDialog = false">
+        <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        <span>取消</span>
+      </button>
+      <button class="capsule-btn submit-btn" style="border-radius: 8px;" @click="confirmCourseCustomBreak">
+        <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
+        <span>确认</span>
+      </button>
+    </template>
+  </BaseDialog>
 </template>
 
 <script setup lang="ts">
@@ -413,6 +411,7 @@ import { logger } from '../../lib/logger'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
 import PeriodCountPicker from '../common/picker/PeriodCountPicker.vue'
+import BaseDialog from '../common/BaseDialog.vue'
 
 interface Course {
   id: string
@@ -1368,7 +1367,12 @@ onMounted(async () => {
 
 .dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
 .dialog-container { background: rgba(30,28,52,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; }
-.course-settings-dialog { width: 300px; }
+.course-settings-dialog { width: 400px; }
+.course-settings-dialog .dialog-header { padding-bottom: 12px; }
+.course-settings-dialog .dialog-body { padding-bottom: 0; }
+.course-settings-dialog .form-footer { position: sticky; bottom: 0; background: rgba(30,28,52,0.98); z-index: 1; padding-bottom: 16px; }
+.course-settings-dialog .capsule-btn { border-radius: 8px; }
+.dialog-divider { height: 1px; background: rgba(255, 255, 255, 0.12); margin: 0 16px; }
 .dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 0; flex-shrink: 0; }
 .dialog-header-title { font-size: 16px; font-weight: 600; color: var(--chalk-white); }
 .folder-dialog-header { justify-content: center; }
@@ -1397,9 +1401,7 @@ onMounted(async () => {
 .break-mode-row { display: flex; align-items: center; }
 .setting-break-custom-btn { white-space: nowrap; }
 
-.custom-break-dialog { width: 250px; }
-.custom-break-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
-.custom-break-item:last-child { border-bottom: none; }
+.custom-break-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
 .custom-break-label { font-size: 13px; color: rgba(255,255,255,0.8); }
 .custom-break-empty { text-align: center; color: rgba(255,255,255,0.5); padding: 20px 0; font-size: 14px; }
 

@@ -168,18 +168,19 @@
       @confirm="onCategoryDeleteConfirmed"
     />
 
-    <el-dialog v-model="showRenameDialog" width="420px" :show-close="false" @open="onRenameDialogOpen">
-      <template #header>
-        <div style="text-align: center; font-size: 16px; font-weight: 600; color: #fff; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.08);">重命名笔记</div>
-      </template>
-      <el-input v-model="renameInputValue" placeholder="输入笔记名称" @keyup.enter="commitRenameNote" />
+  <BaseDialog
+    :visible="showRenameDialog"
+    title="重命名笔记"
+    :width="420"
+    @update:visible="showRenameDialog = $event"
+  >
+    <span class="form-label">名称</span>
+    <el-input v-model="renameInputValue" placeholder="输入笔记名称" @keyup.enter="commitRenameNote" />
       <template #footer>
-        <div style="display: flex; justify-content: center; gap: 12px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.08);">
-          <el-button @click="showRenameDialog = false">取消</el-button>
-          <el-button type="primary" @click="commitRenameNote">确定</el-button>
-        </div>
+        <el-button @click="showRenameDialog = false">取消</el-button>
+        <el-button type="primary" @click="commitRenameNote">确定</el-button>
       </template>
-    </el-dialog>
+    </BaseDialog>
   </div>
 </template>
 
@@ -191,6 +192,7 @@ import dayjs from 'dayjs'
 import NoteEditor from './NoteEditor.vue'
 import CategoryForm from './CategoryForm.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
+import BaseDialog from '../common/BaseDialog.vue'
 import { useNoteStore, ALL_CATEGORY_VALUE, getMdPlainText, extractMdOutline, type Note, type NoteCategory } from '../../stores/noteStore'
 import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem, type FavoriteItem } from '../../composables/usePageNav'
 import { getData, setData } from '../../services/storageService'
@@ -636,12 +638,8 @@ const showRenameDialog = ref(false)
 const startRenameNote = () => {
   if (!detailNote.value) return
   renameInputValue.value = detailNote.value.title || ''
-  showRenameDialog.value = true
-}
-
-const onRenameDialogOpen = () => {
-  // el-dialog 打开后自动聚焦输入框
   isRenamingNote.value = true
+  showRenameDialog.value = true
 }
 
 const commitRenameNote = () => {
@@ -1354,5 +1352,12 @@ onBeforeUnmount(() => {
 .detail-content :deep(video) {
   max-width: 100%;
   border-radius: 6px;
+}
+
+.form-label {
+  display: block;
+  color: var(--chalk-dim);
+  font-size: 13px;
+  margin-bottom: 8px;
 }
 </style>

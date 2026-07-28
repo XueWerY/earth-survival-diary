@@ -115,149 +115,113 @@
 
     <DateScrollPicker v-model="datePickerValue" v-model:visible="showDatePicker" @update:model-value="onDatePicked" />
 
-    <Teleport to="body">
-      <div v-if="showReminderDialog" class="dialog-overlay" @click.self="showReminderDialog = false">
-        <div class="dialog-container folder-color-dialog">
-          <div class="dialog-header folder-dialog-header">
-            <span class="dialog-header-title folder-dialog-title">设置提醒</span>
-          </div>
-          <div class="dialog-body">
-            <div class="list-form">
-              <div class="form-row">
-                <span class="form-label">提醒</span>
-                <div class="reminder-area">
-                  <div class="reminder-toggle">
-                    <button class="reminder-toggle-btn" :class="{ active: reminderEnabled }" @click="reminderEnabled = true">提醒</button>
-                    <button class="reminder-toggle-btn" :class="{ active: !reminderEnabled }" @click="reminderEnabled = false">不提醒</button>
-                  </div>
-                  <ReminderTimePicker v-if="reminderEnabled" v-model="reminderTimeValue" />
-                </div>
+      <BaseDialog :visible="showReminderDialog" title="设置提醒" :width="380" teleport @update:visible="showReminderDialog = false">
+        <div class="list-form">
+          <div class="form-row">
+            <span class="form-label">提醒</span>
+            <div class="reminder-area">
+              <div class="reminder-toggle">
+                <button class="reminder-toggle-btn" :class="{ active: reminderEnabled }" @click="reminderEnabled = true">提醒</button>
+                <button class="reminder-toggle-btn" :class="{ active: !reminderEnabled }" @click="reminderEnabled = false">不提醒</button>
               </div>
-              <div class="list-form-footer">
-                <el-button @click="showReminderDialog = false">取消</el-button>
-                <el-button type="primary" @click="saveReminder">保存</el-button>
-              </div>
+              <ReminderTimePicker v-if="reminderEnabled" v-model="reminderTimeValue" />
             </div>
           </div>
         </div>
-      </div>
-    </Teleport>
+        <template #footer>
+          <el-button @click="showReminderDialog = false">取消</el-button>
+          <el-button type="primary" @click="saveReminder">保存</el-button>
+        </template>
+      </BaseDialog>
 
-    <Teleport to="body">
-      <div v-if="showRepeatDialog" class="dialog-overlay" @click.self="showRepeatDialog = false">
-        <div class="dialog-container folder-color-dialog">
-          <div class="dialog-header folder-dialog-header">
-            <span class="dialog-header-title folder-dialog-title">设置重复</span>
+    <BaseDialog :visible="showRepeatDialog" title="设置重复" :width="380" teleport @update:visible="showRepeatDialog = false">
+        <div class="list-form">
+          <div class="form-row">
+            <span class="form-label">重复</span>
+            <el-select v-model="repeatForm.strategy" placeholder="不重复" class="full-select" popper-class="dark-select-popper">
+              <el-option v-for="s in REPEAT_STRATEGIES" :key="s.value" :label="s.label" :value="s.value" />
+            </el-select>
           </div>
-          <div class="dialog-body">
-            <div class="list-form">
-              <div class="form-row">
-                <span class="form-label">重复</span>
-                <el-select v-model="repeatForm.strategy" placeholder="不重复" class="full-select" popper-class="dark-select-popper">
-                  <el-option v-for="s in REPEAT_STRATEGIES" :key="s.value" :label="s.label" :value="s.value" />
-                </el-select>
-              </div>
-              <div class="form-row" v-if="repeatForm.strategy === 'custom_days'">
-                <span class="form-label">间隔天数</span>
-                <el-input-number v-model="repeatForm.customDays" :min="1" :max="999" class="full-input-num" />
-              </div>
-              <div class="form-row" v-if="repeatForm.strategy === 'weekly_select'">
-                <span class="form-label">选择星期</span>
-                <div class="weekday-grid">
-                  <button v-for="(d, i) in WEEKDAYS" :key="i"
-                    class="weekday-btn" :class="{ active: repeatWeekdays.includes(i) }"
-                    @click="toggleWeekday(i)">{{ d }}</button>
-                </div>
-              </div>
-              <div class="form-row" v-if="repeatForm.strategy === 'monthly_selected_day'">
-                <span class="form-label">指定日期</span>
-                <el-input-number v-model="repeatForm.monthDay" :min="1" :max="31" class="full-input-num" />
-              </div>
-              <div class="form-row" v-if="repeatForm.strategy === 'lunar_date'">
-                <span class="form-label">农历月</span>
-                <el-select v-model="repeatLunarMonth" class="full-select" popper-class="dark-select-popper">
-                  <el-option v-for="(m, i) in LUNAR_MONTHS" :key="i" :label="m" :value="i + 1" />
-                </el-select>
-                <span class="form-label" style="margin-top: 10px;">农历日</span>
-                <el-select v-model="repeatLunarDay" class="full-select" popper-class="dark-select-popper">
-                  <el-option v-for="(d, i) in LUNAR_DAYS" :key="i" :label="d" :value="i + 1" />
-                </el-select>
-              </div>
-              <div class="list-form-footer">
-                <el-button @click="showRepeatDialog = false">取消</el-button>
-                <el-button type="primary" @click="saveRepeat">保存</el-button>
-              </div>
+          <div class="form-row" v-if="repeatForm.strategy === 'custom_days'">
+            <span class="form-label">间隔天数</span>
+            <el-input-number v-model="repeatForm.customDays" :min="1" :max="999" class="full-input-num" />
+          </div>
+          <div class="form-row" v-if="repeatForm.strategy === 'weekly_select'">
+            <span class="form-label">选择星期</span>
+            <div class="weekday-grid">
+              <button v-for="(d, i) in WEEKDAYS" :key="i"
+                class="weekday-btn" :class="{ active: repeatWeekdays.includes(i) }"
+                @click="toggleWeekday(i)">{{ d }}</button>
             </div>
           </div>
+          <div class="form-row" v-if="repeatForm.strategy === 'monthly_selected_day'">
+            <span class="form-label">指定日期</span>
+            <el-input-number v-model="repeatForm.monthDay" :min="1" :max="31" class="full-input-num" />
+          </div>
+          <div class="form-row" v-if="repeatForm.strategy === 'lunar_date'">
+            <span class="form-label">农历月</span>
+            <el-select v-model="repeatLunarMonth" class="full-select" popper-class="dark-select-popper">
+              <el-option v-for="(m, i) in LUNAR_MONTHS" :key="i" :label="m" :value="i + 1" />
+            </el-select>
+            <span class="form-label" style="margin-top: 10px;">农历日</span>
+            <el-select v-model="repeatLunarDay" class="full-select" popper-class="dark-select-popper">
+              <el-option v-for="(d, i) in LUNAR_DAYS" :key="i" :label="d" :value="i + 1" />
+            </el-select>
+          </div>
         </div>
-      </div>
-    </Teleport>
+        <template #footer>
+          <el-button @click="showRepeatDialog = false">取消</el-button>
+          <el-button type="primary" @click="saveRepeat">保存</el-button>
+        </template>
+      </BaseDialog>
 
-    <Teleport to="body">
-      <div v-if="showEndRepeatDialog" class="dialog-overlay" @click.self="showEndRepeatDialog = false">
-        <div class="dialog-container folder-color-dialog">
-          <div class="dialog-header folder-dialog-header">
-            <span class="dialog-header-title folder-dialog-title">结束重复</span>
+    <BaseDialog :visible="showEndRepeatDialog" title="结束重复" :width="380" teleport @update:visible="showEndRepeatDialog = false">
+        <div class="list-form">
+          <div class="form-row">
+            <span class="form-label">结束重复</span>
+            <el-select v-model="endRepeatForm.strategy" class="full-select" popper-class="dark-select-popper">
+              <el-option v-for="s in REPEAT_END_STRATEGIES" :key="s.value" :label="s.label" :value="s.value" />
+            </el-select>
           </div>
-          <div class="dialog-body">
-            <div class="list-form">
-              <div class="form-row">
-                <span class="form-label">结束重复</span>
-                <el-select v-model="endRepeatForm.strategy" class="full-select" popper-class="dark-select-popper">
-                  <el-option v-for="s in REPEAT_END_STRATEGIES" :key="s.value" :label="s.label" :value="s.value" />
-                </el-select>
-              </div>
-              <div class="form-row" v-if="endRepeatForm.strategy === 'date'">
-                <span class="form-label">结束日期</span>
-                <DateScrollPicker v-model="endRepeatForm.date" />
-              </div>
-              <div class="form-row" v-if="endRepeatForm.strategy === 'count'">
-                <span class="form-label">重复次数</span>
-                <el-input-number v-model="endRepeatForm.count" :min="1" :max="9999" class="full-input-num" />
-              </div>
-              <div class="list-form-footer">
-                <el-button @click="showEndRepeatDialog = false">取消</el-button>
-                <el-button type="primary" @click="saveEndRepeat">保存</el-button>
-              </div>
-            </div>
+          <div class="form-row" v-if="endRepeatForm.strategy === 'date'">
+            <span class="form-label">结束日期</span>
+            <DateScrollPicker v-model="endRepeatForm.date" />
+          </div>
+          <div class="form-row" v-if="endRepeatForm.strategy === 'count'">
+            <span class="form-label">重复次数</span>
+            <el-input-number v-model="endRepeatForm.count" :min="1" :max="9999" class="full-input-num" />
           </div>
         </div>
-      </div>
-    </Teleport>
+        <template #footer>
+          <el-button @click="showEndRepeatDialog = false">取消</el-button>
+          <el-button type="primary" @click="saveEndRepeat">保存</el-button>
+        </template>
+      </BaseDialog>
 
-    <Teleport to="body">
-      <div v-if="showListGroupDialog" class="dialog-overlay" @click.self="showListGroupDialog = false">
-        <div class="dialog-container folder-color-dialog">
-          <div class="dialog-header folder-dialog-header">
-            <span class="dialog-header-title folder-dialog-title">所属清单分组</span>
+    <BaseDialog :visible="showListGroupDialog" title="所属清单分组" :width="380" teleport @update:visible="showListGroupDialog = false">
+        <div class="list-form">
+          <div class="form-row">
+            <span class="form-label">所属清单</span>
+            <el-select v-model="listGroupForm.listId" placeholder="选择清单" class="full-select" popper-class="dark-select-popper">
+              <el-option v-for="list in availableLists" :key="list.id" :label="list.name" :value="list.id">
+                <div class="select-option-row"><span class="select-option-dot" :style="{ background: list.color }"></span>{{ list.name }}</div>
+              </el-option>
+            </el-select>
           </div>
-          <div class="dialog-body">
-            <div class="list-form">
-              <div class="form-row">
-                <span class="form-label">所属清单</span>
-                <el-select v-model="listGroupForm.listId" placeholder="选择清单" class="full-select" popper-class="dark-select-popper">
-                  <el-option v-for="list in availableLists" :key="list.id" :label="list.name" :value="list.id">
-                    <div class="select-option-row"><span class="select-option-dot" :style="{ background: list.color }"></span>{{ list.name }}</div>
-                  </el-option>
-                </el-select>
-              </div>
-              <div class="form-row" v-if="listGroupForm.listId">
-                <span class="form-label">所属分组</span>
-                <el-select v-model="listGroupForm.groupId" placeholder="选择分组" class="full-select" popper-class="dark-select-popper">
-                  <el-option v-for="g in availableGroups" :key="g.id" :label="g.name" :value="g.id">
-                    <div class="select-option-row"><span class="select-option-dot" :style="{ background: g.color }"></span>{{ g.name }}</div>
-                  </el-option>
-                </el-select>
-              </div>
-              <div class="list-form-footer">
-                <el-button @click="showListGroupDialog = false">取消</el-button>
-                <el-button type="primary" @click="saveListGroup">保存</el-button>
-              </div>
-            </div>
+          <div class="form-row" v-if="listGroupForm.listId">
+            <span class="form-label">所属分组</span>
+            <el-select v-model="listGroupForm.groupId" placeholder="选择分组" class="full-select" popper-class="dark-select-popper">
+              <el-option v-for="g in availableGroups" :key="g.id" :label="g.name" :value="g.id">
+                <div class="select-option-row"><span class="select-option-dot" :style="{ background: g.color }"></span>{{ g.name }}</div>
+              </el-option>
+            </el-select>
           </div>
         </div>
-      </div>
-    </Teleport>
+        <template #footer>
+          <el-button @click="showListGroupDialog = false">取消</el-button>
+          <el-button type="primary" @click="saveListGroup">保存</el-button>
+        </template>
+      </BaseDialog>
 
     <ConfirmDialog
       v-model="showDeleteConfirm"
@@ -279,6 +243,7 @@ import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
 import ReminderTimePicker from '../common/picker/ReminderTimePicker.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
+import BaseDialog from '../common/BaseDialog.vue'
 
 const props = withDefaults(defineProps<{
   list: Task

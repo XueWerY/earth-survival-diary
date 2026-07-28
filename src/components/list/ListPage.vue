@@ -49,7 +49,7 @@
     <div class="main-content" @click="closeDropdown">
       <el-scrollbar>
 
-        <div v-if="isTaskRoot" class="card-grid card-grid-root" :class="isElectron ? 'grid-4cols' : 'grid-2cols'">
+        <div v-if="isTaskRoot" class="card-grid card-grid-root">
           <div class="folder-card has-actions" @click="pageNav.setNavPath(['list', 'smart'])">
             <div class="folder-card-icon smart-icon-bg"><el-icon><List /></el-icon></div>
             <span class="folder-card-name">智能清单</span>
@@ -67,7 +67,7 @@
         </div>
 
         <template v-else-if="isSmartOverview">
-          <div class="card-grid" :class="!isElectron ? 'grid-2cols' : ''">
+          <div class="card-grid">
             <div class="folder-card" @click="pageNav.setNavPath(['list', 'smart', 'today'])">
               <div class="folder-card-icon today-icon-bg"><el-icon><Calendar /></el-icon></div>
               <span class="folder-card-name">今天</span>
@@ -88,14 +88,14 @@
 
         <template v-else-if="isSmartDetail">
           <el-empty v-if="smartDetailTasks.length === 0" :description="smartDetailEmptyText" :image-size="120" />
-          <div v-else :class="[smartDetailIsToday ? 'today-lists' : 'smart-lists', isElectron ? 'grid-2cols' : '']">
+          <div v-else :class="smartDetailIsToday ? 'today-lists' : 'smart-lists'">
               <TaskCard v-for="list in smartDetailTasks" :key="list.id" :list="list" :context="smartDetailCardContext" @delete="deleteTask" />
             </div>
         </template>
 
         <template v-else-if="isCustomOverview">
           <el-empty v-if="sortedFolders.length === 0" description="还没有自定义文件夹" :image-size="120" />
-          <div v-else class="card-grid" :class="!isElectron ? 'grid-2cols' : ''">
+          <div v-else class="card-grid">
             <div v-for="folder in sortedFolders" :key="folder.id" class="folder-card has-actions" @click="pageNav.setNavPath(['list', 'custom', folder.id])">
               <div class="card-top-actions" @click.stop>
                 <button class="card-icon-btn" title="编辑文件夹" @click="handleEditFolder(folder)"><el-icon><Edit /></el-icon></button>
@@ -110,7 +110,7 @@
 
         <template v-else-if="isFolderView">
           <el-empty v-if="folderLists.length === 0" description="该文件夹下还没有清单" :image-size="120" />
-          <div v-else class="card-grid" :class="!isElectron ? 'grid-2cols' : ''">
+          <div v-else class="card-grid">
             <div v-for="list in sortedFolderLists" :key="list.id" class="folder-card has-actions" @click="pageNav.setNavPath(['list', 'custom', currentFolderIdFromPath, list.id])">
               <div class="card-top-actions" @click.stop>
                 <button class="card-icon-btn" title="编辑清单" @click="handleEditListCard(list)"><el-icon><Edit /></el-icon></button>
@@ -127,7 +127,7 @@
 
         <template v-else-if="isListView">
           <el-empty v-if="currentGroups.length === 0" description="还没有分组" :image-size="120" />
-          <div v-else class="card-grid" :class="!isElectron ? 'grid-2cols' : ''">
+          <div v-else class="card-grid">
             <div v-for="group in currentSortedGroups" :key="group.id" class="folder-card has-actions" @click="pageNav.setNavPath(['list', 'custom', currentFolderIdFromPath, currentListIdFromPath, group.id])">
               <div class="card-top-actions" @click.stop>
                 <button class="card-icon-btn" title="编辑分组" @click="handleEditGroupCard(group)"><el-icon><Edit /></el-icon></button>
@@ -144,7 +144,7 @@
 
         <template v-else-if="isGroupTasksView">
           <el-empty v-if="currentGroupTasks.length === 0" description="暂无任务" :image-size="120" />
-          <div v-else class="list-list" :class="isElectron ? 'grid-2cols' : ''">
+          <div v-else class="list-list">
             <TaskCard v-for="list in currentGroupTasks" :key="list.id" :list="list" context="custom-list" @delete="deleteTask" />
           </div>
         </template>
@@ -157,75 +157,45 @@
     </div>
   </div>
 
-  <div v-if="showFolderDialog" class="dialog-overlay" @click.self="closeFolderDialog">
-      <div class="dialog-container folder-color-dialog">
-        <div class="dialog-header folder-dialog-header">
-          <span class="dialog-header-title folder-dialog-title">{{ dialogFolder ? '编辑文件夹' : '添加文件夹' }}</span>
-        </div>
-        <div class="dialog-body">
-          <div class="folder-form">
-            <el-input v-model="folderFormName" placeholder="请输入文件夹名称" @keyup.enter="onFolderFormSubmit" />
-            <div class="folder-color-section">
-              <span class="folder-color-label">颜色</span>
-              <div class="folder-color-grid">
-                <div
-                  v-for="c in EXTENDED_FOLDER_COLORS"
-                  :key="c"
-                  class="folder-color-swatch"
-                  :class="{ selected: folderFormColor === c }"
-                  :style="{ background: c }"
-                  @click="folderFormColor = c"
-                ></div>
-              </div>
-              <div class="folder-color-custom">
-                <span class="folder-color-label">自定义</span>
-                <el-input v-model="folderFormColor" placeholder="#667eea" size="small" class="folder-color-input" />
-              </div>
-            </div>
-            <div class="folder-form-footer">
-              <el-button @click="closeFolderDialog">取消</el-button>
-              <el-button type="primary" @click="onFolderFormSubmit">保存</el-button>
-            </div>
+  <BaseDialog :visible="showFolderDialog" :title="dialogFolder ? '编辑文件夹' : '添加文件夹'" :width="380" @update:visible="closeFolderDialog">
+      <div class="folder-form">
+        <span class="folder-color-label">名称</span>
+        <el-input v-model="folderFormName" placeholder="请输入文件夹名称" @keyup.enter="onFolderFormSubmit" />
+        <div class="folder-color-section">
+          <span class="folder-color-label">颜色</span>
+          <div class="folder-color-grid">
+            <div
+              v-for="c in EXTENDED_FOLDER_COLORS"
+              :key="c"
+              class="folder-color-swatch"
+              :class="{ selected: folderFormColor === c }"
+              :style="{ background: c }"
+              @click="folderFormColor = c"
+            ></div>
+          </div>
+          <div class="folder-color-custom">
+            <span class="folder-color-label">自定义</span>
+            <el-input v-model="folderFormColor" placeholder="#667eea" size="small" class="folder-color-input" />
           </div>
         </div>
       </div>
-    </div>
+      <template #footer>
+        <el-button @click="closeFolderDialog">取消</el-button>
+        <el-button type="primary" @click="onFolderFormSubmit">保存</el-button>
+      </template>
+    </BaseDialog>
 
-  <div v-if="showListDialog" class="dialog-overlay" @click.self="closeListDialog">
-    <div class="dialog-container folder-color-dialog">
-      <div class="dialog-header folder-dialog-header">
-        <span class="dialog-header-title folder-dialog-title">{{ dialogList ? '编辑清单' : '添加清单' }}</span>
-      </div>
-      <div class="dialog-body">
-        <ListFormPage :list="dialogList" @submit="onListSubmit" @cancel="closeListDialog" />
-      </div>
-    </div>
-  </div>
+  <BaseDialog :visible="showListDialog" :title="dialogList ? '编辑清单' : '添加清单'" :width="380" @update:visible="closeListDialog">
+    <ListFormPage :list="dialogList" @submit="onListSubmit" @cancel="closeListDialog" />
+  </BaseDialog>
 
-  <div v-if="showGroupDialog" class="dialog-overlay" @click.self="closeGroupDialog">
-    <div class="dialog-container folder-color-dialog">
-      <div class="dialog-header folder-dialog-header">
-        <span class="dialog-header-title folder-dialog-title">{{ dialogGroup ? '编辑分组' : '添加分组' }}</span>
-      </div>
-      <div class="dialog-body">
-        <GroupFormPage :group="dialogGroup" :list-id="currentListIdForDialog" @submit="onGroupSubmit" @cancel="closeGroupDialog" />
-      </div>
-    </div>
-  </div>
+  <BaseDialog :visible="showGroupDialog" :title="dialogGroup ? '编辑分组' : '添加分组'" :width="380" @update:visible="closeGroupDialog">
+    <GroupFormPage :group="dialogGroup" :list-id="currentListIdForDialog" @submit="onGroupSubmit" @cancel="closeGroupDialog" />
+  </BaseDialog>
 
-  <Teleport v-if="showTaskDialog" to="body">
-    <div class="dialog-overlay list-dialog-overlay" @click.self="closeTaskDialog">
-      <div class="dialog-container folder-color-dialog list-add-dialog">
-        <div class="dialog-header folder-dialog-header">
-          <span class="dialog-header-title folder-dialog-title">添加任务</span>
-        </div>
-        <div class="task-wavy-divider"></div>
-        <div class="dialog-body">
-          <TaskForm :list-id="listDialogListId" :group-id="listDialogGroupId" @submit="onTaskSubmit" @cancel="closeTaskDialog" />
-        </div>
-      </div>
-    </div>
-  </Teleport>
+  <BaseDialog :visible="showTaskDialog" :title="'添加任务'" :width="400" teleport @update:visible="closeTaskDialog">
+    <TaskForm :list-id="listDialogListId" :group-id="listDialogGroupId" @submit="onTaskSubmit" @cancel="closeTaskDialog" />
+  </BaseDialog>
 
   <div v-if="showMoveDialog" class="dialog-overlay" @click.self="closeMoveDialog">
     <div class="dialog-container">
@@ -261,6 +231,7 @@ import GroupFormPage from './GroupFormPage.vue'
 import TaskForm from './TaskForm.vue'
 import TaskCard from './TaskCard.vue'
 import MoveTaskPage from './MoveTaskPage.vue'
+import BaseDialog from '../common/BaseDialog.vue'
 import dayjs from 'dayjs'
 import { useListStore, DEFAULT_FOLDER_COLORS, EXTENDED_FOLDER_COLORS, type Task, type ListPage, type TaskGroup, type TaskFolder } from '../../stores/listStore'
 import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem, type FavoriteItem } from '../../composables/usePageNav'
@@ -314,11 +285,16 @@ const sortOptions: { value: SortMode; label: string }[] = [
   { value: 'priority', label: '按优先级排序' },
 ]
 
-const sortDropdownPos = ref({ top: 0, left: 0 })
-const sortDropdownPosStyle = computed(() => ({
-  top: sortDropdownPos.value.top + 'px',
-  left: sortDropdownPos.value.left + 'px'
-}))
+const sortDropdownPos = ref<{ top: number; left?: number; right?: number }>({ top: 0, left: 0 })
+const sortDropdownPosStyle = computed(() => {
+  const style: Record<string, string> = { top: sortDropdownPos.value.top + 'px' }
+  if (sortDropdownPos.value.right !== undefined) {
+    style.right = sortDropdownPos.value.right + 'px'
+  } else {
+    style.left = (sortDropdownPos.value.left ?? 0) + 'px'
+  }
+  return style
+})
 
 const showSortButton = computed(() => isSmartDetail.value || isGroupTasksView.value)
 
@@ -516,12 +492,17 @@ const plusAction = computed(() => {
 })
 
 const activeDropdown = ref<string | null>(null)
-const dropdownPos = ref({ top: 0, left: 0 })
+const dropdownPos = ref<{ top: number; left?: number; right?: number }>({ top: 0, left: 0 })
 
-const dropdownPosStyle = computed(() => ({
-  top: dropdownPos.value.top + 'px',
-  left: dropdownPos.value.left + 'px'
-}))
+const dropdownPosStyle = computed(() => {
+  const style: Record<string, string> = { top: dropdownPos.value.top + 'px' }
+  if (dropdownPos.value.right !== undefined) {
+    style.right = dropdownPos.value.right + 'px'
+  } else {
+    style.left = (dropdownPos.value.left ?? 0) + 'px'
+  }
+  return style
+})
 
 const activeSegment = ref<BreadcrumbSegment | null>(null)
 
@@ -556,7 +537,7 @@ const openFavoritesDropdown = (event: MouseEvent) => {
   }
   const target = event.currentTarget as HTMLElement
   const rect = target.getBoundingClientRect()
-  dropdownPos.value = { top: rect.bottom + 4, left: rect.left - 8 }
+  dropdownPos.value = { top: rect.bottom + 4, right: window.innerWidth - rect.right - 8 }
   activeDropdown.value = 'favorites'
   activeSegment.value = null
 }
@@ -624,7 +605,7 @@ const openSortDropdown = (event: MouseEvent) => {
   }
   const target = event.currentTarget as HTMLElement
   const rect = target.getBoundingClientRect()
-  sortDropdownPos.value = { top: rect.bottom + 4, left: rect.left - 8 }
+  sortDropdownPos.value = { top: rect.bottom + 4, right: window.innerWidth - rect.right - 8 }
   activeDropdown.value = 'sort'
   activeSegment.value = null
 }
@@ -935,7 +916,7 @@ const handleConfirmAction = () => {
 </script>
 
 <style scoped>
-.list-container { display: flex; flex-direction: column; height: 100%; position: relative; }
+.list-container { display: flex; flex-direction: column; height: 100%; position: relative; padding: 0 20px; }
 
 .list-breadcrumb-bar {
   display: flex;
@@ -946,7 +927,7 @@ const handleConfirmAction = () => {
   background: rgba(255, 255, 255, 0.03);
   z-index: 20;
   min-height: 40px;
-  width: 80%;
+  width: 100%;
   margin: 8px auto 16px auto;
   border-radius: 8px;
 }
@@ -1107,7 +1088,7 @@ const handleConfirmAction = () => {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   padding: 4px;
-  min-width: 75px;
+  min-width: 200px;
   max-height: 300px;
   overflow-y: auto;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
@@ -1123,6 +1104,7 @@ const handleConfirmAction = () => {
   font-size: 13px;
   color: var(--chalk-white-75);
   transition: all 0.15s;
+  white-space: nowrap;
 }
 
 .page-dropdown-item:hover {
@@ -1149,11 +1131,8 @@ const handleConfirmAction = () => {
 .main-content :deep(.el-scrollbar__bar) { display: none; }
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 0; }
 
-.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; width: 80%; margin: 0 auto; }
-.card-grid-root { width: 80%; }
-.card-grid-root.grid-4cols { grid-template-columns: repeat(4, 1fr); }
-.card-grid-root.grid-2cols { grid-template-columns: repeat(2, 1fr); }
-.card-grid.grid-2cols { grid-template-columns: repeat(2, 1fr); }
+.card-grid { display: flex; flex-wrap: wrap; gap: 20px; align-content: flex-start; }
+.card-grid > .folder-card { flex: 1 1 300px; min-width: 300px; }
 .folder-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 16px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; cursor: pointer; transition: all 0.2s; position: relative; }
 .folder-card:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(102, 126, 234, 0.3); transform: translateY(-2px); }
 .folder-card-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; background: rgba(102, 126, 234, 0.6); }
@@ -1173,28 +1152,18 @@ const handleConfirmAction = () => {
 
 .folder-card.has-actions { padding-top: 44px; }
 
-.list-list, .today-lists, .smart-lists { width: 80%; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }
-.list-list.grid-2cols, .today-lists.grid-2cols, .smart-lists.grid-2cols { display: block; column-count: 2; column-gap: 8px; }
-.list-list.grid-2cols :deep(.list-card), .today-lists.grid-2cols :deep(.list-card), .smart-lists.grid-2cols :deep(.list-card) { break-inside: avoid; margin-bottom: 8px; }
+.list-list, .today-lists, .smart-lists { display: flex; flex-wrap: wrap; gap: 20px; align-content: flex-start; }
+.list-list :deep(.list-card), .today-lists :deep(.list-card), .smart-lists :deep(.list-card) { flex: 1 1 300px; min-width: 300px; }
 
 :deep(.el-empty__description) { color: var(--chalk-muted); }
 
 .dialog-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; overflow-y: auto; }
-.list-dialog-overlay { flex-direction: column; justify-content: flex-start; align-items: center; padding: 20px 0; }
-.list-dialog-overlay::before { content: none; }
-.list-dialog-overlay::after { content: none; }
-
-.dialog-container { background: rgba(30, 28, 52, 0.98); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); width: 210px; max-width: 90vw; max-height: 90vh; display: flex; flex-direction: column; }
-.dialog-container.list-add-dialog { width: 400px; max-height: none; margin-top: auto; margin-bottom: auto; }
-.list-add-dialog .dialog-body { padding-top: 0; }
-.task-wavy-divider { height: 1px; background: rgba(255, 255, 255, 0.15); margin: 14px 20px; }
 .confirm-dialog-container { width: 380px; text-align: center; padding: 32px; }
+.dialog-container { background: rgba(30, 28, 52, 0.98); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); max-width: 90vw; max-height: 90vh; display: flex; flex-direction: column; }
+.task-wavy-divider { height: 1px; background: rgba(255, 255, 255, 0.15); margin: 14px 20px; }
 .dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 0; flex-shrink: 0; }
 .dialog-header-title { font-size: 16px; font-weight: 600; color: var(--chalk-white); }
-.folder-dialog-header { justify-content: center; }
-.folder-dialog-title { text-align: center; }
 .folder-form { display: flex; flex-direction: column; gap: 16px; }
-.folder-form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 8px; }
 .folder-form :deep(.el-input__wrapper) { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
 .folder-form :deep(.el-input__inner) { color: #fff; }
 .folder-form :deep(.el-input__inner::placeholder) { color: rgba(255, 255, 255, 0.4); }

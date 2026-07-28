@@ -176,11 +176,11 @@
     </div>
 
     <!-- 手机号绑定对话框 -->
-    <el-dialog
-        v-model="showPhoneDialog"
+    <BaseDialog
+        :visible="showPhoneDialog"
         title="绑定手机号"
-        width="400px"
-        :append-to-body="true"
+        :width="400"
+        @update:visible="showPhoneDialog = $event"
     >
       <el-form :model="phoneForm" label-width="80px">
         <el-form-item label="手机号">
@@ -191,14 +191,14 @@
         <el-button @click="showPhoneDialog = false">取消</el-button>
         <el-button type="primary" @click="savePhone">确定</el-button>
       </template>
-    </el-dialog>
+    </BaseDialog>
 
     <!-- 修改账号对话框 -->
-    <el-dialog
-        v-model="showEmailDialog"
+    <BaseDialog
+        :visible="showEmailDialog"
         title="修改账号"
-        width="400px"
-        :append-to-body="true"
+        :width="400"
+        @update:visible="showEmailDialog = $event"
     >
       <el-form :model="emailForm" label-width="80px">
         <el-form-item label="新账号">
@@ -212,14 +212,14 @@
         <el-button @click="showEmailDialog = false">取消</el-button>
         <el-button type="primary" @click="changeEmail" :loading="changingEmail">确定</el-button>
       </template>
-    </el-dialog>
+    </BaseDialog>
 
     <!-- 修改密码对话框 -->
-    <el-dialog
-        v-model="showPasswordDialog"
+    <BaseDialog
+        :visible="showPasswordDialog"
         title="修改密码"
-        width="400px"
-        :append-to-body="true"
+        :width="400"
+        @update:visible="showPasswordDialog = $event"
     >
       <el-form :model="passwordForm" label-width="100px">
         <el-form-item label="当前密码">
@@ -236,15 +236,30 @@
         <el-button @click="showPasswordDialog = false">取消</el-button>
         <el-button type="primary" @click="changePassword" :loading="changingPassword">确定</el-button>
       </template>
-    </el-dialog>
+    </BaseDialog>
 
-    <div v-if="showChangelogDialog" class="changelog-panel">
-      <div class="changelog-panel-header">
-        <span class="changelog-panel-title">更新日志</span>
-        <button class="changelog-panel-close" @click="showChangelogDialog = false">&times;</button>
-      </div>
-      <div class="changelog-panel-body" v-html="changelogHtml"></div>
-    </div>
+    <BaseDialog :visible="showChangelogDialog" title="更新日志" :width="480" @update:visible="showChangelogDialog = $event">
+      <div v-html="changelogHtml"></div>
+      <template #footer>
+        <el-button type="primary" @click="showChangelogDialog = false">确认</el-button>
+      </template>
+    </BaseDialog>
+
+    <BaseDialog :visible="showLogoutDialog" title="退出确认" :width="380" teleport @update:visible="showLogoutDialog = false">
+      <p style="color: #fbbf24; text-align: center;">确定要退出登录吗？</p>
+      <template #footer>
+        <el-button @click="showLogoutDialog = false">取消</el-button>
+        <el-button type="primary" @click="confirmLogout">确认</el-button>
+      </template>
+    </BaseDialog>
+
+    <BaseDialog :visible="showDeleteAccountDialog" title="注销确认" :width="400" teleport @update:visible="showDeleteAccountDialog = false">
+      <p style="color: #ef4444;">注销账号将永久删除您的所有数据，此操作不可恢复！确定要注销吗？</p>
+      <template #footer>
+        <el-button @click="showDeleteAccountDialog = false">取消</el-button>
+        <el-button type="danger" @click="confirmDeleteAccount">确定注销</el-button>
+      </template>
+    </BaseDialog>
 
   </div>
 
@@ -252,13 +267,14 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch, inject } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import dayjs from 'dayjs'
 import { useAuthStore } from '../../stores/authStore'
 import { usePageNav } from '../../composables/usePageNav'
 import * as api from '../../lib/api'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
+import BaseDialog from '../common/BaseDialog.vue'
 import { logger } from '../../lib/logger'
 import appVersion from 'virtual:version'
 // @ts-expect-error - Vite raw import
@@ -421,6 +437,8 @@ const checkForUpdate = async () => {
 }
 
 const showChangelogDialog = ref(false)
+const showLogoutDialog = ref(false)
+const showDeleteAccountDialog = ref(false)
 
 const changelogHtml = computed(() => {
   const content = changelogContent.replace(/^# 更新日志\n*/, '')
@@ -559,19 +577,19 @@ const changePassword = async () => {
   }
 }
 
-const handleLogout = async () => {
-  try {
-    await ElMessageBox.confirm('确定要退出登录吗？', '退出确认', {
-      type: 'warning'
-    })
+const handleLogout = () => {
+  showLogoutDialog.value = true
+}
 
-    loggingOut.value = true
-    logger.info('[我的] 退出登录')
+const confirmLogout = async () => {
+  showLogoutDialog.value = false
+  loggingOut.value = true
+  logger.info('[我的] 退出登录')
+  try {
     await authStore.signOut()
     if (window.electronAPI) {
       await window.electronAPI.restartApp()
     } else if (typeof (window as any).Capacitor !== 'undefined') {
-      // Android (Capacitor) 端：重启应用
       window.location.reload()
     } else {
       emit('logout')
@@ -582,20 +600,15 @@ const handleLogout = async () => {
   }
 }
 
-const handleDeleteAccount = async () => {
-  try {
-    await ElMessageBox.confirm(
-      '注销账号将永久删除您的所有数据，此操作不可恢复！\n确定要注销吗？',
-      '注销确认',
-      {
-        type: 'warning',
-        confirmButtonText: '确定注销',
-        cancelButtonText: '取消'
-      }
-    )
+const handleDeleteAccount = () => {
+  showDeleteAccountDialog.value = true
+}
 
-    deletingAccount.value = true
-    logger.info('[我的] 注销账号')
+const confirmDeleteAccount = async () => {
+  showDeleteAccountDialog.value = false
+  deletingAccount.value = true
+  logger.info('[我的] 注销账号')
+  try {
     await api.deleteAccount()
     await authStore.signOut()
     logger.info('[我的] 注销成功')
@@ -605,10 +618,8 @@ const handleDeleteAccount = async () => {
       window.location.reload()
     }
   } catch (err: any) {
-    if (err !== 'cancel') {
-      console.error('Failed to delete account:', err)
-      ElMessage.error(err?.response?.data?.error || '注销账号失败')
-    }
+    console.error('Failed to delete account:', err)
+    ElMessage.error(err?.response?.data?.error || '注销账号失败')
   } finally {
     deletingAccount.value = false
   }
@@ -1051,16 +1062,6 @@ watch(() => form.birthday, () => {
   color: rgba(255, 255, 255, 0.45);
 }
 
-:deep(.el-button--danger) {
-  background: rgba(239, 68, 68, 0.2) !important;
-  border-color: rgba(239, 68, 68, 0.4) !important;
-  color: #ef4444 !important;
-}
-
-:deep(.el-button--danger:hover) {
-  background: rgba(239, 68, 68, 0.3) !important;
-}
-
 :deep(.el-input__count),
 :deep(.el-input__count-inner) {
   background: transparent !important;
@@ -1189,75 +1190,5 @@ watch(() => form.birthday, () => {
 .import-group {
   margin-bottom: 8px;
 }
-
-.changelog-panel {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 3000;
-  width: 480px;
-  max-width: 80vw;
-  max-height: 85vh;
-  background: rgba(20, 16, 55, 0.95);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
-  display: flex;
-  flex-direction: column;
-  animation: changelogFadeIn 0.3s ease-out;
-}
-
-@keyframes changelogFadeIn {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
-
-.changelog-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  flex-shrink: 0;
-}
-
-.changelog-panel-title {
-  color: #f0c040;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.changelog-panel-close {
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 22px;
-  cursor: pointer;
-  padding: 0 4px;
-  line-height: 1;
-  transition: color 0.2s;
-}
-
-.changelog-panel-close:hover {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.changelog-panel-body {
-  overflow-y: auto;
-  padding: 8px 16px 12px 8px;
-  flex: 1;
-  min-height: 0;
-}
-
-.changelog-panel-body::-webkit-scrollbar { width: 4px; }
-.changelog-panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
-.changelog-panel-body::-webkit-scrollbar-track { background: transparent; }
-.changelog-panel-body :deep(.cl-version) { color: #f0c040; font-size: 14px; font-weight: 600; margin: 14px 0 6px; padding: 5px 0 5px 10px; border-left: 3px solid #f0c040; background: linear-gradient(90deg, rgba(240,192,64,0.06) 0%, transparent 100%); border-radius: 0 4px 4px 0; }
-.changelog-panel-body :deep(.cl-list) { margin: 0 0 4px 16px; padding: 0; list-style: none; color: rgba(255,255,255,0.75); }
-.changelog-panel-body :deep(.cl-list li) { font-size: 12px; line-height: 1.7; padding: 2px 0; position: relative; padding-left: 14px; }
-.changelog-panel-body :deep(.cl-list li)::before { content: '•'; position: absolute; left: 0; color: rgba(255,255,255,0.25); font-size: 10px; top: 5px; }
-
 
 </style>

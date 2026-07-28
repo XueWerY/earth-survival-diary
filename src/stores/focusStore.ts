@@ -46,7 +46,6 @@ export const useFocusStore = defineStore('focus', () => {
     const records = ref<FocusRecord[]>([])
     const favorites = ref<FavoriteFocus[]>([])
     const timerState = ref<TimerState | null>(null) // 当前计时状态
-    const focusDisplayTime = ref('')
     const isLoaded = ref(false)
 
     // 加载数据
@@ -335,7 +334,6 @@ export const useFocusStore = defineStore('focus', () => {
         getStatsByNameByRange,
         // 计时状态持久化
         timerState,
-        focusDisplayTime,
         saveTimerState,
         clearTimerState,
         reset

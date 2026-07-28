@@ -1,9 +1,9 @@
 <template>
-  <el-dialog
-      v-model="dialogVisible"
+  <BaseDialog
+      :visible="dialogVisible"
       :title="isEdit ? '编辑课程' : '添加课程'"
-      width="500px"
-      @close="resetForm"
+      :width="500"
+      @update:visible="closeDialog"
   >
     <el-form :model="form" :rules="rules" ref="formRef" label-width="80px">
       <!-- 课程名称 -->
@@ -91,18 +91,19 @@
     <template #footer>
       <div class="dialog-footer">
         <el-button v-if="isEdit" type="danger" text @click="handleDelete">删除</el-button>
-        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button @click="closeDialog">取消</el-button>
         <el-button type="primary" @click="handleSubmit">
           {{ isEdit ? '保存' : '添加' }}
         </el-button>
       </div>
     </template>
-  </el-dialog>
+  </BaseDialog>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { type FormInstance, type FormRules } from 'element-plus'
+import BaseDialog from '../common/BaseDialog.vue'
 
 interface Course {
   id: string
@@ -233,6 +234,16 @@ const resetForm = () => {
   allWeeks.value = true
 }
 
+const closeDialog = () => {
+  emit('update:visible', false)
+  resetForm()
+}
+
+// 父组件关闭对话框时也重置表单（如删除课程后）
+watch(() => props.visible, (val) => {
+  if (!val) resetForm()
+})
+
 const handleSubmit = async () => {
   if (!formRef.value) return
 
@@ -320,29 +331,6 @@ const handleDelete = () => {
   display: flex;
   justify-content: space-between;
   flex: 1;
-}
-
-/* 对话框深色主题 */
-:deep(.el-dialog) {
-  background: rgba(30, 30, 50, 0.95) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-}
-
-:deep(.el-dialog__header) {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-:deep(.el-dialog__title) {
-  color: var(--chalk-white-95) !important;
-}
-
-:deep(.el-dialog__headerbtn .el-dialog__close) {
-  color: var(--chalk-muted) !important;
-}
-
-:deep(.el-dialog__headerbtn:hover .el-dialog__close) {
-  color: var(--chalk-white-90) !important;
 }
 
 :deep(.el-form-item__label) {

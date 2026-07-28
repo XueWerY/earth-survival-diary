@@ -12,6 +12,7 @@
           <div class="pc-dialog-header">
             <span class="pc-dialog-title">课表节数设置</span>
           </div>
+          <div class="pc-dialog-separator"></div>
           <div class="pc-column-labels">
             <span class="pc-col-label">上午</span>
             <span class="pc-col-label">下午</span>
@@ -221,6 +222,12 @@ watch(dialogVisible, (val) => {
   text-align: center;
 }
 
+.pc-dialog-separator {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 12px 20px 8px;
+}
+
 .pc-column-labels {
   display: flex;
   padding: 12px 20px 4px;
@@ -281,8 +288,17 @@ watch(dialogVisible, (val) => {
   justify-content: center;
   gap: 16px;
   padding: 12px 20px 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
   margin-top: 8px;
+  position: relative;
+}
+.pc-actions::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 20px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .pc-icon-btn {

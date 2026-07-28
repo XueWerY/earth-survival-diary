@@ -1,81 +1,78 @@
 <template>
-  <Teleport to="body">
-    <div v-if="dialogVisible" class="dialog-overlay" @click.self="dialogVisible = false">
-      <div class="dialog-container countdown-form-dialog">
-        <div class="dialog-header folder-dialog-header">
-          <span class="dialog-header-title folder-dialog-title">{{ reminderOnly ? '编辑提醒策略' : (isEdit ? '编辑倒数日' : '添加倒数日') }}</span>
-        </div>
-        <div class="dialog-body">
-          <el-form :model="form" :rules="rules" ref="formRef" label-width="80px">
-            <template v-if="!reminderOnly">
-              <el-form-item label="名称" prop="name">
-                <el-input v-model="form.name" placeholder="这个倒数日叫什么？" maxlength="50" />
-              </el-form-item>
-              <el-form-item label="类型" prop="countMode">
-                <el-radio-group v-model="form.countMode" class="count-mode-group">
-                  <el-radio value="countdown">倒数日</el-radio>
-                  <el-radio value="countup">正数日</el-radio>
-                </el-radio-group>
-              </el-form-item>
-              <el-form-item :label="form.countMode === 'countup' ? '起始日期' : '目标日期'" prop="targetDate">
-                <DateScrollPicker v-model="form.targetDate" style="width: 130px" />
-              </el-form-item>
-              <el-form-item label="分类" prop="category">
-                <el-select v-model="form.category" placeholder="选择分类" style="width: 90px">
-                  <el-option
-                      v-for="cat in categories"
-                      :key="cat.value"
-                      :label="cat.label"
-                      :value="cat.value"
-                  >
-                    <span class="category-option">
-                      <span class="category-icon">{{ cat.icon }}</span>
-                      <span class="category-label">{{ cat.label }}</span>
-                    </span>
-                  </el-option>
-                </el-select>
-              </el-form-item>
-              <el-form-item label="描述">
-                <el-input
-                    v-model="form.description"
-                    type="textarea"
-                    :rows="2"
-                    placeholder="添加备注（可选）"
-                />
-              </el-form-item>
-            </template>
-            <el-form-item label="提醒" v-if="form.countMode !== 'countup'">
-              <div class="reminder-area">
-                <el-radio-group v-model="reminderEnabled">
-                  <el-radio :value="true">提醒</el-radio>
-                  <el-radio :value="false">不提醒</el-radio>
-                </el-radio-group>
-                <div v-if="reminderEnabled" class="reminder-picker-row">
-                  <ReminderTimePicker v-model="reminderTime" style="width: 170px" />
-                </div>
-              </div>
-            </el-form-item>
-            <el-form-item label="重复" v-if="form.countMode !== 'countup' && !reminderOnly">
-              <el-radio-group v-model="form.repeatStrategy">
-                <el-radio value="none">不重复</el-radio>
-                <el-radio value="yearly">重复</el-radio>
-              </el-radio-group>
-            </el-form-item>
-          </el-form>
-          <div class="form-footer">
-            <button class="capsule-btn cancel-btn" @click="dialogVisible = false">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-              <span>取消</span>
-            </button>
-            <button class="capsule-btn submit-btn" @click="handleSubmit">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
-              <span>{{ isEdit ? '保存' : '添加' }}</span>
-            </button>
+  <BaseDialog
+    :visible="dialogVisible"
+    :title="reminderOnly ? '编辑提醒策略' : (isEdit ? '编辑倒数日' : '添加倒数日')"
+    :width="300"
+    teleport
+    @update:visible="dialogVisible = $event"
+  >
+    <el-form :model="form" :rules="rules" ref="formRef" label-width="80px">
+      <template v-if="!reminderOnly">
+        <el-form-item label="名称" prop="name">
+          <el-input v-model="form.name" placeholder="这个倒数日叫什么？" maxlength="50" />
+        </el-form-item>
+        <el-form-item label="类型" prop="countMode">
+          <el-radio-group v-model="form.countMode" class="count-mode-group">
+            <el-radio value="countdown">倒数日</el-radio>
+            <el-radio value="countup">正数日</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item :label="form.countMode === 'countup' ? '起始日期' : '目标日期'" prop="targetDate">
+          <DateScrollPicker v-model="form.targetDate" style="width: 130px" />
+        </el-form-item>
+        <el-form-item label="分类" prop="category">
+          <el-select v-model="form.category" placeholder="选择分类" style="width: 90px">
+            <el-option
+                v-for="cat in categories"
+                :key="cat.value"
+                :label="cat.label"
+                :value="cat.value"
+            >
+              <span class="category-option">
+                <span class="category-icon">{{ cat.icon }}</span>
+                <span class="category-label">{{ cat.label }}</span>
+              </span>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input
+              v-model="form.description"
+              type="textarea"
+              :rows="2"
+              placeholder="添加备注（可选）"
+          />
+        </el-form-item>
+      </template>
+      <el-form-item label="提醒" v-if="form.countMode !== 'countup'">
+        <div class="reminder-area">
+          <el-radio-group v-model="reminderEnabled">
+            <el-radio :value="true">提醒</el-radio>
+            <el-radio :value="false">不提醒</el-radio>
+          </el-radio-group>
+          <div v-if="reminderEnabled" class="reminder-picker-row">
+            <ReminderTimePicker v-model="reminderTime" style="width: 170px" />
           </div>
         </div>
-      </div>
-    </div>
-  </Teleport>
+      </el-form-item>
+      <el-form-item label="重复" v-if="form.countMode !== 'countup' && !reminderOnly">
+        <el-radio-group v-model="form.repeatStrategy">
+          <el-radio value="none">不重复</el-radio>
+          <el-radio value="yearly">重复</el-radio>
+        </el-radio-group>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <button class="capsule-btn cancel-btn" @click="dialogVisible = false">
+        <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        <span>取消</span>
+      </button>
+      <button class="capsule-btn submit-btn" @click="handleSubmit">
+        <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
+        <span>{{ isEdit ? '保存' : '添加' }}</span>
+      </button>
+    </template>
+  </BaseDialog>
 </template>
 
 <script setup lang="ts">
@@ -84,6 +81,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import dayjs from 'dayjs'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import ReminderTimePicker from '../common/picker/ReminderTimePicker.vue'
+import BaseDialog from '../common/BaseDialog.vue'
 
 interface Milestone {
   id: string
@@ -255,57 +253,6 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
-.dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-}
-
-.dialog-container {
-  background: rgba(30, 28, 52, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  max-width: 90vw;
-}
-
-.countdown-form-dialog {
-  width: 300px;
-}
-
-.dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 16px 0;
-  flex-shrink: 0;
-}
-
-.dialog-header-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--chalk-white);
-}
-
-.folder-dialog-header {
-  justify-content: center;
-}
-
-.folder-dialog-title {
-  text-align: center;
-}
-
-.dialog-body {
-  padding: 12px 16px 16px;
-}
-
 .count-mode-group {
   width: 100%;
 }
@@ -326,15 +273,6 @@ const handleSubmit = async () => {
 
 .category-icon {
   font-size: 16px;
-}
-
-.form-footer {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .capsule-btn {

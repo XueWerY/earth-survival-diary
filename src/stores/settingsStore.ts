@@ -7,7 +7,7 @@ export interface ExtendedUserSettings {
     // 专注模块设置
     focus: {
         pomodoroDuration: number
-        timerStyle: 'flip' | 'plain' | 'led'
+        timerStyle: 'ring' | 'plain' | 'led'
     }
     // 课程表模块设置
     course: {
@@ -39,7 +39,7 @@ export interface ExtendedUserSettings {
 export const defaultSettings: ExtendedUserSettings = {
     focus: {
         pomodoroDuration: 25,
-        timerStyle: 'flip'
+        timerStyle: 'ring'
     },
     course: {
         semesterStartDate: '',

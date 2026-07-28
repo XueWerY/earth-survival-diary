@@ -18,6 +18,7 @@
         <el-input v-model="formColor" placeholder="#667eea" size="small" class="list-color-input" />
       </div>
     </div>
+    <div class="list-form-separator"></div>
     <div class="list-form-footer">
       <el-button @click="cancel">取消</el-button>
       <el-button type="primary" @click="handleSubmit">保存</el-button>
@@ -77,5 +78,6 @@ const cancel = () => {
 .list-color-custom { display: flex; align-items: center; gap: 10px; }
 .list-color-input { width: 140px; }
 
+.list-form-separator { height: 1px; background: rgba(255, 255, 255, 0.1); margin: 12px 0 8px; }
 .list-form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 8px; }
 </style>

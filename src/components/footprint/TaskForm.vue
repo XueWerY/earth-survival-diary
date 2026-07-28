@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div v-if="dialogVisible" class="dialog-overlay" @click.self="dialogVisible = false">
-      <div class="dialog-container task-form-dialog">
+      <div class="dialog-container task-form-dialog" :class="{ 'task-form-dialog-full': props.mode === 'diary' }">
         <div class="dialog-header folder-dialog-header">
           <span class="dialog-header-title folder-dialog-title">{{ dialogTitle }}</span>
         </div>
@@ -242,6 +242,8 @@ const handleSubmit = async () => {
 .dialog-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
 .dialog-container { background: rgba(30, 28, 52, 0.98); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); max-width: 90vw; }
 .task-form-dialog { width: min(500px, 80vw); }
+.task-form-dialog-full { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; border-radius: 0; }
+.task-form-dialog-full .dialog-body { max-height: none; overflow-y: auto; }
 .dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 12px; flex-shrink: 0; }
 .dialog-header-title { font-size: 16px; font-weight: 600; color: var(--chalk-white); }
 .folder-dialog-header { justify-content: center; }

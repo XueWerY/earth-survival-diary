@@ -111,38 +111,31 @@
         @skip="handleGuideSkip"
       />
 
-      <!-- 版本更新右下角面板 -->
+      <!-- 版本更新/更新日志面板 -->
       <template v-if="!guideVisible">
-      <div v-if="updateDialogVisible" class="update-panel">
-        <div class="update-panel-header">
-          <span class="update-panel-title">版本更新</span>
-          <button class="update-panel-close" @click="updateDialogVisible = false">&times;</button>
+      <BaseDialog :visible="updateDialogVisible" title="版本更新" :width="380" noOverlayClose @update:visible="updateDialogVisible = false">
+        <div class="update-status" :class="{ 'update-error': updateStatus === 'error', 'update-no-new': updateStatus === 'no-update' }" style="text-align: center;">
+          <span v-if="updateStatus === 'available'">
+            发现新版本 v{{ updateVersion }}，请前往
+            <a class="update-link" href="#" @click.prevent="openReleasesUrl">GitHub Releases</a>
+            下载
+          </span>
+          <template v-else>{{ updateStatusText }}</template>
         </div>
-        <div class="update-panel-body">
-          <div
-            class="update-status"
-            :class="{ 'update-error': updateStatus === 'error', 'update-no-new': updateStatus === 'no-update' }"
-          >
-            <span v-if="updateStatus === 'available'">
-              发现新版本 v{{ updateVersion }}，请前往
-              <a class="update-link" href="#" @click.prevent="openReleasesUrl">GitHub Releases</a>
-              下载
-            </span>
-            <template v-else>{{ updateStatusText }}</template>
-          </div>
-          <div v-if="updateStatus === 'error' && updateMessage" class="update-message">
-            {{ updateMessage }}
-          </div>
+        <div v-if="updateStatus === 'error' && updateMessage" class="update-message">
+          {{ updateMessage }}
         </div>
-      </div>
+        <template #footer>
+          <el-button type="primary" @click="updateDialogVisible = false">确认</el-button>
+        </template>
+      </BaseDialog>
 
-      <div v-if="showAppChangelogDialog" class="changelog-panel">
-        <div class="changelog-panel-header">
-          <span class="changelog-panel-title">更新日志</span>
-          <button class="changelog-panel-close" @click="showAppChangelogDialog = false">&times;</button>
-        </div>
-        <div class="changelog-panel-body" v-html="appChangelogHtml"></div>
-      </div>
+      <BaseDialog :visible="showAppChangelogDialog" title="更新日志" :width="480" @update:visible="showAppChangelogDialog = $event">
+        <div v-html="appChangelogHtml"></div>
+        <template #footer>
+          <el-button type="primary" @click="showAppChangelogDialog = false">确认</el-button>
+        </template>
+      </BaseDialog>
       </template>
       <div class="reminder-stack">
         <ReminderCard v-for="(r, i) in activeReminders" :key="r.id" :reminder="r" @dismiss="dismissReminder(i)" />
@@ -165,6 +158,7 @@
 import { ref, onMounted, onUnmounted, watch, computed, nextTick, provide, onErrorCaptured, defineAsyncComponent } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AuthPage from './components/auth/AuthPage.vue'
+import BaseDialog from './components/common/BaseDialog.vue'
 import { useTaskStore } from './stores/taskStore'
 import { useListStore, DEFAULT_LIST_COLORS } from './stores/listStore'
 import { useNoteStore } from './stores/noteStore'
@@ -425,8 +419,6 @@ const updateStatusText = computed(() => {
   }
 })
 
-let updateNoUpdateTimer: ReturnType<typeof setTimeout> | null = null
-
 const openReleasesUrl = () => {
   logger.info('[App] 用户点击更新链接')
   if (window.electronAPI?.openExternal) {
@@ -507,10 +499,6 @@ const setupUpdateStatusListener = () => {
     } else if (data.status === 'no-update') {
       updateStatus.value = 'no-update'
       updateDialogVisible.value = true
-      if (updateNoUpdateTimer) clearTimeout(updateNoUpdateTimer)
-      updateNoUpdateTimer = setTimeout(() => {
-        updateDialogVisible.value = false
-      }, 1500)
     }
   })
 }
@@ -530,12 +518,6 @@ const setupUpdateStatusListener = () => {
   } catch (e) {
     updateStatus.value = 'error'
     updateMessage.value = e instanceof Error ? e.message : '检查失败'
-  }
-  if (updateStatus.value === 'no-update') {
-    if (updateNoUpdateTimer) clearTimeout(updateNoUpdateTimer)
-    updateNoUpdateTimer = setTimeout(() => {
-      updateDialogVisible.value = false
-    }, 1500)
   }
 }
 
@@ -1455,66 +1437,6 @@ const handleFullscreenFromRoute = (fullscreen: boolean) => {
   }
 }
 
-const focusDisplayTime = ref('')
-let focusDisplayTimer: ReturnType<typeof setInterval> | null = null
-
-const updateFocusDisplayTime = () => {
-  const state = focusStore.timerState
-  if (!state) {
-    focusDisplayTime.value = ''
-    return
-  }
-  const now = Date.now()
-  const elapsedSinceStart = Math.floor((now - state.startTimestamp) / 1000)
-  let totalSeconds: number
-  if (state.type === 'pomodoro') {
-    totalSeconds = Math.max(0, state.targetDuration * 60 - elapsedSinceStart)
-  } else {
-    totalSeconds = Math.max(0, elapsedSinceStart)
-  }
-
-  const days = Math.floor(totalSeconds / 86400)
-  const hours = Math.floor((totalSeconds % 86400) / 3600)
-  const mins = Math.floor((totalSeconds % 3600) / 60)
-  const secs = totalSeconds % 60
-
-  let timeStr: string
-  if (days > 0 || totalSeconds >= 86400) {
-    timeStr = `${String(days).padStart(2, '0')}:${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-  } else if (hours > 0 || totalSeconds >= 3600) {
-    timeStr = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-  } else {
-    timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-  }
-  focusDisplayTime.value = timeStr
-
-  // 更新 Windows 窗口标题
-  if (isElectron.value && window.electronAPI?.setWindowTitle) {
-    const icon = state.type === 'pomodoro' ? '\u{1F345}' : '\u{23F1}'
-    const title = `${icon} ${state.name} ${timeStr} - 地球 Online 生存日记`
-    window.electronAPI.setWindowTitle(title)
-  }
-}
-
-const APP_TITLE = '地球 Online 生存日记'
-
-watch(() => focusStore.timerState, (state) => {
-  if (focusDisplayTimer) {
-    clearInterval(focusDisplayTimer)
-    focusDisplayTimer = null
-  }
-  if (state) {
-    updateFocusDisplayTime()
-    focusDisplayTimer = setInterval(updateFocusDisplayTime, 1000)
-  } else {
-    focusDisplayTime.value = ''
-    // 恢复默认窗口标题
-    if (isElectron.value && window.electronAPI?.setWindowTitle) {
-      window.electronAPI.setWindowTitle(APP_TITLE)
-    }
-  }
-}, { immediate: true })
-
 const starCanvas = ref<HTMLCanvasElement>()
 let animationId: number
 let resizeHandler: (() => void) | null = null
@@ -1750,12 +1672,6 @@ onUnmounted(() => {
   if (animationId) {
     cancelAnimationFrame(animationId)
   }
-  if (updateNoUpdateTimer) {
-    clearTimeout(updateNoUpdateTimer)
-  }
-  if (focusDisplayTimer) {
-    clearInterval(focusDisplayTimer)
-  }
 })
 </script>
 
@@ -1949,57 +1865,6 @@ onUnmounted(() => {
   font-size: 14px;
 }
 
-.update-panel {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 3000;
-  width: 380px;
-  max-width: 80vw;
-  background: rgba(20, 16, 55, 0.95);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
-  display: flex;
-  flex-direction: column;
-  animation: changelogFadeIn 0.3s ease-out;
-}
-
-.update-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  flex-shrink: 0;
-}
-
-.update-panel-title {
-  color: var(--chalk-amber);
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.update-panel-close {
-  background: none;
-  border: none;
-  color: var(--chalk-muted);
-  font-size: 22px;
-  cursor: pointer;
-  padding: 0 4px;
-  line-height: 1;
-  transition: color 0.2s;
-}
-
-.update-panel-close:hover {
-  color: var(--chalk-white-90);
-}
-
-.update-panel-body {
-  padding: 16px 20px 18px;
-}
 
 .update-status {
   font-size: 15px;
@@ -2051,74 +1916,10 @@ onUnmounted(() => {
   right: 0;
 }
 
-.changelog-panel {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 3000;
-  width: 480px;
-  max-width: 80vw;
-  max-height: 85vh;
-  background: rgba(20, 16, 55, 0.95);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
-  display: flex;
-  flex-direction: column;
-  animation: changelogFadeIn 0.3s ease-out;
-}
-
-@keyframes changelogFadeIn {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-}
-
-.changelog-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  flex-shrink: 0;
-}
-
-.changelog-panel-title {
-  color: var(--chalk-amber);
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.changelog-panel-close {
-  background: none;
-  border: none;
-  color: var(--chalk-muted);
-  font-size: 22px;
-  cursor: pointer;
-  padding: 0 4px;
-  line-height: 1;
-  transition: color 0.2s;
-}
-
-.changelog-panel-close:hover {
-  color: var(--chalk-white-90);
-}
-
-.changelog-panel-body {
-  overflow-y: auto;
-  padding: 8px 16px 12px 8px;
-  flex: 1;
-  min-height: 0;
-}
-
-.changelog-panel-body::-webkit-scrollbar { width: 4px; }
-.changelog-panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
-.changelog-panel-body::-webkit-scrollbar-track { background: transparent; }
-.changelog-panel-body :deep(.cl-version) { color: var(--chalk-amber); font-size: 14px; font-weight: 600; margin: 14px 0 6px; padding: 5px 0 5px 10px; border-left: 3px solid #f0c040; background: linear-gradient(90deg, rgba(240,192,64,0.06) 0%, transparent 100%); border-radius: 0 4px 4px 0; }
-.changelog-panel-body :deep(.cl-list) { margin: 0 0 4px 16px; padding: 0; list-style: none; color: var(--chalk-white-75); }
-.changelog-panel-body :deep(.cl-list li) { font-size: 12px; line-height: 1.7; padding: 2px 0; position: relative; padding-left: 14px; }
-.changelog-panel-body :deep(.cl-list li)::before { content: '•'; position: absolute; left: 0; color: rgba(255,255,255,0.25); font-size: 10px; top: 5px; }
+:deep(.cl-version) { color: var(--chalk-amber); font-size: 14px; font-weight: 600; margin: 14px 0 6px; padding: 5px 0 5px 10px; border-left: 3px solid #f0c040; background: linear-gradient(90deg, rgba(240,192,64,0.06) 0%, transparent 100%); border-radius: 0 4px 4px 0; }
+:deep(.cl-list) { margin: 0 0 4px 16px; padding: 0; list-style: none; color: var(--chalk-white-75); }
+:deep(.cl-list li) { font-size: 12px; line-height: 1.7; padding: 2px 0; position: relative; padding-left: 14px; }
+:deep(.cl-list li)::before { content: '•'; position: absolute; left: 0; color: rgba(255,255,255,0.25); font-size: 10px; top: 5px; }
 
 .context-menu-overlay {
   position: fixed;
