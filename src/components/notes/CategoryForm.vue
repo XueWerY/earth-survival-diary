@@ -23,22 +23,9 @@
         >{{ emoji }}</button>
       </div>
     </div>
-    <div class="color-section">
-      <span class="color-label">颜色</span>
-      <div class="color-grid">
-        <div
-          v-for="c in EXTENDED_NOTE_COLORS"
-          :key="c"
-          class="color-swatch"
-          :class="{ selected: form.color === c }"
-          :style="{ background: c }"
-          @click="form.color = c"
-        ></div>
-      </div>
-      <div class="custom-color">
-        <span class="color-label">自定义</span>
-        <el-input v-model="form.color" placeholder="#667eea" size="small" class="custom-color-input" />
-      </div>
+    <div class="form-row">
+      <span class="field-label">颜色</span>
+      <ColorGrid v-model="form.color" :colors="EXTENDED_NOTE_COLORS" />
     </div>
     <template #footer>
       <button class="capsule-btn cancel-btn" @click="handleCancel">
@@ -57,6 +44,7 @@
 import { ref, watch, nextTick } from 'vue'
 import { EXTENDED_NOTE_COLORS, type NoteCategory } from '../../stores/noteStore'
 import BaseDialog from '../common/BaseDialog.vue'
+import ColorGrid from '../common/ColorGrid.vue'
 
 const ICON_OPTIONS = [
   '📝', '🗒️', '📓', '📔', '📕', '📗', '📘', '📙', '💼', '📚', '💡', '✏️',
@@ -250,7 +238,7 @@ const handleSubmit = () => {
   gap: 4px;
   padding: 6px 18px;
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
+  border-radius: 8px;
   background: transparent;
   color: var(--chalk-white-70);
   cursor: pointer;

@@ -5,58 +5,49 @@
       <polyline points="6 9 12 15 18 9"></polyline>
     </svg>
   </div>
-  <Teleport to="body">
-    <div v-if="visible" class="reminder-overlay" @click.self="cancel">
-      <div class="reminder-dialog">
-        <div class="reminder-columns">
-          <div class="reminder-col">
-            <div class="reminder-col-list" ref="dayListRef" @scroll="onDayScroll" @scrollend="onDayScrollEnd">
-              <div class="reminder-spacer" v-for="n in 1" :key="'ds'+n"></div>
-              <div v-for="d in 31" :key="d - 1"
-                class="reminder-item" :class="{ active: draft.days === d - 1 }"
-                @click="selectDay(d - 1)">{{ d - 1 }}</div>
-              <div class="reminder-spacer" v-for="n in 1" :key="'de'+n"></div>
-            </div>
-            <span class="reminder-col-unit">天</span>
-          </div>
-          <div class="reminder-col">
-            <div class="reminder-col-list" ref="hourListRef" @scroll="onHourScroll" @scrollend="onHourScrollEnd">
-              <div class="reminder-spacer" v-for="n in 1" :key="'hs'+n"></div>
-              <div v-for="h in 24" :key="h - 1"
-                class="reminder-item" :class="{ active: draft.hours === h - 1 }"
-                @click="selectHour(h - 1)">{{ h - 1 }}</div>
-              <div class="reminder-spacer" v-for="n in 1" :key="'he'+n"></div>
-            </div>
-            <span class="reminder-col-unit">时</span>
-          </div>
-          <div class="reminder-col">
-            <div class="reminder-col-list" ref="minuteListRef" @scroll="onMinuteScroll" @scrollend="onMinuteScrollEnd">
-              <div class="reminder-spacer" v-for="n in 1" :key="'ms'+n"></div>
-              <div v-for="m in 60" :key="m - 1"
-                class="reminder-item" :class="{ active: draft.minutes === m - 1 }"
-                @click="selectMinute(m - 1)">{{ m - 1 }}</div>
-              <div class="reminder-spacer" v-for="n in 1" :key="'me'+n"></div>
-            </div>
-            <span class="reminder-col-unit">分</span>
-          </div>
+  <BaseDialog :visible="visible" title="设置提醒时间" :width="360" teleport @update:visible="visible = $event">
+    <div class="reminder-columns">
+      <div class="reminder-col">
+        <div class="reminder-col-list" ref="dayListRef" @scroll="onDayScroll" @scrollend="onDayScrollEnd">
+          <div class="reminder-spacer" v-for="n in 1" :key="'ds'+n"></div>
+          <div v-for="d in 31" :key="d - 1"
+            class="reminder-item" :class="{ active: draft.days === d - 1 }"
+            @click="selectDay(d - 1)">{{ d - 1 }}</div>
+          <div class="reminder-spacer" v-for="n in 1" :key="'de'+n"></div>
         </div>
-        <div class="reminder-actions">
-          <button class="capsule-btn cancel-btn" @click="cancel">
-            <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-            <span>取消</span>
-          </button>
-          <button class="capsule-btn submit-btn" @click="save">
-            <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
-            <span>保存</span>
-          </button>
+        <span class="reminder-col-unit">天</span>
+      </div>
+      <div class="reminder-col">
+        <div class="reminder-col-list" ref="hourListRef" @scroll="onHourScroll" @scrollend="onHourScrollEnd">
+          <div class="reminder-spacer" v-for="n in 1" :key="'hs'+n"></div>
+          <div v-for="h in 24" :key="h - 1"
+            class="reminder-item" :class="{ active: draft.hours === h - 1 }"
+            @click="selectHour(h - 1)">{{ h - 1 }}</div>
+          <div class="reminder-spacer" v-for="n in 1" :key="'he'+n"></div>
         </div>
+        <span class="reminder-col-unit">时</span>
+      </div>
+      <div class="reminder-col">
+        <div class="reminder-col-list" ref="minuteListRef" @scroll="onMinuteScroll" @scrollend="onMinuteScrollEnd">
+          <div class="reminder-spacer" v-for="n in 1" :key="'ms'+n"></div>
+          <div v-for="m in 60" :key="m - 1"
+            class="reminder-item" :class="{ active: draft.minutes === m - 1 }"
+            @click="selectMinute(m - 1)">{{ m - 1 }}</div>
+          <div class="reminder-spacer" v-for="n in 1" :key="'me'+n"></div>
+        </div>
+        <span class="reminder-col-unit">分</span>
       </div>
     </div>
-  </Teleport>
+    <template #footer>
+      <button class="capsule-btn cancel-btn" @click="cancel">取消</button>
+      <button class="capsule-btn submit-btn" @click="save">保存</button>
+    </template>
+  </BaseDialog>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, nextTick, reactive } from 'vue'
+import BaseDialog from '../BaseDialog.vue'
 
 interface ReminderTime {
   days: number
@@ -206,28 +197,7 @@ function cancel() {
 }
 .trigger-arrow { width: 14px; height: 14px; opacity: 0.5; flex-shrink: 0; }
 
-.reminder-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-}
-
-.reminder-dialog {
-  background: rgba(20, 20, 45, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-  padding: 16px;
-  min-width: 150px;
-}
-
-.reminder-columns { display: flex; gap: 0; }
+.reminder-columns { display: flex; gap: 0; padding-top: 8px; }
 .reminder-col { flex: 1; display: flex; align-items: center; }
 
 .reminder-col-list {
@@ -257,13 +227,6 @@ function cancel() {
   flex-shrink: 0;
 }
 
-.reminder-actions {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 14px;
-}
-
 .capsule-btn {
   display: flex;
   align-items: center;
@@ -271,17 +234,12 @@ function cancel() {
   gap: 4px;
   padding: 6px 18px;
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
+  border-radius: 8px;
   background: transparent;
   color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
   font-size: 13px;
   font-family: inherit;
-}
-
-.capsule-btn .capsule-icon {
-  width: 14px;
-  height: 14px;
 }
 
 .submit-btn {

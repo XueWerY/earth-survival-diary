@@ -6,7 +6,7 @@
     teleport
     @update:visible="dialogVisible = $event"
   >
-    <el-form :model="form" :rules="rules" ref="formRef" label-width="80px">
+    <el-form :model="form" :rules="rules" ref="formRef" class="record-form">
       <el-form-item label="名称" prop="name">
         <el-input
             v-model="form.name"
@@ -15,14 +15,12 @@
             placeholder="今天做了什么？"
         />
       </el-form-item>
-      <div class="time-range-row">
-        <el-form-item label="开始时间" class="time-range-item">
-          <TimePickerPopover v-model="form.startTime" :offset-minutes="0" placeholder="--:--" />
-        </el-form-item>
-        <el-form-item label="结束时间" class="time-range-item">
-          <TimePickerPopover v-model="form.endTime" :offset-minutes="60" placeholder="--:--" />
-        </el-form-item>
-      </div>
+      <el-form-item label="开始时间">
+        <TimePickerPopover v-model="form.startTime" :offset-minutes="0" placeholder="--:--" />
+      </el-form-item>
+      <el-form-item label="结束时间">
+        <TimePickerPopover v-model="form.endTime" :offset-minutes="60" placeholder="--:--" />
+      </el-form-item>
       <el-form-item label="备注" prop="notes">
         <el-input
             v-model="form.notes"
@@ -165,10 +163,9 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
-.time-range-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end; margin-bottom: 20px; }
-.time-range-row :deep(.el-form-item) { margin-bottom: 0; min-width: 0; }
-.time-range-row :deep(.el-form-item__content) { align-items: flex-end; }
-.time-range-row :deep(.time-picker-wrapper) { width: 100%; display: block; }
+.record-form :deep(.el-form-item) { display: block; }
+.record-form :deep(.el-form-item__label) { display: block; text-align: left; line-height: normal; padding-bottom: 4px; }
+.record-form :deep(.el-form-item__content) { display: block; }
 
 .capsule-btn {
   height: 32px;
@@ -181,7 +178,7 @@ const handleSubmit = async () => {
   background: rgba(255, 255, 255, 0.08);
   color: var(--chalk-white-60);
   cursor: pointer;
-  border-radius: 16px;
+  border-radius: 8px;
   transition: all 0.2s;
   flex-shrink: 0;
   font-size: 12px;

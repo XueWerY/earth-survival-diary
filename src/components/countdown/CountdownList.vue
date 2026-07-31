@@ -25,7 +25,7 @@
     </div>
 
     <div class="main-content" @click="closeDropdown">
-      <div v-if="isCountdownHome" class="card-grid" :class="isElectron ? 'grid-3cols' : 'grid-2cols'">
+      <div v-if="isCountdownHome" class="card-grid">
         <div class="folder-card has-actions" @click="pageNav.setNavPath(['countdown', ALL_CATEGORY_VALUE])">
           <div class="folder-card-icon" style="background: #667eea">📋</div>
           <span class="folder-card-name">全部</span>
@@ -33,8 +33,8 @@
         </div>
         <div v-for="cat in categories" :key="cat.value" class="folder-card has-actions" @click="pageNav.setNavPath(['countdown', cat.value])">
           <div class="card-top-actions" @click.stop>
-            <button v-if="cat.isCustom" class="card-icon-btn" title="编辑分类" @click="editCategoryFromCard(cat)"><el-icon><Edit /></el-icon></button>
-            <button v-if="cat.isCustom" class="card-icon-btn danger" title="删除分类" @click="deleteCategoryFromCard(cat)"><el-icon><Delete /></el-icon></button>
+            <button class="card-icon-btn" title="编辑分类" @click="editCategoryFromCard(cat)"><el-icon><Edit /></el-icon></button>
+            <button class="card-icon-btn danger" title="删除分类" @click="deleteCategoryFromCard(cat)"><el-icon><Delete /></el-icon></button>
           </div>
           <div class="folder-card-icon" :style="{ background: cat.color }">{{ cat.icon }}</div>
           <span class="folder-card-name">{{ cat.label }}</span>
@@ -223,9 +223,16 @@
 
     <ConfirmDialog
       v-model="showDeleteConfirm"
-      title="提示"
+      title="删除确认"
       message="确定要删除这个倒数日吗？"
       @confirm="onDeleteConfirmed"
+    />
+
+    <ConfirmDialog
+      v-model="deleteCategoryConfirmVisible"
+      title="删除确认"
+      message="确定要删除该分类吗？"
+      @confirm="confirmDeleteCategory"
     />
 
     <BaseDialog
@@ -235,7 +242,7 @@
       teleport
       @update:visible="categoryFormVisible = $event"
     >
-      <el-form :model="categoryForm" label-width="80px">
+      <el-form :model="categoryForm" label-width="80px" label-position="top">
         <el-form-item label="分类名称">
           <el-input v-model="categoryForm.label" placeholder="输入分类名称" maxlength="10" />
         </el-form-item>
@@ -251,24 +258,16 @@
               {{ icon }}
             </div>
           </div>
-          <div class="custom-icon-row">
-            <span class="custom-icon-label">自定义</span>
-            <el-input
-              v-model="categoryForm.icon"
-              placeholder="输入表情符号"
-              maxlength="4"
-              class="custom-icon-input"
-            />
-          </div>
+        </el-form-item>
+        <el-form-item label="颜色">
+          <ColorGrid v-model="categoryForm.color" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <button class="capsule-btn" @click="categoryFormVisible = false">
-          <el-icon><Close /></el-icon>
+        <button class="capsule-btn cancel-btn" style="border-radius:8px" @click="categoryFormVisible = false">
           <span>取消</span>
         </button>
-        <button class="capsule-btn submit-btn" @click="handleCategoryFormSubmit">
-          <el-icon><Check /></el-icon>
+        <button class="capsule-btn submit-btn" style="border-radius:8px" @click="handleCategoryFormSubmit">
           <span>确定</span>
         </button>
       </template>
@@ -279,12 +278,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, inject, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Clock, Timer, Star, Sunny, Delete, Plus, Check, Close } from '@element-plus/icons-vue'
+import { Calendar, Clock, Timer, Star, Sunny, Delete, Plus, Check, Close, Edit } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import CountdownForm from './CountdownForm.vue'
 import CountdownCard from './CountdownCard.vue'
 import BaseDialog from '../common/BaseDialog.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
+import ColorGrid from '../common/ColorGrid.vue'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import { setData } from '../../services/storageService'
 import { logger } from '../../lib/logger'
@@ -726,25 +726,31 @@ const handleAddMilestone = () => {
 
 const editCategoryFromCard = (cat: Category) => {
   editingCategory.value = cat.value
-  categoryForm.value = { label: cat.label, icon: cat.icon }
+  categoryForm.value = { label: cat.label, icon: cat.icon, color: cat.color }
   categoryFormVisible.value = true
 }
 
+const deleteCategoryTarget = ref<Category | null>(null)
+const deleteCategoryConfirmVisible = ref(false)
+
 const deleteCategoryFromCard = (cat: Category) => {
-  if (isDefaultCategory(cat.value)) { ElMessage.warning('系统默认分类不可删除'); return }
   const count = milestones.value.filter(m => m.category === cat.value).length
   if (count > 0) { ElMessage.warning(`该分类下有 ${count} 个倒数日，请先删除或移动这些倒数日`); return }
-  ElMessageBox.confirm('确定要删除该分类吗？', '提示', {
-    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning'
-  }).then(() => {
-    const index = categories.value.findIndex(c => c.value === cat.value)
-    if (index > -1) {
-      categories.value.splice(index, 1)
-      saveCategories()
-      if (currentCategoryFromPath.value === cat.value) pageNav.setNavPath(['countdown'])
-      ElMessage.success('删除成功')
-    }
-  }).catch(() => {})
+  deleteCategoryTarget.value = cat
+  deleteCategoryConfirmVisible.value = true
+}
+
+const confirmDeleteCategory = () => {
+  const cat = deleteCategoryTarget.value
+  if (!cat) return
+  const index = categories.value.findIndex(c => c.value === cat.value)
+  if (index > -1) {
+    categories.value.splice(index, 1)
+    saveCategories()
+    if (currentCategoryFromPath.value === cat.value) pageNav.setNavPath(['countdown'])
+    ElMessage.success('删除成功')
+  }
+  deleteCategoryConfirmVisible.value = false
 }
 
 const moveCategoryCard = (cat: Category, direction: 'left' | 'right') => {
@@ -851,7 +857,8 @@ const handleAddCategory = () => {
     editingCategory.value = null
     categoryForm.value = {
       label: '',
-      icon: '📌'
+      icon: '📌',
+      color: '#667eea'
     }
     categoryFormVisible.value = true
     logger.info('[倒数日] 打开添加分类对话框')
@@ -861,7 +868,8 @@ const handleAddCategory = () => {
 const editingCategory = ref<string | null>(null)
 const categoryForm = ref({
   label: '',
-  icon: '📌'
+  icon: '📌',
+  color: '#667eea'
 })
 
 const handleCategoryFormSubmit = () => {
@@ -877,7 +885,7 @@ const handleCategoryFormSubmit = () => {
         ...categories.value[index],
         label: categoryForm.value.label,
         icon: categoryForm.value.icon,
-        color: categories.value[index].color
+        color: categoryForm.value.color
       }
       logger.info('[倒数日] 编辑分类', { value: editingCategory.value, label: categoryForm.value.label })
       ElMessage.success('分类已更新')
@@ -889,7 +897,7 @@ const handleCategoryFormSubmit = () => {
       value,
       label: categoryForm.value.label,
       icon: categoryForm.value.icon,
-      color: COLOR_OPTIONS[defaultColorIndex],
+      color: categoryForm.value.color,
       isCustom: true
     })
     logger.info('[倒数日] 添加分类', { label: categoryForm.value.label })
@@ -934,8 +942,7 @@ onMounted(async () => {
   background: rgba(255, 255, 255, 0.03);
   z-index: 20;
   min-height: 40px;
-  width: 80%;
-  margin: 8px auto 16px auto;
+  margin: 8px 20px 20px 20px;
   border-radius: 8px;
 }
 
@@ -1078,9 +1085,8 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 80%; margin: 0 auto; box-sizing: border-box; }
-.card-grid.grid-3cols { grid-template-columns: repeat(3, 1fr); }
-.card-grid.grid-2cols { grid-template-columns: repeat(2, 1fr); }
+.card-grid { display: flex; flex-wrap: wrap; gap: 20px; align-content: flex-start; padding: 0 20px; box-sizing: border-box; }
+.card-grid > .folder-card { flex: 1 1 300px; min-width: 300px; }
 
 .folder-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 16px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; cursor: pointer; transition: all 0.2s; position: relative; }
 .folder-card:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(102, 126, 234, 0.3); transform: translateY(-2px); }
@@ -1089,9 +1095,9 @@ onMounted(async () => {
 .folder-card-count { font-size: 12px; color: var(--chalk-dim); padding: 2px 10px; background: rgba(255, 255, 255, 0.08); border-radius: 10px; }
 
 .card-top-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 2px; z-index: 2; }
-.card-icon-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: transparent; color: var(--chalk-white-60); cursor: pointer; border-radius: 4px; font-size: 12px; transition: all 0.15s; }
-.card-icon-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--chalk-white); }
-.card-icon-btn.danger:hover { color: var(--chalk-danger); }
+.card-icon-btn { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: none; background: transparent; color: #fff; cursor: pointer; border-radius: 4px; font-size: 14px; transition: all 0.15s; }
+.card-icon-btn:hover { background: rgba(255,255,255,0.15); }
+.card-icon-btn.danger:hover { color: #fca5a5; }
 
 .folder-card.has-actions { padding-top: 44px; }
 
@@ -1113,8 +1119,7 @@ onMounted(async () => {
   min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  width: 80%;
-  margin: 0 auto;
+  margin: 0;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -1160,6 +1165,7 @@ onMounted(async () => {
   font-weight: 600;
   color: var(--chalk-white-85);
   margin-bottom: 16px;
+  padding-left: 20px;
 }
 
 .pinned-section .section-title {
@@ -1190,10 +1196,13 @@ onMounted(async () => {
 }
 
 .milestone-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 0 20px;
+  align-content: flex-start;
 }
+.milestone-grid > :deep(.milestone-card) { flex: 1 1 300px; min-width: 300px; }
 
 .capsule-btn {
   display: flex;
@@ -1278,25 +1287,6 @@ onMounted(async () => {
 .icon-option.active {
   border-color: #3b82f6;
   background: rgba(59, 130, 246, 0.1);
-}
-
-.custom-icon-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.custom-icon-label {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.55);
-  flex-shrink: 0;
-}
-
-.custom-icon-input {
-  flex: 1;
 }
 </style>
 

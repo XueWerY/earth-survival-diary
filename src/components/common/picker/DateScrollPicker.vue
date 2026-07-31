@@ -2,9 +2,6 @@
   <div class="date-scroll-picker">
     <div v-if="visible === undefined" class="date-trigger" @click="openDialog">
       <span>{{ displayDate }}</span>
-      <svg class="trigger-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="6 9 12 15 18 9"></polyline>
-      </svg>
     </div>
     <Teleport to="body">
       <div v-if="dialogVisible" class="date-dialog-overlay" @click.self="onCancel">
@@ -79,21 +76,21 @@
               </div>
             </div>
             <div class="jump-actions">
-              <button class="capsule-btn" @click="goToToday">
+              <button class="capsule-btn" style="border-radius:8px" @click="goToToday">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
                   <circle cx="12" cy="12" r="10"></circle>
                   <polyline points="12 6 12 12 16 14"></polyline>
                 </svg>
                 <span>回到今天</span>
               </button>
-              <button class="capsule-btn" @click="onCancel">
+              <button class="capsule-btn" style="border-radius:8px" @click="onCancel">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
                 </svg>
                 <span>取消</span>
               </button>
-              <button class="capsule-btn capsule-btn-primary" @click="confirmDate">
+              <button class="capsule-btn capsule-btn-primary" style="border-radius:8px" @click="confirmDate">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
                   <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
@@ -333,7 +330,7 @@ watch([pickerYear, pickerMonth], () => {
 .date-trigger {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   width: 100%;
   height: 32px;
   padding: 0 12px;
@@ -348,7 +345,6 @@ watch([pickerYear, pickerMonth], () => {
   box-sizing: border-box;
 }
 .date-trigger:hover { border-color: rgba(102, 126, 234, 0.5); }
-.trigger-arrow { width: 14px; height: 14px; opacity: 0.5; flex-shrink: 0; }
 
 .date-dialog-overlay {
   position: fixed;

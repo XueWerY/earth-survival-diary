@@ -244,11 +244,11 @@ watch(() => props.activeModule, scrollToActive)
   display: none;
 }
 
-/* 垂直导航栏：纵向滚动 */
+/* 垂直导航栏：纵向滚动，垂直居中 */
 .nav-left .nav-items-scroll {
   flex: 1;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: center;
   overflow-x: hidden;
   overflow-y: auto;
   padding: 10px 8px 12px;

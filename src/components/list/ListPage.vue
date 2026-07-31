@@ -41,7 +41,18 @@
 
     <div v-if="activeDropdown === 'favorites'" class="page-dropdown" :style="dropdownPosStyle" @click.stop>
       <div v-if="favorites.length === 0" class="page-dropdown-empty">暂无收藏</div>
-      <div v-for="fav in favorites" :key="fav.id" class="page-dropdown-item" @click="selectFavorite(fav)">
+      <div
+        v-for="(fav, idx) in favorites"
+        :key="fav.id"
+        class="page-dropdown-item"
+        :class="{ 'drag-over': dragOverIdx === idx }"
+        draggable="true"
+        @click="selectFavorite(fav)"
+        @dragstart="handleDragStart($event, idx)"
+        @dragover.prevent="handleDragOver($event, idx)"
+        @dragend="handleDragEnd"
+      >
+        <span class="drag-handle" title="拖拽排序">⠿</span>
         <span :style="{ color: getFavoriteColor(fav) }">{{ fav.name }}</span>
       </div>
     </div>
@@ -161,23 +172,8 @@
       <div class="folder-form">
         <span class="folder-color-label">名称</span>
         <el-input v-model="folderFormName" placeholder="请输入文件夹名称" @keyup.enter="onFolderFormSubmit" />
-        <div class="folder-color-section">
-          <span class="folder-color-label">颜色</span>
-          <div class="folder-color-grid">
-            <div
-              v-for="c in EXTENDED_FOLDER_COLORS"
-              :key="c"
-              class="folder-color-swatch"
-              :class="{ selected: folderFormColor === c }"
-              :style="{ background: c }"
-              @click="folderFormColor = c"
-            ></div>
-          </div>
-          <div class="folder-color-custom">
-            <span class="folder-color-label">自定义</span>
-            <el-input v-model="folderFormColor" placeholder="#667eea" size="small" class="folder-color-input" />
-          </div>
-        </div>
+        <span class="folder-color-label">颜色</span>
+        <ColorGrid v-model="folderFormColor" />
       </div>
       <template #footer>
         <el-button @click="closeFolderDialog">取消</el-button>
@@ -209,17 +205,12 @@
     </div>
   </div>
 
-  <div v-if="showConfirmDialog" class="dialog-overlay" @click.self="closeConfirmDialog">
-    <div class="dialog-container confirm-dialog-container">
-      <div class="confirm-icon"><el-icon class="warning-icon"><Warning /></el-icon></div>
-      <h3 class="confirm-title">{{ confirmDialogTitle }}</h3>
-      <p class="confirm-message">{{ confirmDialogMessage }}</p>
-      <div class="confirm-actions">
-        <el-button type="default" @click="closeConfirmDialog">取消</el-button>
-        <el-button type="danger" @click="handleConfirmAction">确认删除</el-button>
-      </div>
-    </div>
-  </div>
+  <ConfirmDialog
+    v-model="showConfirmDialog"
+    :title="confirmDialogTitle"
+    :message="confirmDialogMessage"
+    @confirm="handleConfirmAction"
+  />
 </template>
 
 <script setup lang="ts">
@@ -231,7 +222,9 @@ import GroupFormPage from './GroupFormPage.vue'
 import TaskForm from './TaskForm.vue'
 import TaskCard from './TaskCard.vue'
 import MoveTaskPage from './MoveTaskPage.vue'
+import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
 import BaseDialog from '../common/BaseDialog.vue'
+import ColorGrid from '../common/ColorGrid.vue'
 import dayjs from 'dayjs'
 import { useListStore, DEFAULT_FOLDER_COLORS, EXTENDED_FOLDER_COLORS, type Task, type ListPage, type TaskGroup, type TaskFolder } from '../../stores/listStore'
 import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem, type FavoriteItem } from '../../composables/usePageNav'
@@ -545,6 +538,28 @@ const openFavoritesDropdown = (event: MouseEvent) => {
 const selectFavorite = (fav: FavoriteItem) => {
   activeDropdown.value = null
   pageNav.setNavPath([...fav.navPath])
+}
+
+// 拖拽排序
+const dragOverIdx = ref<number | null>(null)
+let dragFromIdx = -1
+const handleDragStart = (_e: DragEvent, idx: number) => {
+  dragFromIdx = idx
+}
+const handleDragOver = (e: DragEvent, idx: number) => {
+  e.dataTransfer!.dropEffect = 'move'
+  dragOverIdx.value = idx
+}
+const handleDragEnd = async () => {
+  const toIdx = dragOverIdx.value
+  dragOverIdx.value = null
+  if (dragFromIdx < 0 || toIdx === null || dragFromIdx === toIdx) return
+  const items = [...favorites.value]
+  const [moved] = items.splice(dragFromIdx, 1)
+  items.splice(toIdx, 0, moved)
+  favorites.value = items
+  await setData('list', 'favorites', favorites.value)
+  dragFromIdx = -1
 }
 
 const smartColors: Record<string, string> = { today: '#22c55e', expired: '#ef4444', future: '#3b82f6' }
@@ -1116,6 +1131,22 @@ const handleConfirmAction = () => {
   background: rgba(102, 126, 234, 0.15);
   color: var(--chalk-white);
   font-weight: 500;
+}
+
+.page-dropdown-item.drag-over {
+  background: rgba(102, 126, 234, 0.2);
+}
+
+.drag-handle {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 14px;
+  cursor: grab;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
 }
 
 .page-dropdown-dot {

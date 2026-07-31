@@ -37,7 +37,6 @@
                 filter="url(#ringGlow)"
                 :stroke-dasharray="ringCircumference"
                 :stroke-dashoffset="ringCircumference * (1 - ringProgress)" />
-              <circle class="ring-dot" :cx="ringDotStyle.cx" :cy="ringDotStyle.cy" r="5" filter="url(#ringGlow)" />
             </svg>
             <span class="ring-time">
               <span v-for="(g, i) in displayTime.split(' ')" :key="i" class="time-group">{{ g }}</span>
@@ -134,11 +133,11 @@
           <div v-if="timerStyle === 'ring'" class="timer-ring">
             <svg class="ring-svg" viewBox="0 0 120 120">
               <defs>
-                <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <linearGradient id="ringGradient2" x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" stop-color="#667eea" />
                   <stop offset="100%" stop-color="#a78bfa" />
                 </linearGradient>
-                <filter id="ringGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <filter id="ringGlow2" x="-50%" y="-50%" width="200%" height="200%">
                   <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
                   <feMerge>
                     <feMergeNode in="blur" />
@@ -148,11 +147,16 @@
               </defs>
               <circle class="ring-track" cx="60" cy="60" r="54" />
               <circle class="ring-progress" cx="60" cy="60" r="54"
-                stroke="url(#ringGradient)"
-                filter="url(#ringGlow)"
+                stroke="url(#ringGradient2)"
+                filter="url(#ringGlow2)"
                 :stroke-dasharray="ringCircumference"
                 :stroke-dashoffset="ringCircumference * (1 - ringProgress)" />
-              <circle class="ring-dot" :cx="ringDotStyle.cx" :cy="ringDotStyle.cy" r="5" filter="url(#ringGlow)" />
+              <!-- 正计时粒子 -->
+              <g v-if="focusType === 'stopwatch'" class="ring-particles" filter="url(#ringGlow2)">
+                <circle v-for="i in 16" :key="i" class="ring-particle"
+                  :cx="(60 + 54 * Math.cos((i - 1) * Math.PI / 8 - Math.PI / 2))"
+                  :cy="(60 + 54 * Math.sin((i - 1) * Math.PI / 8 - Math.PI / 2))" r="2.5" />
+              </g>
             </svg>
             <span class="ring-time">
               <span v-for="(g, i) in displayTime.split(' ')" :key="i" class="time-group">{{ g }}</span>
@@ -190,6 +194,13 @@
         <el-button type="primary" @click="saveAsFavorite">保存</el-button>
       </template>
     </BaseDialog>
+
+    <ConfirmDialog
+      v-model="deleteFavoriteConfirmVisible"
+      title="删除确认"
+      message="确定要删除这个常用专注吗？"
+      @confirm="confirmDeleteFavorite"
+    />
   </div>
 </template>
 
@@ -204,6 +215,7 @@ import { useSettingsStore } from '../../stores/settingsStore'
 import { usePageNav } from '../../composables/usePageNav'
 import { logger } from '../../lib/logger'
 import BaseDialog from '../common/BaseDialog.vue'
+import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
 
 const emit = defineEmits<{
   (e: 'fullscreen-change', fullscreen: boolean): void
@@ -301,15 +313,6 @@ const ringProgress = computed(() => {
   return 1 - sandProgress.value
 })
 
-// 进度末端小球坐标（以圆心 60,60 半径 54 计算，从 SVG 内 3 点顺时针；与 circle-progress 起点对齐）
-const ringDotStyle = computed(() => {
-  const angleRad = (ringProgress.value * 360 * Math.PI) / 180
-  return {
-    cx: (60 + 54 * Math.cos(angleRad)).toFixed(1),
-    cy: (60 + 54 * Math.sin(angleRad)).toFixed(1),
-  }
-})
-
 // 选择常用专注
 const selectFavorite = (fav: FavoriteFocus) => {
   focusName.value = fav.name
@@ -321,10 +324,21 @@ const selectFavorite = (fav: FavoriteFocus) => {
 }
 
 // 删除常用专注
-const deleteFavorite = async (id: string) => {
+const deleteFavoriteConfirmVisible = ref(false)
+const pendingDeleteFavoriteId = ref<string | null>(null)
+
+const deleteFavorite = (id: string) => {
+  pendingDeleteFavoriteId.value = id
+  deleteFavoriteConfirmVisible.value = true
+}
+
+const confirmDeleteFavorite = async () => {
+  const id = pendingDeleteFavoriteId.value
+  if (!id) return
   await focusStore.deleteFavorite(id)
   logger.info('[专注] 删除常用专注', { id })
   ElMessage.success('已删除')
+  pendingDeleteFavoriteId.value = null
 }
 
 // 开始专注
@@ -871,8 +885,17 @@ onUnmounted(async () => {
   transition: stroke-dashoffset 0.3s ease;
 }
 
-.ring-dot {
-  fill: #a78bfa;
+.ring-particles {
+  animation: particle-rotate 8s linear infinite;
+  transform-origin: 60px 60px;
+}
+
+.ring-particle {
+  fill: #c4b5fd;
+}
+
+@keyframes particle-rotate {
+  to { transform: rotate(360deg); }
 }
 
 .ring-time {

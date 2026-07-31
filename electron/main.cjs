@@ -273,18 +273,55 @@ function compareVersions(v1, v2) {
   if (a.day !== b.day) return a.day - b.day
   return a.patch - b.patch
 }
+/** 通过 GitHub Releases API 检查更新（从资产文件名提取版本号） */
+async function fetchLatestFromReleases() {
+  return new Promise((resolve, reject) => {
+    const url = new URL(RELEASES_API)
+    const opts = { hostname: url.hostname, path: url.pathname, headers: { 'User-Agent': 'earth-survival-diary' } }
+    https.get(opts, (res) => {
+      let body = ''
+      res.on('data', (chunk) => { body += chunk })
+      res.on('end', () => {
+        try {
+          const releases = JSON.parse(body)
+          if (!Array.isArray(releases)) return resolve(null)
+          let bestVersion = null; let bestUrl = null
+          for (const release of releases) {
+            if (release.prerelease) continue
+            for (const asset of (release.assets || [])) {
+              if (!asset.name.endsWith('.exe')) continue
+              const v = extractVersionFromFilename(asset.name)
+              if (!v) continue
+              if (!bestVersion || compareVersions(v, bestVersion) > 0) {
+                bestVersion = v; bestUrl = asset.browser_download_url
+              }
+            }
+          }
+          resolve(bestVersion ? { version: bestVersion, downloadUrl: bestUrl } : null)
+        } catch { resolve(null) }
+      })
+    }).on('error', (e) => reject(e))
+  })
+}
+
 ipcMain.handle('check-for-update', async () => {
   debugLog('[Main] Received manual update check request')
   try {
-    const result = await ensureAutoUpdater().checkForUpdates()
-    if (!result || result.updateInfo.version === app.getVersion()) {
-      debugLog('[Main] Already up to date: ' + app.getVersion())
+    const latest = await fetchLatestFromReleases()
+    const currentVersion = app.getVersion()
+    if (!latest) {
+      debugLog('[Main] No release assets found')
       sendUpdateStatusToMain({ status: 'no-update' })
       return { updateAvailable: false }
     }
-    debugLog('[Main] New version found: ' + result.updateInfo.version)
-    sendUpdateStatusToMain({ status: 'available', version: result.updateInfo.version })
-    return { updateAvailable: true, version: result.updateInfo.version }
+    if (compareVersions(latest.version, currentVersion) <= 0) {
+      debugLog('[Main] Already up to date: ' + currentVersion)
+      sendUpdateStatusToMain({ status: 'no-update' })
+      return { updateAvailable: false }
+    }
+    debugLog('[Main] New version found: ' + latest.version)
+    sendUpdateStatusToMain({ status: 'available', version: latest.version })
+    return { updateAvailable: true, version: latest.version }
   } catch (e) {
     debugLog('[Main] Update check failed: ' + e.message)
     sendUpdateStatusToMain({ status: 'error', message: e.message })
@@ -1471,7 +1508,12 @@ app.whenReady().then(async () => {
     setupTray()
 
     setTimeout(() => {
-      ensureAutoUpdater().checkForUpdates().catch(e => debugLog('[Updater] Check failed: ' + e.message))
+      fetchLatestFromReleases().then((latest) => {
+        if (latest && compareVersions(latest.version, app.getVersion()) > 0) {
+          debugLog('[Updater] New version found at startup: ' + latest.version)
+          sendUpdateStatusToMain({ status: 'available', version: latest.version })
+        }
+      }).catch(e => debugLog('[Updater] Check failed: ' + e.message))
     }, 5000)
   } catch (err) {
     errorLog('[Electron] Fatal error: ' + err.message)

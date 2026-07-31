@@ -45,7 +45,18 @@
 
     <div v-if="activeDropdown === 'favorites'" class="page-dropdown" :style="dropdownPosStyle" @click.stop>
       <div v-if="favorites.length === 0" class="page-dropdown-empty">暂无收藏</div>
-      <div v-for="fav in favorites" :key="fav.id" class="page-dropdown-item" @click="selectFavorite(fav)">
+      <div
+        v-for="(fav, idx) in favorites"
+        :key="fav.id"
+        class="page-dropdown-item"
+        :class="{ 'drag-over': dragOverIdx === idx }"
+        draggable="true"
+        @click="selectFavorite(fav)"
+        @dragstart="handleDragStart($event, idx)"
+        @dragover.prevent="handleDragOver($event, idx)"
+        @dragend="handleDragEnd"
+      >
+        <span class="drag-handle" title="拖拽排序">⠿</span>
         <span>{{ fav.name }}</span>
       </div>
     </div>
@@ -468,6 +479,28 @@ const selectFavorite = async (fav: FavoriteItem) => {
   await saveCurrentEditorIfNeeded()
   pageNav.setNavPath(fav.navPath)
   closeDropdown()
+}
+
+// 拖拽排序
+const dragOverIdx = ref<number | null>(null)
+let dragFromIdx = -1
+const handleDragStart = (_e: DragEvent, idx: number) => {
+  dragFromIdx = idx
+}
+const handleDragOver = (e: DragEvent, idx: number) => {
+  e.dataTransfer!.dropEffect = 'move'
+  dragOverIdx.value = idx
+}
+const handleDragEnd = async () => {
+  const toIdx = dragOverIdx.value
+  dragOverIdx.value = null
+  if (dragFromIdx < 0 || toIdx === null || dragFromIdx === toIdx) return
+  const items = [...favorites.value]
+  const [moved] = items.splice(dragFromIdx, 1)
+  items.splice(toIdx, 0, moved)
+  favorites.value = items
+  await setData('notes', 'favorites', favorites.value)
+  dragFromIdx = -1
 }
 
 const filteredNotes = computed(() => {
@@ -1003,6 +1036,22 @@ onBeforeUnmount(() => {
 .page-dropdown-item.current {
   background: rgba(102, 126, 234, 0.15);
   color: #93c5fd;
+}
+
+.page-dropdown-item.drag-over {
+  background: rgba(102, 126, 234, 0.2);
+}
+
+.drag-handle {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 14px;
+  cursor: grab;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
 }
 
 .page-dropdown-dot {

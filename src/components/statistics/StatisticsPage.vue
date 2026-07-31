@@ -3,14 +3,8 @@
     <div class="stats-scroll-wrapper">
       <div class="stats-content">
         <div class="date-range-bar">
-          <div class="date-range-row date-range-top">
-            <div class="date-range-label">统计范围</div>
-            <button class="capsule-btn reset-capsule" @click="resetDateRange">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
-              <span>重置</span>
-            </button>
-          </div>
-          <div class="date-range-row date-range-bottom">
+          <div class="date-range-row">
+            <div class="date-range-label">统计范围：</div>
             <DateScrollPicker v-model="startDate" class="date-picker-inline" />
             <span class="date-separator">至</span>
             <DateScrollPicker v-model="endDate" class="date-picker-inline" />
@@ -315,10 +309,6 @@ const initDateRange = () => {
     startDate.value = dayjs().subtract(30, 'day').format('YYYY-MM-DD')
   }
   endDate.value = dayjs().format('YYYY-MM-DD')
-}
-
-const resetDateRange = () => {
-  initDateRange()
 }
 
 const daysInRange = computed(() => {
@@ -631,14 +621,13 @@ onMounted(async () => {
 
 .date-range-bar {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
   margin-bottom: 28px;
   padding: 16px 20px;
   background: rgba(255, 255, 255, 0.03);
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   align-items: center;
+  justify-content: center;
 }
 
 .date-range-row {
@@ -680,44 +669,6 @@ onMounted(async () => {
 .date-separator {
   color: rgba(255, 255, 255, 0.4);
   flex-shrink: 0;
-}
-
-.capsule-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 6px 18px;
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 20px;
-  background: transparent;
-  color: rgba(255,255,255,0.7);
-  cursor: pointer;
-  font-size: 13px;
-  font-family: inherit;
-  transition: all 0.2s;
-  flex-shrink: 0;
-}
-
-.capsule-btn:hover {
-  background: rgba(255,255,255,0.08);
-  color: #fff;
-}
-
-.capsule-btn .capsule-icon {
-  width: 14px;
-  height: 14px;
-}
-
-.reset-capsule {
-  background: rgba(102,126,234,0.15);
-  border-color: rgba(102,126,234,0.3);
-  color: #93c5fd;
-}
-
-.reset-capsule:hover {
-  background: rgba(102,126,234,0.3);
-  color: #fff;
 }
 
 .module-sections {

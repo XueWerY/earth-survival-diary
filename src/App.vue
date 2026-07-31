@@ -3,6 +3,9 @@
     <!-- Canvas 2D 流星背景 -->
     <canvas ref="starCanvas" class="star-canvas" :class="{ 'canvas-hidden': !showStarCanvas }"></canvas>
 
+    <!-- 计时中跨页面常驻弹窗 -->
+    <FloatingTimerBar />
+
     <!-- 未登录时显示登录页面 -->
     <template v-if="!authStore.isAuthenticated && !authStore.loading">
       <AuthPage @success="handleAuthSuccess" />
@@ -159,6 +162,7 @@ import { ref, onMounted, onUnmounted, watch, computed, nextTick, provide, onErro
 import { useRouter, useRoute } from 'vue-router'
 import AuthPage from './components/auth/AuthPage.vue'
 import BaseDialog from './components/common/BaseDialog.vue'
+import FloatingTimerBar from './components/common/FloatingTimerBar.vue'
 import { useTaskStore } from './stores/taskStore'
 import { useListStore, DEFAULT_LIST_COLORS } from './stores/listStore'
 import { useNoteStore } from './stores/noteStore'

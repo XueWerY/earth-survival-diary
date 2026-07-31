@@ -1,23 +1,7 @@
 <template>
   <div class="group-form">
     <el-input v-model="formName" placeholder="请输入分组名称" @keyup.enter="handleSubmit" />
-    <div class="group-color-section">
-      <span class="group-color-label">颜色</span>
-      <div class="group-color-grid">
-        <div
-          v-for="c in EXTENDED_FOLDER_COLORS"
-          :key="c"
-          class="group-color-swatch"
-          :class="{ selected: formColor === c }"
-          :style="{ background: c }"
-          @click="formColor = c"
-        ></div>
-      </div>
-      <div class="group-color-custom">
-        <span class="group-color-label">自定义</span>
-        <el-input v-model="formColor" placeholder="#667eea" size="small" class="group-color-input" />
-      </div>
-    </div>
+    <ColorGrid v-model="formColor" />
     <div class="group-form-separator"></div>
     <div class="group-form-footer">
       <el-button @click="cancel">取消</el-button>
@@ -29,6 +13,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { EXTENDED_FOLDER_COLORS, type TaskGroup } from '../../stores/listStore'
+import ColorGrid from '../common/ColorGrid.vue'
 
 const props = defineProps<{
   group?: TaskGroup | null

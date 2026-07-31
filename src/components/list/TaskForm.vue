@@ -147,11 +147,11 @@
     <div class="task-wavy-divider"></div>
 
     <div class="list-form-footer">
-      <button class="capsule-btn" @click="cancel">
+      <button class="capsule-btn" style="border-radius:8px" @click="cancel">
         <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         <span>取消</span>
       </button>
-      <button class="capsule-btn capsule-save" @click="handleSubmit">
+      <button class="capsule-btn capsule-save" style="border-radius:8px" @click="handleSubmit">
         <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
         <span>保存</span>
       </button>

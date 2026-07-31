@@ -1,7 +1,7 @@
 <template>
   <div class="course-container" :class="{ 'is-electron': isElectron }">
     <div class="course-inner">
-      <div class="week-area">
+      <div v-if="viewMode === 'schedule'" class="week-area">
         <el-button :icon="ArrowLeft" circle size="small" class="week-nav-btn" @click="prevWeek" :disabled="displayWeekNumber <= 1" />
         <div class="week-info">
           <span class="week-number">第{{ displayWeekNumber }}周</span>
@@ -10,12 +10,18 @@
         <el-button :icon="ArrowRight" circle size="small" class="week-nav-btn" @click="nextWeek" :disabled="displayWeekNumber >= totalWeeks" />
       </div>
 
-      <div class="course-grid-wrapper">
+      <div v-if="viewMode === 'schedule'" class="course-grid-wrapper">
         <!-- 顶部：设置按钮 + 星期标签 -->
         <div class="grid-top-row" :style="{ gridTemplateColumns: gridColumns }">
-          <button class="corner-settings-btn" title="课程表设置" @click="showCourseSettings = true">
-            <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-          </button>
+          <div class="corner-actions">
+            <button class="corner-settings-btn" title="课程表设置" @click="showCourseSettings = true">
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+            </button>
+            <button class="corner-toggle-btn" :title="viewMode === 'schedule' ? '课程列表视图' : '课程表视图'" @click="viewMode = viewMode === 'schedule' ? 'list' : 'schedule'">
+              <svg v-if="viewMode === 'schedule'" class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              <svg v-else class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+            </button>
+          </div>
           <div v-for="(day, di) in weekDays" :key="day.dayOfWeek" class="day-header-tag" :class="{ today: day.isToday }" :style="{ gridColumn: (di + 2).toString() }">
             <span class="tag-name">{{ day.name }}</span>
           </div>
@@ -26,7 +32,7 @@
           <div v-if="section.breakLabel" class="break-section-tag" :style="{ gridTemplateColumns: gridColumns }">
             <span :style="{ gridColumn: `1 / span ${totalDayCount + 1}` }">{{ section.breakLabel }}</span>
           </div>
-          <div class="course-grid" :style="{ gridTemplateColumns: gridColumns }">
+          <div class="course-grid" :style="{ gridTemplateColumns: gridColumns, gridAutoRows: rowHeight + 'px' }">
             <template v-for="cell in section.cells" :key="cell.key">
               <div v-if="cell.type === 'period-label'" class="period-label-cell" :style="{ gridRow: cell.gridRow, gridColumn: cell.gridColumn }">
                 <span class="pl-name">{{ cell.period!.name }}</span>
@@ -36,12 +42,6 @@
               <div v-else-if="cell.type === 'course'" class="grid-cell has-course" :style="{ gridRow: cell.gridRow, gridColumn: cell.gridColumn }" @click="handleShowDetail(cell.course!)">
                 <div class="course-card">
                   <div class="card-name" :style="{ color: cell.course!.color }">{{ cell.course!.name }}</div>
-                  <div class="card-meta">
-                    <span v-if="cell.course!.location" class="card-location">{{ cell.course!.location }}</span>
-                    <span v-if="cell.course!.teacher" class="card-teacher">{{ cell.course!.teacher }}</span>
-                  </div>
-                  <div v-if="cell.course!.note" class="card-note">{{ cell.course!.note }}</div>
-                  <div v-if="showNonCurrentWeekCourses && !cell.isCurrentWeek && cell.course!.weeks && cell.course!.weeks.length > 0" class="card-weeks">第{{ formatWeeks(cell.course!.weeks) }}周</div>
                 </div>
                 <div v-if="cell.overlapCount && cell.overlapCount > 0" class="overlap-badge">+{{ cell.overlapCount }}</div>
               </div>
@@ -52,143 +52,185 @@
           </div>
         </template>
       </div>
+      <div v-else class="course-list-wrapper">
+        <div class="list-top-bar">
+          <button class="list-back-btn" title="返回课程表" @click="viewMode = 'schedule'">
+            <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            <span>返回课程表</span>
+          </button>
+        </div>
+        <div v-if="allCourses.length === 0" class="list-empty">暂无课程，请在课程表视图中添加</div>
+        <div v-else class="course-list-grid">
+          <div
+            v-for="course in allCourses"
+            :key="course.id"
+            class="course-list-card"
+            @click="handleShowDetail(course)"
+          >
+            <div class="lcard-top">
+              <span class="lcard-icon" :style="{ background: course.color }"></span>
+              <span class="lcard-name" :style="{ color: course.color }">{{ course.name }}</span>
+              <div class="lcard-actions" @click.stop>
+                <button class="lcard-action-btn" title="编辑" @click.stop="handleEditCourse(course)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                <button class="lcard-action-btn danger" title="删除" @click.stop="handleListCardDelete(course)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg></button>
+              </div>
+            </div>
+            <div class="lcard-meta">
+              <div class="lcard-row">
+                <span class="lcard-label">时间</span>
+                <span class="lcard-value">{{ getCourseDaysText(course) }} {{ getCoursePeriodsText(course) }}</span>
+              </div>
+              <div class="lcard-row" v-if="course.location">
+                <span class="lcard-label">地点</span>
+                <span class="lcard-value">{{ course.location }}</span>
+              </div>
+              <div class="lcard-row" v-if="course.teacher">
+                <span class="lcard-label">教师</span>
+                <span class="lcard-value">{{ course.teacher }}</span>
+              </div>
+              <div class="lcard-row">
+                <span class="lcard-label">周次</span>
+                <span class="lcard-value">{{ getCourseWeeksText(course) }}</span>
+              </div>
+              <div class="lcard-row" v-if="course.note">
+                <span class="lcard-label">备注</span>
+                <span class="lcard-value lcard-note">{{ course.note }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- 课程弹窗 -->
-  <Teleport to="body">
-    <div v-if="dialogVisible" class="dialog-overlay" @click.self="closeDialog">
-      <div class="dialog-container course-form-dialog">
-        <div class="dialog-header folder-dialog-header">
-          <span class="dialog-header-title folder-dialog-title">{{ editingCourse ? '编辑课程' : '添加课程' }}</span>
-        </div>
-        <div class="dialog-body">
-          <el-form :model="courseForm" :rules="courseRules" ref="courseFormRef" label-width="90px" class="course-form">
-            <el-form-item label="课程名称" prop="name">
-              <el-input v-model="courseForm.name" placeholder="输入课程名称" maxlength="30" show-word-limit />
-            </el-form-item>
-            <el-form-item label="上课时间">
-              <div class="time-area">
-                <div class="time-day-row">
-                  <el-radio-group v-model="courseForm.dayOfWeek">
-                    <el-radio v-for="d in DAY_OPTIONS" :key="d.value" :value="d.value" class="day-radio">{{ d.label }}</el-radio>
-                  </el-radio-group>
-                </div>
-                <div class="time-periods-row">
-                  <el-checkbox v-for="p in periods" :key="p.id" :model-value="courseForm.periodIds.includes(p.id)" @change="(val: boolean) => togglePeriod(p.id, val)" class="period-checkbox">{{ p.name }}</el-checkbox>
-                </div>
-                <div class="time-range-row">
-                  <span class="time-range-text">{{ computedTimeRange }}</span>
-                </div>
-              </div>
-            </el-form-item>
-            <el-form-item label="上课地点">
-              <el-input v-model="courseForm.location" placeholder="教室/地点（可选）" maxlength="30" />
-            </el-form-item>
-            <el-form-item label="授课教师">
-              <el-input v-model="courseForm.teacher" placeholder="教师姓名（可选）" maxlength="20" />
-            </el-form-item>
-            <el-form-item label="课程颜色">
-              <div class="color-section">
-                <div class="color-grid">
-                  <div v-for="c in EXTENDED_COLORS" :key="c" class="color-swatch" :class="{ selected: courseForm.color === c }" :style="{ background: c }" @click="courseForm.color = c"></div>
-                </div>
-                <div class="color-custom">
-                  <span class="color-custom-label">自定义</span>
-                  <el-input v-model="courseForm.color" placeholder="#667eea" size="small" class="color-custom-input" />
-                </div>
-              </div>
-            </el-form-item>
-            <el-form-item label="上课周次">
-              <div class="weeks-setting">
-                <el-checkbox v-model="allWeeks">每周都有</el-checkbox>
-                <div v-if="!allWeeks" class="week-selector">
-                  <el-checkbox-group v-model="courseForm.weeks">
-                    <el-checkbox v-for="w in maxWeeks" :key="w" :value="w">第{{ w }}周</el-checkbox>
-                  </el-checkbox-group>
-                </div>
-              </div>
-            </el-form-item>
-            <el-form-item label="备注">
-              <el-input v-model="courseForm.note" type="textarea" :rows="2" placeholder="添加备注（可选）" maxlength="100" show-word-limit />
-            </el-form-item>
-          </el-form>
-          <div class="form-footer">
-            <button v-if="editingCourse" class="capsule-btn delete-btn" @click="handleDeleteCourseClick()">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
-              <span>删除</span>
-            </button>
-            <button class="capsule-btn cancel-btn" @click="closeDialog">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-              <span>取消</span>
-            </button>
-            <button class="capsule-btn submit-btn" @click="handleCourseFormSubmit">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
-              <span>{{ editingCourse ? '保存' : '添加' }}</span>
-            </button>
+  <BaseDialog
+    :visible="dialogVisible"
+    :title="editingCourse ? '编辑课程' : '添加课程'"
+    :width="420"
+    teleport
+    @update:visible="dialogVisible = $event"
+  >
+    <el-form :model="courseForm" :rules="courseRules" ref="courseFormRef" class="course-form">
+      <el-form-item label="课程名称" prop="name">
+        <el-input v-model="courseForm.name" placeholder="输入课程名称" maxlength="30" show-word-limit />
+      </el-form-item>
+      <el-form-item label="上课时间">
+        <div class="time-area">
+          <div class="time-day-row">
+            <el-radio-group v-model="courseForm.dayOfWeek">
+              <el-radio v-for="d in DAY_OPTIONS" :key="d.value" :value="d.value" class="day-radio">{{ d.label }}</el-radio>
+            </el-radio-group>
+          </div>
+          <div class="time-periods-row">
+            <el-checkbox v-for="p in periods" :key="p.id" :model-value="courseForm.periodIds.includes(p.id)" @change="(val: boolean) => togglePeriod(p.id, val)" class="period-checkbox">{{ p.name }}</el-checkbox>
+          </div>
+          <div class="time-range-row">
+            <span class="time-range-text">{{ computedTimeRange }}</span>
           </div>
         </div>
-      </div>
-    </div>
-  </Teleport>
+      </el-form-item>
+      <el-form-item label="上课地点">
+        <el-input v-model="courseForm.location" placeholder="教室/地点（可选）" maxlength="30" />
+      </el-form-item>
+      <el-form-item label="授课教师">
+        <el-input v-model="courseForm.teacher" placeholder="教师姓名（可选）" maxlength="20" />
+      </el-form-item>
+      <el-form-item label="课程颜色">
+        <ColorGrid v-model="courseForm.color" />
+      </el-form-item>
+      <el-form-item label="上课周次">
+        <div class="weeks-setting">
+          <el-checkbox v-model="allWeeks">每周都有</el-checkbox>
+          <div v-if="!allWeeks" class="week-selector">
+            <el-checkbox-group v-model="courseForm.weeks">
+              <el-checkbox v-for="w in maxWeeks" :key="w" :value="w">第{{ w }}周</el-checkbox>
+            </el-checkbox-group>
+          </div>
+        </div>
+      </el-form-item>
+      <el-form-item label="备注">
+        <el-input v-model="courseForm.note" type="textarea" :rows="2" placeholder="添加备注（可选）" maxlength="100" show-word-limit />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <button class="capsule-btn cancel-btn" style="border-radius:8px" @click="dialogVisible = false">
+        <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        <span>取消</span>
+      </button>
+      <button class="capsule-btn submit-btn" style="border-radius:8px" @click="handleCourseFormSubmit">
+        <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
+        <span>{{ editingCourse ? '保存' : '添加' }}</span>
+      </button>
+    </template>
+  </BaseDialog>
 
   <!-- 课程详情弹窗 -->
-  <Teleport to="body">
-    <div v-if="showCourseDetail && detailCourse" class="dialog-overlay" @click.self="showCourseDetail = false">
-      <div class="dialog-container course-detail-dialog">
-        <div class="dialog-header folder-dialog-header">
-          <span class="dialog-header-title folder-dialog-title" :style="{ color: detailCourse.color }">{{ detailCourse.name }}</span>
-        </div>
-        <div class="dialog-body">
-          <div class="detail-row">
-            <span class="detail-label">上课时间</span>
-            <span class="detail-value">{{ getCourseDaysText(detailCourse) }} {{ getCoursePeriodsText(detailCourse) }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">上课地点</span>
-            <span class="detail-value">{{ detailCourse.location || '未设置' }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">授课教师</span>
-            <span class="detail-value">{{ detailCourse.teacher || '未设置' }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">上课周次</span>
-            <span class="detail-value">{{ getCourseWeeksText(detailCourse) }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">备注</span>
-            <span class="detail-value">{{ detailCourse.note || '无' }}</span>
-          </div>
-          <div class="form-footer">
-            <button class="capsule-btn submit-btn" @click="openEditFromDetail">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-              <span>编辑</span>
-            </button>
-            <button class="capsule-btn cancel-btn" @click="showCourseDetail = false">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-              <span>关闭</span>
-            </button>
-          </div>
-        </div>
-      </div>
+  <BaseDialog
+    :visible="showCourseDetail && !!detailCourse"
+    :title="detailCourse?.name || ''"
+    :width="360"
+    teleport
+    @update:visible="showCourseDetail = $event"
+  >
+    <div class="detail-row">
+      <span class="detail-label">上课时间</span>
+      <span class="detail-value">{{ detailCourse ? getCourseDaysText(detailCourse) : '' }} {{ detailCourse ? getCoursePeriodsText(detailCourse) : '' }}</span>
     </div>
-  </Teleport>
+    <div class="detail-row">
+      <span class="detail-label">上课地点</span>
+      <span class="detail-value">{{ detailCourse?.location || '未设置' }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">授课教师</span>
+      <span class="detail-value">{{ detailCourse?.teacher || '未设置' }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">上课周次</span>
+      <span class="detail-value">{{ detailCourse ? getCourseWeeksText(detailCourse) : '' }}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">备注</span>
+      <span class="detail-value">{{ detailCourse?.note || '无' }}</span>
+    </div>
+    <template #footer>
+      <button class="capsule-btn delete-btn" style="border-radius:8px" @click="handleDeleteCourseClick()">
+        <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+        <span>删除</span>
+      </button>
+      <button class="capsule-btn submit-btn" style="border-radius:8px" @click="openEditFromDetail">
+        <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        <span>编辑</span>
+      </button>
+      <button class="capsule-btn cancel-btn" style="border-radius:8px" @click="showCourseDetail = false">
+        <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        <span>关闭</span>
+      </button>
+    </template>
+  </BaseDialog>
 
   <!-- 删除课程确认弹窗 -->
-  <Teleport to="body">
-    <div v-if="showDeleteCourseConfirm" class="confirm-top-overlay" @click.self="showDeleteCourseConfirm = false">
-      <div class="confirm-dialog-box">
-        <div class="dialog-icon"><el-icon class="icon-warning"><Warning /></el-icon></div>
-        <h3 class="dialog-title">删除确认</h3>
-        <p class="dialog-message">确定要删除这门课程吗？</p>
-        <div class="dialog-actions">
-          <el-button type="default" @click="showDeleteCourseConfirm = false">取消</el-button>
-          <el-button type="danger" @click="confirmDeleteCourse">确认删除</el-button>
-        </div>
-      </div>
+  <BaseDialog
+    :visible="showDeleteCourseConfirm"
+    title="删除确认"
+    :width="300"
+    teleport
+    @update:visible="showDeleteCourseConfirm = $event"
+  >
+    <div class="confirm-body">
+      <p class="confirm-message">确定要删除这门课程吗？</p>
     </div>
-  </Teleport>
+    <template #footer>
+      <button class="capsule-btn cancel-btn" @click="showDeleteCourseConfirm = false">
+        <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        <span>取消</span>
+      </button>
+      <button class="capsule-btn delete-btn" @click="confirmDeleteCourse">
+        <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+        <span>确认删除</span>
+      </button>
+    </template>
+  </BaseDialog>
 
   <!-- 课程表设置弹窗 -->
   <Teleport to="body">
@@ -400,9 +442,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, inject } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch, inject } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, ArrowRight, Warning } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { getData, setData } from '../../services/storageService'
 import { useSettingsStore } from '../../stores/settingsStore'
@@ -412,6 +454,7 @@ import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
 import PeriodCountPicker from '../common/picker/PeriodCountPicker.vue'
 import BaseDialog from '../common/BaseDialog.vue'
+import ColorGrid from '../common/ColorGrid.vue'
 
 interface Course {
   id: string
@@ -492,6 +535,29 @@ const pageNav = usePageNav()
 const refreshReminders = inject<() => void>('refreshReminders', () => {})
 
 const isElectron = computed(() => typeof window !== 'undefined' && !!(window as any).electronAPI)
+
+// ===== 课程列表视图 =====
+const viewMode = ref<'schedule' | 'list'>('schedule')
+const allCourses = computed(() => courses.value)
+
+// ===== 课表行高自适应 =====
+const rowHeight = ref(64)
+
+function calcRowHeight() {
+  const wrapper = document.querySelector('.course-grid-wrapper') as HTMLElement | null
+  if (!wrapper) return
+  const totalPeriods = periods.value.length
+  if (totalPeriods === 0) return
+  const topRow = wrapper.querySelector('.grid-top-row') as HTMLElement | null
+  const topRowH = topRow ? topRow.offsetHeight + parseFloat(getComputedStyle(topRow).marginBottom) : 0
+  let breakH = 0
+  wrapper.querySelectorAll('.break-section-tag').forEach(el => {
+    breakH += (el as HTMLElement).offsetHeight
+  })
+  const gaps = (totalPeriods - gridSections.value.length) * 2
+  const availableH = wrapper.clientHeight - topRowH - breakH - gaps
+  rowHeight.value = Math.max(40, Math.floor(availableH / totalPeriods))
+}
 
 const semesterStartDate = computed(() => settingsStore.settings.course?.semesterStartDate || '')
 const totalWeeks = computed(() => settingsStore.settings.course?.totalWeeks || 20)
@@ -576,7 +642,7 @@ function getMondayOfWeek(date: dayjs.Dayjs): dayjs.Dayjs {
   return date.add(diff, 'day').startOf('day')
 }
 
-const displayWeekNumber = computed(() => getWeekNumber(currentWeekStart.value))
+const displayWeekNumber = computed(() => Math.min(getWeekNumber(currentWeekStart.value), totalWeeks.value))
 
 const weekDateRange = computed(() => {
   const start = currentWeekStart.value
@@ -883,6 +949,10 @@ function closeDialog() {
   editingCourse.value = null
 }
 
+watch(dialogVisible, (val) => {
+  if (!val) editingCourse.value = null
+})
+
 // ===== 课程详情弹窗 =====
 const showCourseDetail = ref(false)
 const detailCourse = ref<Course | null>(null)
@@ -966,8 +1036,12 @@ const showDeleteCourseConfirm = ref(false)
 const pendingDeleteCourseId = ref<string | null>(null)
 
 function handleDeleteCourseClick() {
-  if (!editingCourse.value) return
-  pendingDeleteCourseId.value = editingCourse.value.id
+  pendingDeleteCourseId.value = (editingCourse.value || detailCourse.value)?.id || null
+  showDeleteCourseConfirm.value = true
+}
+
+function handleListCardDelete(course: Course) {
+  pendingDeleteCourseId.value = course.id
   showDeleteCourseConfirm.value = true
 }
 
@@ -1137,14 +1211,22 @@ onMounted(async () => {
   })
   await settingsStore.loadSettings()
   await loadCourses()
+  await nextTick()
+  calcRowHeight()
+  window.addEventListener('resize', calcRowHeight)
 })
+
+onUnmounted(() => {
+  window.removeEventListener('resize', calcRowHeight)
+})
+
 
 
 </script>
 
 <style scoped>
 .course-container { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-.course-inner { display: flex; flex-direction: column; align-items: center; padding: 16px 0; gap: 16px; height: 100%; }
+.course-inner { display: flex; flex-direction: column; align-items: center; padding: 16px 24px; gap: 16px; height: 100%; }
 
 .week-area { display: flex; align-items: center; justify-content: center; gap: 16px; width: 100%; flex-shrink: 0; }
 .is-electron .week-area { width: 500px; }
@@ -1157,7 +1239,7 @@ onMounted(async () => {
 .is-electron .week-date { font-size: 13px; }
 
 .course-grid-wrapper { width: 100%; flex: 1; overflow: auto; scrollbar-width: none; -ms-overflow-style: none; }
-.is-electron .course-grid-wrapper { width: 80%; }
+.is-electron .course-grid-wrapper { width: 100%; }
 .course-grid-wrapper::-webkit-scrollbar { display: none; }
 .course-grid { display: grid; gap: 2px; min-width: 0; grid-auto-rows: 64px; }
 
@@ -1221,57 +1303,17 @@ onMounted(async () => {
 .course-card {
   flex: 1;
   display: flex;
-  flex-direction: row;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
   padding: 2px 4px;
   border-radius: 3px;
   background: rgba(255,255,255,0.06);
   overflow: hidden;
   cursor: pointer;
   transition: background 0.15s;
-  white-space: nowrap;
-}
-.is-electron .course-card {
-  flex-direction: column;
-  padding: 4px 6px;
-  white-space: normal;
-  justify-content: center;
-  align-items: flex-start;
 }
 .course-card:hover { background: rgba(255,255,255,0.1); }
-.card-name { font-size: 10px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; max-width: 45%; }
-.is-electron .card-name { font-size: 12px; word-break: break-all; line-height: 1.3; white-space: normal; overflow: visible; text-overflow: clip; flex-shrink: 1; max-width: none; }
-.card-meta { display: inline-flex; gap: 2px; flex-shrink: 1; overflow: hidden; min-width: 0; }
-.is-electron .card-meta { margin-top: 2px; flex-wrap: wrap; gap: 4px; }
-.card-location, .card-teacher { font-size: 10px; color: var(--chalk-white-60); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card-note { font-size: 10px; color: var(--chalk-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; max-width: 30%; }
-.is-electron .card-note { margin-top: 2px; word-break: break-all; line-height: 1.3; white-space: normal; overflow: visible; text-overflow: clip; flex-shrink: 1; max-width: none; }
-
-/* 安卓端：课程卡片分四行显示，不截断文本 */
-.course-container:not(.is-electron) .course-card {
-  flex-direction: column;
-  justify-content: center;
-  align-items: stretch;
-  overflow: visible;
-  white-space: normal;
-}
-.course-container:not(.is-electron) .card-meta {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}
-.course-container:not(.is-electron) .card-name,
-.course-container:not(.is-electron) .card-location,
-.course-container:not(.is-electron) .card-teacher,
-.course-container:not(.is-electron) .card-note {
-  font-size: 5px;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-  max-width: none;
-  flex-shrink: 1;
-}
+.card-name { font-size: 14px; font-weight: 600; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .has-course { position: relative; }
 .overlap-badge {
@@ -1289,29 +1331,11 @@ onMounted(async () => {
   z-index: 2;
 }
 
-.card-weeks {
-  font-size: 10px;
-  color: var(--chalk-orange);
-  margin-top: 2px;
-  word-break: break-all;
-  line-height: 1.3;
-}
-
-/* 弹窗 */
-.dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
-.dialog-container { background: rgba(30,28,52,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; }
-.course-form-dialog { width: 420px; }
-
-.dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 0; flex-shrink: 0; }
-.dialog-header-title { font-size: 16px; font-weight: 600; color: var(--chalk-white); }
-.folder-dialog-header { justify-content: center; }
-.folder-dialog-title { text-align: center; }
-.dialog-body { padding: 12px 16px 16px; overflow-y: auto; flex: 1; scrollbar-width: none; -ms-overflow-style: none; }
-.dialog-body::-webkit-scrollbar { display: none; }
-
-.course-form :deep(.el-form-item) { margin-bottom: 12px; }
+/* 表单样式 */
+.course-form :deep(.el-form-item) { display: block; margin-bottom: 12px; }
 .course-form :deep(.el-form-item:last-child) { margin-bottom: 0; }
-.course-form :deep(.el-form-item__label) { color: var(--chalk-white-70); }
+.course-form :deep(.el-form-item__label) { display: block; text-align: left; line-height: normal; padding-bottom: 4px; color: var(--chalk-white-70); }
+.course-form :deep(.el-form-item__content) { display: block; }
 .course-form :deep(.el-input__wrapper) { background: rgba(255,255,255,0.05) !important; border: 1px solid rgba(255,255,255,0.1); box-shadow: none !important; }
 .course-form :deep(.el-input__wrapper:hover) { border-color: rgba(102,126,234,0.5); }
 .course-form :deep(.el-input__inner),
@@ -1354,17 +1378,53 @@ onMounted(async () => {
 .capsule-btn .capsule-icon { width: 14px; height: 14px; }
 .submit-btn { background: rgba(102,126,234,0.2); border-color: rgba(102,126,234,0.4); color: #93c5fd; }
 .submit-btn:hover { background: rgba(102,126,234,0.35); color: var(--chalk-white); }
-.delete-btn { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.35); color: #fca5a5; }
-.delete-btn:hover { background: rgba(239,68,68,0.3); color: var(--chalk-white); }
+.capsule-btn.delete-btn { background: #ef4444; border-color: #ef4444; color: #fff; }
+.capsule-btn.delete-btn:hover { background: #dc2626; border-color: #dc2626; color: #fff; }
 
-.confirm-top-overlay { position: fixed; inset: 0; z-index: 10001; background: rgba(15,12,41,0.92); display: flex; align-items: center; justify-content: center; }
-.confirm-dialog-box { background: rgba(30,28,52,0.98); border-radius: 16px; padding: 32px; width: 300px; max-width: 300px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
-.icon-warning { font-size: 48px; color: var(--chalk-orange); }
-.dialog-icon { text-align: center; margin-bottom: 16px; }
-.dialog-title { text-align: center; font-size: 18px; font-weight: 600; color: var(--chalk-white); margin: 0 0 12px 0; }
-.dialog-message { text-align: center; font-size: 14px; color: var(--chalk-white-70); margin: 0 0 24px 0; line-height: 1.6; }
-.dialog-actions { display: flex; gap: 12px; justify-content: center; }
+/* 确认弹窗 */
+.confirm-body { display: flex; flex-direction: column; align-items: center; }
+.confirm-message { text-align: center; font-size: 14px; color: var(--chalk-white-70); margin: 0; line-height: 1.6; }
 
+/* 切换按钮 */
+.corner-toggle-btn { padding: 4px; min-width: auto; border: none; background: transparent; color: var(--chalk-white-60); cursor: pointer; transition: color 0.2s; }
+.corner-toggle-btn .capsule-icon { width: 16px; height: 16px; }
+.corner-toggle-btn:hover { color: var(--chalk-white); background: transparent; }
+
+/* 课程列表视图 */
+.course-list-wrapper { width: 100%; flex: 1; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+.course-list-wrapper::-webkit-scrollbar { display: none; }
+.list-top-bar { padding: 8px 16px; }
+.list-back-btn { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: transparent; color: var(--chalk-white-70); cursor: pointer; font-size: 12px; font-family: inherit; transition: all 0.2s; }
+.list-back-btn:hover { background: rgba(255,255,255,0.06); color: var(--chalk-white); }
+.list-back-btn .capsule-icon { width: 14px; height: 14px; }
+.list-empty { text-align: center; color: var(--chalk-muted); font-size: 14px; padding: 40px 0; }
+.course-list-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; padding: 16px; }
+.course-list-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-sizing: border-box;
+  color: var(--chalk-white-85);
+}
+.course-list-card:hover { background: rgba(255,255,255,0.06); border-color: rgba(102,126,234,0.3); }
+.lcard-top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.lcard-icon { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.lcard-name { font-size: 14px; font-weight: 600; line-height: 1.3; word-break: break-all; }
+.lcard-meta { display: flex; flex-direction: column; gap: 4px; }
+.lcard-row { display: flex; gap: 8px; font-size: 11px; }
+.lcard-label { color: var(--chalk-muted); flex-shrink: 0; min-width: 28px; }
+.lcard-value { color: var(--chalk-white-85); }
+.lcard-note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lcard-actions { display: flex; gap: 4px; margin-left: auto; }
+.lcard-action-btn { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: none; background: transparent; color: var(--chalk-white-70); cursor: pointer; border-radius: 4px; transition: all 0.15s; }
+.lcard-action-btn svg { width: 14px; height: 14px; }
+.lcard-action-btn:hover { color: var(--chalk-white); }
+.lcard-action-btn.danger:hover { color: #fca5a5; }
+
+/* 课程表设置弹窗 */
 .dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
 .dialog-container { background: rgba(30,28,52,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; }
 .course-settings-dialog { width: 400px; }
@@ -1387,7 +1447,8 @@ onMounted(async () => {
 .setting-desc { font-size: 12px; color: rgba(255, 255, 255, 0.5); }
 .setting-control { display: flex; align-items: center; gap: 8px; }
 
-.corner-settings-btn { padding: 4px; min-width: auto; border: none; background: transparent; color: #fff; }
+.corner-actions { display: flex; align-items: center; justify-content: center; gap: 2px; }
+.corner-settings-btn { padding: 4px; min-width: auto; border: none; background: transparent; color: #fff; cursor: pointer; }
 .corner-settings-btn .capsule-icon { width: 16px; height: 16px; }
 .corner-settings-btn:hover { background: transparent; }
 
@@ -1406,9 +1467,15 @@ onMounted(async () => {
 .custom-break-empty { text-align: center; color: rgba(255,255,255,0.5); padding: 20px 0; font-size: 14px; }
 
 /* 课程详情弹窗 */
-.course-detail-dialog { width: 360px; }
-.detail-row { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
-.detail-row:last-of-type { border-bottom: none; }
+.detail-row { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; }
 .detail-label { font-size: 11px; color: var(--chalk-muted); }
 .detail-value { font-size: 13px; color: var(--chalk-white-85); line-height: 1.5; }
+
+/* 设置弹窗 */
+.course-settings-dialog .setting-item .setting-control :deep(.date-trigger) { width: 110px; }
+.course-settings-dialog .setting-item .setting-control :deep(.pc-trigger) { width: 210px; justify-content: center; }
+.course-settings-dialog .setting-item .setting-control :deep(.trigger-arrow) { display: none; }
+
+/* 删除课程确认弹窗 */
+.confirm-message { color: #fbbf24; }
 </style>

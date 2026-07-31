@@ -1,23 +1,7 @@
 <template>
   <div class="list-form">
     <el-input v-model="formName" placeholder="请输入清单名称" @keyup.enter="handleSubmit" />
-    <div class="list-color-section">
-      <span class="list-color-label">颜色</span>
-      <div class="list-color-grid">
-        <div
-          v-for="c in EXTENDED_FOLDER_COLORS"
-          :key="c"
-          class="list-color-swatch"
-          :class="{ selected: formColor === c }"
-          :style="{ background: c }"
-          @click="formColor = c"
-        ></div>
-      </div>
-      <div class="list-color-custom">
-        <span class="list-color-label">自定义</span>
-        <el-input v-model="formColor" placeholder="#667eea" size="small" class="list-color-input" />
-      </div>
-    </div>
+    <ColorGrid v-model="formColor" />
     <div class="list-form-separator"></div>
     <div class="list-form-footer">
       <el-button @click="cancel">取消</el-button>
@@ -29,6 +13,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { EXTENDED_FOLDER_COLORS, type ListPage } from '../../stores/listStore'
+import ColorGrid from '../common/ColorGrid.vue'
 
 const props = defineProps<{
   list?: ListPage | null

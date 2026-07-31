@@ -53,14 +53,14 @@
           </div>
           <div class="drum-divider"></div>
           <div class="drum-actions">
-            <button class="icon-capsule-btn" @click="cancel">
+            <button class="icon-capsule-btn" style="border-radius:8px" @click="cancel">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
               <span>取消</span>
             </button>
-            <button class="icon-capsule-btn primary" @click="confirm">
+            <button class="icon-capsule-btn primary" style="border-radius:8px" @click="confirm">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-svg">
                 <polyline points="20 6 9 17 4 12"></polyline>
               </svg>

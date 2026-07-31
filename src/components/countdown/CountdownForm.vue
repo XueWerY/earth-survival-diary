@@ -6,7 +6,7 @@
     teleport
     @update:visible="dialogVisible = $event"
   >
-    <el-form :model="form" :rules="rules" ref="formRef" label-width="80px">
+    <el-form :model="form" :rules="rules" ref="formRef" label-position="top">
       <template v-if="!reminderOnly">
         <el-form-item label="名称" prop="name">
           <el-input v-model="form.name" placeholder="这个倒数日叫什么？" maxlength="50" />
@@ -282,7 +282,7 @@ const handleSubmit = async () => {
   gap: 4px;
   padding: 6px 18px;
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
+  border-radius: 8px;
   background: transparent;
   color: var(--chalk-white-70);
   cursor: pointer;

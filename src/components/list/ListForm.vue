@@ -13,25 +13,13 @@
 
       <!-- 清单颜色 -->
       <el-form-item label="颜色">
-        <div class="color-picker">
-          <div
-              v-for="color in availableColors"
-              :key="color"
-              class="color-item"
-              :class="{ active: form.color === color, used: usedColors.includes(color) && form.color !== color }"
-              :style="{ background: color }"
-              @click="usedColors.includes(color) && form.color !== color ? null : (form.color = color)"
-          >
-            <span v-if="usedColors.includes(color) && form.color !== color" class="used-mark">✓</span>
-          </div>
-        </div>
-        <div class="color-tip">灰色标记的颜色已被其他清单使用，不可选择</div>
+        <ColorGrid v-model="form.color" :colors="DEFAULT_LIST_COLORS" />
       </el-form-item>
     </el-form>
 
     <template #footer>
-      <el-button @click="dialogVisible = false">取消</el-button>
-      <el-button type="primary" @click="handleSubmit">
+      <el-button style="border-radius:8px" @click="dialogVisible = false">取消</el-button>
+      <el-button type="primary" style="border-radius:8px" @click="handleSubmit">
         {{ isEdit ? '保存' : '创建' }}
       </el-button>
     </template>
@@ -42,6 +30,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useListStore, DEFAULT_LIST_COLORS, type ListPage } from '../../stores/listStore'
+import ColorGrid from '../common/ColorGrid.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -72,33 +61,13 @@ const formRef = ref<FormInstance>()
 
 const isEdit = computed(() => !!props.list)
 
-// 已使用的颜色
-const usedColors = computed(() => {
-  const colors = new Set<string>()
-  listStore.taskLists.forEach(list => {
-    // 编辑时排除当前清单的颜色
-    if (!props.list || list.id !== props.list.id) {
-      colors.add(list.color)
-    }
-  })
-  return Array.from(colors)
-})
-
-// 所有颜色都可选，但已使用的会标记
-const availableColors = computed(() => DEFAULT_LIST_COLORS)
-
 interface FormData {
   name: string
   color: string
 }
 
 const getDefaultForm = (): FormData => {
-  // 找到第一个未被使用的颜色
-  const unusedColor = DEFAULT_LIST_COLORS.find(c => !usedColors.value.includes(c)) || DEFAULT_LIST_COLORS[0]
-  return {
-    name: '',
-    color: unusedColor
-  }
+  return { name: '', color: DEFAULT_LIST_COLORS[0] }
 }
 
 const form = ref<FormData>(getDefaultForm())
@@ -143,56 +112,6 @@ const resetForm = () => {
 </script>
 
 <style scoped>
-.color-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.color-item {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: 2px solid transparent;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.color-item:hover {
-  transform: scale(1.1);
-}
-
-.color-item.active {
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3);
-}
-
-.color-item.used {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.color-item.used:hover {
-  opacity: 0.5;
-  transform: none;
-}
-
-.used-mark {
-  font-size: 12px;
-  color: var(--chalk-white);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-}
-
-.color-tip {
-  margin-top: 8px;
-  font-size: 12px;
-  color: #909399;
-}
-
 :deep(.el-input__wrapper) {
   background: #fff;
   border-color: #dcdfe6;
