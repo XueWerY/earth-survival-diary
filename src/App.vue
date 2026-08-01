@@ -112,6 +112,7 @@
         @prev="handleGuidePrev"
         @next="handleGuideNext"
         @skip="handleGuideSkip"
+        @exit="handleGuideExit"
       />
 
       <!-- 版本更新/更新日志面板 -->
@@ -866,19 +867,26 @@ const guideCurrentIndex = ref(0)
 const guideCompleted = ref(false)
 const guideRunning = ref(false)
 
-const startGuide = () => {
+const startGuide = async () => {
   if (focusStore.timerState) {
     ElMessage.warning('请先停止专注')
     logger.info('[引导] 检测到正在专注，已阻止启动引导')
     return
   }
-  guideCurrentIndex.value = 0
+  let lastIndex = 0
+  try {
+    const saved = await getSystemStateField('guideLastIndex')
+    if (typeof saved === 'number' && saved > 0 && saved < guideSteps.length) {
+      lastIndex = saved
+    }
+  } catch {}
+  guideCurrentIndex.value = lastIndex
   guideVisible.value = true
   guideRunning.value = true
-  if (route.path !== guideSteps[0].route) {
-    router.push(guideSteps[0].route)
+  if (route.path !== guideSteps[lastIndex].route) {
+    router.push(guideSteps[lastIndex].route)
   }
-  logger.info('[引导] 新手引导已启动')
+  logger.info('[引导] 新手引导已启动', { fromStep: lastIndex })
 }
 
 const closeGuide = async () => {
@@ -887,6 +895,7 @@ const closeGuide = async () => {
   guideRunning.value = false
   try {
     await setSystemStateField('guideCompleted', true)
+    await setSystemStateField('guideLastIndex', 0)
   } catch {}
   logger.info('[引导] 新手引导已完成')
   startVersionChecks()
@@ -900,6 +909,7 @@ const handleGuidePrev = () => {
     router.push(prevRoute)
   }
   guideCurrentIndex.value = prevIdx
+  setSystemStateField('guideLastIndex', prevIdx).catch(() => {})
 }
 
 const handleGuideNext = () => {
@@ -913,10 +923,17 @@ const handleGuideNext = () => {
     router.push(nextRoute)
   }
   guideCurrentIndex.value = nextIdx
+  setSystemStateField('guideLastIndex', nextIdx).catch(() => {})
 }
 
 const handleGuideSkip = () => {
   closeGuide()
+}
+
+const handleGuideExit = () => {
+  guideVisible.value = false
+  guideRunning.value = false
+  logger.info('[引导] 退出引导，已保存进度', { step: guideCurrentIndex.value })
 }
 
 provide('startGuide', startGuide)
@@ -1012,7 +1029,8 @@ const ensureDefaultData = async () => {
       startTime: '',
       endTime: '',
       notes: '这里是备注',
-      category: 'diary'
+      category: 'diary',
+      pinned: true
     })
     logger.info('[App] 已创建示例日记')
 

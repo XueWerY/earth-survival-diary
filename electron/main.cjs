@@ -835,6 +835,7 @@ ipcMain.handle('clear-logs', async () => {
 
 const MODULE_FILE_MAP = {
   tasks: ['footprint/footprint.json'],
+  diaries: ['footprint/diary.json'],
   focus_favorites: ['focus/favorites.json'],
   focus_records: ['focus/records.json'],
   lists: ['list/lists.json', 'list/tasks.json'],
@@ -843,7 +844,7 @@ const MODULE_FILE_MAP = {
 }
 
 const MODULE_GROUP_DEF = [
-  { key: 'footprint', label: '足迹', children: [{ key: 'tasks', label: '足迹记录', serverKeys: ['tasks'] }] },
+  { key: 'footprint', label: '足迹', children: [{ key: 'tasks', label: '足迹记录', serverKeys: ['tasks'] }, { key: 'diaries', label: '日记', serverKeys: ['diaries'] }] },
   { key: 'focus', label: '专注', children: [{ key: 'focus_favorites', label: '常用专注', serverKeys: ['focus_favorites'] }, { key: 'focus_records', label: '专注记录', serverKeys: ['focus_records'] }] },
   { key: 'lists', label: '清单', children: [{ key: 'lists', label: '清单列表及其任务', serverKeys: ['lists', 'lists'] }] },
   { key: 'countdown', label: '倒数日', children: [{ key: 'countdown', label: '倒数日分类及其倒数日', serverKeys: ['countdown_categories', 'countdowns'] }] },
@@ -895,7 +896,7 @@ ipcMain.handle('get-module-sizes', async () => {
     // Also add sizes for account info files (not deletable but part of total)
     for (const user of users) {
       const userDir = path.join(DATA_DIR, user.userId)
-      for (const sub of ['profile', 'session', 'system']) {
+      for (const sub of ['profile', 'system']) {
         const subDir = path.join(userDir, sub)
         if (fs.existsSync(subDir)) {
           const sz = getDirSize(subDir)

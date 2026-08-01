@@ -46,8 +46,13 @@ export const useTaskStore = defineStore('task', () => {
     if (isLoaded.value) return
 
     try {
-      const { tasks: dbTasks } = await api.getTasks()
-      tasks.value = dbTasks.map(dbToTask)
+      const [footprintRes, diaryRes] = await Promise.all([
+        api.getTasks(),
+        api.getDiaries()
+      ])
+      const footprintTasks = footprintRes.tasks.map(dbToTask)
+      const diaryTasks = diaryRes.tasks.map(dbToTask)
+      tasks.value = [...footprintTasks, ...diaryTasks]
       isLoaded.value = true
     } catch (error) {
       console.error('Failed to load tasks:', error)
@@ -65,14 +70,16 @@ export const useTaskStore = defineStore('task', () => {
   const addTask = async (task: Omit<Task, 'id' | 'duration' | 'completed'>) => {
     try {
       const duration = calculateDuration(task.startTime, task.endTime)
-      const { task: dbTask } = await api.addTask({
+      const apiCall = task.category === 'diary' ? api.addDiary : api.addTask
+      const { task: dbTask } = await apiCall({
         name: task.name,
         date: task.date,
         startTime: task.startTime,
         endTime: task.endTime,
         notes: task.notes,
         content: task.content,
-        category: task.category
+        category: task.category,
+        pinned: (task as any).pinned
       })
       tasks.value.unshift({ ...dbToTask(dbTask), duration })
     } catch (error) {
@@ -124,7 +131,9 @@ export const useTaskStore = defineStore('task', () => {
     if (index === -1) return
 
     try {
-      const { task: dbTask } = await api.updateTask(id, {
+      const isDiary = tasks.value[index].isDiary
+      const apiCall = isDiary ? api.updateDiary : api.updateTask
+      const { task: dbTask } = await apiCall(id, {
         name: updates.name,
         date: updates.date,
         startTime: updates.startTime,
@@ -144,11 +153,12 @@ export const useTaskStore = defineStore('task', () => {
   // Delete a task
   const deleteTask = async (id: string) => {
     try {
-      await api.deleteTask(id)
       const index = tasks.value.findIndex(t => t.id === id)
-      if (index !== -1) {
-        tasks.value.splice(index, 1)
-      }
+      if (index === -1) return
+      const isDiary = tasks.value[index].isDiary
+      const apiCall = isDiary ? api.deleteDiary : api.deleteTask
+      await apiCall(id)
+      tasks.value.splice(index, 1)
     } catch (error) {
       console.error('Failed to delete task:', error)
     }

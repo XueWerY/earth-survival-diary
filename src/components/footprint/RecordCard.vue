@@ -1,5 +1,5 @@
 <template>
-  <div class="task-card" :class="{ 'task-card-pinned': record.pinned }">
+  <div class="task-card record-card" :class="{ 'task-card-pinned': record.pinned }">
     <div class="task-card-row">
       <template v-if="isEditingName">
         <textarea

@@ -33,38 +33,38 @@
           <h3 class="section-title">账号安全</h3>
 
           <div class="security-item">
+            <button class="security-edit-btn" @click="showEmailDialog = true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="security-edit-icon"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
             <div class="security-info">
-              <span class="security-label">账号</span>
+              <span class="security-label">账号：</span>
               <span class="security-value">{{ maskEmail(authStore.user?.email) }}</span>
             </div>
-            <el-button size="small" @click="showEmailDialog = true">
-              修改
-            </el-button>
           </div>
 
           <div class="security-item">
+            <button class="security-edit-btn" @click="showPasswordDialog = true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="security-edit-icon"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
             <div class="security-info">
-              <span class="security-label">密码</span>
+              <span class="security-label">密码：</span>
               <span class="security-value">••••••••</span>
             </div>
-            <el-button size="small" @click="showPasswordDialog = true">
-              修改
-            </el-button>
           </div>
 
           <div class="security-item">
+            <button class="security-edit-btn" @click="showPhoneDialog = true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="security-edit-icon"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
             <div class="security-info">
-              <span class="security-label">手机号</span>
+              <span class="security-label">手机号：</span>
               <span class="security-value">{{ form.phone || '未绑定' }}</span>
             </div>
-            <el-button size="small" @click="showPhoneDialog = true">
-              {{ form.phone ? '修改' : '绑定' }}
-            </el-button>
           </div>
 
           <div class="security-item">
             <div class="security-info">
-              <span class="security-label">注册时间</span>
+              <span class="security-label">注册时间：</span>
               <span class="security-value">{{ formatCreatedAt() }}</span>
             </div>
           </div>
@@ -146,12 +146,12 @@
           <h3 class="section-title">关于</h3>
 
           <div class="about-item">
-            <span class="about-label">项目地址</span>
+            <span class="about-label">项目地址：</span>
             <a class="about-link" @click.prevent="openProjectUrl">https://github.com/XueWerY/earth-survival-diary</a>
           </div>
 
           <div class="about-item">
-            <span class="about-label">版本号</span>
+            <span class="about-label">版本号：</span>
             <span class="about-value">v{{ version }}</span>
             
           </div>
@@ -165,7 +165,7 @@
               <span>查看更新日志</span>
             </button>
             <button class="capsule-btn" @click="startGuide" :disabled="isGuideActive">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="12,2 17,12 12,22 7,12"/></svg>
               <span>新手引导</span>
             </button>
           </div>
@@ -182,11 +182,13 @@
         :width="400"
         @update:visible="showPhoneDialog = $event"
     >
-      <el-form :model="phoneForm" label-width="80px">
-        <el-form-item label="手机号">
-          <el-input v-model="phoneForm.phone" placeholder="请输入手机号" />
-        </el-form-item>
-      </el-form>
+      <div class="dialog-centered-content">
+        <el-form :model="phoneForm" label-width="80px">
+          <el-form-item label="手机号">
+            <el-input v-model="phoneForm.phone" placeholder="请输入手机号" />
+          </el-form-item>
+        </el-form>
+      </div>
       <template #footer>
         <el-button @click="showPhoneDialog = false">取消</el-button>
         <el-button type="primary" @click="savePhone">确定</el-button>
@@ -200,14 +202,16 @@
         :width="400"
         @update:visible="showEmailDialog = $event"
     >
-      <el-form :model="emailForm" label-width="80px">
-        <el-form-item label="新账号">
-          <el-input v-model="emailForm.newEmail" placeholder="请输入新邮箱" />
-        </el-form-item>
-        <el-form-item label="当前密码">
-          <el-input v-model="emailForm.password" type="password" placeholder="请输入当前密码" />
-        </el-form-item>
-      </el-form>
+      <div class="dialog-centered-content">
+        <el-form :model="emailForm" label-width="80px">
+          <el-form-item label="新账号">
+            <el-input v-model="emailForm.newEmail" placeholder="请输入新邮箱" />
+          </el-form-item>
+          <el-form-item label="当前密码">
+            <el-input v-model="emailForm.password" type="password" placeholder="请输入当前密码" />
+          </el-form-item>
+        </el-form>
+      </div>
       <template #footer>
         <el-button @click="showEmailDialog = false">取消</el-button>
         <el-button type="primary" @click="changeEmail" :loading="changingEmail">确定</el-button>
@@ -221,17 +225,19 @@
         :width="400"
         @update:visible="showPasswordDialog = $event"
     >
-      <el-form :model="passwordForm" label-width="100px">
-        <el-form-item label="当前密码">
-          <el-input v-model="passwordForm.oldPassword" type="password" placeholder="请输入当前密码" />
-        </el-form-item>
-        <el-form-item label="新密码">
-          <el-input v-model="passwordForm.newPassword" type="password" placeholder="请输入新密码（至少6位）" />
-        </el-form-item>
-        <el-form-item label="确认新密码">
-          <el-input v-model="passwordForm.confirmPassword" type="password" placeholder="请再次输入新密码" />
-        </el-form-item>
-      </el-form>
+      <div class="dialog-centered-content">
+        <el-form :model="passwordForm" label-width="100px">
+          <el-form-item label="当前密码">
+            <el-input v-model="passwordForm.oldPassword" type="password" placeholder="请输入当前密码" />
+          </el-form-item>
+          <el-form-item label="新密码">
+            <el-input v-model="passwordForm.newPassword" type="password" placeholder="请输入新密码（至少6位）" />
+          </el-form-item>
+          <el-form-item label="确认新密码">
+            <el-input v-model="passwordForm.confirmPassword" type="password" placeholder="请再次输入新密码" />
+          </el-form-item>
+        </el-form>
+      </div>
       <template #footer>
         <el-button @click="showPasswordDialog = false">取消</el-button>
         <el-button type="primary" @click="changePassword" :loading="changingPassword">确定</el-button>
@@ -692,13 +698,13 @@ watch(() => form.birthday, () => {
 .profile-content {
   flex: 1;
   overflow: hidden;
-  width: 500px;
-  margin: 0 auto;
+  width: 100%;
+  padding: 0 16px;
 }
 
 @media (max-width: 499px) {
   .profile-content {
-    width: 80%;
+    width: 100%;
   }
 }
 
@@ -717,7 +723,6 @@ watch(() => form.birthday, () => {
 
 .profile-section {
   padding: 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .section-title {
@@ -737,7 +742,7 @@ watch(() => form.birthday, () => {
 }
 
 .profile-form {
-  max-width: 400px;
+  max-width: 360px;
 }
 
 :deep(.el-form-item__label) {
@@ -778,18 +783,14 @@ watch(() => form.birthday, () => {
 .security-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 12px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.security-item:last-child {
-  border-bottom: none;
+  gap: 10px;
 }
 
 .security-info {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
   gap: 4px;
 }
 
@@ -810,7 +811,6 @@ watch(() => form.birthday, () => {
   justify-content: space-between;
   padding: 16px;
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   margin-bottom: 12px;
   gap: 16px;
@@ -900,7 +900,7 @@ watch(() => form.birthday, () => {
 .dialog-body::-webkit-scrollbar { display: none; }
 
 .form-footer { display: flex; justify-content: center; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); }
-.capsule-btn { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 18px; border: 1px solid rgba(255,255,255,0.15); border-radius: 20px; background: transparent; color: var(--chalk-white-70); cursor: pointer; font-size: 13px; font-family: inherit; transition: all 0.2s; }
+.capsule-btn { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 18px; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; background: transparent; color: var(--chalk-white-70); cursor: pointer; font-size: 13px; font-family: inherit; transition: all 0.2s; }
 .capsule-btn:hover { background: rgba(255,255,255,0.08); color: var(--chalk-white); }
 .capsule-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .capsule-btn .capsule-icon { width: 14px; height: 14px; }
@@ -929,8 +929,8 @@ watch(() => form.birthday, () => {
 .about-label {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.5);
-  width: 60px;
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .about-value {
@@ -1066,6 +1066,57 @@ watch(() => form.birthday, () => {
 :deep(.el-input__count-inner) {
   background: transparent !important;
   color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* 生日选择器宽度 */
+:deep(.date-trigger) {
+  width: 110px;
+}
+
+/* 安全编辑按钮 */
+.security-edit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.security-edit-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.security-edit-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* 弹窗内容垂直居中 */
+.dialog-centered-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+/* 去除 body 的垂直 padding，避免与 separator 上下 margin 叠加造成过大间距 */
+:deep(.dialog-body) {
+  padding: 0 20px;
+}
+
+/* 最后一个表单项去掉默认 margin-bottom，确保表单底边与最后输入框底边对齐 */
+:deep(.el-form-item:last-child) {
+  margin-bottom: 0;
 }
 
 /* 导出对话框样式 */

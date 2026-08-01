@@ -13,24 +13,26 @@
       <p class="empty-hint">如需课程提醒，请在「课程表」设置中配置学期起始日期</p>
     </div>
 
-    <div v-else :class="['card-grid', { 'android-grid': isAndroid }]">
-      <div v-for="item in sortedItems" :key="item.id" class="reminder-card">
-        <div class="card-top">
-          <div class="reminder-name">{{ item.name }}</div>
-          <div class="card-top-right">
-            <span :class="['status-badge', timeStatus(item.triggerTime)]">{{ timeLabel(item.triggerTime) }}</span>
+    <div v-else ref="gridRef" class="card-grid">
+      <div v-for="(row, ri) in cardRows" :key="ri" class="card-row" :style="{ gap: d + 'px' }">
+        <div v-for="item in row" :key="item.id" class="reminder-card" :style="{ width: rowWidths[ri] + 'px' }">
+          <div class="card-top">
+            <div class="reminder-name">{{ item.name }}</div>
+            <div class="card-top-right">
+              <span :class="['status-badge', timeStatus(item.triggerTime)]">{{ timeLabel(item.triggerTime) }}</span>
+            </div>
           </div>
-        </div>
-        <div class="card-second-row">
-          <span class="trigger-time">{{ formatTime(item.triggerTime) }}</span>
-          <span v-if="item.listName && item.repeatStrategy && item.repeatStrategy !== 'none'" class="repeat-label">重复任务</span>
-        </div>
-        <div v-if="item.listName" class="reminder-source">
-          <span v-if="item.folderName" :style="{ color: getColor(item.folderName, 'folder') }">{{ item.folderName }}</span>
-          <span v-if="item.folderName && item.listName" class="source-sep"> / </span>
-          <span :style="{ color: getColor(item.listName, 'list') }">{{ item.listName }}</span>
-          <span v-if="item.groupName" class="source-sep"> / </span>
-          <span v-if="item.groupName" :style="{ color: getColor(item.listName + ':' + item.groupName, 'group') }">{{ item.groupName }}</span>
+          <div class="card-second-row">
+            <span class="trigger-time">{{ formatTime(item.triggerTime) }}</span>
+            <span v-if="item.listName && item.repeatStrategy && item.repeatStrategy !== 'none'" class="repeat-label">重复任务</span>
+          </div>
+          <div v-if="item.listName" class="reminder-source">
+            <span v-if="item.folderName" :style="{ color: getColor(item.folderName, 'folder') }">{{ item.folderName }}</span>
+            <span v-if="item.folderName && item.listName" class="source-sep"> / </span>
+            <span :style="{ color: getColor(item.listName, 'list') }">{{ item.listName }}</span>
+            <span v-if="item.groupName" class="source-sep"> / </span>
+            <span v-if="item.groupName" :style="{ color: getColor(item.listName + ':' + item.groupName, 'group') }">{{ item.groupName }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -38,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useFocusStore } from '../../../../stores/focusStore'
 import { useListStore } from '../../../../stores/listStore'
 import { useSettingsStore } from '../../../../stores/settingsStore'
@@ -50,7 +52,60 @@ const listStore = useListStore()
 const settingsStore = useSettingsStore()
 const loading = ref(false)
 const items = ref<any[]>([])
-const isAndroid = computed(() => typeof window !== 'undefined' && !(window as any).electronAPI && typeof (window as any).Capacitor !== 'undefined')
+
+// 卡片布局参数
+const d = 16
+const gridRef = ref<HTMLElement | null>(null)
+const containerWidth = ref(0)
+let resizeObserver: ResizeObserver | null = null
+
+// 等待网格渲染后再设置观察器（gridRef 在数据加载后才指向元素）
+watch(gridRef, (el) => {
+  if (!el) {
+    resizeObserver?.disconnect()
+    resizeObserver = null
+    return
+  }
+  if (!resizeObserver) {
+    resizeObserver = new ResizeObserver(() => {
+      containerWidth.value = gridRef.value?.getBoundingClientRect().width ?? 0
+    })
+    resizeObserver.observe(el)
+  }
+}, { flush: 'post' })
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+})
+
+// 最大列数（按阈值公式：可用宽度 < 300*(n+1) + n*d 时，最多 n 列）
+const maxCards = computed(() => {
+  const w = containerWidth.value
+  if (!w) return 3
+  let n = 1
+  while (300 * (n + 1) + n * d <= w) n++
+  return Math.max(1, n)
+})
+
+// 按行分组
+const cardRows = computed(() => {
+  const rows = []
+  const max = maxCards.value
+  for (let i = 0; i < sortedItems.value.length; i += max) {
+    rows.push(sortedItems.value.slice(i, i + max))
+  }
+  return rows
+})
+
+// 每行卡片宽度（满行与不足行的宽度不同）
+const rowWidths = computed(() => {
+  const w = containerWidth.value
+  if (!w) return cardRows.value.map(() => 300)
+  return cardRows.value.map(row => {
+    const n = row.length
+    return Math.floor((w - (n + 1) * d) / n)
+  })
+})
 
 const sortedItems = computed(() => {
   return [...items.value].sort((a, b) => new Date(a.triggerTime).getTime() - new Date(b.triggerTime).getTime())
@@ -381,13 +436,14 @@ onMounted(() => {
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 12px;
 }
 
 .count-badge {
   color: var(--chalk-white-60);
   font-size: 12px;
+  margin-left: 16px;
 }
 
 .loading {
@@ -416,13 +472,14 @@ onMounted(() => {
 }
 
 .card-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 16px;
 }
 
-.card-grid.android-grid {
-  grid-template-columns: 1fr;
+.card-row {
+  display: flex;
 }
 
 .reminder-card {
@@ -500,18 +557,6 @@ onMounted(() => {
 .status-badge.soon {
   background: rgba(234, 179, 8, 0.15);
   color: #eab308;
-}
-
-@media (max-width: 640px) {
-  .card-grid:not(.android-grid) {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-@media (max-width: 400px) {
-  .card-grid:not(.android-grid) {
-    grid-template-columns: 1fr;
-  }
 }
 </style>
 

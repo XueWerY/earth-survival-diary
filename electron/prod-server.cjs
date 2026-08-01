@@ -98,6 +98,14 @@ function createProdServer(options = {}) {
     writeJson(getDataPath('footprint', userId), tasks)
   }
 
+  // Diaries
+  async function getUserDiaries(userId) {
+    return readJson(getDataPath('footprint', userId, 'diary'), [])
+  }
+  async function setUserDiaries(userId, diaries) {
+    writeJson(getDataPath('footprint', userId, 'diary'), diaries)
+  }
+
   // List checklists
   async function getUserListChecklists(userId) {
     return readJson(getDataPath('list', userId, 'lists'), [])
@@ -135,16 +143,6 @@ function createProdServer(options = {}) {
   }
 
   // Session
-  async function getUserSession(userId) {
-    return readJson(getDataPath('session', userId))
-  }
-  async function setUserSession(userId, token) {
-    writeJson(getDataPath('session', userId), { token, createdAt: new Date().toISOString() })
-  }
-  async function deleteUserSession(userId) {
-    const p = path.join(DATA_DIR, userId, 'session', 'session.json')
-    if (fs.existsSync(p)) fs.unlinkSync(p)
-  }
 
   // ============ Helpers ============
 
@@ -240,7 +238,6 @@ function createProdServer(options = {}) {
       await setUserIndex(email, userEntry)
       await setUserProfile(userId, { id: userId, nickname: userEntry.nickname, createdAt: userEntry.createdAt })
       const token = generateToken(userId)
-      await setUserSession(userId, token)
       res.json({ user: { id: userId, email, nickname: userEntry.nickname, createdAt: userEntry.createdAt }, session: { access_token: token } })
     } catch (e) { console.error('Signup error:', e); res.status(500).json({ error: '注册失败，请稍后重试' }) }
   })
@@ -256,18 +253,12 @@ function createProdServer(options = {}) {
       if (!userEntry) return res.status(400).json({ error: '该邮箱未注册' })
       if (userEntry.passwordHash !== hashPassword(password)) return res.status(400).json({ error: '密码错误' })
       const token = generateToken(userEntry.id)
-      await setUserSession(userEntry.id, token)
       res.json({ user: { id: userEntry.id, email: userEntry.email, nickname: userEntry.nickname, createdAt: userEntry.createdAt }, session: { access_token: token } })
     } catch (e) { console.error('Signin error:', e); res.status(500).json({ error: '登录失败，请稍后重试' }) }
   })
 
-  /** POST /api/auth/signout (clears server session) => 200 {success:true} */
-  app.post('/api/auth/signout', async (req, res) => {
-    const authHeader = req.headers.authorization
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const userId = verifyToken(authHeader.substring(7))
-      if (userId) await deleteUserSession(userId)
-    }
+  /** POST /api/auth/signout => 200 {success:true} */
+  app.post('/api/auth/signout', async (_req, res) => {
     res.json({ success: true })
   })
 
@@ -285,9 +276,6 @@ function createProdServer(options = {}) {
       if (fs.existsSync(userDir)) {
         fs.rmSync(userDir, { recursive: true, force: true })
       }
-
-      // 删除session
-      await deleteUserSession(userId)
 
       console.log(`[Account] User deleted: ${userEmail} (${userId})`)
       res.json({ success: true })
@@ -484,6 +472,60 @@ function createProdServer(options = {}) {
       await setUserFootprintTasks(req.userId, tasks)
       res.json({ success: true })
     } catch (e) { console.error('Delete task error:', e); res.status(500).json({ error: '删除任务失败' }) }
+  })
+
+  // ============ Diaries API ============
+
+  /** GET /api/diaries (auth) => 200 {tasks:Task[]} */
+  app.get('/api/diaries', authMiddleware, async (req, res) => {
+    try { const diaries = await getUserDiaries(req.userId); res.json({ tasks: diaries }) }
+    catch (e) { console.error('Get diaries error:', e); res.status(500).json({ error: '获取日记失败' }) }
+  })
+
+  /** POST /api/diaries (auth) body:{...task fields} => 200 {task} */
+  app.post('/api/diaries', authMiddleware, async (req, res) => {
+    try {
+      const { name, date, startTime, endTime, notes, content, category } = req.body
+      const diaries = await getUserDiaries(req.userId)
+      const newDiary = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), name, date, startTime: startTime || null, endTime: endTime || null, duration: 0, completed: false, notes: notes || null, content: content || null, category: category || null, created_at: new Date().toISOString() }
+      diaries.unshift(newDiary)
+      await setUserDiaries(req.userId, diaries)
+      res.json({ task: newDiary })
+    } catch (e) { console.error('Add diary error:', e); res.status(500).json({ error: '添加日记失败' }) }
+  })
+
+  /** PUT /api/diaries/:id (auth) body:{...task fields} => 200 {task} | 404 */
+  app.put('/api/diaries/:id', authMiddleware, async (req, res) => {
+    try {
+      const { id } = req.params; const updates = req.body
+      const diaries = await getUserDiaries(req.userId)
+      const diaryIndex = diaries.findIndex(d => d.id === id)
+      if (diaryIndex === -1) return res.status(404).json({ error: '日记不存在' })
+      const diary = diaries[diaryIndex]
+      if (updates.name !== undefined) diary.name = updates.name
+      if (updates.date !== undefined) diary.date = updates.date
+      if (updates.startTime !== undefined) diary.startTime = updates.startTime || null
+      if (updates.endTime !== undefined) diary.endTime = updates.endTime || null
+      if (updates.notes !== undefined) diary.notes = updates.notes || null
+      if (updates.content !== undefined) diary.content = updates.content || null
+      if (updates.category !== undefined) diary.category = updates.category || null
+      if (updates.completed !== undefined) diary.completed = updates.completed
+      if (updates.pinned !== undefined) diary.pinned = updates.pinned
+      await setUserDiaries(req.userId, diaries)
+      res.json({ task: diary })
+    } catch (e) { console.error('Update diary error:', e); res.status(500).json({ error: '更新日记失败' }) }
+  })
+
+  /** DELETE /api/diaries/:id (auth) => 200 {success:true} */
+  app.delete('/api/diaries/:id', authMiddleware, async (req, res) => {
+    try {
+      const { id } = req.params
+      const diaries = await getUserDiaries(req.userId)
+      const diaryIndex = diaries.findIndex(d => d.id === id)
+      if (diaryIndex !== -1) diaries.splice(diaryIndex, 1)
+      await setUserDiaries(req.userId, diaries)
+      res.json({ success: true })
+    } catch (e) { console.error('Delete diary error:', e); res.status(500).json({ error: '删除日记失败' }) }
   })
 
   // ============ Lists API ============
@@ -806,7 +848,6 @@ function createProdServer(options = {}) {
         courses: await getUserKV(userId, 'course', 'courses'),
         // 我的
         profile: await getUserProfile(userId),
-        login_info: await getUserSession(userId),
         settings: await getUserSettings(userId),
         system_state: await getUserKV(userId, 'system', 'state'),
         exportTime: new Date().toISOString()
@@ -821,7 +862,7 @@ function createProdServer(options = {}) {
   /** POST /api/import body:{各模块数据} => 200 {success} - 导入数据（登录后可导入到当前账号，未登录时从user_index获取账号信息） */
   app.post('/api/import', async (req, res) => {
     try {
-      const { user_index, tasks, focus_favorites, focus_records, lists, listTasks, countdown_categories, countdowns, courses, course_recorded_courses, profile, login_info, settings, system_state } = req.body
+      const { user_index, tasks, focus_favorites, focus_records, lists, listTasks, countdown_categories, countdowns, courses, course_recorded_courses, profile, settings, system_state } = req.body
 
       // 尝试从token获取用户信息（可选，不要求必须登录）
       let userId = req.userId
@@ -860,7 +901,6 @@ function createProdServer(options = {}) {
       if (countdowns !== undefined) await setUserKV(userId, 'countdown', 'countdowns', countdowns)
       if (courses !== undefined) await setUserKV(userId, 'course', 'courses', courses)
       if (profile) await setUserProfile(userId, profile)
-      if (login_info) await setUserSession(userId, login_info)
       if (settings) await setUserSettings(userId, settings)
       if (system_state !== undefined) await setUserKV(userId, 'system', 'state', system_state)
 
@@ -879,7 +919,7 @@ function createProdServer(options = {}) {
       if (!userId) return res.status(401).json({ error: '请先登录' })
 
       const cleanMap = req.body
-      const PROTECTED_KEYS = ['user_index', 'email', 'profile', 'login_info']
+      const PROTECTED_KEYS = ['user_index', 'email', 'profile']
 
       for (const key of Object.keys(cleanMap)) {
         if (PROTECTED_KEYS.includes(key)) continue

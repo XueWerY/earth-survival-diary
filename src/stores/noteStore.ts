@@ -123,6 +123,18 @@ export const useNoteStore = defineStore('note', () => {
 
       notes.value = savedNotes || []
 
+      // 从 favorites.json 同步置顶状态
+      const pinnedIds = await getData<string[]>('notes', 'favorites')
+      if (pinnedIds && pinnedIds.length > 0) {
+        for (const note of notes.value) {
+          note.pinned = pinnedIds.includes(note.id)
+        }
+      } else {
+        // 首次迁移：将现有置顶状态写入 favorites.json
+        const ids = notes.value.filter(n => n.pinned).map(n => n.id)
+        if (ids.length > 0) await setData('notes', 'favorites', ids)
+      }
+
       // 首次启动：自动创建使用指南笔记到攻略分类
       await ensureGuideNote()
 
@@ -209,7 +221,12 @@ export const useNoteStore = defineStore('note', () => {
   const togglePin = async (id: string): Promise<boolean> => {
     const note = notes.value.find(n => n.id === id)
     if (!note) return false
-    return updateNote(id, { pinned: !note.pinned })
+    const ok = await updateNote(id, { pinned: !note.pinned })
+    if (ok) {
+      const ids = notes.value.filter(n => n.pinned).map(n => n.id)
+      await setData('notes', 'favorites', ids)
+    }
+    return ok
   }
 
   const addCategory = async (data: Omit<NoteCategory, 'id' | 'isCustom'>): Promise<NoteCategory | null> => {

@@ -33,6 +33,11 @@ export interface ExtendedUserSettings {
     reminderPersistDuration: number
     // 桌面端左侧导航栏是否收起
     sidebarCollapsed: boolean
+    // 工具箱折叠状态
+    toolbox: {
+        pluginsCollapsed: boolean
+        toolsCollapsed: boolean
+    }
 }
 
 // 默认设置
@@ -61,7 +66,11 @@ export const defaultSettings: ExtendedUserSettings = {
         }
     },
     reminderPersistDuration: 30,
-    sidebarCollapsed: false
+    sidebarCollapsed: false,
+    toolbox: {
+        pluginsCollapsed: false,
+        toolsCollapsed: false
+    }
 }
 
 export const useSettingsStore = defineStore('settings', () => {

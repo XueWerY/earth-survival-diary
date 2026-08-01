@@ -17,7 +17,13 @@
     <div v-else class="toolbox-content">
       <el-scrollbar>
         <div class="section" v-if="tools.length > 0">
-          <div class="tool-card-grid">
+          <div class="section-title-row">
+            <button class="collapse-btn" @click="toggleToolsCollapse">
+              <el-icon><component :is="toolsCollapsed ? ArrowDown : ArrowUp" /></el-icon>
+            </button>
+            <h3 class="section-title">小工具</h3>
+          </div>
+          <div v-show="!toolsCollapsed" class="tool-card-grid">
             <div
               v-for="tool in tools"
               :key="tool.id"
@@ -40,8 +46,13 @@
         </div>
 
         <div class="section" v-if="plugins.length > 0">
-          <h3 class="section-title">已安装插件</h3>
-          <div class="plugin-list">
+          <div class="section-title-row">
+            <button class="collapse-btn" @click="togglePluginsCollapse">
+              <el-icon><component :is="pluginsCollapsed ? ArrowDown : ArrowUp" /></el-icon>
+            </button>
+            <h3 class="section-title">已安装插件</h3>
+          </div>
+          <div v-show="!pluginsCollapsed" class="plugin-list">
             <div v-for="plugin in plugins" :key="plugin.manifest.id" class="plugin-card">
               <div class="plugin-info">
                 <span class="plugin-name">{{ plugin.manifest.name }}</span>
@@ -62,24 +73,47 @@
 
 <script setup lang="ts">
 import { ref, shallowRef, onMounted, defineAsyncComponent } from 'vue'
-import { ArrowLeft } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { logger } from '../../lib/logger'
 import { getAllTools, getPlugins, type ToolInfo } from '../../lib/pluginLoader'
+import { useSettingsStore } from '../../stores/settingsStore'
 
+const settingsStore = useSettingsStore()
 const tools = ref<ToolInfo[]>([])
 const plugins = ref<ReturnType<typeof getPlugins>>([])
 const activeTool = shallowRef<{ name: string; component: any } | null>(null)
+const toolsCollapsed = ref(false)
+const pluginsCollapsed = ref(false)
 
-onMounted(() => {
+onMounted(async () => {
   logger.info('[工具箱] 页面挂载')
   tools.value = getAllTools()
   plugins.value = getPlugins()
   logger.info('[工具箱] 已加载工具', { toolCount: tools.value.length, pluginCount: plugins.value.length })
+
+  if (settingsStore.settings.toolbox) {
+    toolsCollapsed.value = !!settingsStore.settings.toolbox.toolsCollapsed
+    pluginsCollapsed.value = !!settingsStore.settings.toolbox.pluginsCollapsed
+  }
 })
 
 function getPluginName(pluginId: string): string {
   const plugin = plugins.value.find(p => p.manifest.id === pluginId)
   return plugin ? plugin.manifest.name : pluginId
+}
+
+async function toggleToolsCollapse() {
+  toolsCollapsed.value = !toolsCollapsed.value
+  settingsStore.updateSettings({
+    toolbox: { toolsCollapsed: toolsCollapsed.value, pluginsCollapsed: pluginsCollapsed.value }
+  })
+}
+
+async function togglePluginsCollapse() {
+  pluginsCollapsed.value = !pluginsCollapsed.value
+  settingsStore.updateSettings({
+    toolbox: { toolsCollapsed: toolsCollapsed.value, pluginsCollapsed: pluginsCollapsed.value }
+  })
 }
 
 async function openTool(tool: ToolInfo) {
@@ -115,27 +149,48 @@ function closeTool() {
 }
 
 .section {
-  width: 80%;
+  width: 100%;
+  padding: 0 16px;
   margin: 0 auto 32px;
+}
+
+.section-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px 0;
 }
 
 .section-title {
   color: var(--chalk-white);
   font-size: 16px;
   font-weight: 600;
-  margin: 0 0 16px 0;
+  margin: 0;
+}
+
+.collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--chalk-white-60);
+  cursor: pointer;
+  transition: color 0.15s;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.collapse-btn:hover {
+  color: var(--chalk-white);
 }
 
 .tool-card-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-}
-
-@media (max-width: 768px) {
-  .tool-card-grid {
-    grid-template-columns: 1fr;
-  }
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
 }
 
 .tool-card {
@@ -203,14 +258,8 @@ function closeTool() {
 
 .plugin-list {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-@media (max-width: 768px) {
-  .plugin-list {
-    grid-template-columns: 1fr;
-  }
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
 }
 
 .plugin-card {
@@ -272,7 +321,8 @@ function closeTool() {
 }
 
 .tool-page-container {
-  width: 80%;
+  width: 100%;
+  padding: 0 16px;
   margin: 0 auto;
   height: 100%;
   display: flex;
@@ -293,7 +343,7 @@ function closeTool() {
   gap: 4px;
   padding: 6px 14px;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 20px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.08);
   color: var(--chalk-white);
   font-size: 13px;

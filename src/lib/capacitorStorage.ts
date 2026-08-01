@@ -131,7 +131,6 @@ export function capSignUp(email: string, password: string, nickname?: string) {
   })
 
   const token = generateToken(userId)
-  setUserData(userId, 'session', 'session', { token, createdAt: new Date().toISOString() })
 
   logger.info('[CapStorage] 用户注册成功', { email })
 
@@ -150,7 +149,6 @@ export function capSignIn(email: string, password: string) {
     throw new Error('密码错误')
   }
   const token = generateToken(userEntry.id)
-  setUserData(userEntry.id, 'session', 'session', { token, createdAt: new Date().toISOString() })
 
   logger.info('[CapStorage] 用户登录成功', { email })
 
@@ -160,13 +158,8 @@ export function capSignIn(email: string, password: string) {
   }
 }
 
-export function capSignOut(token: string | null) {
-  if (token) {
-    const userId = verifyToken(token)
-    if (userId) {
-      deleteUserData(userId, 'session', 'session')
-    }
-  }
+export function capSignOut(_token: string | null) {
+  // session.json 已移除，无需清理
 }
 
 export function capDeleteAccount(token: string | null) {
@@ -283,6 +276,36 @@ export function capDeleteTask(userId: string, taskId: string) {
   let tasks = getUserData<any[]>(userId, 'footprint', 'footprint', [])
   tasks = tasks.filter((t: any) => t.id !== taskId)
   setUserData(userId, 'footprint', 'footprint', tasks)
+  return { success: true }
+}
+
+// ============ Diaries ============
+
+export function capGetDiaries(userId: string) {
+  return { tasks: getUserData<any[]>(userId, 'footprint', 'diary', []) }
+}
+
+export function capAddDiary(userId: string, data: any) {
+  const diaries = getUserData<any[]>(userId, 'footprint', 'diary', [])
+  const newDiary = { ...data, id: generateId(), created_at: new Date().toISOString(), duration: 0, completed: false }
+  diaries.unshift(newDiary)
+  setUserData(userId, 'footprint', 'diary', diaries)
+  return { task: newDiary }
+}
+
+export function capUpdateDiary(userId: string, diaryId: string, updates: any) {
+  const diaries = getUserData<any[]>(userId, 'footprint', 'diary', [])
+  const idx = diaries.findIndex((d: any) => d.id === diaryId)
+  if (idx === -1) throw new Error('日记不存在')
+  Object.assign(diaries[idx], updates)
+  setUserData(userId, 'footprint', 'diary', diaries)
+  return { task: diaries[idx] }
+}
+
+export function capDeleteDiary(userId: string, diaryId: string) {
+  let diaries = getUserData<any[]>(userId, 'footprint', 'diary', [])
+  diaries = diaries.filter((d: any) => d.id !== diaryId)
+  setUserData(userId, 'footprint', 'diary', diaries)
   return { success: true }
 }
 

@@ -1,16 +1,18 @@
 <template>
   <div class="footprint-container" ref="containerRef" :class="{ 'is-mobile': !isElectron }">
     <div class="page-header">
-      <button class="header-nav-btn" @click="shiftDate(-1)" title="前一天">
-        <el-icon><ArrowLeft /></el-icon>
-      </button>
-      <div class="header-title" @click="openDatePicker" title="点击跳转日期">
-        <div class="header-title-main">{{ selectedDateLabel }}</div>
-        <div class="header-title-sub">{{ lunarDateLabel }}</div>
+      <div class="date-nav-area">
+        <button class="header-nav-btn" @click="shiftDate(-1)" title="前一天">
+          <el-icon><ArrowLeft /></el-icon>
+        </button>
+        <div class="header-title" @click="openDatePicker" title="点击跳转日期">
+          <div class="header-title-main">{{ selectedDateLabel }}</div>
+          <div class="header-title-sub">{{ lunarDateLabel }}</div>
+        </div>
+        <button class="header-nav-btn" @click="shiftDate(1)" title="后一天">
+          <el-icon><ArrowRight /></el-icon>
+        </button>
       </div>
-      <button class="header-nav-btn" @click="shiftDate(1)" title="后一天">
-        <el-icon><ArrowRight /></el-icon>
-      </button>
       <div class="header-actions">
         <button class="header-action-btn add-btn" @click="handleAddTask" title="记录足迹">
           <el-icon><DocumentAdd /></el-icon>
@@ -34,6 +36,57 @@
 
         <template v-else>
             <div class="diary-content">
+              <div id="section-starred" v-if="starredCards.length > 0" class="diary-period">
+                <p class="period-title period-starred">
+                  <span class="collapse-arrow">▼</span> ⭐ 星标
+                </p>
+                <div class="period-items" :style="{ gridTemplateColumns: 'repeat(' + cardColumns + ', 1fr)' }">
+                  <template v-for="card in starredCards" :key="card.id">
+                    <div v-if="card.isDiary || card.category === 'diary'" class="period-item">
+                      <DiaryCard
+                        :record="card"
+                        :editing-name-id="editingNameId"
+                        :editing-name-value="editingNameValue"
+                        :editing-notes-id="editingNotesId"
+                        :editing-notes-value="editingNotesValue"
+                        @update:editing-name-value="editingNameValue = $event"
+                        @update:editing-notes-value="editingNotesValue = $event"
+                        @start-name-edit="startNameEdit"
+                        @save-name-edit="saveNameEdit"
+                        @cancel-name-edit="cancelNameEdit"
+                        @start-notes-edit="startNotesEdit"
+                        @save-notes-edit="saveNotesEdit"
+                        @cancel-notes-edit="cancelNotesEdit"
+                        @delete="openDeleteConfirm"
+                        @star="handleStarRecord"
+                        @edit="handleEditRecord"
+                      />
+                    </div>
+                    <div v-else class="period-item">
+                      <RecordCard
+                        :record="card"
+                        :editing-name-id="editingNameId"
+                        :editing-name-value="editingNameValue"
+                        :editing-notes-id="editingNotesId"
+                        :editing-notes-value="editingNotesValue"
+                        @update:editing-name-value="editingNameValue = $event"
+                        @update:editing-notes-value="editingNotesValue = $event"
+                        @start-name-edit="startNameEdit"
+                        @save-name-edit="saveNameEdit"
+                        @cancel-name-edit="cancelNameEdit"
+                        @start-notes-edit="startNotesEdit"
+                        @save-notes-edit="saveNotesEdit"
+                        @cancel-notes-edit="cancelNotesEdit"
+                        @delete="openDeleteConfirm"
+                        @update:start-time="(id, v) => taskStore.updateTask(id, { startTime: v })"
+                        @update:end-time="(id, v) => taskStore.updateTask(id, { endTime: v })"
+                        @star="handleStarRecord"
+                        @edit="handleEditRecord"
+                      />
+                    </div>
+                  </template>
+                </div>
+              </div>
               <div id="section-morning" v-if="morningRecordCards.length > 0" class="diary-period">
                 <p class="period-title period-morning" @click="morningCollapsed = !morningCollapsed">
                   <span class="collapse-arrow">{{ morningCollapsed ? '▶' : '▼' }}</span> 🌤️ 上午
@@ -56,6 +109,8 @@
                         @save-notes-edit="saveNotesEdit"
                         @cancel-notes-edit="cancelNotesEdit"
                         @delete="openDeleteConfirm"
+                        @star="handleStarRecord"
+                        @edit="handleEditRecord"
                       />
                     </div>
                     <div v-else-if="card.type === 'record' && card.record" class="period-item">
@@ -106,6 +161,8 @@
                         @save-notes-edit="saveNotesEdit"
                         @cancel-notes-edit="cancelNotesEdit"
                         @delete="openDeleteConfirm"
+                        @star="handleStarRecord"
+                        @edit="handleEditRecord"
                       />
                     </div>
                     <div v-else-if="card.type === 'record' && card.record" class="period-item">
@@ -156,6 +213,8 @@
                         @save-notes-edit="saveNotesEdit"
                         @cancel-notes-edit="cancelNotesEdit"
                         @delete="openDeleteConfirm"
+                        @star="handleStarRecord"
+                        @edit="handleEditRecord"
                       />
                     </div>
                     <div v-else-if="card.type === 'record' && card.record" class="period-item">
@@ -453,6 +512,10 @@ const morningRecordCards = computed(() => morningCards.value.filter(c => c.type 
 const afternoonRecordCards = computed(() => afternoonCards.value.filter(c => c.type === 'record'))
 const eveningRecordCards = computed(() => eveningCards.value.filter(c => c.type === 'record'))
 
+const starredCards = computed(() =>
+  filteredTasks.value.filter(t => t.pinned)
+)
+
 const todayTasks = computed(() => {
   return filteredTasks.value
 })
@@ -558,6 +621,12 @@ const generateTaskDescription = (task: Task) => {
   gap: 8px;
   padding: 18px 0 10px;
   flex-shrink: 0;
+}
+
+.date-nav-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .header-nav-btn {
@@ -809,6 +878,10 @@ const generateTaskDescription = (task: Task) => {
 
 .period-title.period-evening {
   color: var(--chalk-violet);
+}
+
+.period-title.period-starred {
+  color: #e6a23c;
 }
 
 .period-items {

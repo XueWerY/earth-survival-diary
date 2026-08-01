@@ -79,27 +79,12 @@
       </div>
 
       <!-- 文件内容查看弹窗 -->
-      <div v-if="previewFile" class="fm-overlay" @click.self="previewFile = null">
-        <div class="fm-preview-dialog">
-          <div class="fm-preview-header">
-            <span class="fm-preview-name">{{ previewFile.name }}</span>
-            <button class="fm-preview-close" @click="previewFile = null">✕</button>
-          </div>
-          <pre class="fm-preview-content">{{ previewContent || '加载中...' }}</pre>
-        </div>
-      </div>
+      <BaseDialog :visible="previewFile !== null" :title="previewFile?.name || ''" :width="680" teleport @update:visible="previewFile = null">
+        <pre class="fm-preview-content">{{ previewContent || '加载中...' }}</pre>
+      </BaseDialog>
 
       <!-- 删除确认弹窗 -->
-      <div v-if="deleteTarget" class="fm-overlay" @click.self="deleteTarget = null">
-        <div class="fm-confirm-dialog">
-          <div class="fm-confirm-title">确认删除</div>
-          <div class="fm-confirm-msg">{{ deleteTarget.isDirectory ? '确定要删除目录 ' : '确定要删除文件 ' }}<strong>{{ deleteTarget.name }}</strong> 吗？{{ deleteTarget.isDirectory ? '目录内的所有内容将被删除。' : '' }}</div>
-          <div class="fm-confirm-actions">
-            <button class="fm-btn-cancel" @click="deleteTarget = null">取消</button>
-            <button class="fm-btn-confirm" @click="doDelete">确认删除</button>
-          </div>
-        </div>
-      </div>
+      <ConfirmDialog v-model="showDeleteConfirm" title="确认删除" :message="deleteMessage" @confirm="handleDeleteConfirm" @cancel="deleteTarget = null" />
     </template>
     </template>
 
@@ -110,7 +95,7 @@
         <div class="module-tree">
           <div class="select-all-row">
             <el-checkbox v-model="exportSelectAll" @change="onExportSelectAll">全选</el-checkbox>
-            <el-button v-if="!lanServerInfo" type="primary" size="default" round @click="handleExportViaLan" :loading="exportLoading" :disabled="exportSelected.length === 0">
+            <el-button v-if="!lanServerInfo" type="primary" size="default" @click="handleExportViaLan" :loading="exportLoading" :disabled="exportSelected.length === 0">
               <span style="margin-right:4px">📤</span>通过局域网发送
             </el-button>
           </div>
@@ -130,12 +115,14 @@
         <!-- 局域网传输就绪弹窗 -->
         <div v-if="lanServerInfo" class="fm-overlay" @click.self="handleStopLanServer">
           <div class="lan-dialog">
+            <div class="lan-dialog-header">局域网传输</div>
+            <hr class="lan-dialog-separator" />
             <div class="lan-dialog-icon">📡</div>
             <div class="lan-dialog-title">局域网传输已就绪</div>
             <p class="lan-dialog-desc">请在另一台设备的「数据导入」中输入以下地址：</p>
             <div class="lan-address-box">
               <span class="lan-address-text">{{ lanServerInfo.ip }}:{{ lanServerInfo.port }}</span>
-              <el-button type="primary" size="small" round @click="copyLanAddress">📋 复制</el-button>
+              <el-button type="primary" size="small" class="lan-copy-btn" @click="copyLanAddress">📋 复制</el-button>
             </div>
             <div class="lan-qr-section">
               <div class="lan-qr-divider"><span>或</span></div>
@@ -143,7 +130,8 @@
               <img v-if="qrCodeDataUrl" :src="qrCodeDataUrl" alt="二维码" class="lan-qr-image" />
             </div>
             <p class="lan-status-hint">数据传输中请勿关闭此页面</p>
-            <el-button round @click="handleStopLanServer">⏹️ 停止传输</el-button>
+            <hr class="lan-dialog-separator" />
+            <el-button class="lan-stop-btn" @click="handleStopLanServer">⏹️ 停止传输</el-button>
           </div>
         </div>
       </div>
@@ -157,11 +145,11 @@
         <div v-if="!importedData" class="lan-connect-area">
           <div class="lan-connect-row">
             <input v-model="lanTargetAddress" type="text" class="lan-ip-input" placeholder="发送方地址，例如：192.168.1.100:5789" />
-            <el-button type="primary" round @click="handleConnectLan" :loading="importConnecting">🔗 连接</el-button>
+            <el-button type="primary" @click="handleConnectLan" :loading="importConnecting">🔗 连接</el-button>
           </div>
           <div class="lan-or-divider"><span>或</span></div>
           <div class="lan-scan-btn-row">
-            <el-button title="扫描二维码" round @click="openQRScanner">📷 扫码</el-button>
+            <el-button title="扫描二维码" @click="openQRScanner">📷 扫码</el-button>
           </div>
           <div v-if="importErrorMsg" class="lan-error-msg">{{ importErrorMsg }}</div>
         </div>
@@ -198,14 +186,15 @@
         <div class="qr-scanner-dialog">
           <div class="qr-scanner-header">
             <span class="qr-scanner-title">扫描二维码</span>
-            <button class="fm-preview-close" @click="closeQRScanner">✕</button>
           </div>
+          <hr class="lan-dialog-separator" />
           <div class="qr-scanner-container">
             <video ref="scannerVideo" autoplay playsinline class="qr-scanner-video"></video>
             <canvas ref="scannerCanvas" class="qr-scanner-canvas"></canvas>
           </div>
           <p class="qr-scanner-hint">将二维码对准摄像头</p>
-          <el-button round @click="closeQRScanner">取消</el-button>
+          <hr class="lan-dialog-separator" />
+          <el-button class="lan-stop-btn" @click="closeQRScanner">取消</el-button>
         </div>
       </div>
     </template>
@@ -235,6 +224,8 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem'
 import { CapacitorHttp } from '@capacitor/core'
 import HttpServer from './capacitor-http-server'
+import BaseDialog from '../../../../components/common/BaseDialog.vue'
+import ConfirmDialog from '../../../../components/common/overlay/ConfirmDialog.vue'
 import { logger } from '../../../../lib/logger'
 import { useSettingsStore } from '../../../../stores/settingsStore'
 import * as api from '../../../../lib/api'
@@ -259,50 +250,65 @@ const MODULE_DEFS: ModuleGroupDef[] = [
     key: 'footprint',
     label: '足迹',
     children: [
-      { key: 'footprint', label: '足迹记录', dataKeys: ['footprint/footprint'] }
+      { key: 'footprint_records', label: '记录', dataKeys: ['footprint/footprint'] },
+      { key: 'footprint_diaries', label: '日记', dataKeys: ['footprint/diary'] }
     ]
   },
   {
     key: 'focus',
     label: '专注',
     children: [
-      { key: 'focus', label: '专注数据', dataKeys: ['focus/favorites', 'focus/records'] }
+      { key: 'focus_favorites', label: '常用专注', dataKeys: ['focus/favorites'] },
+      { key: 'focus_records', label: '专注记录', dataKeys: ['focus/records'] }
     ]
   },
   {
     key: 'list',
     label: '清单',
     children: [
-      { key: 'list', label: '清单数据', dataKeys: ['list/lists', 'list/tasks', 'list/folders', 'list/completed', 'list/favorites'] }
+      { key: 'list_lists', label: '清单列表', dataKeys: ['list/lists'] },
+      { key: 'list_tasks', label: '清单任务', dataKeys: ['list/tasks'] },
+      { key: 'list_folders', label: '文件夹', dataKeys: ['list/folders'] },
+      { key: 'list_completed', label: '已完成', dataKeys: ['list/completed'] },
+      { key: 'list_favorites', label: '收藏', dataKeys: ['list/favorites'] }
     ]
   },
   {
     key: 'countdown',
     label: '倒数日',
     children: [
-      { key: 'countdown', label: '倒数日数据', dataKeys: ['countdown/categories', 'countdown/countdowns'] }
+      { key: 'countdown_categories', label: '分类', dataKeys: ['countdown/categories'] },
+      { key: 'countdown_countdowns', label: '倒数日', dataKeys: ['countdown/countdowns'] }
     ]
   },
   {
     key: 'notes',
     label: '笔记',
     children: [
-      { key: 'notes', label: '笔记数据', dataKeys: ['notes/notes', 'notes/categories'] }
+      { key: 'notes_notes', label: '笔记', dataKeys: ['notes/notes'] },
+      { key: 'notes_categories', label: '分类', dataKeys: ['notes/categories'] },
+      { key: 'notes_favorites', label: '置顶', dataKeys: ['notes/favorites'] }
     ]
   },
   {
     key: 'course',
     label: '课程表',
     children: [
-      { key: 'course', label: '课程表数据', dataKeys: ['course/courses'] }
+      { key: 'course_courses', label: '课程', dataKeys: ['course/courses'] }
+    ]
+  },
+  {
+    key: 'settings',
+    label: '设置',
+    children: [
+      { key: 'settings_settings', label: '设置', dataKeys: ['settings/settings'] }
     ]
   },
   {
     key: 'profile',
     label: '个人资料',
     children: [
-      { key: 'profile', label: '个人资料', dataKeys: ['profile/profile'] },
-      { key: 'settings', label: '设置', dataKeys: ['settings/settings'] }
+      { key: 'profile_profile', label: '个人信息', dataKeys: ['profile/profile'] }
     ]
   }
 ]
@@ -329,6 +335,7 @@ const breadcrumbs = ref<Breadcrumb[]>([])
 const previewFile = ref<FsEntry | null>(null)
 const previewContent = ref('')
 const deleteTarget = ref<FsEntry | null>(null)
+const showDeleteConfirm = ref(false)
 
 // Electron 端的根目录路径
 const electronRoots = ref<{ data: string; logs: string }>({ data: '', logs: '' })
@@ -374,6 +381,14 @@ const qrCodeDataUrl = ref('')
 const showQRScanner = ref(false)
 
 // ====== 导出/导入目录树 ======
+const deleteMessage = computed(() => {
+  const t = deleteTarget.value
+  if (!t) return ''
+  const prefix = t.isDirectory ? '确定要删除目录 ' : '确定要删除文件 '
+  const suffix = t.isDirectory ? ' 吗？目录内的所有内容将被删除。' : ' 吗？'
+  return prefix + t.name + suffix
+})
+
 const exportGroups = computed(() => MODULE_DEFS)
 const importGroups = computed(() => MODULE_DEFS)
 
@@ -815,12 +830,16 @@ function clearLogFilter() {
 
 function confirmDelete(entry: FsEntry) {
   deleteTarget.value = entry
+  showDeleteConfirm.value = true
 }
 
-async function doDelete() {
+function handleDeleteConfirm() {
   const target = deleteTarget.value
-  if (!target) return
   deleteTarget.value = null
+  if (target) doDelete(target)
+}
+
+async function doDelete(target: FsEntry) {
   try {
     if (isElectron) {
       const electronAPI = (window as any).electronAPI
@@ -1420,136 +1439,14 @@ onUnmounted(() => {
   justify-content: center;
 }
 
-/* Preview Dialog */
-.fm-preview-dialog {
-  background: #1a1a2e;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  width: 80%;
-  max-width: 640px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.fm-preview-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.fm-preview-name {
-  color: var(--chalk-white);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.fm-preview-close {
-  background: transparent;
-  border: none;
-  color: var(--chalk-dim);
-  font-size: 18px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-
-.fm-preview-close:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-
 .fm-preview-content {
-  padding: 16px 18px;
   white-space: pre-wrap;
   word-break: break-all;
-  overflow-y: auto;
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 12px;
   line-height: 1.6;
   color: #ccc;
-  max-height: 60vh;
   margin: 0;
-}
-
-.fm-preview-content::-webkit-scrollbar {
-  width: 6px;
-}
-
-.fm-preview-content::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.fm-preview-content::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
-}
-
-/* Confirm Dialog */
-.fm-confirm-dialog {
-  background: #1a1a2e;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  width: 360px;
-  padding: 24px;
-}
-
-.fm-confirm-title {
-  color: var(--chalk-white);
-  font-size: 16px;
-  font-weight: 600;
-  text-align: center;
-  margin-bottom: 12px;
-}
-
-.fm-confirm-msg {
-  color: var(--chalk-white-70);
-  font-size: 13px;
-  text-align: center;
-  margin-bottom: 20px;
-  line-height: 1.5;
-}
-
-.fm-confirm-msg strong {
-  color: var(--chalk-white);
-}
-
-.fm-confirm-actions {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-}
-
-.fm-btn-cancel,
-.fm-btn-confirm {
-  padding: 8px 20px;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-  font-size: 13px;
-  transition: all 0.2s;
-}
-
-.fm-btn-cancel {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.fm-btn-cancel:hover {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.fm-btn-confirm {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.4);
-}
-
-.fm-btn-confirm:hover {
-  background: rgba(239, 68, 68, 0.3);
 }
 
 /* ====== 日志查看器样式 ====== */
@@ -1872,6 +1769,20 @@ onUnmounted(() => {
   text-align: center;
 }
 
+.lan-dialog-header {
+  color: var(--chalk-white);
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 12px;
+  text-align: left;
+}
+
+.lan-dialog-separator {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  margin: 16px 0;
+}
+
 .lan-dialog-icon {
   font-size: 48px;
   margin-bottom: 12px;
@@ -1892,9 +1803,10 @@ onUnmounted(() => {
 
 .lan-address-box {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(102, 126, 234, 0.3);
   border-radius: 8px;
@@ -1902,11 +1814,22 @@ onUnmounted(() => {
   margin-bottom: 12px;
 }
 
+.lan-copy-btn {
+  flex-shrink: 0;
+  border-radius: 6px;
+}
+
+.lan-stop-btn {
+  border-radius: 6px;
+  width: 100%;
+}
+
 .lan-address-text {
   color: var(--chalk-primary);
   font-size: 18px;
   font-weight: 600;
   font-family: 'Consolas', 'Monaco', monospace;
+  word-break: break-all;
 }
 
 .lan-status-hint {
@@ -1969,7 +1892,7 @@ onUnmounted(() => {
 .qr-scanner-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   margin-bottom: 16px;
 }
 
@@ -2130,14 +2053,12 @@ onUnmounted(() => {
 /* ====== 隐藏所有滚动条 ====== */
 .fm-body::-webkit-scrollbar,
 .tool-container::-webkit-scrollbar,
-.fm-preview-content::-webkit-scrollbar,
 .log-container::-webkit-scrollbar {
   display: none;
 }
 
 .fm-body,
 .tool-container,
-.fm-preview-content,
 .log-container {
   scrollbar-width: none;
 }

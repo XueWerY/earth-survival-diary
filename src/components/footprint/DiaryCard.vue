@@ -1,5 +1,5 @@
 <template>
-  <div class="task-card">
+  <div class="task-card diary-card">
     <div class="task-card-row">
       <template v-if="isEditingName">
         <textarea
@@ -13,7 +13,15 @@
       </template>
       <span v-else class="task-card-name" @dblclick="emit('start-name-edit', record)">{{ record.name }}</span>
       <div class="task-card-actions">
-        <el-button :icon="Delete" circle size="small" class="task-card-btn" @click.stop="emit('delete', record.id)" />
+        <button class="card-btn card-btn-star" :class="{ starred: record.pinned }" @click.stop="emit('star', record)" title="星标">
+          <el-icon><Star v-if="!record.pinned" /><StarFilled v-else /></el-icon>
+        </button>
+        <button class="card-btn card-btn-edit" @click.stop="emit('edit', record)" title="编辑">
+          <el-icon><Edit /></el-icon>
+        </button>
+        <button class="card-btn card-btn-delete" @click.stop="emit('delete', record.id)" title="删除">
+          <el-icon><Delete /></el-icon>
+        </button>
       </div>
     </div>
     <span class="task-card-diary-time">创建于 {{ formatDiaryTime(record.createdAt) }}</span>
@@ -38,7 +46,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Delete } from '@element-plus/icons-vue'
+import { Star, StarFilled, Edit, Delete } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import type { Task } from '../../stores/taskStore'
 
@@ -60,6 +68,8 @@ const emit = defineEmits<{
   'save-notes-edit': [record: Task]
   'cancel-notes-edit': []
   'delete': [id: string]
+  'star': [record: Task]
+  'edit': [record: Task]
 }>()
 
 const isEditingName = computed(() => props.editingNameId === props.record.id)
@@ -107,34 +117,64 @@ const formatDiaryTime = (createdAt?: string) => {
 .task-card-actions {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 4px;
   flex-shrink: 0;
 }
 
-.task-card-btn {
-  width: 26px;
-  height: 26px;
-  min-width: 26px;
-  min-height: 26px;
+.card-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  background: none !important;
-  border: none !important;
-  color: var(--chalk-red) !important;
-  box-shadow: none !important;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 6px;
   font-size: 14px;
+  transition: all 0.15s;
+  color: var(--chalk-white-50);
 }
 
-.task-card-btn:hover {
-  color: var(--chalk-red) !important;
-  background: transparent !important;
+.card-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--chalk-white);
 }
 
-.task-card-btn:focus,
-.task-card-btn:focus-visible,
-.task-card-btn:active {
-  outline: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
+.card-btn-star {
+  color: rgba(251, 191, 36, 0.5);
+}
+
+.card-btn-star:hover {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.card-btn-star.starred {
+  color: #fbbf24;
+}
+
+.card-btn-star.starred:hover {
+  background: rgba(251, 191, 36, 0.15);
+}
+
+.card-btn-edit {
+  color: rgba(102, 126, 234, 0.5);
+}
+
+.card-btn-edit:hover {
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.12);
+}
+
+.card-btn-delete {
+  color: rgba(239, 68, 68, 0.5);
+}
+
+.card-btn-delete:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
 }
 
 .task-card-diary-time {

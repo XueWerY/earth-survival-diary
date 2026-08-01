@@ -1,7 +1,7 @@
 {
   "name": "earth-survival-diary",
   "private": true,
-  "version": "2026.7.31-30",
+  "version": "2026.8.2-2",
   "author": "XueWerY <3073820063@qq.com>",
   "type": "module",
   "main": "electron/main.cjs",

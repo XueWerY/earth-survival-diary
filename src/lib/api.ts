@@ -135,6 +135,19 @@ async function capacitorRequest<T>(endpoint: string, options: RequestInit = {}):
         if (options.method === 'DELETE') return await fs.fsDeleteTask(userId, taskMatch[1]) as unknown as T
     }
 
+    // Diaries
+    if (endpoint === '/diaries' && !options.method) {
+        return await fs.fsGetDiaries(userId) as unknown as T
+    }
+    if (endpoint === '/diaries' && options.method === 'POST') {
+        return await fs.fsAddDiary(userId, body) as unknown as T
+    }
+    const diaryMatch = endpoint.match(/^\/diaries\/([^/]+)$/)
+    if (diaryMatch) {
+        if (options.method === 'PUT') return await fs.fsUpdateDiary(userId, diaryMatch[1], body) as unknown as T
+        if (options.method === 'DELETE') return await fs.fsDeleteDiary(userId, diaryMatch[1]) as unknown as T
+    }
+
     // Lists
     if (endpoint === '/list-lists' && !options.method) {
         return await fs.fsGetLists(userId) as unknown as T
@@ -366,6 +379,30 @@ export async function updateTask(id: string, data: Partial<TaskFormData & { comp
 
 export async function deleteTask(id: string): Promise<{ success: boolean }> {
     return request(`/tasks/${id}`, { method: 'DELETE' })
+}
+
+// ============ 日记 API ============
+
+export async function getDiaries(): Promise<{ tasks: Task[] }> {
+    return request('/diaries')
+}
+
+export async function addDiary(data: TaskFormData): Promise<{ task: Task }> {
+    return request('/diaries', {
+        method: 'POST',
+        body: JSON.stringify(data)
+    })
+}
+
+export async function updateDiary(id: string, data: Partial<TaskFormData & { completed?: boolean; pinned?: boolean }>): Promise<{ task: Task }> {
+    return request(`/diaries/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+    })
+}
+
+export async function deleteDiary(id: string): Promise<{ success: boolean }> {
+    return request(`/diaries/${id}`, { method: 'DELETE' })
 }
 
 // ============ 清单 API ============

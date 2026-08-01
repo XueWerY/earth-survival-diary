@@ -5,7 +5,7 @@
       <el-scrollbar>
 
         <!-- 计时器风格选择 -->
-        <div v-if="timerState === 'idle'" class="mode-row">
+        <div v-if="timerState === 'idle'" class="mode-row focus-style-row">
           <span class="mode-label">计时器风格</span>
           <div class="type-toggle style-2-seg" :class="styleToggleClass">
             <div class="toggle-slider" />
@@ -54,7 +54,7 @@
         <!-- 非计时状态 -->
         <div v-if="timerState === 'idle'" class="idle-view">
           <!-- 模式切换 -->
-          <div class="mode-row">
+          <div class="mode-row focus-mode-row">
             <span class="mode-label">模式</span>
             <div class="type-toggle" :class="{ 'active-right': focusType === 'stopwatch' }">
               <div class="toggle-slider" />
@@ -1031,6 +1031,7 @@ onUnmounted(async () => {
 }
 
 .focus-start-btn {
+  border-radius: 8px;
   background: linear-gradient(135deg, rgba(167, 139, 250, 0.3) 0%, rgba(192, 132, 252, 0.3) 100%);
   border-color: rgba(167, 139, 250, 0.5);
   color: var(--chalk-white);

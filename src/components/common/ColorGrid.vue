@@ -34,8 +34,8 @@ const colorList = computed(() => props.colors)
 </script>
 
 <style scoped>
-.color-section { display: flex; flex-direction: column; gap: 8px; }
-.color-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+.color-section { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.color-grid { display: grid; grid-template-columns: repeat(10, minmax(28px, 1fr)); gap: 4px; }
 .color-swatch { width: 100%; aspect-ratio: 1; border-radius: 8px; cursor: pointer; border: 2px solid transparent; transition: all 0.15s; box-sizing: border-box; }
 .color-swatch:hover { transform: scale(1.15); }
 .color-swatch.selected { border-color: #fff; transform: scale(1.15); box-shadow: 0 0 8px rgba(255,255,255,0.3); }

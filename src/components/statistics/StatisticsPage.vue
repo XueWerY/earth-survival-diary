@@ -609,12 +609,6 @@ onMounted(async () => {
 }
 
 .stats-content {
-  width: 80%;
-  margin: 0 auto;
-  padding: 24px;
-}
-
-.is-mobile .stats-content {
   width: 100%;
   padding: 24px 16px;
 }

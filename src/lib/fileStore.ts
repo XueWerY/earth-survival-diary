@@ -195,7 +195,6 @@ export async function fsSignUp(email: string, password: string, nickname?: strin
   })
 
   const token = generateToken(userId)
-  await writeJson(userDataPath(userId, 'session', 'session'), { token, createdAt: new Date().toISOString() })
 
   logger.info('[FileStore] 用户注册成功', { email })
 
@@ -214,7 +213,6 @@ export async function fsSignIn(email: string, password: string) {
     throw new Error('密码错误')
   }
   const token = generateToken(userEntry.id)
-  await writeJson(userDataPath(userEntry.id, 'session', 'session'), { token, createdAt: new Date().toISOString() })
 
   logger.info('[FileStore] 用户登录成功', { email })
 
@@ -224,13 +222,8 @@ export async function fsSignIn(email: string, password: string) {
   }
 }
 
-export async function fsSignOut(token: string | null) {
-  if (token) {
-    const userId = verifyToken(token)
-    if (userId) {
-      await deleteFile(userDataPath(userId, 'session', 'session'))
-    }
-  }
+export async function fsSignOut(_token: string | null) {
+  // session.json 已移除，无需清理
 }
 
 export async function fsDeleteAccount(token: string | null) {
@@ -345,6 +338,37 @@ export async function fsDeleteTask(userId: string, taskId: string) {
   let tasks = await readJson<any[]>(userDataPath(userId, 'footprint', 'footprint'), [])
   tasks = tasks.filter((t: any) => t.id !== taskId)
   await writeJson(userDataPath(userId, 'footprint', 'footprint'), tasks)
+  return { success: true }
+}
+
+// ============ Diaries ============
+
+export async function fsGetDiaries(userId: string) {
+  const diaries = await readJson<any[]>(userDataPath(userId, 'footprint', 'diary'), [])
+  return { tasks: diaries }
+}
+
+export async function fsAddDiary(userId: string, data: any) {
+  const diaries = await readJson<any[]>(userDataPath(userId, 'footprint', 'diary'), [])
+  const newDiary = { ...data, id: generateId(), created_at: new Date().toISOString(), duration: 0, completed: false }
+  diaries.unshift(newDiary)
+  await writeJson(userDataPath(userId, 'footprint', 'diary'), diaries)
+  return { task: newDiary }
+}
+
+export async function fsUpdateDiary(userId: string, diaryId: string, updates: any) {
+  const diaries = await readJson<any[]>(userDataPath(userId, 'footprint', 'diary'), [])
+  const idx = diaries.findIndex((d: any) => d.id === diaryId)
+  if (idx === -1) throw new Error('日记不存在')
+  Object.assign(diaries[idx], updates)
+  await writeJson(userDataPath(userId, 'footprint', 'diary'), diaries)
+  return { task: diaries[idx] }
+}
+
+export async function fsDeleteDiary(userId: string, diaryId: string) {
+  let diaries = await readJson<any[]>(userDataPath(userId, 'footprint', 'diary'), [])
+  diaries = diaries.filter((d: any) => d.id !== diaryId)
+  await writeJson(userDataPath(userId, 'footprint', 'diary'), diaries)
   return { success: true }
 }
 

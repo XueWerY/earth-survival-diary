@@ -155,7 +155,6 @@ export interface SystemState {
   focusTimer?: Record<string, any> | null
   currentPage?: string
   statsActiveTab?: string
-  session?: { token: string }
   guideCompleted?: boolean
   version?: string
   defaultsInitialized?: boolean

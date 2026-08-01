@@ -58,6 +58,17 @@ export const useFocusStore = defineStore('focus', () => {
         ])
         if (savedRecords) records.value = savedRecords
         if (savedFavorites) favorites.value = savedFavorites
+        else {
+          // 首次使用，创建默认常用专注
+          const now = new Date().toISOString()
+          favorites.value = [
+            { id: 'default-reading', name: '阅读', notes: '', type: 'pomodoro', targetDuration: 25, createdAt: now },
+            { id: 'default-study', name: '学习', notes: '', type: 'pomodoro', targetDuration: 25, createdAt: now },
+            { id: 'default-work', name: '工作', notes: '', type: 'pomodoro', targetDuration: 25, createdAt: now },
+            { id: 'default-exercise', name: '锻炼', notes: '', type: 'stopwatch', targetDuration: 0, createdAt: now },
+          ] as FavoriteFocus[]
+          await saveFavorites()
+        }
         if (savedTimerState) timerState.value = savedTimerState
         isLoaded.value = true
     }
