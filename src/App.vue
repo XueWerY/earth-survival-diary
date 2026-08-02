@@ -1056,6 +1056,7 @@ const initializeData = async () => {
     try {
       const savedPage = await getSystemStateField('currentPage')
       logger.debug('[App] initializeData savedPage', { savedPage })
+      const DEFAULT_PAGE = 'footprint'
       if (savedPage && VALID_ROUTES.includes(savedPage)) {
         logger.debug('[App] initializeData router.replace 开始', { currentPage: route.name, savedPage })
         await router.replace(`/${savedPage}`)
@@ -1064,6 +1065,12 @@ const initializeData = async () => {
         pageNav.setNavPath([savedPage])
         logger.debug('[App] initializeData router.replace 完成', { currentPage: route.name })
         logger.debug('[App] 恢复路由状态:', { page: savedPage })
+      } else {
+        // state.json 缺失 / currentPage 字段缺失 / 值无效：回退默认首页，并记录 currentPage 以便下次恢复
+        logger.debug('[App] 无有效 currentPage，回退默认首页', { savedPage, default: DEFAULT_PAGE })
+        await router.replace(MODULE_ROUTES[DEFAULT_PAGE])
+        pageNav.setNavPath([DEFAULT_PAGE])
+        await setSystemStateField('currentPage', DEFAULT_PAGE)
       }
     } catch (e) {
       logger.warn('[App] initializeData 路由恢复失败', { error: e })
@@ -1425,6 +1432,8 @@ const preloadCourseData = async () => {
 watch(
   () => route.name,
   async (newName, oldName) => {
+    // 初始化阶段（含默认路由重定向）不持久化 currentPage，避免覆盖已保存的上次浏览页
+    if (!dataInitialized.value) return
     logger.debug('[App] route watch 触发', { oldName, newName, currentModule: pageNav.currentModule.value, navPath: [...pageNav.navPath.value] })
     if (newName && typeof newName === 'string' && VALID_ROUTES.includes(newName)) {
       if (pageNav.currentModule.value !== newName) {
