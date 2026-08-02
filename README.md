@@ -18,6 +18,10 @@
 | 🧰 工具箱 | 实用小工具集合 |
 | 🔌 插件系统 | 可扩展的插件支持 |
 
+## 🔌 插件市场
+
+应用内置社区插件市场，可在工具箱页面查看与安装。插件列表托管在独立仓库：[XueWerY/plugin-marketplace](https://github.com/XueWerY/plugin-marketplace)
+
 ## 🖥️ 支持平台
 
 - **Windows** — Electron 桌面端

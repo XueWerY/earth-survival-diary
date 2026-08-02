@@ -37,6 +37,7 @@ export interface ExtendedUserSettings {
     toolbox: {
         pluginsCollapsed: boolean
         toolsCollapsed: boolean
+        marketCollapsed: boolean
     }
 }
 
@@ -69,7 +70,8 @@ export const defaultSettings: ExtendedUserSettings = {
     sidebarCollapsed: false,
     toolbox: {
         pluginsCollapsed: false,
-        toolsCollapsed: false
+        toolsCollapsed: false,
+        marketCollapsed: false
     }
 }
 

@@ -55,6 +55,11 @@ declare global {
       stopLanServer: () => Promise<boolean>
       fetchLanData: (url: string) => Promise<any>
       setWindowTitle: (title: string) => Promise<boolean>
+
+      // 插件管理
+      getPluginsDirPath: () => Promise<string>
+      createDirectory: (dirPath: string) => Promise<boolean>
+      removeDirectory: (dirPath: string) => Promise<boolean>
     }
 
   }

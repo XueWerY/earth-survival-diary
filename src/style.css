@@ -84,6 +84,36 @@ body {
   --el-border-color-hover: rgba(102, 126, 234, 0.5) !important;
 }
 
+/* el-select 触发器（Element Plus v2.5+ 新结构） */
+.el-select__wrapper {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15) inset !important;
+  border-radius: 6px !important;
+  transition: all 0.2s ease !important;
+}
+
+.el-select__wrapper:hover {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.5) inset !important;
+}
+
+.el-select__wrapper.is-focused {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 0 0 1px #667eea inset !important;
+}
+
+.el-select__wrapper .el-select__placeholder,
+.el-select__wrapper .el-select__selected-item,
+.el-select__wrapper .el-select__input-wrapper input {
+  color: var(--chalk-white-90) !important;
+}
+
+.el-select__wrapper .el-select__caret,
+.el-select__wrapper .el-icon {
+  color: var(--chalk-white-60) !important;
+}
+
+/* 兼容旧版 .el-input__wrapper */
 .el-select .el-input__wrapper {
   background: rgba(255, 255, 255, 0.08) !important;
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
@@ -119,6 +149,36 @@ body {
   background: rgba(30, 30, 50, 0.98) !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
   backdrop-filter: blur(10px);
+}
+
+/* 系统设置 el-select 深色 popper 主题 */
+.system-select-popper,
+.system-select-popper .el-select-dropdown,
+.system-select-popper.el-popper {
+  background: rgba(30, 30, 50, 0.98) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  backdrop-filter: blur(10px);
+}
+
+.system-select-popper .el-select-dropdown__item {
+  color: var(--chalk-white-90) !important;
+  background: transparent !important;
+}
+
+.system-select-popper .el-select-dropdown__item:hover,
+.system-select-popper .el-select-dropdown__item.hover {
+  background: rgba(102, 126, 234, 0.25) !important;
+  color: var(--chalk-white) !important;
+}
+
+.system-select-popper .el-select-dropdown__item.selected {
+  color: var(--chalk-white) !important;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.35) 0%, rgba(118, 75, 162, 0.35) 100%) !important;
+  font-weight: 600;
+}
+
+.system-select-popper .el-select-dropdown__item.is-disabled {
+  color: var(--chalk-white-30) !important;
 }
 
 .el-select-dropdown__item {

@@ -370,9 +370,14 @@ ipcMain.handle('write-file', async (_event, filePath, content) => {
 })
 
 // ====== 文件管理器 IPC ======
+const PLUGINS_DIR = app.isPackaged
+  ? path.join(app.getPath('userData'), 'plugins')
+  : path.join(__dirname, '..', 'src', 'plugins')
+
 const ALLOWED_DIRS = [
   path.join(app.getPath('userData'), 'data'),
-  path.join(app.getPath('userData'), 'logs')
+  path.join(app.getPath('userData'), 'logs'),
+  PLUGINS_DIR
 ]
 
 function isPathAllowed(targetPath) {
@@ -442,6 +447,34 @@ ipcMain.handle('read-text-file-path', async (_event, filePath) => {
     return fs.readFileSync(filePath, 'utf-8')
   } catch (e) {
     errorLog('[FileManager] read-text-file-path failed: ' + e.message)
+    throw e
+  }
+})
+
+ipcMain.handle('get-plugins-dir-path', async () => {
+  return PLUGINS_DIR
+})
+
+ipcMain.handle('create-directory', async (_event, dirPath) => {
+  try {
+    if (!isPathAllowed(dirPath)) throw new Error('Access denied: directory not allowed')
+    fs.mkdirSync(dirPath, { recursive: true })
+    return true
+  } catch (e) {
+    errorLog('[FileManager] create-directory failed: ' + e.message)
+    throw e
+  }
+})
+
+ipcMain.handle('remove-directory', async (_event, dirPath) => {
+  try {
+    if (!isPathAllowed(dirPath)) throw new Error('Access denied: directory not allowed')
+    if (fs.existsSync(dirPath)) {
+      fs.rmSync(dirPath, { recursive: true, force: true })
+    }
+    return true
+  } catch (e) {
+    errorLog('[FileManager] remove-directory failed: ' + e.message)
     throw e
   }
 })

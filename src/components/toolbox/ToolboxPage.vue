@@ -60,10 +60,32 @@
               <div class="plugin-meta">
                 <span class="plugin-author">{{ plugin.manifest.author }}</span>
                 <span class="plugin-version">v{{ plugin.manifest.version }}</span>
-                <span v-if="plugin.tools.length > 0" class="plugin-tools-count">小工具 {{ plugin.tools.length }}个</span>
+                <span v-if="plugin.tools && plugin.tools.length > 0" class="plugin-tools-count">小工具 {{ plugin.tools.length }}个</span>
               </div>
               <div class="plugin-desc">{{ plugin.manifest.description }}</div>
+              <button
+                class="plugin-delete-btn"
+                :disabled="!isElectron || deletingPlugin === plugin.manifest.id"
+                @click="handleDeletePlugin(plugin.manifest.id)"
+              >
+                {{ deletingPlugin === plugin.manifest.id ? '删除中...' : '删除插件' }}
+              </button>
             </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title-row">
+            <button class="collapse-btn" @click="toggleMarketCollapse">
+              <el-icon><component :is="marketCollapsed ? ArrowDown : ArrowUp" /></el-icon>
+            </button>
+            <h3 class="section-title">插件市场</h3>
+            <button class="market-refresh-btn" @click="refreshMarketplace" :disabled="marketLoading">
+              <el-icon :class="{ spinning: marketLoading }"><Refresh /></el-icon>
+            </button>
+          </div>
+          <div v-show="!marketCollapsed">
+            <MarketplacePanel ref="marketplaceRef" />
           </div>
         </div>
       </el-scrollbar>
@@ -72,18 +94,37 @@
 </template>
 
 <script setup lang="ts">
-import { ref, shallowRef, onMounted, defineAsyncComponent } from 'vue'
+import { ref, shallowRef, onMounted, inject, defineAsyncComponent } from 'vue'
+import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { logger } from '../../lib/logger'
 import { getAllTools, getPlugins, type ToolInfo } from '../../lib/pluginLoader'
 import { useSettingsStore } from '../../stores/settingsStore'
+import MarketplacePanel from './MarketplacePanel.vue'
+import { Refresh } from '@element-plus/icons-vue'
 
 const settingsStore = useSettingsStore()
+const isElectron = inject<boolean>('isElectron', false)
 const tools = ref<ToolInfo[]>([])
 const plugins = ref<ReturnType<typeof getPlugins>>([])
 const activeTool = shallowRef<{ name: string; component: any } | null>(null)
 const toolsCollapsed = ref(false)
 const pluginsCollapsed = ref(false)
+const marketCollapsed = ref(false)
+const deletingPlugin = ref<string | null>(null)
+const marketplaceRef = ref<InstanceType<typeof MarketplacePanel> | null>(null)
+const marketLoading = ref(false)
+
+async function refreshMarketplace() {
+  if (marketplaceRef.value) {
+    marketLoading.value = true
+    try {
+      await marketplaceRef.value.refresh()
+    } finally {
+      marketLoading.value = false
+    }
+  }
+}
 
 onMounted(async () => {
   logger.info('[工具箱] 页面挂载')
@@ -94,6 +135,7 @@ onMounted(async () => {
   if (settingsStore.settings.toolbox) {
     toolsCollapsed.value = !!settingsStore.settings.toolbox.toolsCollapsed
     pluginsCollapsed.value = !!settingsStore.settings.toolbox.pluginsCollapsed
+    marketCollapsed.value = !!settingsStore.settings.toolbox.marketCollapsed
   }
 })
 
@@ -105,15 +147,43 @@ function getPluginName(pluginId: string): string {
 async function toggleToolsCollapse() {
   toolsCollapsed.value = !toolsCollapsed.value
   settingsStore.updateSettings({
-    toolbox: { toolsCollapsed: toolsCollapsed.value, pluginsCollapsed: pluginsCollapsed.value }
+    toolbox: { toolsCollapsed: toolsCollapsed.value, pluginsCollapsed: pluginsCollapsed.value, marketCollapsed: marketCollapsed.value }
   })
 }
 
 async function togglePluginsCollapse() {
   pluginsCollapsed.value = !pluginsCollapsed.value
   settingsStore.updateSettings({
-    toolbox: { toolsCollapsed: toolsCollapsed.value, pluginsCollapsed: pluginsCollapsed.value }
+    toolbox: { toolsCollapsed: toolsCollapsed.value, pluginsCollapsed: pluginsCollapsed.value, marketCollapsed: marketCollapsed.value }
   })
+}
+
+async function toggleMarketCollapse() {
+  marketCollapsed.value = !marketCollapsed.value
+  settingsStore.updateSettings({
+    toolbox: { toolsCollapsed: toolsCollapsed.value, pluginsCollapsed: pluginsCollapsed.value, marketCollapsed: marketCollapsed.value }
+  })
+}
+
+async function handleDeletePlugin(pluginId: string) {
+  if (!window.electronAPI) {
+    ElMessage.info('插件删除需要在桌面端进行操作')
+    return
+  }
+  deletingPlugin.value = pluginId
+  try {
+    const pluginsDir = await window.electronAPI.getPluginsDirPath()
+    await window.electronAPI.removeDirectory(`${pluginsDir}/${pluginId}`)
+    ElMessage.success('插件已删除，重启后生效')
+    // 刷新本地插件列表
+    plugins.value = getPlugins()
+    tools.value = getAllTools()
+  } catch (e) {
+    logger.error(`[工具箱] 删除插件失败 ${pluginId}`, { error: e instanceof Error ? e.message : String(e) })
+    ElMessage.error('删除失败')
+  } finally {
+    deletingPlugin.value = null
+  }
 }
 
 async function openTool(tool: ToolInfo) {
@@ -186,6 +256,23 @@ function closeTool() {
 .collapse-btn:hover {
   color: var(--chalk-white);
 }
+
+.market-refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--chalk-white-70);
+  cursor: pointer;
+  transition: color 0.15s;
+  padding: 0;
+}
+
+.market-refresh-btn:hover { color: var(--chalk-white); }
+.market-refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .tool-card-grid {
   display: grid;
@@ -309,6 +396,22 @@ function closeTool() {
   word-break: break-all;
 }
 
+.plugin-delete-btn {
+  margin-top: 10px;
+  padding: 4px 14px;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  align-self: flex-start;
+}
+
+.plugin-delete-btn:hover { background: rgba(239, 68, 68, 0.2); }
+.plugin-delete-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
 .tool-page-overlay {
   position: absolute;
   top: 0;
@@ -382,4 +485,7 @@ function closeTool() {
   background: rgba(255, 255, 255, 0.15);
   border-radius: 3px;
 }
+
+.spinning { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 </style>

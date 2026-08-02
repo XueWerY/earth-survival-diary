@@ -81,7 +81,7 @@
           </div>
         </div>
 
-        <div class="profile-section" id="section-system" v-if="isElectron">
+        <div class="profile-section" id="section-system">
           <h3 class="section-title">系统设置</h3>
           <p class="section-desc">配置程序在系统中的行为。</p>
 
@@ -95,6 +95,7 @@
                   v-model="autoLaunch"
                   inline-prompt
                   size="default"
+                  :disabled="!isElectron"
                   @change="handleAutoLaunchChange"
               />
             </div>
@@ -110,6 +111,8 @@
                   v-model="closeAction"
                   size="default"
                   style="width: 140px;"
+                  :disabled="!isElectron"
+                  popper-class="system-select-popper"
                   @change="handleCloseActionChange"
               >
                 <el-option label="隐藏到托盘" value="minimize" />
@@ -128,6 +131,8 @@
                   v-model="windowResolution"
                   size="default"
                   style="width: 140px;"
+                  :disabled="!isElectron"
+                  popper-class="system-select-popper"
                   @change="handleResolutionChange"
               >
                 <el-option
@@ -723,6 +728,10 @@ watch(() => form.birthday, () => {
 
 .profile-section {
   padding: 24px;
+}
+
+#section-system {
+  max-width: 400px;
 }
 
 .section-title {

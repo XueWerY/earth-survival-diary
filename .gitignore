@@ -51,3 +51,6 @@ __screenshots__/
 
 # WorkBuddy
 .workbuddy/
+
+# plugins
+src/plugins/

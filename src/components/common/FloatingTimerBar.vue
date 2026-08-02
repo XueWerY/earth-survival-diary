@@ -1,6 +1,7 @@
 <template>
   <div
     v-if="visible"
+    ref="barRef"
     class="floating-timer-bar"
     :style="barStyle"
     @mousedown="handleMouseDown"
@@ -45,6 +46,7 @@ const displayTime = computed(() => {
 })
 
 // 拖动逻辑
+const barRef = ref<HTMLElement | null>(null)
 const dragPos = ref({ x: 0, y: 0 })
 const isDragging = ref(false)
 let hasDragged = false
@@ -68,7 +70,13 @@ const handleMouseMove = (e: MouseEvent) => {
   if (!hasDragged && Math.abs(e.movementX) + Math.abs(e.movementY) > 2) hasDragged = true
   if (hasDragged) {
     isDragging.value = true
-    dragPos.value = { x: e.clientX - offsetX, y: e.clientY - offsetY }
+    const bar = barRef.value
+    const bw = bar ? bar.offsetWidth : 200
+    const bh = bar ? bar.offsetHeight : 40
+    dragPos.value = {
+      x: Math.max(0, Math.min(e.clientX - offsetX, window.innerWidth - bw)),
+      y: Math.max(0, Math.min(e.clientY - offsetY, window.innerHeight - bh))
+    }
   }
 }
 

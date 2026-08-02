@@ -55,5 +55,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 局域网传输
   startLanServer: (data) => ipcRenderer.invoke('start-lan-server', data),
   stopLanServer: () => ipcRenderer.invoke('stop-lan-server'),
-  fetchLanData: (url) => ipcRenderer.invoke('fetch-lan-data', url)
+  fetchLanData: (url) => ipcRenderer.invoke('fetch-lan-data', url),
+
+  // 插件管理
+  getPluginsDirPath: () => ipcRenderer.invoke('get-plugins-dir-path'),
+  createDirectory: (dirPath) => ipcRenderer.invoke('create-directory', dirPath),
+  removeDirectory: (dirPath) => ipcRenderer.invoke('remove-directory', dirPath)
 })
