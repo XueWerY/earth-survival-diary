@@ -25,21 +25,56 @@ export interface PluginExport {
   tools?: ToolInfo[]
 }
 
-const pluginModules = import.meta.glob<{ default: PluginExport }>('../plugins/*/index.ts', { eager: true })
-
 const plugins: PluginExport[] = []
 
-for (const [path, module] of Object.entries(pluginModules)) {
-  const plugin = module.default
-  if (!plugin.manifest) {
-    logger.warn(`[插件] ${path} 缺少 manifest，跳过`)
-    continue
+// 开发模式：从独立文件加载 Vite glob（生产构建会 tree-shake 整个 import）
+let _devLoaded: Promise<void> | null = null
+if (import.meta.env.DEV) {
+  _devLoaded = import('./pluginLoader.dev').then(m => {
+    plugins.push(...m.devPlugins)
+  })
+}
+
+// 生产模式：从运行时编译产物加载
+let runtimeLoaded = false
+
+export async function loadRuntimePlugins(): Promise<void> {
+  if (runtimeLoaded) return
+
+  if (import.meta.env.DEV) {
+    await _devLoaded
+    runtimeLoaded = true
+    return
   }
-  plugins.push(plugin)
-  const pageCount = plugin.pages ? Object.keys(plugin.pages).length : 0
-  const storeCount = plugin.stores ? Object.keys(plugin.stores).length : 0
-  const toolCount = plugin.tools ? plugin.tools.length : 0
-  logger.info(`[插件] 已加载: ${plugin.manifest.name} v${plugin.manifest.version} (页面${pageCount} 存储${storeCount} 工具${toolCount})`)
+
+  const electronAPI = (window as any).electronAPI
+  if (!electronAPI?.getRuntimePluginManifests) return
+
+  try {
+    const manifests: PluginManifest[] = await electronAPI.getRuntimePluginManifests()
+    for (const m of manifests) {
+      const plugin: PluginExport = { manifest: m, tools: [] }
+      const toolsMeta = (m as any).tools || {}
+
+      for (const [toolId, meta] of Object.entries(toolsMeta) as [string, any][]) {
+        const modulePath = `/api/plugins/${m.id}/dist/${toolId}.js`
+        plugin.tools!.push({
+          id: `${m.id}/${toolId}`,
+          pluginId: m.id,
+          name: meta.name || toolId,
+          description: meta.description || '',
+          icon: meta.icon || '🔧',
+          component: () => import(/* @vite-ignore */ modulePath),
+        })
+      }
+
+      plugins.push(plugin)
+      logger.info(`[插件] 运行时加载: ${m.name} v${m.version} (工具${plugin.tools!.length})`)
+    }
+    runtimeLoaded = true
+  } catch (e) {
+    logger.warn('[插件] 运行时加载失败', { error: e instanceof Error ? e.message : String(e) })
+  }
 }
 
 export function getPluginPageOverride(componentName: string): (() => Promise<Component>) | null {

@@ -7,6 +7,7 @@ import './style.css'
 import App from './App.vue'
 import router from './router'
 import { logger } from './lib/logger'
+import './lib/pluginBridge'
 
 logger.info('应用启动')
 

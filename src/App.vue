@@ -80,12 +80,13 @@
           <div v-if="capturedError" class="captured-error">
             <div class="captured-error-header">
               <span class="captured-error-title">应用发生错误</span>
-              <div class="captured-error-buttons">
-                <button class="error-btn copy" @click="copyError">复制错误</button>
-                <button class="error-btn close" @click="capturedError = null">关闭</button>
-              </div>
             </div>
             <pre>{{ capturedError }}</pre>
+            <div class="captured-error-separator"></div>
+            <div class="captured-error-buttons">
+              <button class="error-btn copy" @click="copyError">复制错误</button>
+              <button class="error-btn close" @click="capturedError = null">关闭</button>
+            </div>
           </div>
           <router-view v-slot="{ Component }">
             <template v-if="Component">
@@ -1058,6 +1059,9 @@ const initializeData = async () => {
       if (savedPage && VALID_ROUTES.includes(savedPage)) {
         logger.debug('[App] initializeData router.replace 开始', { currentPage: route.name, savedPage })
         await router.replace(`/${savedPage}`)
+        // hash 路由下 router.replace 到相同路由是空操作，不会触发 route watch 来设置 navPath，
+        // 因此这里显式恢复选中模块，保证刷新后导航栏高亮正确（含此前缺漏的 toolbox 等模块）
+        pageNav.setNavPath([savedPage])
         logger.debug('[App] initializeData router.replace 完成', { currentPage: route.name })
         logger.debug('[App] 恢复路由状态:', { page: savedPage })
       }
@@ -1797,9 +1801,7 @@ onUnmounted(() => {
 }
 
 .captured-error-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  text-align: center;
   margin-bottom: 8px;
   padding-bottom: 8px;
   border-bottom: 1px solid rgba(255, 80, 80, 0.3);
@@ -1811,8 +1813,14 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
+.captured-error-separator {
+  border-top: 1px solid rgba(255, 80, 80, 0.3);
+  margin: 8px 0;
+}
+
 .captured-error-buttons {
   display: flex;
+  justify-content: center;
   gap: 6px;
 }
 

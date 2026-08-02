@@ -72,6 +72,10 @@
               </button>
             </div>
           </div>
+          <p v-if="installedRestartNeeded" class="restart-hint">
+            插件已变更，请重启应用使更改生效。
+            <button v-if="isElectron" class="restart-btn" @click="doRestart">立即重启</button>
+          </p>
         </div>
 
         <div class="section">
@@ -98,7 +102,7 @@ import { ref, shallowRef, onMounted, inject, defineAsyncComponent } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { logger } from '../../lib/logger'
-import { getAllTools, getPlugins, type ToolInfo } from '../../lib/pluginLoader'
+import { getAllTools, getPlugins, loadRuntimePlugins, type ToolInfo } from '../../lib/pluginLoader'
 import { useSettingsStore } from '../../stores/settingsStore'
 import MarketplacePanel from './MarketplacePanel.vue'
 import { Refresh } from '@element-plus/icons-vue'
@@ -114,6 +118,7 @@ const marketCollapsed = ref(false)
 const deletingPlugin = ref<string | null>(null)
 const marketplaceRef = ref<InstanceType<typeof MarketplacePanel> | null>(null)
 const marketLoading = ref(false)
+const installedRestartNeeded = ref(false)
 
 async function refreshMarketplace() {
   if (marketplaceRef.value) {
@@ -128,6 +133,7 @@ async function refreshMarketplace() {
 
 onMounted(async () => {
   logger.info('[工具箱] 页面挂载')
+  await loadRuntimePlugins()
   tools.value = getAllTools()
   plugins.value = getPlugins()
   logger.info('[工具箱] 已加载工具', { toolCount: tools.value.length, pluginCount: plugins.value.length })
@@ -137,6 +143,8 @@ onMounted(async () => {
     pluginsCollapsed.value = !!settingsStore.settings.toolbox.pluginsCollapsed
     marketCollapsed.value = !!settingsStore.settings.toolbox.marketCollapsed
   }
+
+  refreshMarketplace()
 })
 
 function getPluginName(pluginId: string): string {
@@ -178,6 +186,7 @@ async function handleDeletePlugin(pluginId: string) {
     // 刷新本地插件列表
     plugins.value = getPlugins()
     tools.value = getAllTools()
+    installedRestartNeeded.value = true
   } catch (e) {
     logger.error(`[工具箱] 删除插件失败 ${pluginId}`, { error: e instanceof Error ? e.message : String(e) })
     ElMessage.error('删除失败')
@@ -194,6 +203,10 @@ async function openTool(tool: ToolInfo) {
 
 function closeTool() {
   activeTool.value = null
+}
+
+function doRestart() {
+  window.electronAPI?.restartApp()
 }
 </script>
 
@@ -411,6 +424,31 @@ function closeTool() {
 
 .plugin-delete-btn:hover { background: rgba(239, 68, 68, 0.2); }
 .plugin-delete-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.restart-hint {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: rgba(102, 126, 234, 0.1);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 6px;
+  color: var(--chalk-blue);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.restart-btn {
+  padding: 4px 12px;
+  border: 1px solid #667eea;
+  border-radius: 6px;
+  background: rgba(102, 126, 234, 0.2);
+  color: var(--chalk-blue);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.restart-btn:hover { background: rgba(102, 126, 234, 0.35); }
 
 .tool-page-overlay {
   position: absolute;

@@ -9,7 +9,9 @@ const RELEASE_DIR = path.join(ROOT, 'release')
 function installDeps() {
   const ELECTRON_DIR = path.join(ROOT, 'electron')
   const ELECTRON_DEPS_OK = path.join(ELECTRON_DIR, '.deps-ok')
-  if (fs.existsSync(ELECTRON_DEPS_OK) && fs.existsSync(path.join(ELECTRON_DIR, 'node_modules', 'express'))) { console.log('Electron deps already installed.'); return }
+  const REQUIRED = ['express', '@vue/compiler-sfc', 'esbuild']
+  const depsReady = fs.existsSync(ELECTRON_DEPS_OK) && REQUIRED.every(d => fs.existsSync(path.join(ELECTRON_DIR, 'node_modules', d)))
+  if (depsReady) { console.log('Electron deps already installed.'); return }
   console.log('Installing electron main process dependencies...')
   execSync('npm install --no-package-lock --no-audit --no-fund', { cwd: ELECTRON_DIR, stdio: 'inherit' })
   fs.writeFileSync(ELECTRON_DEPS_OK, '')

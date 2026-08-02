@@ -60,5 +60,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 插件管理
   getPluginsDirPath: () => ipcRenderer.invoke('get-plugins-dir-path'),
   createDirectory: (dirPath) => ipcRenderer.invoke('create-directory', dirPath),
-  removeDirectory: (dirPath) => ipcRenderer.invoke('remove-directory', dirPath)
+  removeDirectory: (dirPath) => ipcRenderer.invoke('remove-directory', dirPath),
+  getRuntimePluginManifests: () => ipcRenderer.invoke('get-runtime-plugin-manifests')
 })

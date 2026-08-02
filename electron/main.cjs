@@ -1,6 +1,13 @@
 const { app, BrowserWindow, Menu, ipcMain, shell, dialog, Tray, screen, clipboard } = require('electron')
 const path = require('path')
 const fs = require('fs')
+// esbuild 二进制打包后位于 app.asar 内（asar 不可执行），主进程 spawn 会 ENOENT。
+// extraResources 已把真实二进制复制到 resources/node_modules/@esbuild/win32-x64/esbuild.exe，
+// 这里在 require('esbuild') 之前用 ESBUILD_BINARY_PATH 指向它（esbuild 模块加载时读取该变量）。
+const esbuildBinaryPath = path.join(process.resourcesPath, 'node_modules', '@esbuild', 'win32-x64', 'esbuild.exe')
+if (fs.existsSync(esbuildBinaryPath)) {
+  process.env.ESBUILD_BINARY_PATH = esbuildBinaryPath
+}
 const { spawn, execSync } = require('child_process')
 let autoUpdater = null
 
@@ -455,6 +462,90 @@ ipcMain.handle('get-plugins-dir-path', async () => {
   return PLUGINS_DIR
 })
 
+// ====== 运行时插件编译 IPC ======
+// 编译标记内容：打包器变更或产物异常时递增，强制已安装插件重新编译
+const COMPILED_TAG = 'esbuild-v3'
+
+async function ensurePluginsCompiled() {
+  const buildScript = path.join(__dirname, 'build-plugin.cjs')
+  if (!fs.existsSync(buildScript)) {
+    debugLog('[Plugins] build-plugin.cjs not found, skipping compilation')
+    return
+  }
+
+  if (!fs.existsSync(PLUGINS_DIR)) {
+    fs.mkdirSync(PLUGINS_DIR, { recursive: true })
+  }
+
+  const entries = fs.readdirSync(PLUGINS_DIR, { withFileTypes: true })
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const pluginDir = path.join(PLUGINS_DIR, entry.name)
+    const pluginJson = path.join(pluginDir, 'plugin.json')
+    const distDir = path.join(pluginDir, 'dist')
+    const distMarker = path.join(distDir, '.compiled')
+
+    if (!fs.existsSync(pluginJson)) continue
+
+    // 检查是否需要重新编译（标记版本不匹配、dist 不存在或 plugin.json 比编译产物新）
+    let needCompile = !fs.existsSync(distMarker) ||
+      fs.readFileSync(distMarker, 'utf-8') !== COMPILED_TAG ||
+      fs.statSync(pluginJson).mtimeMs > fs.statSync(distMarker).mtimeMs
+
+    // 额外检查：编译过的插件，工具 JS 文件是否都存在且非占位（占位 <1KB）
+    if (!needCompile) {
+      try {
+        const manifest = JSON.parse(fs.readFileSync(pluginJson, 'utf-8'))
+        const tools = manifest.tools || {}
+        for (const toolId of Object.keys(tools)) {
+          const toolJs = path.join(distDir, `${toolId}.js`)
+          if (!fs.existsSync(toolJs)) {
+            needCompile = true
+            debugLog(`[Plugins] ${entry.name}: missing ${toolId}.js, recompiling`)
+            break
+          }
+          if (fs.statSync(toolJs).size < 1000) {
+            needCompile = true
+            debugLog(`[Plugins] ${entry.name}: ${toolId}.js 看起来是占位文件，重新编译`)
+            break
+          }
+        }
+      } catch (_) { needCompile = true }
+    }
+
+    if (!needCompile) continue
+
+    debugLog(`[Plugins] Compiling: ${entry.name}`)
+    try {
+      const { compilePlugin } = require(buildScript)
+      await compilePlugin(pluginDir, distDir)
+      // 写入编译标记
+      fs.writeFileSync(distMarker, COMPILED_TAG, 'utf-8')
+    } catch (e) {
+      errorLog(`[Plugins] Compile failed for ${entry.name}: ${e.message}`)
+    }
+  }
+}
+
+ipcMain.handle('get-runtime-plugin-manifests', async () => {
+  const manifests = []
+  if (!fs.existsSync(PLUGINS_DIR)) return manifests
+
+  const entries = fs.readdirSync(PLUGINS_DIR, { withFileTypes: true })
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const pluginJson = path.join(PLUGINS_DIR, entry.name, 'plugin.json')
+    if (!fs.existsSync(pluginJson)) continue
+    try {
+      const manifest = JSON.parse(fs.readFileSync(pluginJson, 'utf-8'))
+      manifests.push(manifest)
+    } catch (e) {
+      errorLog(`[Plugins] Failed to read plugin.json for ${entry.name}: ${e.message}`)
+    }
+  }
+  return manifests
+})
+
 ipcMain.handle('create-directory', async (_event, dirPath) => {
   try {
     if (!isPathAllowed(dirPath)) throw new Error('Access denied: directory not allowed')
@@ -659,7 +750,8 @@ async function startServer() {
         dataDir: path.join(app.getPath('userData'), 'data'),
         distPath: distPath,
         resourcesPath: resourcesPath,
-        nodeModulesPath: nodeModulesPath
+        nodeModulesPath: nodeModulesPath,
+        pluginsDir: PLUGINS_DIR
       })
 
       await new Promise((resolve, reject) => {
@@ -1536,6 +1628,7 @@ app.whenReady().then(async () => {
       }
     }
     const port = await startServer()
+    await ensurePluginsCompiled()
     const url = 'http://127.0.0.1:' + port
     debugLog('[Electron] Loading URL: ' + url)
     createWindow(url)

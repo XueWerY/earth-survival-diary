@@ -8,7 +8,8 @@ function createProdServer(options = {}) {
     port = 5000, 
     dataDir, 
     distPath,
-    resourcesPath 
+    resourcesPath,
+    pluginsDir
   } = options
 
   // Resolve paths
@@ -1001,6 +1002,30 @@ function createProdServer(options = {}) {
       }
     } catch (e) { res.status(500).json({ error: 'Failed to read package.json' }) }
   })
+
+  // ============ Plugin dist files ============
+
+  /** GET /api/plugins/:id/dist/:file => 200 {JS module} - 提供编译后的插件 JS 文件 */
+  if (pluginsDir && fs.existsSync(pluginsDir)) {
+    app.get('/api/plugins/:id/dist/:file', (req, res) => {
+      try {
+        const { id, file } = req.params
+        const filePath = path.join(pluginsDir, id, 'dist', file)
+        // 安全校验：防止路径穿越
+        if (!filePath.startsWith(path.resolve(pluginsDir))) {
+          return res.status(403).json({ error: 'Forbidden' })
+        }
+        if (!fs.existsSync(filePath)) {
+          return res.status(404).json({ error: 'File not found' })
+        }
+        res.setHeader('Content-Type', 'application/javascript')
+        res.sendFile(filePath)
+      } catch (e) {
+        console.error('Serve plugin file error:', e)
+        res.status(500).json({ error: 'Failed to serve plugin file' })
+      }
+    })
+  }
 
   // ============ Static files ============
 

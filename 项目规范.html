@@ -532,6 +532,24 @@ npx cap sync android</code></pre>
       </ul>
     </div>
   </div>
+
+  <h3>插件系统架构</h3>
+  <ul>
+    <li>插件仅支持 Electron 端，以源码形式分发（插件市场从 GitHub 仓库下载源码），<strong>不打包进 exe</strong></li>
+    <li><strong>开发模式</strong>：<code>src/lib/pluginLoader.dev.ts</code> 通过 Vite glob 加载 <code>src/plugins/&lt;插件ID&gt;/</code>，随主应用一起编译</li>
+    <li><strong>生产模式</strong>：插件安装到 <code>userData/plugins/&lt;插件ID&gt;/</code>；应用启动时主进程用 esbuild 将每个工具打包为单文件 ESM（<code>dist/&lt;工具ID&gt;.js</code>），渲染端经 Express <code>/api/plugins/&lt;插件ID&gt;/dist/&lt;工具ID&gt;.js</code> 动态导入，重启后生效</li>
+    <li><strong>运行时桥</strong>：共享依赖（vue / pinia / element-plus / 应用内部模块等）<strong>不打包进插件产物</strong>，由 <code>src/lib/pluginBridge.ts</code> 暴露到 <code>window.__ESD_BRIDGE__</code>，保证插件与主应用共用同一 Vue / Pinia 实例</li>
+    <li><strong>桥接白名单</strong>：插件可引用的模块受白名单约束，在 <code>electron/build-plugin.cjs</code>（<code>BARE_BRIDGE</code> / <code>SRC_BRIDGE</code>）与 <code>src/lib/pluginBridge.ts</code> 两端登记，新增可桥接模块需同步修改两处</li>
+    <li>编译标记 <code>dist/.compiled</code> 内容版本化（main.cjs <code>COMPILED_TAG</code>），打包器变更时递增，强制已安装插件重编译</li>
+    <li>Electron 运行时依赖（<code>electron/package.json</code>）：<code>@vue/compiler-sfc</code>（SFC 编译）、<code>esbuild</code>（打包），经 extraResources 随安装包分发</li>
+  </ul>
+  <pre class="dir"><code>&lt;插件ID&gt;/
+├── plugin.json              # manifest + tools 元数据
+├── index.ts                 # 仅开发模式（Vite glob）使用
+├── tools/&lt;工具ID&gt;/index.vue  # 工具组件（script setup）
+└── dist/                    # 生产模式启动时自动生成的打包产物
+    ├── &lt;工具ID&gt;.js
+    └── .compiled            # 编译标记（内容 = COMPILED_TAG）</code></pre>
 </section>
 
 <!-- 05 UI/UX 规范 -->
