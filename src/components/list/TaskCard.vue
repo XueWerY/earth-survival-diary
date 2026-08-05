@@ -243,7 +243,7 @@ import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
 import ReminderTimePicker from '../common/picker/ReminderTimePicker.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
-import BaseDialog from '../common/BaseDialog.vue'
+import BaseDialog from '../ui/BaseDialog.vue'
 
 const props = withDefaults(defineProps<{
   list: Task

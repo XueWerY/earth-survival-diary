@@ -18,6 +18,7 @@ export interface Task {
   createdAt?: string
   isDiary?: boolean
   pinned?: boolean
+  icon?: string
 }
 
 // 转换数据库任务到前端任务
@@ -34,7 +35,8 @@ const dbToTask = (dbTask: api.Task): Task => ({
   category: dbTask.category || undefined,
   createdAt: dbTask.created_at,
   isDiary: dbTask.category === 'diary',
-  pinned: dbTask.pinned
+  pinned: dbTask.pinned,
+  icon: dbTask.icon || undefined
 })
 
 export const useTaskStore = defineStore('task', () => {
@@ -79,6 +81,7 @@ export const useTaskStore = defineStore('task', () => {
         notes: task.notes,
         content: task.content,
         category: task.category,
+        icon: task.icon,
         pinned: (task as any).pinned
       })
       tasks.value.unshift({ ...dbToTask(dbTask), duration })
@@ -141,6 +144,7 @@ export const useTaskStore = defineStore('task', () => {
         notes: updates.notes,
         content: updates.content,
         category: updates.category,
+        icon: updates.icon,
         completed: updates.completed,
         pinned: updates.pinned
       })

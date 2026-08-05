@@ -30,7 +30,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useListStore, DEFAULT_GROUP_COLORS, type TaskGroup } from '../../stores/listStore'
-import ColorGrid from '../common/ColorGrid.vue'
+import ColorGrid from '../ui/ColorGrid.vue'
 
 const props = defineProps<{
   visible: boolean

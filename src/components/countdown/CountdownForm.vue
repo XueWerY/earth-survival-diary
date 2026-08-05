@@ -81,7 +81,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import dayjs from 'dayjs'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import ReminderTimePicker from '../common/picker/ReminderTimePicker.vue'
-import BaseDialog from '../common/BaseDialog.vue'
+import BaseDialog from '../ui/BaseDialog.vue'
 
 interface Milestone {
   id: string

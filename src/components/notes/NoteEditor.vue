@@ -71,7 +71,7 @@ import { ArrowLeft, ArrowRight, Star, StarFilled } from '@element-plus/icons-vue
 import dayjs from 'dayjs'
 import type { Note, MdOutlineItem } from '../../stores/noteStore'
 import { extractMdOutline } from '../../stores/noteStore'
-import MarkdownEditor from '../common/MarkdownEditor.vue'
+import MarkdownEditor from '../editor/MarkdownEditor.vue'
 
 const props = defineProps<{
   note: Note | null

@@ -2,8 +2,8 @@
   <BaseDialog
     :visible="dialogVisible"
     :title="dialogTitle"
+    :width="500"
     teleport
-    fullscreen
     @update:visible="dialogVisible = $event"
   >
     <el-form :model="form" :rules="rules" ref="formRef" label-position="top">
@@ -11,9 +11,12 @@
         <el-input
             v-model="form.name"
             type="textarea"
-            :rows="2"
+            :autosize="{ minRows: 1, maxRows: 5 }"
             placeholder="给日记起个名字"
         />
+      </el-form-item>
+      <el-form-item label="图标">
+        <IconPicker v-model="form.icon" />
       </el-form-item>
       <el-form-item label="内容" class="content-editor-form-item">
         <MarkdownEditor
@@ -25,7 +28,7 @@
         <el-input
             v-model="form.notes"
             type="textarea"
-            :rows="3"
+            :autosize="{ minRows: 1, maxRows: 5 }"
             placeholder="添加备注"
         />
       </el-form-item>
@@ -54,8 +57,9 @@ import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import dayjs from 'dayjs'
 import { useTaskStore, type Task } from '../../stores/taskStore'
-import MarkdownEditor from '../common/MarkdownEditor.vue'
-import BaseDialog from '../common/BaseDialog.vue'
+import MarkdownEditor from '../editor/MarkdownEditor.vue'
+import IconPicker from '../common/picker/IconPicker.vue'
+import BaseDialog from '../ui/BaseDialog.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -90,7 +94,8 @@ const form = reactive({
   name: '',
   date: dayjs().format('YYYY-MM-DD'),
   notes: '',
-  content: ''
+  content: '',
+  icon: ''
 })
 
 const rules = reactive<FormRules>({
@@ -104,12 +109,14 @@ watch(() => props.visible, (val) => {
     form.date = props.task.date
     form.notes = props.task.notes || ''
     form.content = (props.task as any).content || ''
+    form.icon = props.task.icon || ''
   } else if (val) {
     isEdit.value = false
     form.name = ''
     form.date = props.defaultDate || dayjs().format('YYYY-MM-DD')
     form.notes = ''
     form.content = ''
+    form.icon = ''
   } else {
     isEdit.value = false
   }
@@ -133,6 +140,7 @@ const handleSubmit = async () => {
     endTime: timeStr,
     notes: form.notes,
     content: form.content,
+    icon: form.icon || undefined,
     category: 'diary',
     isDiary: true,
     createdAt: new Date().toISOString(),
@@ -159,12 +167,8 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
-:deep(.dialog-body) { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-
-:deep(.el-form) { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.content-editor-form-item { flex: 1; min-height: 0; }
-.content-editor-form-item :deep(.el-form-item__content) { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.content-editor-form-item :deep(.md-editor) { width: 100%; }
+.content-editor-form-item :deep(.el-form-item__content) { display: block; }
+.content-editor-form-item :deep(.md-editor) { height: 260px; }
 .content-editor-form-item :deep(.md-block) { padding-left: 0; }
 .content-editor-form-item :deep(.md-block-preview) { padding-left: 11px; padding-right: 11px; }
 

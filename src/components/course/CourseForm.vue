@@ -103,7 +103,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { type FormInstance, type FormRules } from 'element-plus'
-import BaseDialog from '../common/BaseDialog.vue'
+import BaseDialog from '../ui/BaseDialog.vue'
 
 interface Course {
   id: string

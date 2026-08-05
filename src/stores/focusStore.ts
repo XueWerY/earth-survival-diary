@@ -23,6 +23,7 @@ export interface FavoriteFocus {
     id: string
     name: string
     notes: string
+    icon?: string
     tags?: string
     type: 'pomodoro' | 'stopwatch'
     targetDuration: number // 目标时长（分钟）
@@ -41,6 +42,25 @@ export interface TimerState {
 }
 
 // 状态
+
+// 系统默认卡片图标兜底（图标取自 IconPicker 图标集）
+const DEFAULT_FOCUS_ICON_POOL = ['📚', '📖', '💼', '🏃', '🎯', '💡', '🌟', '⏰']
+const DEFAULT_FOCUS_ICON_MAP: Record<string, string> = {
+  'default-reading': '📚',
+  'default-study': '📖',
+  'default-work': '💼',
+  'default-exercise': '🏃',
+}
+const ensureSystemFavoriteIcons = (list: FavoriteFocus[]): boolean => {
+  let changed = false
+  for (const f of list) {
+    if (f.id.startsWith('default-') && !f.icon) {
+      f.icon = DEFAULT_FOCUS_ICON_MAP[f.id] || DEFAULT_FOCUS_ICON_POOL[f.id.length % DEFAULT_FOCUS_ICON_POOL.length]
+      changed = true
+    }
+  }
+  return changed
+}
 
 export const useFocusStore = defineStore('focus', () => {
     const records = ref<FocusRecord[]>([])
@@ -62,11 +82,15 @@ export const useFocusStore = defineStore('focus', () => {
           // 首次使用，创建默认常用专注
           const now = new Date().toISOString()
           favorites.value = [
-            { id: 'default-reading', name: '阅读', notes: '', type: 'pomodoro', targetDuration: 25, createdAt: now },
-            { id: 'default-study', name: '学习', notes: '', type: 'pomodoro', targetDuration: 25, createdAt: now },
-            { id: 'default-work', name: '工作', notes: '', type: 'pomodoro', targetDuration: 25, createdAt: now },
-            { id: 'default-exercise', name: '锻炼', notes: '', type: 'stopwatch', targetDuration: 0, createdAt: now },
+            { id: 'default-reading', name: '阅读', notes: '', icon: '📚', type: 'pomodoro', targetDuration: 25, createdAt: now },
+            { id: 'default-study', name: '学习', notes: '', icon: '📖', type: 'pomodoro', targetDuration: 25, createdAt: now },
+            { id: 'default-work', name: '工作', notes: '', icon: '💼', type: 'pomodoro', targetDuration: 25, createdAt: now },
+            { id: 'default-exercise', name: '锻炼', notes: '', icon: '🏃', type: 'stopwatch', targetDuration: 0, createdAt: now },
           ] as FavoriteFocus[]
+          await saveFavorites()
+        }
+        // 兜底：确保系统默认卡片始终带有图标（取自 IconPicker 图标集）
+        if (ensureSystemFavoriteIcons(favorites.value)) {
           await saveFavorites()
         }
         if (savedTimerState) timerState.value = savedTimerState
@@ -131,6 +155,16 @@ export const useFocusStore = defineStore('focus', () => {
         favorites.value.push(newFavorite)
         await saveFavorites()
         return newFavorite
+    }
+
+    // 更新常用专注（内存实时生效，写入防抖 500ms）
+    let favoriteSaveTimer: ReturnType<typeof setTimeout> | null = null
+    const updateFavorite = (id: string, patch: Partial<FavoriteFocus>) => {
+        const favorite = favorites.value.find(f => f.id === id)
+        if (!favorite) return
+        Object.assign(favorite, patch)
+        if (favoriteSaveTimer) clearTimeout(favoriteSaveTimer)
+        favoriteSaveTimer = setTimeout(() => { saveFavorites() }, 500)
     }
 
     // 删除常用专注
@@ -326,6 +360,7 @@ export const useFocusStore = defineStore('focus', () => {
         addRecord,
         deleteRecord,
         addFavorite,
+        updateFavorite,
         deleteFavorite,
         todayFocusCount,
         todayFocusDuration,

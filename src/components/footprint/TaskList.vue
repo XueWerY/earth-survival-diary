@@ -45,43 +45,17 @@
                     <div v-if="card.isDiary || card.category === 'diary'" class="period-item">
                       <DiaryCard
                         :record="card"
-                        :editing-name-id="editingNameId"
-                        :editing-name-value="editingNameValue"
-                        :editing-notes-id="editingNotesId"
-                        :editing-notes-value="editingNotesValue"
-                        @update:editing-name-value="editingNameValue = $event"
-                        @update:editing-notes-value="editingNotesValue = $event"
-                        @start-name-edit="startNameEdit"
-                        @save-name-edit="saveNameEdit"
-                        @cancel-name-edit="cancelNameEdit"
-                        @start-notes-edit="startNotesEdit"
-                        @save-notes-edit="saveNotesEdit"
-                        @cancel-notes-edit="cancelNotesEdit"
                         @delete="openDeleteConfirm"
                         @star="handleStarRecord"
-                        @edit="handleEditRecord"
+                        @edit="handleEditTask"
                       />
                     </div>
                     <div v-else class="period-item">
                       <RecordCard
                         :record="card"
-                        :editing-name-id="editingNameId"
-                        :editing-name-value="editingNameValue"
-                        :editing-notes-id="editingNotesId"
-                        :editing-notes-value="editingNotesValue"
-                        @update:editing-name-value="editingNameValue = $event"
-                        @update:editing-notes-value="editingNotesValue = $event"
-                        @start-name-edit="startNameEdit"
-                        @save-name-edit="saveNameEdit"
-                        @cancel-name-edit="cancelNameEdit"
-                        @start-notes-edit="startNotesEdit"
-                        @save-notes-edit="saveNotesEdit"
-                        @cancel-notes-edit="cancelNotesEdit"
                         @delete="openDeleteConfirm"
-                        @update:start-time="(id, v) => taskStore.updateTask(id, { startTime: v })"
-                        @update:end-time="(id, v) => taskStore.updateTask(id, { endTime: v })"
                         @star="handleStarRecord"
-                        @edit="handleEditRecord"
+                        @edit="handleEditTask"
                       />
                     </div>
                   </template>
@@ -96,43 +70,17 @@
                     <div v-if="card.type === 'record' && card.record && (card.record.isDiary || card.record.category === 'diary')" class="period-item">
                       <DiaryCard
                         :record="card.record"
-                        :editing-name-id="editingNameId"
-                        :editing-name-value="editingNameValue"
-                        :editing-notes-id="editingNotesId"
-                        :editing-notes-value="editingNotesValue"
-                        @update:editing-name-value="editingNameValue = $event"
-                        @update:editing-notes-value="editingNotesValue = $event"
-                        @start-name-edit="startNameEdit"
-                        @save-name-edit="saveNameEdit"
-                        @cancel-name-edit="cancelNameEdit"
-                        @start-notes-edit="startNotesEdit"
-                        @save-notes-edit="saveNotesEdit"
-                        @cancel-notes-edit="cancelNotesEdit"
                         @delete="openDeleteConfirm"
                         @star="handleStarRecord"
-                        @edit="handleEditRecord"
+                        @edit="handleEditTask"
                       />
                     </div>
                     <div v-else-if="card.type === 'record' && card.record" class="period-item">
                       <RecordCard
                         :record="card.record"
-                        :editing-name-id="editingNameId"
-                        :editing-name-value="editingNameValue"
-                        :editing-notes-id="editingNotesId"
-                        :editing-notes-value="editingNotesValue"
-                        @update:editing-name-value="editingNameValue = $event"
-                        @update:editing-notes-value="editingNotesValue = $event"
-                        @start-name-edit="startNameEdit"
-                        @save-name-edit="saveNameEdit"
-                        @cancel-name-edit="cancelNameEdit"
-                        @start-notes-edit="startNotesEdit"
-                        @save-notes-edit="saveNotesEdit"
-                        @cancel-notes-edit="cancelNotesEdit"
                         @delete="openDeleteConfirm"
-                        @update:start-time="(id, v) => taskStore.updateTask(id, { startTime: v })"
-                        @update:end-time="(id, v) => taskStore.updateTask(id, { endTime: v })"
-                        @edit="handleEditRecord"
                         @star="handleStarRecord"
+                        @edit="handleEditTask"
                       />
                     </div>
                   </template>
@@ -148,43 +96,17 @@
                     <div v-if="card.type === 'record' && card.record && (card.record.isDiary || card.record.category === 'diary')" class="period-item">
                       <DiaryCard
                         :record="card.record"
-                        :editing-name-id="editingNameId"
-                        :editing-name-value="editingNameValue"
-                        :editing-notes-id="editingNotesId"
-                        :editing-notes-value="editingNotesValue"
-                        @update:editing-name-value="editingNameValue = $event"
-                        @update:editing-notes-value="editingNotesValue = $event"
-                        @start-name-edit="startNameEdit"
-                        @save-name-edit="saveNameEdit"
-                        @cancel-name-edit="cancelNameEdit"
-                        @start-notes-edit="startNotesEdit"
-                        @save-notes-edit="saveNotesEdit"
-                        @cancel-notes-edit="cancelNotesEdit"
                         @delete="openDeleteConfirm"
                         @star="handleStarRecord"
-                        @edit="handleEditRecord"
+                        @edit="handleEditTask"
                       />
                     </div>
                     <div v-else-if="card.type === 'record' && card.record" class="period-item">
                       <RecordCard
                         :record="card.record"
-                        :editing-name-id="editingNameId"
-                        :editing-name-value="editingNameValue"
-                        :editing-notes-id="editingNotesId"
-                        :editing-notes-value="editingNotesValue"
-                        @update:editing-name-value="editingNameValue = $event"
-                        @update:editing-notes-value="editingNotesValue = $event"
-                        @start-name-edit="startNameEdit"
-                        @save-name-edit="saveNameEdit"
-                        @cancel-name-edit="cancelNameEdit"
-                        @start-notes-edit="startNotesEdit"
-                        @save-notes-edit="saveNotesEdit"
-                        @cancel-notes-edit="cancelNotesEdit"
                         @delete="openDeleteConfirm"
-                        @update:start-time="(id, v) => taskStore.updateTask(id, { startTime: v })"
-                        @update:end-time="(id, v) => taskStore.updateTask(id, { endTime: v })"
-                        @edit="handleEditRecord"
                         @star="handleStarRecord"
+                        @edit="handleEditTask"
                       />
                     </div>
                   </template>
@@ -200,43 +122,17 @@
                     <div v-if="card.type === 'record' && card.record && (card.record.isDiary || card.record.category === 'diary')" class="period-item">
                       <DiaryCard
                         :record="card.record"
-                        :editing-name-id="editingNameId"
-                        :editing-name-value="editingNameValue"
-                        :editing-notes-id="editingNotesId"
-                        :editing-notes-value="editingNotesValue"
-                        @update:editing-name-value="editingNameValue = $event"
-                        @update:editing-notes-value="editingNotesValue = $event"
-                        @start-name-edit="startNameEdit"
-                        @save-name-edit="saveNameEdit"
-                        @cancel-name-edit="cancelNameEdit"
-                        @start-notes-edit="startNotesEdit"
-                        @save-notes-edit="saveNotesEdit"
-                        @cancel-notes-edit="cancelNotesEdit"
                         @delete="openDeleteConfirm"
                         @star="handleStarRecord"
-                        @edit="handleEditRecord"
+                        @edit="handleEditTask"
                       />
                     </div>
                     <div v-else-if="card.type === 'record' && card.record" class="period-item">
                       <RecordCard
                         :record="card.record"
-                        :editing-name-id="editingNameId"
-                        :editing-name-value="editingNameValue"
-                        :editing-notes-id="editingNotesId"
-                        :editing-notes-value="editingNotesValue"
-                        @update:editing-name-value="editingNameValue = $event"
-                        @update:editing-notes-value="editingNotesValue = $event"
-                        @start-name-edit="startNameEdit"
-                        @save-name-edit="saveNameEdit"
-                        @cancel-name-edit="cancelNameEdit"
-                        @start-notes-edit="startNotesEdit"
-                        @save-notes-edit="saveNotesEdit"
-                        @cancel-notes-edit="cancelNotesEdit"
                         @delete="openDeleteConfirm"
-                        @update:start-time="(id, v) => taskStore.updateTask(id, { startTime: v })"
-                        @update:end-time="(id, v) => taskStore.updateTask(id, { endTime: v })"
-                        @edit="handleEditRecord"
                         @star="handleStarRecord"
+                        @edit="handleEditTask"
                       />
                     </div>
                   </template>
@@ -278,7 +174,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, inject, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, inject, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowRight, DocumentAdd, EditPen } from '@element-plus/icons-vue'
 import { Solar } from 'lunar-javascript'
@@ -307,51 +203,6 @@ const isElectron = inject<boolean>('isElectron', false)
 const taskStore = useTaskStore()
 const pageNav = usePageNav()
 
-const editingNameId = ref<string | null>(null)
-const editingNameValue = ref('')
-const editingNotesId = ref<string | null>(null)
-const editingNotesValue = ref('')
-
-const startNameEdit = (record: Task) => {
-  editingNameId.value = record.id
-  editingNameValue.value = record.name
-  nextTick(() => {
-    const el = document.querySelector('.inline-edit-textarea') as HTMLTextAreaElement | null
-    el?.focus()
-  })
-}
-
-const saveNameEdit = async (record: Task) => {
-  const trimmed = editingNameValue.value.trim()
-  await taskStore.updateTask(record.id, { name: trimmed })
-  editingNameId.value = null
-}
-
-const cancelNameEdit = () => {
-  editingNameId.value = null
-}
-
-const startNotesEdit = (record: Task) => {
-  editingNotesId.value = record.id
-  editingNotesValue.value = record.notes || ''
-  nextTick(() => {
-    const el = document.querySelector('.inline-edit-textarea') as HTMLTextAreaElement | null
-    el?.focus()
-  })
-}
-
-const saveNotesEdit = async (record: Task) => {
-  const trimmed = editingNotesValue.value.trim()
-  if (trimmed !== (record.notes || '')) {
-    await taskStore.updateTask(record.id, { notes: trimmed || null })
-  }
-  editingNotesId.value = null
-}
-
-const cancelNotesEdit = () => {
-  editingNotesId.value = null
-}
-
 const handleAddTask = () => {
   editingTask.value = null
   recordFormVisible.value = true
@@ -369,11 +220,6 @@ const handleEditTask = (task: Task) => {
   } else {
     recordFormVisible.value = true
   }
-}
-
-const handleEditRecord = (record: Task) => {
-  editingTask.value = record
-  recordFormVisible.value = true
 }
 
 const handleStarRecord = async (record: Task) => {
@@ -484,16 +330,20 @@ const shiftDate = (delta: number) => {
   selectedDateValue.value = dayjs(selectedDateValue.value).add(delta, 'day').format('YYYY-MM-DD')
 }
 
-// 动态卡片列数
+// 动态卡片列数（足迹页面卡片布局）
 const containerRef = ref<HTMLElement | null>(null)
-const GAP = 16
+const D = 25 // 卡片间距常量 d = 25px
 const cardColumns = ref(1)
 let resizeObserver: ResizeObserver | null = null
 
 const updateCardColumns = () => {
   if (!containerRef.value) return
-  const width = containerRef.value.clientWidth - 2 * GAP
-  cardColumns.value = Math.max(1, Math.floor((width + GAP) / (250 + GAP)))
+  // 可用区域宽度：电脑端容器已自动扣除全局导航栏宽度，安卓端即窗口宽度
+  const availableWidth = containerRef.value.clientWidth
+  if (availableWidth < 1000 + D) cardColumns.value = 1
+  else if (availableWidth < 1500 + 2 * D) cardColumns.value = 2
+  else if (availableWidth < 2000 + 3 * D) cardColumns.value = 3
+  else cardColumns.value = 3
 }
 
 // 折叠状态
@@ -596,7 +446,7 @@ const generateTaskDescription = (task: Task) => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 0 16px;
+  padding: 0 25px;
 }
 
 .footprint-container.is-mobile .footprint-content {
@@ -886,7 +736,7 @@ const generateTaskDescription = (task: Task) => {
 
 .period-items {
   display: grid;
-  gap: 16px;
+  gap: 25px;
   width: 100%;
 }
 

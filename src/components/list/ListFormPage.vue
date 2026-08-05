@@ -13,7 +13,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { EXTENDED_FOLDER_COLORS, type ListPage } from '../../stores/listStore'
-import ColorGrid from '../common/ColorGrid.vue'
+import ColorGrid from '../ui/ColorGrid.vue'
 
 const props = defineProps<{
   list?: ListPage | null

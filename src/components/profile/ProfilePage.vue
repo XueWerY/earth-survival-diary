@@ -285,7 +285,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { usePageNav } from '../../composables/usePageNav'
 import * as api from '../../lib/api'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
-import BaseDialog from '../common/BaseDialog.vue'
+import BaseDialog from '../ui/BaseDialog.vue'
 import { logger } from '../../lib/logger'
 import appVersion from 'virtual:version'
 // @ts-expect-error - Vite raw import

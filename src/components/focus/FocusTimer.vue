@@ -73,6 +73,8 @@
                 :autosize="{ minRows: 1, maxRows: 3 }"
                 :disabled="isGuideActive"
             />
+            <div class="input-label" style="margin-top: 16px">图标</div>
+            <IconPicker v-model="focusIcon" />
             <div v-if="focusType === 'pomodoro'" class="input-label" style="margin-top: 16px">番茄时长（分钟）</div>
             <el-input-number
                 v-if="focusType === 'pomodoro'"
@@ -108,12 +110,17 @@
                   v-for="fav in favorites"
                   :key="fav.id"
                   class="favorite-card"
+                  :class="{ editing: editingFavoriteId === fav.id }"
                   @click="selectFavorite(fav)"
               >
-                <div class="fav-name">{{ fav.name }}</div>
+                <div class="fav-name">
+                  <span class="fav-icon">{{ fav.icon || '📝' }}</span>
+                  {{ fav.name }}
+                </div>
                 <div class="fav-info">
                   <span>{{ fav.type === 'pomodoro' ? `${fav.targetDuration}分钟` : '正计时' }}</span>
                 </div>
+                <div v-if="fav.notes" class="fav-notes">{{ fav.notes }}</div>
                 <el-button
                     type="danger"
                     :icon="Delete"
@@ -214,8 +221,9 @@ import { useTaskStore } from '../../stores/taskStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { usePageNav } from '../../composables/usePageNav'
 import { logger } from '../../lib/logger'
-import BaseDialog from '../common/BaseDialog.vue'
+import BaseDialog from '../ui/BaseDialog.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
+import IconPicker from '../common/picker/IconPicker.vue'
 
 const emit = defineEmits<{
   (e: 'fullscreen-change', fullscreen: boolean): void
@@ -253,7 +261,7 @@ const localPomodoroDuration = ref(settingsStore.settings.focus?.pomodoroDuration
 
 // 保存常用
 const showSaveFavorite = ref(false)
-const lastCompletedFocus = ref<{ name: string; notes: string; type: FocusType; targetDuration: number } | null>(null)
+const lastCompletedFocus = ref<{ name: string; notes: string; type: FocusType; targetDuration: number; icon?: string } | null>(null)
 
 const timerStyle = ref<'ring' | 'plain'>('ring')
 const styleToggleClass = computed(() => {
@@ -268,6 +276,7 @@ const setTimerStyle = async (s: 'ring' | 'plain') => {
 const favorites = computed(() => focusStore.favorites)
 const favoritesGridRef = ref<HTMLDivElement>()
 const favoritesCols = ref(4)
+const focusIcon = ref('🎯')
 const CARD_GAP = 24
 const updateFavoritesCols = () => {
   if (!favoritesGridRef.value) return
@@ -313,15 +322,35 @@ const ringProgress = computed(() => {
   return 1 - sandProgress.value
 })
 
-// 选择常用专注
+// 选择常用专注（再次点击同一卡片退出编辑态）
+const editingFavoriteId = ref<string | null>(null)
+
 const selectFavorite = (fav: FavoriteFocus) => {
+  if (editingFavoriteId.value === fav.id) {
+    editingFavoriteId.value = null
+    return
+  }
   focusName.value = fav.name
   focusNotes.value = fav.notes
+  focusIcon.value = fav.icon || ''
   focusType.value = fav.type
   if (fav.type === 'pomodoro') {
     localPomodoroDuration.value = fav.targetDuration
   }
+  editingFavoriteId.value = fav.id
 }
+
+// 编辑态下输入区改动实时同步到对应卡片
+watch([focusName, focusNotes, focusIcon, focusType, localPomodoroDuration], () => {
+  if (!editingFavoriteId.value) return
+  focusStore.updateFavorite(editingFavoriteId.value, {
+    name: focusName.value,
+    notes: focusNotes.value,
+    icon: focusIcon.value,
+    type: focusType.value,
+    targetDuration: focusType.value === 'pomodoro' ? localPomodoroDuration.value : 0
+  })
+})
 
 // 删除常用专注
 const deleteFavoriteConfirmVisible = ref(false)
@@ -350,6 +379,7 @@ const startFocus = async () => {
 
   logger.info('[专注] 开始专注', { name: focusName.value, type: focusType.value })
 
+  editingFavoriteId.value = null
   timerState.value = 'running'
   startTimestamp.value = Date.now()
   lastUpdateTime.value = Date.now()
@@ -548,7 +578,8 @@ const completeFocus = async () => {
     name: focusName.value,
     notes: focusNotes.value,
     type: focusType.value,
-    targetDuration: localPomodoroDuration.value
+    targetDuration: localPomodoroDuration.value,
+    icon: focusIcon.value || undefined
   }
 
   // 重置状态
@@ -589,7 +620,8 @@ const saveAsFavorite = async () => {
     name: lastCompletedFocus.value.name,
     notes: lastCompletedFocus.value.notes,
     type: lastCompletedFocus.value.type,
-    targetDuration: lastCompletedFocus.value.targetDuration
+    targetDuration: lastCompletedFocus.value.targetDuration,
+    icon: lastCompletedFocus.value.icon
   })
 
   showSaveFavorite.value = false
@@ -1083,6 +1115,12 @@ onUnmounted(async () => {
   box-shadow: 0 4px 16px rgba(167, 139, 250, 0.15);
 }
 
+.favorite-card.editing {
+  background: rgba(167, 139, 250, 0.12);
+  border-color: rgba(167, 139, 250, 0.8);
+  box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.4);
+}
+
 .fav-name {
   font-size: 14px;
   font-weight: 500;
@@ -1093,9 +1131,26 @@ onUnmounted(async () => {
   white-space: nowrap;
 }
 
+.fav-icon {
+  margin-right: 6px;
+}
+
 .fav-info {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.5);
+}
+
+.fav-notes {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.65);
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .fav-delete {

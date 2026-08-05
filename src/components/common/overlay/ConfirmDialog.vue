@@ -24,7 +24,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import BaseDialog from '../BaseDialog.vue'
+import BaseDialog from '../../ui/BaseDialog.vue'
 
 const props = withDefaults(defineProps<{
   modelValue: boolean

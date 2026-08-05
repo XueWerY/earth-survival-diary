@@ -432,9 +432,9 @@ function createProdServer(options = {}) {
   /** POST /api/tasks (auth) body:{name,date,startTime?,endTime?,notes?,content?,category?} => 200 {task} */
   app.post('/api/tasks', authMiddleware, async (req, res) => {
     try {
-      const { name, date, startTime, endTime, notes, content, category } = req.body
+      const { name, date, startTime, endTime, notes, content, category, icon } = req.body
       const tasks = await getUserFootprintTasks(req.userId)
-      const newTask = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), name, date, startTime: startTime || null, endTime: endTime || null, duration: 0, completed: false, notes: notes || null, content: content || null, category: category || null, created_at: new Date().toISOString() }
+      const newTask = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), name, date, startTime: startTime || null, endTime: endTime || null, duration: 0, completed: false, notes: notes || null, content: content || null, category: category || null, icon: icon || null, created_at: new Date().toISOString() }
       tasks.unshift(newTask)
       await setUserFootprintTasks(req.userId, tasks)
       res.json({ task: newTask })
@@ -456,6 +456,7 @@ function createProdServer(options = {}) {
       if (updates.notes !== undefined) task.notes = updates.notes || null
       if (updates.content !== undefined) task.content = updates.content || null
       if (updates.category !== undefined) task.category = updates.category || null
+      if (updates.icon !== undefined) task.icon = updates.icon || null
       if (updates.completed !== undefined) task.completed = updates.completed
       if (updates.pinned !== undefined) task.pinned = updates.pinned
       await setUserFootprintTasks(req.userId, tasks)
@@ -486,9 +487,9 @@ function createProdServer(options = {}) {
   /** POST /api/diaries (auth) body:{...task fields} => 200 {task} */
   app.post('/api/diaries', authMiddleware, async (req, res) => {
     try {
-      const { name, date, startTime, endTime, notes, content, category } = req.body
+      const { name, date, startTime, endTime, notes, content, category, icon } = req.body
       const diaries = await getUserDiaries(req.userId)
-      const newDiary = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), name, date, startTime: startTime || null, endTime: endTime || null, duration: 0, completed: false, notes: notes || null, content: content || null, category: category || null, created_at: new Date().toISOString() }
+      const newDiary = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), name, date, startTime: startTime || null, endTime: endTime || null, duration: 0, completed: false, notes: notes || null, content: content || null, category: category || null, icon: icon || null, created_at: new Date().toISOString() }
       diaries.unshift(newDiary)
       await setUserDiaries(req.userId, diaries)
       res.json({ task: newDiary })
@@ -510,6 +511,7 @@ function createProdServer(options = {}) {
       if (updates.notes !== undefined) diary.notes = updates.notes || null
       if (updates.content !== undefined) diary.content = updates.content || null
       if (updates.category !== undefined) diary.category = updates.category || null
+      if (updates.icon !== undefined) diary.icon = updates.icon || null
       if (updates.completed !== undefined) diary.completed = updates.completed
       if (updates.pinned !== undefined) diary.pinned = updates.pinned
       await setUserDiaries(req.userId, diaries)

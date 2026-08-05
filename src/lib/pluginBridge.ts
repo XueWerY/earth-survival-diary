@@ -23,7 +23,7 @@ import * as storageService from '../services/storageService'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useFocusStore } from '../stores/focusStore'
 import { useListStore } from '../stores/listStore'
-import BaseDialog from '../components/common/BaseDialog.vue'
+import BaseDialog from '../components/ui/BaseDialog.vue'
 import ConfirmDialog from '../components/common/overlay/ConfirmDialog.vue'
 
 ;(window as any).__ESD_BRIDGE__ = {

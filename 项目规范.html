@@ -461,7 +461,10 @@ npx cap sync android</code></pre>
 ├── src/                        # 前端源码
 │   ├── components/             # Vue 组件（按模块组织）
 │   │   ├── auth/               #   认证页面
-│   │   ├── common/             #   通用组件（导航、卡片、弹窗、选择器）
+│   │   ├── common/             #   通用组件（nav、card、overlay、picker 等）
+│   │   ├── ui/                 #   通用 UI 组件（BaseDialog、ColorGrid）
+│   │   ├── editor/             #   编辑器组件（MarkdownEditor）
+│   │   ├── timer/              #   计时相关组件（FloatingTimerBar）
 │   │   ├── countdown/          #   倒数日
 │   │   ├── course/             #   课程表
 │   │   ├── focus/              #   专注计时
@@ -620,15 +623,16 @@ npx cap sync android</code></pre>
     <tr><td><code>ConfirmDialog</code></td><td>确认弹窗，v-model:visible 控制</td></tr>
     <tr><td><code>ColorPickerPanel</code></td><td>颜色选择面板，自带 max-height: 90vh + overflow-y: auto</td></tr>
     <tr><td><code>GuideOverlay</code></td><td>新手引导遮罩层</td></tr>
-    <tr><td><code>FloatingTimerBar</code></td><td>计时中跨页面常驻弹窗，窗口顶部居中显示</td></tr>
+    <tr><td><code>FloatingTimerBar</code>（<code>components/timer/</code>）</td><td>计时中跨页面常驻弹窗，窗口顶部居中显示</td></tr>
   </table>
 
   <h3>选择器组件</h3>
   <div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;">
     <span class="tag">DateScrollPicker</span><span class="tag">InlineLunarDatePicker</span>
     <span class="tag pink">TimePickerPopover</span><span class="tag green">ReminderTimePicker</span>
-    <span class="tag">PeriodCountPicker</span>
+    <span class="tag">PeriodCountPicker</span><span class="tag blue">IconPicker</span>
   </div>
+  <p style="margin-top:0.6rem;color:var(--muted);font-size:0.85rem;">IconPicker：通用 emoji 图标选择器，采用「触发按钮 + Teleport 浮层」模式（与 TimePickerPopover 一致），v-model 绑定单个 emoji 字符；图标集参考 emojiall.com。用于记录足迹、写日记、新建分类、专注页的图标选择。</p>
 </section>
 
 <!-- 07 构建与部署规范 -->

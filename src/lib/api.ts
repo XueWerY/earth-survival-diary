@@ -346,6 +346,7 @@ export interface Task {
     category: string | null
     created_at: string
     pinned?: boolean
+    icon?: string | null
 }
 
 export interface TaskFormData {
@@ -357,6 +358,7 @@ export interface TaskFormData {
     content?: string
     category?: string
     pinned?: boolean
+    icon?: string
 }
 
 export async function getTasks(): Promise<{ tasks: Task[] }> {

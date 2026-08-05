@@ -2,7 +2,7 @@
   <BaseDialog
     :visible="dialogVisible"
     :title="dialogTitle"
-    :width="400"
+    :width="500"
     teleport
     @update:visible="dialogVisible = $event"
   >
@@ -11,21 +11,25 @@
         <el-input
             v-model="form.name"
             type="textarea"
-            :rows="2"
+            :autosize="{ minRows: 1, maxRows: 5 }"
             placeholder="今天做了什么？"
         />
       </el-form-item>
-      <el-form-item label="开始时间">
-        <TimePickerPopover v-model="form.startTime" :offset-minutes="0" placeholder="--:--" />
+      <el-form-item label="时间">
+        <div class="time-range-row">
+          <TimePickerPopover v-model="form.startTime" :offset-minutes="0" placeholder="开始" />
+          <span class="time-range-sep">-</span>
+          <TimePickerPopover v-model="form.endTime" :offset-minutes="60" placeholder="结束" />
+        </div>
       </el-form-item>
-      <el-form-item label="结束时间">
-        <TimePickerPopover v-model="form.endTime" :offset-minutes="60" placeholder="--:--" />
+      <el-form-item label="图标">
+        <IconPicker v-model="form.icon" />
       </el-form-item>
       <el-form-item label="备注" prop="notes">
         <el-input
             v-model="form.notes"
             type="textarea"
-            :rows="3"
+            :autosize="{ minRows: 1, maxRows: 5 }"
             placeholder="添加备注"
         />
       </el-form-item>
@@ -55,7 +59,8 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import dayjs from 'dayjs'
 import { useTaskStore, type Task } from '../../stores/taskStore'
 import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
-import BaseDialog from '../common/BaseDialog.vue'
+import IconPicker from '../common/picker/IconPicker.vue'
+import BaseDialog from '../ui/BaseDialog.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -86,7 +91,8 @@ const form = reactive({
   date: dayjs().format('YYYY-MM-DD'),
   startTime: '',
   endTime: '',
-  notes: ''
+  notes: '',
+  icon: ''
 })
 
 const rules = reactive<FormRules>({
@@ -101,6 +107,7 @@ watch(() => props.visible, (val) => {
     form.startTime = props.task.startTime
     form.endTime = props.task.endTime
     form.notes = props.task.notes || ''
+    form.icon = props.task.icon || ''
   } else if (val) {
     isEdit.value = false
     form.name = ''
@@ -108,6 +115,7 @@ watch(() => props.visible, (val) => {
     form.startTime = ''
     form.endTime = ''
     form.notes = ''
+    form.icon = ''
   } else {
     isEdit.value = false
   }
@@ -137,6 +145,7 @@ const handleSubmit = async () => {
     startTime: form.startTime,
     endTime: form.endTime,
     notes: form.notes,
+    icon: form.icon || undefined,
     category: 'activity',
     isDiary: false,
     createdAt: new Date().toISOString(),
@@ -216,6 +225,26 @@ const handleSubmit = async () => {
 :deep(.el-input__inner::placeholder),
 :deep(.el-textarea__inner::placeholder) { color: var(--chalk-subtle); }
 :deep(.el-autocomplete) { width: 100%; }
+
+.time-range-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.time-range-row :deep(.time-picker-wrapper) {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  width: 100%;
+}
+
+.time-range-sep {
+  color: var(--chalk-white-60);
+  flex-shrink: 0;
+}
+
 :deep(.el-input__count),
 :deep(.el-input__count-inner) { background: transparent !important; color: var(--chalk-subtle) !important; }
 </style>

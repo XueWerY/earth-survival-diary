@@ -453,8 +453,8 @@ import { logger } from '../../lib/logger'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
 import PeriodCountPicker from '../common/picker/PeriodCountPicker.vue'
-import BaseDialog from '../common/BaseDialog.vue'
-import ColorGrid from '../common/ColorGrid.vue'
+import BaseDialog from '../ui/BaseDialog.vue'
+import ColorGrid from '../ui/ColorGrid.vue'
 
 interface Course {
   id: string

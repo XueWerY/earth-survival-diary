@@ -12,16 +12,7 @@
     </div>
     <div class="form-row">
       <span class="field-label">图标</span>
-      <div class="icon-radio-grid">
-        <button
-          v-for="emoji in ICON_OPTIONS"
-          :key="emoji"
-          type="button"
-          class="icon-radio-item"
-          :class="{ selected: form.icon === emoji }"
-          @click="form.icon = emoji"
-        >{{ emoji }}</button>
-      </div>
+      <IconPicker v-model="form.icon" />
     </div>
     <div class="form-row">
       <span class="field-label">颜色</span>
@@ -43,21 +34,23 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
 import { EXTENDED_NOTE_COLORS, type NoteCategory } from '../../stores/noteStore'
-import BaseDialog from '../common/BaseDialog.vue'
-import ColorGrid from '../common/ColorGrid.vue'
+import BaseDialog from '../ui/BaseDialog.vue'
+import ColorGrid from '../ui/ColorGrid.vue'
+import IconPicker from '../common/picker/IconPicker.vue'
 
-const ICON_OPTIONS = [
-  '📝', '🗒️', '📓', '📔', '📕', '📗', '📘', '📙', '💼', '📚', '💡', '✏️',
-  '🖊️', '🖋️', '🖌️', '📐', '📏', '🔨', '🛠️', '⚙️', '🔧', '📌', '📍', '🏷️',
-  '🔖', '🎯', '⭐', '🌟', '✨', '🔥', '💖', '❤️', '🧡', '💛', '💚', '💙',
-  '💜', '🖤', '🤍', '🎉', '🎈', '🎁', '🏆', '🥇', '🎖️', '🔍', '🔬', '🧪',
-  '🧫', '🧬', '💻', '🖥️', '⌨️', '🖱️', '💾', '📱', '📞', '📡', '📺', '📻',
-  '⏰', '⏳', '📅', '📆', '🗓️', '🎲', '♟️', '🧩', '🎨', '🎭', '🎤', '🎧',
-  '🎼', '🎵', '🎶', '🎸', '🎹', '🥁', '🎺', '🚗', '✈️', '🚀', '🚲', '🛴',
-  '⛵', '🚂', '🗺️', '🧭', '🏠', '🏡', '🏢', '🏥', '🏫', '🏬', '🏭', '🌳',
-  '🌲', '🌴', '🌵', '🌷', '🌹', '🌺', '🌸', '🌼', '🌻', '🌿', '🍀', '☘️',
-  '🍁', '🌾', '🍄', '🌍', '🌎', '🌏', '🌕', '☀️', '🌙', '⛅', '☁️', '⚡',
-]
+// 原内联图标列表已迁移至通用组件 src/components/common/picker/IconPicker.vue
+// const ICON_OPTIONS = [
+//   '📝', '🗒️', '📓', '📔', '📕', '📗', '📘', '📙', '💼', '📚', '💡', '✏️',
+//   '🖊️', '🖋️', '🖌️', '📐', '📏', '🔨', '🛠️', '⚙️', '🔧', '📌', '📍', '🏷️',
+//   '🔖', '🎯', '⭐', '🌟', '✨', '🔥', '💖', '❤️', '🧡', '💛', '💚', '💙',
+//   '💜', '🖤', '🤍', '🎉', '🎈', '🎁', '🏆', '🥇', '🎖️', '🔍', '🔬', '🧪',
+//   '🧫', '🧬', '💻', '🖥️', '⌨️', '🖱️', '💾', '📱', '📞', '📡', '📺', '📻',
+//   '⏰', '⏳', '📅', '📆', '🗓️', '🎲', '♟️', '🧩', '🎨', '🎭', '🎤', '🎧',
+//   '🎼', '🎵', '🎶', '🎸', '🎹', '🥁', '🎺', '🚗', '✈️', '🚀', '🚲', '🛴',
+//   '⛵', '🚂', '🗺️', '🧭', '🏠', '🏡', '🏢', '🏥', '🏫', '🏬', '🏭', '🌳',
+//   '🌲', '🌴', '🌵', '🌷', '🌹', '🌺', '🌸', '🌼', '🌻', '🌿', '🍀', '☘️',
+//   '🍁', '🌾', '🍄', '🌍', '🌎', '🌏', '🌕', '☀️', '🌙', '⛅', '☁️', '⚡',
+// ]
 
 const props = defineProps<{
   visible: boolean

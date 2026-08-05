@@ -47,7 +47,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, reactive } from 'vue'
-import BaseDialog from '../BaseDialog.vue'
+import BaseDialog from '../../ui/BaseDialog.vue'
 
 interface ReminderTime {
   days: number
