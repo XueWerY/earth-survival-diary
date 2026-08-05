@@ -2,7 +2,7 @@
   <BaseDialog
     :visible="visible"
     :title="isEdit ? '编辑分类' : '新建分类'"
-    :width="400"
+    :width="500"
     teleport
     @update:visible="emit('update:visible', $event)"
   >
@@ -112,6 +112,10 @@ const handleSubmit = () => {
   font-size: 13px;
   color: var(--chalk-dim);
   margin-bottom: 6px;
+}
+
+.form-row :deep(.el-input) {
+  width: 100%;
 }
 
 .form-row :deep(.el-input__wrapper) {

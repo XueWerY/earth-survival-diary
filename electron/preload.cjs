@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateStatus: (callback) => ipcRenderer.on('update-status', (_event, data) => callback(data)),
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  downloadUpdate: (url) => ipcRenderer.invoke('download-update', url),
   saveFileDialog: (options) => ipcRenderer.invoke('save-file-dialog', options),
   openFileDialog: (options) => ipcRenderer.invoke('open-file-dialog', options),
   readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),

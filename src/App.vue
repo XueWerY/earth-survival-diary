@@ -120,11 +120,19 @@
       <template v-if="!guideVisible">
       <BaseDialog :visible="updateDialogVisible" title="版本更新" :width="380" noOverlayClose @update:visible="updateDialogVisible = false">
         <div class="update-status" :class="{ 'update-error': updateStatus === 'error', 'update-no-new': updateStatus === 'no-update' }" style="text-align: center;">
-          <span v-if="updateStatus === 'available'">
-            发现新版本 v{{ updateVersion }}，请前往
-            <a class="update-link" href="#" @click.prevent="openReleasesUrl">GitHub Releases</a>
-            下载
-          </span>
+          <template v-if="updateStatus === 'available'">
+            <p>发现新版本 v{{ updateVersion }}</p>
+            <el-button type="primary" @click="handleDownloadUpdate">下载更新</el-button>
+            <p class="update-hint">
+              或前往
+              <a class="update-link" href="#" @click.prevent="openReleasesUrl">GitHub Releases</a>
+              手动下载
+            </p>
+          </template>
+          <template v-else-if="updateStatus === 'downloading'">
+            <el-progress type="line" :percentage="updatePercent" :stroke-width="10" />
+            <p class="update-hint">{{ updateStatusText }}</p>
+          </template>
           <template v-else>{{ updateStatusText }}</template>
         </div>
         <div v-if="updateStatus === 'error' && updateMessage" class="update-message">
@@ -412,15 +420,19 @@ const appChangelogHtml = computed(() => {
 
 // 版本更新对话框状态
 const updateDialogVisible = ref(false)
-const updateStatus = ref<'checking' | 'available' | 'error' | 'no-update'>('checking')
+const updateStatus = ref<'checking' | 'available' | 'error' | 'no-update' | 'downloading' | 'downloaded'>('checking')
 const updateVersion = ref('')
 const updateMessage = ref('')
+const updateDownloadUrl = ref('')
+const updatePercent = ref(0)
 
 const updateStatusText = computed(() => {
   switch (updateStatus.value) {
     case 'checking': return '正在检查更新...'
     case 'error': return '更新检查失败'
     case 'no-update': return '已是最新版本'
+    case 'downloading': return `正在下载更新... ${updatePercent.value}%`
+    case 'downloaded': return '下载完成，正在启动安装程序'
     default: return ''
   }
 })
@@ -497,7 +509,13 @@ const setupUpdateStatusListener = () => {
     if (data.status === 'available') {
       updateStatus.value = 'available'
       updateVersion.value = data.version || ''
+      updateDownloadUrl.value = data.downloadUrl || ''
       updateDialogVisible.value = true
+    } else if (data.status === 'downloading') {
+      updateStatus.value = 'downloading'
+      updatePercent.value = data.percent || 0
+    } else if (data.status === 'downloaded') {
+      updateStatus.value = 'downloaded'
     } else if (data.status === 'error') {
       updateStatus.value = 'error'
       updateMessage.value = data.message || ''
@@ -507,6 +525,26 @@ const setupUpdateStatusListener = () => {
       updateDialogVisible.value = true
     }
   })
+}
+
+/** 点击「下载更新」：自动下载安装包并打开安装程序 */
+const handleDownloadUpdate = async () => {
+  if (!updateDownloadUrl.value) {
+    openReleasesUrl()
+    return
+  }
+  if (!window.electronAPI?.downloadUpdate) {
+    openReleasesUrl()
+    return
+  }
+  updateStatus.value = 'downloading'
+  updatePercent.value = 0
+  try {
+    await window.electronAPI.downloadUpdate(updateDownloadUrl.value)
+  } catch (e) {
+    updateStatus.value = 'error'
+    updateMessage.value = e instanceof Error ? e.message : '下载失败'
+  }
 }
 
 // 暴露全局函数供 ProfilePage 调用（非 Electron 端使用）

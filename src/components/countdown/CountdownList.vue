@@ -24,7 +24,7 @@
       </div>
     </div>
 
-    <div class="main-content" @click="closeDropdown">
+    <div class="main-content" ref="mainContentRef" :style="{ '--card-cols': cardCols }" @click="closeDropdown">
       <div v-if="isCountdownHome" class="card-grid">
         <div class="folder-card has-actions" @click="pageNav.setNavPath(['countdown', ALL_CATEGORY_VALUE])">
           <div class="folder-card-icon" style="background: #667eea">📋</div>
@@ -67,24 +67,9 @@
                     :countdown-days="getCountdownDays(milestone)"
                     :countdown-unit="getCountdownUnit(milestone)"
                     :reminder-label="getReminderLabel(milestone)"
-                    :is-editing-name="editingNameId === milestone.id"
-                    :editing-name-value="editingNameValue"
-                    :is-editing-desc="editingDescId === milestone.id"
-                    :editing-desc-value="editingDescValue"
-                    @start-name-edit="startNameEdit(milestone)"
-                    @save-name-edit="saveNameEdit(milestone)"
-                    @cancel-name-edit="cancelNameEdit"
-                    @update:editing-name-value="editingNameValue = $event"
-                    @start-desc-edit="startDescEdit(milestone)"
-                    @save-desc-edit="saveDescEdit(milestone)"
-                    @cancel-desc-edit="cancelDescEdit"
-                    @update:editing-desc-value="editingDescValue = $event"
                     @unpin="handleCommand('unpin', milestone)"
                     @delete="handleCommand('delete', milestone)"
-                    @open-date-picker="openDatePicker(milestone)"
-                    @toggle-repeat="toggleRepeat(milestone)"
                     @edit="handleEditMilestone(milestone)"
-                    @open-reminder-picker="openReminderPicker(milestone)"
                   />
                 </div>
               </div>
@@ -104,24 +89,9 @@
                     :countdown-days="getCountdownDays(milestone)"
                     :countdown-unit="getCountdownUnit(milestone)"
                     :reminder-label="getReminderLabel(milestone)"
-                    :is-editing-name="editingNameId === milestone.id"
-                    :editing-name-value="editingNameValue"
-                    :is-editing-desc="editingDescId === milestone.id"
-                    :editing-desc-value="editingDescValue"
-                    @start-name-edit="startNameEdit(milestone)"
-                    @save-name-edit="saveNameEdit(milestone)"
-                    @cancel-name-edit="cancelNameEdit"
-                    @update:editing-name-value="editingNameValue = $event"
-                    @start-desc-edit="startDescEdit(milestone)"
-                    @save-desc-edit="saveDescEdit(milestone)"
-                    @cancel-desc-edit="cancelDescEdit"
-                    @update:editing-desc-value="editingDescValue = $event"
                     @pin="handleCommand('pin', milestone)"
                     @delete="handleCommand('delete', milestone)"
-                    @open-date-picker="openDatePicker(milestone)"
-                    @toggle-repeat="toggleRepeat(milestone)"
                     @edit="handleEditMilestone(milestone)"
-                    @open-reminder-picker="openReminderPicker(milestone)"
                   />
                 </div>
               </div>
@@ -141,24 +111,9 @@
                     :countdown-days="getCountdownDays(milestone)"
                     :countdown-unit="getCountdownUnit(milestone)"
                     :reminder-label="getReminderLabel(milestone)"
-                    :is-editing-name="editingNameId === milestone.id"
-                    :editing-name-value="editingNameValue"
-                    :is-editing-desc="editingDescId === milestone.id"
-                    :editing-desc-value="editingDescValue"
-                    @start-name-edit="startNameEdit(milestone)"
-                    @save-name-edit="saveNameEdit(milestone)"
-                    @cancel-name-edit="cancelNameEdit"
-                    @update:editing-name-value="editingNameValue = $event"
-                    @start-desc-edit="startDescEdit(milestone)"
-                    @save-desc-edit="saveDescEdit(milestone)"
-                    @cancel-desc-edit="cancelDescEdit"
-                    @update:editing-desc-value="editingDescValue = $event"
                     @pin="handleCommand('pin', milestone)"
                     @delete="handleCommand('delete', milestone)"
-                    @open-date-picker="openDatePicker(milestone)"
-                    @toggle-repeat="toggleRepeat(milestone)"
                     @edit="handleEditMilestone(milestone)"
-                    @open-reminder-picker="openReminderPicker(milestone)"
                   />
                 </div>
               </div>
@@ -178,24 +133,9 @@
                     :countdown-days="getCountdownDays(milestone)"
                     :countdown-unit="getCountdownUnit(milestone)"
                     :reminder-label="getReminderLabel(milestone)"
-                    :is-editing-name="editingNameId === milestone.id"
-                    :editing-name-value="editingNameValue"
-                    :is-editing-desc="editingDescId === milestone.id"
-                    :editing-desc-value="editingDescValue"
-                    @start-name-edit="startNameEdit(milestone)"
-                    @save-name-edit="saveNameEdit(milestone)"
-                    @cancel-name-edit="cancelNameEdit"
-                    @update:editing-name-value="editingNameValue = $event"
-                    @start-desc-edit="startDescEdit(milestone)"
-                    @save-desc-edit="saveDescEdit(milestone)"
-                    @cancel-desc-edit="cancelDescEdit"
-                    @update:editing-desc-value="editingDescValue = $event"
                     @pin="handleCommand('pin', milestone)"
                     @delete="handleCommand('delete', milestone)"
-                    @open-date-picker="openDatePicker(milestone)"
-                    @toggle-repeat="toggleRepeat(milestone)"
                     @edit="handleEditMilestone(milestone)"
-                    @open-reminder-picker="openReminderPicker(milestone)"
                   />
                 </div>
               </div>
@@ -212,13 +152,6 @@
         :default-category="currentCategoryFromPath !== ALL_CATEGORY_VALUE ? currentCategoryFromPath : 'life'"
         :reminder-only="countdownFormReminderOnly"
         @submit="handleCountdownFormSubmit"
-    />
-
-    <DateScrollPicker
-      v-if="datePickerMilestoneId"
-      v-model="datePickerTargetDate"
-      v-model:visible="datePickerVisible"
-      @update:model-value="onDatePickerConfirm"
     />
 
     <ConfirmDialog
@@ -238,26 +171,16 @@
     <BaseDialog
       :visible="categoryFormVisible"
       :title="editingCategory ? '编辑分类' : '添加分类'"
-      :width="440"
+      :width="500"
       teleport
       @update:visible="categoryFormVisible = $event"
     >
       <el-form :model="categoryForm" label-width="80px" label-position="top">
-        <el-form-item label="分类名称">
+        <el-form-item label="名称">
           <el-input v-model="categoryForm.label" placeholder="输入分类名称" maxlength="10" />
         </el-form-item>
         <el-form-item label="图标">
-          <div class="icon-picker">
-            <div
-                v-for="icon in ICON_OPTIONS"
-                :key="icon"
-                class="icon-option"
-                :class="{ active: categoryForm.icon === icon }"
-                @click="categoryForm.icon = icon"
-            >
-              {{ icon }}
-            </div>
-          </div>
+          <IconPicker v-model="categoryForm.icon" />
         </el-form-item>
         <el-form-item label="颜色">
           <ColorGrid v-model="categoryForm.color" />
@@ -276,7 +199,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, inject, type Ref } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, inject, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Calendar, Clock, Timer, Star, Sunny, Delete, Plus, Check, Close, Edit } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
@@ -285,7 +208,7 @@ import CountdownCard from './CountdownCard.vue'
 import BaseDialog from '../ui/BaseDialog.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
 import ColorGrid from '../ui/ColorGrid.vue'
-import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
+import IconPicker from '../common/picker/IconPicker.vue'
 import { setData } from '../../services/storageService'
 import { logger } from '../../lib/logger'
 import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem } from '../../composables/usePageNav'
@@ -293,6 +216,18 @@ import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type Dropdown
 const pageNav = usePageNav()
 
 const isElectron = inject<boolean>('isElectron', false)
+
+// 卡片网格响应式列数：实测内容区宽度 → 1/2/3 列（卡片间距 d = 25px）
+const mainContentRef = ref<HTMLElement | null>(null)
+const contentWidth = ref(0)
+const CARD_GAP = 25
+const computeCardCols = (w: number): number => {
+  if (w < 1000 + CARD_GAP) return 1
+  if (w < 1500 + 2 * CARD_GAP) return 2
+  return 3
+}
+const cardCols = computed(() => computeCardCols(contentWidth.value))
+let contentResizeObserver: ResizeObserver | null = null
 
 interface Milestone {
   id: string
@@ -330,8 +265,6 @@ const DEFAULT_CATEGORIES: Category[] = [
   { value: 'study', label: '学习', icon: '📚', color: '#10b981' },
   { value: 'life', label: '生活', icon: '🌟', color: '#f59e0b' }
 ]
-
-const ICON_OPTIONS = ['🎂', '💕', '🎉', '✈️', '🎮', '💼', '📚', '🌟', '🎵', '🎬', '🏠', '❤️', '🎁', '🏆', '📅', '🎯', '🏖️', '🎄', '🍕', '🚗', '💡', '🔥', '🌈', '⚽', '🏀', '🎸', '🎨', '📷', '💰', '🍀']
 
 const COLOR_OPTIONS = ['#f472b6', '#ec4899', '#a855f7', '#8b5cf6', '#06b6d4', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6b7280']
 
@@ -624,98 +557,11 @@ const countdownFormVisible = ref(false)
 const countdownFormReminderOnly = ref(false)
 const editingMilestoneForForm = ref<Milestone | null>(null)
 
-const editingNameId = ref<string | null>(null)
-const editingNameValue = ref('')
-const editingDescId = ref<string | null>(null)
-const editingDescValue = ref('')
-const datePickerVisible = ref(false)
-const datePickerMilestoneId = ref<string | null>(null)
-const datePickerTargetDate = ref('')
-
-const startNameEdit = (milestone: Milestone) => {
-  editingNameId.value = milestone.id
-  editingNameValue.value = milestone.name
-}
-
-const saveNameEdit = async (milestone: Milestone) => {
-  const trimmed = editingNameValue.value.trim()
-  if (trimmed && trimmed !== milestone.name) {
-    const index = milestones.value.findIndex(m => m.id === milestone.id)
-    if (index > -1) {
-      milestones.value[index].name = trimmed
-      milestones.value[index].updatedAt = new Date().toISOString()
-      saveData()
-    }
-  }
-  editingNameId.value = null
-}
-
-const cancelNameEdit = () => {
-  editingNameId.value = null
-}
-
-const startDescEdit = (milestone: Milestone) => {
-  editingDescId.value = milestone.id
-  editingDescValue.value = milestone.description || ''
-}
-
-const saveDescEdit = async (milestone: Milestone) => {
-  const trimmed = editingDescValue.value.trim()
-  if (trimmed !== (milestone.description || '')) {
-    const index = milestones.value.findIndex(m => m.id === milestone.id)
-    if (index > -1) {
-      milestones.value[index].description = trimmed || ''
-      milestones.value[index].updatedAt = new Date().toISOString()
-      saveData()
-    }
-  }
-  editingDescId.value = null
-}
-
-const cancelDescEdit = () => {
-  editingDescId.value = null
-}
-
-const openDatePicker = (milestone: Milestone) => {
-  datePickerMilestoneId.value = milestone.id
-  datePickerTargetDate.value = milestone.targetDate
-  datePickerVisible.value = true
-}
-
-const onDatePickerConfirm = () => {
-  if (datePickerMilestoneId.value) {
-    const index = milestones.value.findIndex(m => m.id === datePickerMilestoneId.value)
-    if (index > -1) {
-      milestones.value[index].targetDate = datePickerTargetDate.value
-      milestones.value[index].updatedAt = new Date().toISOString()
-      saveData()
-      refreshReminders()
-    }
-  }
-  datePickerMilestoneId.value = null
-}
-
-const openReminderPicker = (milestone: Milestone) => {
-  editingMilestoneForForm.value = { ...milestone }
-  countdownFormReminderOnly.value = true
-  countdownFormVisible.value = true
-}
-
 const handleEditMilestone = (milestone: Milestone) => {
   editingMilestoneForForm.value = { ...milestone }
   countdownFormReminderOnly.value = false
   countdownFormVisible.value = true
   logger.info('[倒数日] 打开编辑倒数日对话框', { id: milestone.id, name: milestone.name })
-}
-
-const toggleRepeat = (milestone: Milestone) => {
-  const index = milestones.value.findIndex(m => m.id === milestone.id)
-  if (index > -1) {
-    milestones.value[index].repeatStrategy = milestones.value[index].repeatStrategy === 'yearly' ? 'none' : 'yearly'
-    milestones.value[index].updatedAt = new Date().toISOString()
-    saveData()
-    refreshReminders()
-  }
 }
 
 const handleAddMilestone = () => {
@@ -920,8 +766,17 @@ const refreshReminders = () => {
 onMounted(async () => {
   logger.debug('[CountdownList] onMounted 开始', { navPath: pageNav.navPath.value })
   await initFilterState()
+  if (mainContentRef.value) {
+    contentResizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) contentWidth.value = entry.contentRect.width
+    })
+    contentResizeObserver.observe(mainContentRef.value)
+    contentWidth.value = mainContentRef.value.clientWidth
+  }
   logger.debug('[CountdownList] onMounted 结束', { navPath: pageNav.navPath.value })
 })
+
+onUnmounted(() => { contentResizeObserver?.disconnect() })
 </script>
 
 <style scoped>
@@ -1085,8 +940,8 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.card-grid { display: flex; flex-wrap: wrap; gap: 20px; align-content: flex-start; padding: 0 20px; box-sizing: border-box; }
-.card-grid > .folder-card { flex: 1 1 300px; min-width: 300px; }
+.card-grid { display: grid; grid-template-columns: repeat(var(--card-cols, 1), minmax(0, 1fr)); gap: 25px; padding: 0 25px; box-sizing: border-box; align-items: stretch; }
+.card-grid > .folder-card { min-width: 0; }
 
 .folder-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 16px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; cursor: pointer; transition: all 0.2s; position: relative; }
 .folder-card:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(102, 126, 234, 0.3); transform: translateY(-2px); }
@@ -1196,13 +1051,14 @@ onMounted(async () => {
 }
 
 .milestone-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  padding: 0 20px;
+  display: grid;
+  grid-template-columns: repeat(var(--card-cols, 1), minmax(0, 1fr));
+  gap: 25px;
+  padding: 0 25px;
   align-content: flex-start;
+  align-items: stretch;
 }
-.milestone-grid > :deep(.milestone-card) { flex: 1 1 300px; min-width: 300px; }
+.milestone-grid > :deep(.milestone-card) { min-width: 0; }
 
 .capsule-btn {
   display: flex;
@@ -1260,34 +1116,6 @@ onMounted(async () => {
   border-radius: 4px;
 }
 
-.icon-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.icon-option {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 18px;
-  transition: all 0.2s;
-  border: 2px solid transparent;
-}
-
-.icon-option:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.icon-option.active {
-  border-color: #3b82f6;
-  background: rgba(59, 130, 246, 0.1);
-}
 </style>
 
 <style>

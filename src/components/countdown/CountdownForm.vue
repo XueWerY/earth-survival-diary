@@ -2,7 +2,7 @@
   <BaseDialog
     :visible="dialogVisible"
     :title="reminderOnly ? '编辑提醒策略' : (isEdit ? '编辑倒数日' : '添加倒数日')"
-    :width="300"
+    :width="500"
     teleport
     @update:visible="dialogVisible = $event"
   >
@@ -18,10 +18,10 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item :label="form.countMode === 'countup' ? '起始日期' : '目标日期'" prop="targetDate">
-          <DateScrollPicker v-model="form.targetDate" style="width: 130px" />
+          <DateScrollPicker v-model="form.targetDate" />
         </el-form-item>
         <el-form-item label="分类" prop="category">
-          <el-select v-model="form.category" placeholder="选择分类" style="width: 90px">
+          <el-select v-model="form.category" placeholder="选择分类">
             <el-option
                 v-for="cat in categories"
                 :key="cat.value"
@@ -39,7 +39,7 @@
           <el-input
               v-model="form.description"
               type="textarea"
-              :rows="2"
+              :autosize="{ minRows: 1, maxRows: 5 }"
               placeholder="添加备注（可选）"
           />
         </el-form-item>
@@ -51,7 +51,7 @@
             <el-radio :value="false">不提醒</el-radio>
           </el-radio-group>
           <div v-if="reminderEnabled" class="reminder-picker-row">
-            <ReminderTimePicker v-model="reminderTime" style="width: 170px" />
+            <ReminderTimePicker v-model="reminderTime" />
           </div>
         </div>
       </el-form-item>

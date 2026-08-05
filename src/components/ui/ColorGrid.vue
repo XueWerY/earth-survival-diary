@@ -41,5 +41,5 @@ const colorList = computed(() => props.colors)
 .color-swatch.selected { border-color: #fff; transform: scale(1.15); box-shadow: 0 0 8px rgba(255,255,255,0.3); }
 .color-custom { display: flex; flex-direction: column; gap: 4px; }
 .color-custom-label { font-size: 13px; color: var(--chalk-dim); }
-.color-custom-input { width: 140px; }
+.color-custom-input { width: 100%; }
 </style>

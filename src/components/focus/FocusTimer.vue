@@ -32,13 +32,24 @@
                 </filter>
               </defs>
               <circle class="ring-track" cx="60" cy="60" r="54" />
-              <circle class="ring-progress" cx="60" cy="60" r="54"
+              <!-- 正计时预览：初始态整圈为底色，小球停在 12 点 -->
+              <template v-if="focusType === 'stopwatch'">
+                <circle class="ring-sweep" cx="60" cy="60" r="54"
+                  :stroke="sweepBaseColor" filter="url(#ringGlow)" />
+              </template>
+              <circle v-else class="ring-progress" cx="60" cy="60" r="54"
                 stroke="url(#ringGradient)"
                 filter="url(#ringGlow)"
                 :stroke-dasharray="ringCircumference"
                 :stroke-dashoffset="ringCircumference * (1 - ringProgress)" />
+              <!-- 进度末端小球（预览态位于 12 点初始位置） -->
+              <circle class="ring-ball" :class="{ 'ball-smooth': focusType === 'pomodoro' }"
+                cx="114" cy="60" r="5"
+                :fill="ballColor"
+                filter="url(#ringGlow)"
+                :style="{ transform: `rotate(${ballAngle}deg)` }" />
             </svg>
-            <span class="ring-time">
+            <span class="ring-time" :style="{ color: ringTextColor }">
               <span v-for="(g, i) in displayTime.split(' ')" :key="i" class="time-group">{{ g }}</span>
             </span>
           </div>
@@ -153,19 +164,30 @@
                 </filter>
               </defs>
               <circle class="ring-track" cx="60" cy="60" r="54" />
-              <circle class="ring-progress" cx="60" cy="60" r="54"
+              <!-- 正计时：底色为上一轮颜色，扫掠弧为本轮颜色 -->
+              <template v-if="focusType === 'stopwatch'">
+                <circle class="ring-sweep" cx="60" cy="60" r="54"
+                  :stroke="sweepBaseColor"
+                  filter="url(#ringGlow2)" />
+                <circle class="ring-sweep" cx="60" cy="60" r="54"
+                  :stroke="sweepFrontColor"
+                  filter="url(#ringGlow2)"
+                  :stroke-dasharray="ringCircumference"
+                  :stroke-dashoffset="ringCircumference * (1 - sweepFraction)" />
+              </template>
+              <circle v-else class="ring-progress" cx="60" cy="60" r="54"
                 stroke="url(#ringGradient2)"
                 filter="url(#ringGlow2)"
                 :stroke-dasharray="ringCircumference"
                 :stroke-dashoffset="ringCircumference * (1 - ringProgress)" />
-              <!-- 正计时粒子 -->
-              <g v-if="focusType === 'stopwatch'" class="ring-particles" filter="url(#ringGlow2)">
-                <circle v-for="i in 16" :key="i" class="ring-particle"
-                  :cx="(60 + 54 * Math.cos((i - 1) * Math.PI / 8 - Math.PI / 2))"
-                  :cy="(60 + 54 * Math.sin((i - 1) * Math.PI / 8 - Math.PI / 2))" r="2.5" />
-              </g>
+              <!-- 进度末端小球 -->
+              <circle class="ring-ball" :class="{ 'ball-smooth': focusType === 'pomodoro' }"
+                cx="114" cy="60" r="5"
+                :fill="ballColor"
+                filter="url(#ringGlow2)"
+                :style="{ transform: `rotate(${ballAngle}deg)` }" />
             </svg>
-            <span class="ring-time">
+            <span class="ring-time" :style="{ color: ringTextColor }">
               <span v-for="(g, i) in displayTime.split(' ')" :key="i" class="time-group">{{ g }}</span>
             </span>
           </div>
@@ -212,7 +234,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, onActivated, watch, inject, provide } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onActivated, watch, nextTick, inject, provide } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Star, Delete } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
@@ -275,15 +297,17 @@ const setTimerStyle = async (s: 'ring' | 'plain') => {
 // 常用专注
 const favorites = computed(() => focusStore.favorites)
 const favoritesGridRef = ref<HTMLDivElement>()
-const favoritesCols = ref(4)
+const favoritesCols = ref(1)
 const focusIcon = ref('🎯')
-const CARD_GAP = 24
+const d = 25 // 卡片间距常量 d = 25px
 const updateFavoritesCols = () => {
   if (!favoritesGridRef.value) return
   const w = favoritesGridRef.value.clientWidth
-  let k = 1
-  while (w >= 300 + (k - 1) * 150 + k * CARD_GAP) k++
-  favoritesCols.value = Math.max(1, k - 1)
+  // 可用区域宽度：桌面端网格已位于全局导航栏右侧（= 窗口宽 - 导航栏宽），安卓端即窗口宽
+  // 一行最多放置 3 张卡片
+  if (w < 1000 + d) favoritesCols.value = 1
+  else if (w < 1500 + 2 * d) favoritesCols.value = 2
+  else favoritesCols.value = 3
 }
 let favGridObs: ResizeObserver | null = null
 
@@ -321,6 +345,45 @@ const ringProgress = computed(() => {
   if (focusType.value === 'stopwatch') return 1
   return 1 - sandProgress.value
 })
+
+// 正计时圆环：60 秒一圈，走过区域按 7 色循环着色
+const RING_COLORS = ['#f87171', '#fb923c', '#fbbf24', '#34d399', '#22d3ee', '#60a5fa', '#a78bfa']
+const sweepElapsed = ref(0)
+let sweepRaf = 0
+const sweepActive = computed(() =>
+  timerState.value === 'running' && focusType.value === 'stopwatch' && timerStyle.value === 'ring'
+)
+const sweepLoop = () => {
+  sweepElapsed.value = Date.now() - startTimestamp.value
+  sweepRaf = requestAnimationFrame(sweepLoop)
+}
+watch(sweepActive, (on) => {
+  cancelAnimationFrame(sweepRaf)
+  sweepElapsed.value = 0
+  if (on) sweepLoop()
+})
+
+const sweepFraction = computed(() => (sweepElapsed.value % 60000) / 60000)
+const sweepBaseColor = computed(() => RING_COLORS[Math.floor(sweepElapsed.value / 60000) % 7])
+const sweepFrontColor = computed(() => RING_COLORS[(Math.floor(sweepElapsed.value / 60000) + 1) % 7])
+const ballAngle = computed(() =>
+  (focusType.value === 'stopwatch' ? sweepFraction.value : ringProgress.value) * 360
+)
+const ballColor = computed(() => focusType.value === 'stopwatch' ? sweepFrontColor.value : '#a78bfa')
+// 两色按进度线性插值（hex -> rgb -> 混合 -> hex），用于正计时文本连续渐变
+const mixColor = (a: string, b: string, t: number) => {
+  const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16))
+  const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16))
+  const c = pa.map((v, i) => Math.round(v + (pb[i] - v) * t))
+  return '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('')
+}
+// 中心文本颜色与圆环联动：
+// 番茄钟恒为蓝紫；正计时随小球进度在「底色→前导色」间连续渐变（预览态 fraction=0 即底色），边界处自然衔接无跳变
+const ringTextColor = computed(() =>
+  focusType.value === 'stopwatch'
+    ? mixColor(sweepBaseColor.value, sweepFrontColor.value, sweepFraction.value)
+    : '#a78bfa'
+)
 
 // 选择常用专注（再次点击同一卡片退出编辑态）
 const editingFavoriteId = ref<string | null>(null)
@@ -688,12 +751,21 @@ onMounted(async () => {
   // 监听页面可见性变化，确保后台计时准确
   document.addEventListener('visibilitychange', handleVisibilityChange)
 
-  // 响应式卡片列数
-  if (favoritesGridRef.value) {
+  // 响应式卡片列数（常用专注卡片布局）
+  ensureFavGridObserver()
+})
+
+// 常用专注网格在 favorites 从无到有时才渲染，需在其出现后补挂 ResizeObserver 并重算列数
+const ensureFavGridObserver = () => {
+  if (favoritesGridRef.value && !favGridObs) {
     favGridObs = new ResizeObserver(updateFavoritesCols)
     favGridObs.observe(favoritesGridRef.value)
-    updateFavoritesCols()
   }
+  updateFavoritesCols()
+}
+watch(() => favorites.value.length, async () => {
+  await nextTick()
+  ensureFavGridObserver()
 })
 
 // 页面可见性变化处理
@@ -743,6 +815,7 @@ onUnmounted(async () => {
   if (timerInterval) {
     clearInterval(timerInterval)
   }
+  cancelAnimationFrame(sweepRaf)
 
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   favGridObs?.disconnect()
@@ -767,7 +840,7 @@ onUnmounted(async () => {
 .focus-container {
   height: 100%;
   background: transparent;
-  padding: 0 24px;
+  padding: 0 25px; /* 左右 d = 25px（最左/最右卡片距可用区域边界） */
 }
 
 .focus-content {
@@ -917,17 +990,17 @@ onUnmounted(async () => {
   transition: stroke-dashoffset 0.3s ease;
 }
 
-.ring-particles {
-  animation: particle-rotate 8s linear infinite;
+.ring-sweep {
+  fill: none;
+  stroke-width: 6;
+}
+
+.ring-ball {
   transform-origin: 60px 60px;
 }
 
-.ring-particle {
-  fill: #c4b5fd;
-}
-
-@keyframes particle-rotate {
-  to { transform: rotate(360deg); }
+.ring-ball.ball-smooth {
+  transition: transform 0.3s ease;
 }
 
 .ring-time {
@@ -1095,7 +1168,8 @@ onUnmounted(async () => {
 
 .favorites-grid {
   display: grid;
-  gap: 24px;
+  gap: 25px; /* d = 25px 卡片间距 */
+  align-items: stretch; /* 同一行卡片高度保持一致 */
 }
 
 .favorite-card {

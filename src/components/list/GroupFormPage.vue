@@ -52,6 +52,7 @@ const cancel = () => {
 .group-form :deep(.el-input__wrapper) { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
 .group-form :deep(.el-input__inner) { color: #fff; }
 .group-form :deep(.el-input__inner::placeholder) { color: rgba(255, 255, 255, 0.4); }
+.group-form :deep(.el-input) { width: 100%; }
 
 .group-color-section { display: flex; flex-direction: column; gap: 8px; }
 .group-color-label { font-size: 13px; color: var(--chalk-dim); }

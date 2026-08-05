@@ -162,12 +162,12 @@
       @confirm="onCategoryDeleteConfirmed"
     />
 
-  <BaseDialog
-    :visible="showRenameDialog"
-    title="重命名笔记"
-    :width="420"
-    @update:visible="showRenameDialog = $event"
-  >
+    <BaseDialog
+      :visible="showRenameDialog"
+      :title="renameMode === 'create' ? '新建笔记' : '重命名笔记'"
+      :width="500"
+      @update:visible="showRenameDialog = $event"
+    >
     <span class="form-label">名称</span>
     <el-input v-model="renameInputValue" placeholder="输入笔记名称" @keyup.enter="commitRenameNote" />
       <template #footer>
@@ -504,15 +504,16 @@ onBeforeUnmount(() => {
   if (timeTimer) clearInterval(timeTimer)
 })
 
-// 动态卡片列数
+// 动态卡片列数（笔记页面卡片布局）
 const containerRef = ref<HTMLElement | null>(null)
 const containerWidth = ref(800)
-const CARD_WIDTH = 250
-const CARD_GAP = 14
+const d = 25 // 卡片间距常量 d = 25px
 const cardColumns = computed(() => {
-  const width = containerWidth.value
-  const cols = Math.max(1, Math.ceil((width - CARD_GAP) / (CARD_WIDTH + CARD_GAP)))
-  return Math.min(cols, 6)
+  // 可用区域宽度：电脑端容器已自动扣除全局导航栏宽度，安卓端即窗口宽度
+  const w = containerWidth.value
+  if (w < 1000 + d) return 1
+  if (w < 1500 + 2 * d) return 2
+  return 3
 })
 let resizeObserver: ResizeObserver | null = null
 const updateWidth = () => {
@@ -523,22 +524,7 @@ const updateWidth = () => {
 
 // 笔记编辑（通过列表中的编辑按钮或详情视图编辑按钮）
 const handleAddNote = () => {
-  // "全部笔记"视图下 currentCategoryFromPath 返回 'all'，不是真实分类 id，需回退到默认分类
-  const catFromPath = currentCategoryFromPath.value
-  const validCategoryId = (catFromPath && catFromPath !== ALL_CATEGORY_VALUE)
-    ? catFromPath
-    : (noteStore.categories[0]?.id || 'personal')
-  detailNote.value = {
-    id: '',
-    title: '',
-    content: '',
-    color: '#ffffff',
-    categoryId: validCategoryId,
-    pinned: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }
-  viewMode.value = 'detail'
+  openCreateNoteDialog()
 }
 
 const handleEditNote = (note: Note) => {
@@ -606,29 +592,50 @@ const closeDetail = () => {
   }
 }
 
-// ====== 弹窗重命名笔记 ======
-const isRenamingNote = ref(false)
+// ====== 弹窗重命名 / 新建笔记 ======
+const renameMode = ref<'create' | 'rename' | null>(null)
 const renameInputValue = ref('')
 const showRenameDialog = ref(false)
 
 const startRenameNote = () => {
   if (!detailNote.value) return
   renameInputValue.value = detailNote.value.title || ''
-  isRenamingNote.value = true
+  renameMode.value = 'rename'
   showRenameDialog.value = true
 }
 
-const commitRenameNote = () => {
-  if (!isRenamingNote.value) return
+const openCreateNoteDialog = () => {
+  renameInputValue.value = ''
+  renameMode.value = 'create'
+  showRenameDialog.value = true
+}
+
+const commitRenameNote = async () => {
+  const mode = renameMode.value
+  renameMode.value = null
   showRenameDialog.value = false
-  isRenamingNote.value = false
-  const newTitle = renameInputValue.value.trim()
-  if (!newTitle || !detailNote.value) return
-  if (newTitle === detailNote.value.title) return
-  // 更新编辑器内部 noteTitle（触发封面页大纲重新生成）
-  editorRef.value?.setNoteTitle(newTitle)
-  // 同步 detailNote 显示
-  detailNote.value = { ...detailNote.value, title: newTitle }
+  const newTitle = renameInputValue.value.trim() || '新笔记'
+  if (mode === 'create') {
+    // "全部笔记"视图下 currentCategoryFromPath 返回 'all'，不是真实分类 id，需回退到默认分类
+    const catFromPath = currentCategoryFromPath.value
+    const validCategoryId = (catFromPath && catFromPath !== ALL_CATEGORY_VALUE)
+      ? catFromPath
+      : (noteStore.categories[0]?.id || 'personal')
+    const note = await noteStore.addNote({ title: newTitle, content: '', color: '#ffffff', categoryId: validCategoryId, pinned: false })
+    if (note) {
+      detailNote.value = note
+      viewMode.value = 'detail'
+      pageNav.setNavPath(['notes', note.categoryId, note.id])
+      ElMessage.success('已添加笔记')
+    }
+  } else if (mode === 'rename') {
+    if (!detailNote.value) return
+    if (newTitle === detailNote.value.title) return
+    // 更新编辑器内部 noteTitle（触发封面页大纲重新生成）
+    editorRef.value?.setNoteTitle(newTitle)
+    // 同步 detailNote 显示
+    detailNote.value = { ...detailNote.value, title: newTitle }
+  }
 }
 
 // 同步 detail 视图：根据 navPath 长度恢复或关闭 detail 视图
@@ -795,7 +802,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  margin: 16px 16px 0;
+  margin: 16px 25px 0; /* 与卡片区左右边界对齐（d = 25px） */
   background: rgba(30, 28, 52, 0.4);
   border-radius: 8px;
   flex-shrink: 0;
@@ -1015,12 +1022,12 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  padding: 16px;
+  padding: 16px 25px; /* 上下 16px，左右 d = 25px（最左/最右卡片距可用区域边界） */
 }
 
 .card-grid {
   display: grid;
-  gap: 14px;
+  gap: 25px; /* d = 25px 卡片间距 */
   height: 100%;
   overflow-y: auto;
   align-content: start;
@@ -1144,7 +1151,7 @@ onBeforeUnmount(() => {
 
 .note-grid {
   display: grid;
-  gap: 14px;
+  gap: 25px; /* d = 25px 卡片间距 */
 }
 
 /* 详情视图 */

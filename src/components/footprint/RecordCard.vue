@@ -15,7 +15,7 @@
       </div>
     </div>
     <span v-if="record.isDiary || record.category === 'diary'" class="task-card-diary-time">创建于 {{ formatDiaryTime(record.createdAt) }}</span>
-    <div v-else class="task-card-time-row">
+    <div v-else-if="record.startTime || record.endTime" class="task-card-time-row">
       <span>{{ record.startTime || '—' }} - {{ record.endTime || '—' }}</span>
       <span v-if="formatDurationLabel(record.startTime, record.endTime)" class="time-duration-label">{{ formatDurationLabel(record.startTime, record.endTime) }}</span>
     </div>

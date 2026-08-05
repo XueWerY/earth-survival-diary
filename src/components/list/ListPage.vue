@@ -57,7 +57,7 @@
       </div>
     </div>
 
-    <div class="main-content" @click="closeDropdown">
+    <div class="main-content" ref="mainContentRef" :style="{ '--card-cols': cardCols }" @click="closeDropdown">
       <el-scrollbar>
 
         <div v-if="isTaskRoot" class="card-grid card-grid-root">
@@ -100,7 +100,7 @@
         <template v-else-if="isSmartDetail">
           <el-empty v-if="smartDetailTasks.length === 0" :description="smartDetailEmptyText" :image-size="120" />
           <div v-else :class="smartDetailIsToday ? 'today-lists' : 'smart-lists'">
-              <TaskCard v-for="list in smartDetailTasks" :key="list.id" :list="list" :context="smartDetailCardContext" @delete="deleteTask" />
+              <TaskCard v-for="list in smartDetailTasks" :key="list.id" :list="list" :context="smartDetailCardContext" @delete="deleteTask" @edit="openEditTask" />
             </div>
         </template>
 
@@ -156,7 +156,7 @@
         <template v-else-if="isGroupTasksView">
           <el-empty v-if="currentGroupTasks.length === 0" description="暂无任务" :image-size="120" />
           <div v-else class="list-list">
-            <TaskCard v-for="list in currentGroupTasks" :key="list.id" :list="list" context="custom-list" @delete="deleteTask" />
+            <TaskCard v-for="list in currentGroupTasks" :key="list.id" :list="list" context="custom-list" @delete="deleteTask" @edit="openEditTask" />
           </div>
         </template>
 
@@ -168,7 +168,7 @@
     </div>
   </div>
 
-  <BaseDialog :visible="showFolderDialog" :title="dialogFolder ? '编辑文件夹' : '添加文件夹'" :width="380" @update:visible="closeFolderDialog">
+  <BaseDialog :visible="showFolderDialog" :title="dialogFolder ? '编辑文件夹' : '添加文件夹'" :width="500" @update:visible="closeFolderDialog">
       <div class="folder-form">
         <span class="folder-color-label">名称</span>
         <el-input v-model="folderFormName" placeholder="请输入文件夹名称" @keyup.enter="onFolderFormSubmit" />
@@ -181,16 +181,20 @@
       </template>
     </BaseDialog>
 
-  <BaseDialog :visible="showListDialog" :title="dialogList ? '编辑清单' : '添加清单'" :width="380" @update:visible="closeListDialog">
+  <BaseDialog :visible="showListDialog" :title="dialogList ? '编辑清单' : '添加清单'" :width="500" @update:visible="closeListDialog">
     <ListFormPage :list="dialogList" @submit="onListSubmit" @cancel="closeListDialog" />
   </BaseDialog>
 
-  <BaseDialog :visible="showGroupDialog" :title="dialogGroup ? '编辑分组' : '添加分组'" :width="380" @update:visible="closeGroupDialog">
+  <BaseDialog :visible="showGroupDialog" :title="dialogGroup ? '编辑分组' : '添加分组'" :width="500" @update:visible="closeGroupDialog">
     <GroupFormPage :group="dialogGroup" :list-id="currentListIdForDialog" @submit="onGroupSubmit" @cancel="closeGroupDialog" />
   </BaseDialog>
 
-  <BaseDialog :visible="showTaskDialog" :title="'添加任务'" :width="400" teleport @update:visible="closeTaskDialog">
+  <BaseDialog :visible="showTaskDialog" :title="'添加任务'" :width="500" teleport @update:visible="closeTaskDialog">
     <TaskForm :list-id="listDialogListId" :group-id="listDialogGroupId" @submit="onTaskSubmit" @cancel="closeTaskDialog" />
+  </BaseDialog>
+
+  <BaseDialog :visible="showEditTaskDialog" :title="'编辑任务'" :width="500" teleport @update:visible="closeEditTaskDialog">
+    <TaskForm v-if="editingTask" :key="editingTask.id" :task="editingTask" @submit="onEditTaskSubmit" @cancel="closeEditTaskDialog" />
   </BaseDialog>
 
   <div v-if="showMoveDialog" class="dialog-overlay" @click.self="closeMoveDialog">
@@ -214,7 +218,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, watch, inject } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch, inject } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Calendar, Clock, Timer, Close, Warning, Edit, Plus as PlusIcon, Delete, List, Folder, Check, Sort, Star, StarFilled, CollectionTag } from '@element-plus/icons-vue'
 import ListFormPage from './ListFormPage.vue'
@@ -239,6 +243,18 @@ const refreshReminders = inject<() => void>('refreshReminders', () => {})
 const isGuideActive = inject('guideVisible', ref(false))
 
 const isElectron = computed(() => typeof window !== 'undefined' && !!(window as any).electronAPI)
+
+// 卡片网格响应式列数：实测内容区宽度 → 1/2/3 列（卡片间距 d = 25px）
+const mainContentRef = ref<HTMLElement | null>(null)
+const contentWidth = ref(0)
+const CARD_GAP = 25
+const computeCardCols = (w: number): number => {
+  if (w < 1000 + CARD_GAP) return 1
+  if (w < 1500 + 2 * CARD_GAP) return 2
+  return 3
+}
+const cardCols = computed(() => computeCardCols(contentWidth.value))
+let contentResizeObserver: ResizeObserver | null = null
 
 const navPath = computed(() => {
   const val = pageNav.navPath.value
@@ -774,8 +790,17 @@ onMounted(async () => {
   logger.debug('[ListPage] onMounted loadData 完成', { isLoaded: listStore.isLoaded, listsCount: listStore.lists?.length })
   await loadFavorites()
   await initTaskState()
+  if (mainContentRef.value) {
+    contentResizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) contentWidth.value = entry.contentRect.width
+    })
+    contentResizeObserver.observe(mainContentRef.value)
+    contentWidth.value = mainContentRef.value.clientWidth
+  }
   logger.debug('[ListPage] onMounted 结束', { navPath: pageNav.navPath.value, showBreadcrumb: showBreadcrumb.value, isTaskRoot: isTaskRoot.value })
 })
+
+onUnmounted(() => { contentResizeObserver?.disconnect() })
 
 const showFolderDialog = ref(false)
 const folderFormName = ref('')
@@ -786,6 +811,9 @@ const showGroupDialog = ref(false)
 const showTaskDialog = ref(false)
 const showMoveDialog = ref(false)
 const showConfirmDialog = ref(false)
+
+const showEditTaskDialog = ref(false)
+const editingTask = ref<Task | null>(null)
 
 const dialogFolder = ref<TaskFolder | null>(null)
 const dialogList = ref<ListPage | null>(null)
@@ -865,6 +893,8 @@ const closeFolderDialog = () => { showFolderDialog.value = false; dialogFolder.v
 const closeListDialog = () => { showListDialog.value = false; dialogList.value = null }
 const closeGroupDialog = () => { showGroupDialog.value = false; dialogGroup.value = null }
 const closeTaskDialog = () => { showTaskDialog.value = false }
+const openEditTask = (task: Task) => { editingTask.value = task; showEditTaskDialog.value = true }
+const closeEditTaskDialog = () => { showEditTaskDialog.value = false; editingTask.value = null }
 const closeMoveDialog = () => { showMoveDialog.value = false; moveTaskId.value = '' }
 const closeConfirmDialog = () => { showConfirmDialog.value = false; pendingConfirmAction = null }
 
@@ -918,6 +948,38 @@ const onTaskSubmit = async (data: Record<string, unknown>) => {
   if (hasReminder) refreshReminders()
 }
 
+const onEditTaskSubmit = async (data: Record<string, unknown>) => {
+  if (!editingTask.value) return
+  const hadReminder = editingTask.value.reminderStrategy !== 'none' && !!editingTask.value.date
+  await listStore.updateTask(editingTask.value.id, {
+    name: data.name,
+    date: data.date,
+    endTime: data.time || '',
+    priority: data.priority,
+    listId: data.listId,
+    groupId: data.groupId,
+    repeatStrategy: data.repeatStrategy,
+    repeatEndStrategy: data.repeatEndStrategy,
+    repeatEndDate: data.repeatEndDate || undefined,
+    repeatEndCount: data.repeatEndCount || 1,
+    repeatDays: data.repeatDays || 1,
+    repeatWeekdays: data.repeatWeekdays,
+    repeatMonthDay: data.repeatMonthDay || 1,
+    repeatLunarMonth: data.repeatLunarMonth || 1,
+    repeatLunarDay: data.repeatLunarDay || 1,
+    reminderStrategy: data.reminderStrategy,
+    reminderDays: data.reminderDays || 0,
+    reminderHours: data.reminderHours || 0,
+    reminderMinutes: data.reminderMinutes || 0,
+    notes: data.note || undefined,
+    checklist: data.checklist,
+  } as any)
+  ElMessage.success('任务已更新')
+  closeEditTaskDialog()
+  const hasReminder = (data.reminderStrategy as string) !== 'none' && !!data.date
+  if (hadReminder || hasReminder) refreshReminders()
+}
+
 const onMoveSubmit = async (data: Record<string, unknown>) => {
   await listStore.updateTask(moveTaskId.value, { listId: data.listId as string, groupId: data.groupId as string })
   ElMessage.success('任务已移动')
@@ -931,7 +993,7 @@ const handleConfirmAction = () => {
 </script>
 
 <style scoped>
-.list-container { display: flex; flex-direction: column; height: 100%; position: relative; padding: 0 20px; }
+.list-container { display: flex; flex-direction: column; height: 100%; position: relative; padding: 0; }
 
 .list-breadcrumb-bar {
   display: flex;
@@ -942,8 +1004,8 @@ const handleConfirmAction = () => {
   background: rgba(255, 255, 255, 0.03);
   z-index: 20;
   min-height: 40px;
-  width: 100%;
-  margin: 8px auto 16px auto;
+  width: auto;
+  margin: 8px 25px 16px 25px;
   border-radius: 8px;
 }
 
@@ -1162,8 +1224,13 @@ const handleConfirmAction = () => {
 .main-content :deep(.el-scrollbar__bar) { display: none; }
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 0; }
 
-.card-grid { display: flex; flex-wrap: wrap; gap: 20px; align-content: flex-start; }
-.card-grid > .folder-card { flex: 1 1 300px; min-width: 300px; }
+.card-grid, .list-list, .today-lists, .smart-lists {
+  display: grid;
+  grid-template-columns: repeat(var(--card-cols, 1), minmax(0, 1fr));
+  gap: 25px;
+  padding: 0 25px;
+  align-items: stretch;
+}
 .folder-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 16px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; cursor: pointer; transition: all 0.2s; position: relative; }
 .folder-card:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(102, 126, 234, 0.3); transform: translateY(-2px); }
 .folder-card-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; background: rgba(102, 126, 234, 0.6); }
@@ -1183,8 +1250,7 @@ const handleConfirmAction = () => {
 
 .folder-card.has-actions { padding-top: 44px; }
 
-.list-list, .today-lists, .smart-lists { display: flex; flex-wrap: wrap; gap: 20px; align-content: flex-start; }
-.list-list :deep(.list-card), .today-lists :deep(.list-card), .smart-lists :deep(.list-card) { flex: 1 1 300px; min-width: 300px; }
+/* 卡片网格已在上方统一为 grid 布局（最多 3 列，卡片间距 25px，同行等高） */
 
 :deep(.el-empty__description) { color: var(--chalk-muted); }
 
@@ -1198,6 +1264,7 @@ const handleConfirmAction = () => {
 .folder-form :deep(.el-input__wrapper) { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
 .folder-form :deep(.el-input__inner) { color: #fff; }
 .folder-form :deep(.el-input__inner::placeholder) { color: rgba(255, 255, 255, 0.4); }
+.folder-form :deep(.el-input) { width: 100%; }
 
 .folder-color-dialog { width: 380px; }
 .folder-color-section { display: flex; flex-direction: column; gap: 8px; }

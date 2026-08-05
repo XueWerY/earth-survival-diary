@@ -1,5 +1,5 @@
 <template>
-  <div class="toolbox-page">
+  <div class="toolbox-page" ref="contentRef" :style="{ '--card-cols': cardCols }">
     <div v-if="activeTool" class="tool-page-overlay">
       <div class="tool-page-container">
         <div class="tool-page-header">
@@ -98,7 +98,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, shallowRef, onMounted, inject, defineAsyncComponent } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, computed, inject, defineAsyncComponent } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { logger } from '../../lib/logger'
@@ -119,6 +119,19 @@ const deletingPlugin = ref<string | null>(null)
 const marketplaceRef = ref<InstanceType<typeof MarketplacePanel> | null>(null)
 const marketLoading = ref(false)
 const installedRestartNeeded = ref(false)
+
+// 卡片网格响应式列数：实测内容区宽度 → 1/2/3 列（卡片间距 d = 25px）
+const contentRef = ref<HTMLElement | null>(null)
+const contentWidth = ref(0)
+const CARD_GAP = 25
+const computeCardCols = (w: number): number => {
+  if (w < 1000 + CARD_GAP) return 1
+  if (w < 1500 + 2 * CARD_GAP) return 2
+  if (w < 2000 + 3 * CARD_GAP) return 3
+  return 3
+}
+const cardCols = computed(() => computeCardCols(contentWidth.value))
+let contentResizeObserver: ResizeObserver | null = null
 
 async function refreshMarketplace() {
   if (marketplaceRef.value) {
@@ -145,7 +158,17 @@ onMounted(async () => {
   }
 
   refreshMarketplace()
+
+  if (contentRef.value) {
+    contentResizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) contentWidth.value = entry.contentRect.width
+    })
+    contentResizeObserver.observe(contentRef.value)
+    contentWidth.value = contentRef.value.clientWidth
+  }
 })
+
+onUnmounted(() => { contentResizeObserver?.disconnect() })
 
 function getPluginName(pluginId: string): string {
   const plugin = plugins.value.find(p => p.manifest.id === pluginId)
@@ -289,9 +312,14 @@ function doRestart() {
 
 .tool-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(var(--card-cols, 1), minmax(0, 1fr));
+  gap: 25px;
+  padding: 0 25px;
+  margin: 0 -16px;
+  align-items: stretch;
 }
+
+.tool-card-grid > .tool-card { min-width: 0; }
 
 .tool-card {
   background: rgba(255, 255, 255, 0.05);
@@ -358,8 +386,11 @@ function doRestart() {
 
 .plugin-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(var(--card-cols, 1), minmax(0, 1fr));
+  gap: 25px;
+  padding: 0 25px;
+  margin: 0 -16px;
+  align-items: stretch;
 }
 
 .plugin-card {

@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Menu, ipcMain, shell, dialog, Tray, screen, clipboard } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const https = require('https')
 // esbuild 二进制打包后位于 app.asar 内（asar 不可执行），主进程 spawn 会 ENOENT。
 // extraResources 已把真实二进制复制到 resources/node_modules/@esbuild/win32-x64/esbuild.exe，
 // 这里在 require('esbuild') 之前用 ESBUILD_BINARY_PATH 指向它（esbuild 模块加载时读取该变量）。
@@ -327,7 +328,7 @@ ipcMain.handle('check-for-update', async () => {
       return { updateAvailable: false }
     }
     debugLog('[Main] New version found: ' + latest.version)
-    sendUpdateStatusToMain({ status: 'available', version: latest.version })
+    sendUpdateStatusToMain({ status: 'available', version: latest.version, downloadUrl: latest.downloadUrl })
     return { updateAvailable: true, version: latest.version }
   } catch (e) {
     debugLog('[Main] Update check failed: ' + e.message)
@@ -339,6 +340,82 @@ ipcMain.handle('check-for-update', async () => {
 ipcMain.handle('open-external', async (_event, url) => {
   debugLog('[Main] Opening external link: ' + url)
   await shell.openExternal(url)
+})
+
+// 下载更新安装包（处理 GitHub Release 资产 302 跳转，回传进度并自动打开安装程序）
+ipcMain.handle('download-update', async (_event, downloadUrl) => {
+  debugLog('[Main] Downloading update from: ' + downloadUrl)
+  return new Promise((resolve) => {
+    const follow = (urlStr) => {
+      const url = new URL(urlStr)
+      const opts = {
+        hostname: url.hostname,
+        path: url.pathname + url.search,
+        headers: { 'User-Agent': 'earth-survival-diary' }
+      }
+      https.get(opts, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          const next = new URL(res.headers.location, url).toString()
+          res.resume() // 消费重定向响应
+          return follow(next)
+        }
+        if (res.statusCode !== 200) {
+          const msg = '下载失败，HTTP 状态码 ' + res.statusCode
+          debugLog('[Main] ' + msg)
+          sendUpdateStatusToMain({ status: 'error', message: msg })
+          return resolve({ ok: false, error: msg })
+        }
+        const total = parseInt(res.headers['content-length'] || '0', 10)
+        const fileName = path.basename(url.pathname) || 'Earth-Survival-Diary-Setup.exe'
+        const filePath = path.join(app.getPath('temp'), fileName)
+        const fileStream = fs.createWriteStream(filePath)
+        let received = 0
+        let lastPercent = -1
+        res.on('data', (chunk) => {
+          received += chunk.length
+          if (total > 0) {
+            const percent = Math.floor((received / total) * 100)
+            if (percent !== lastPercent) {
+              lastPercent = percent
+              sendUpdateStatusToMain({ status: 'downloading', percent })
+            }
+          }
+        })
+        res.pipe(fileStream)
+        fileStream.on('finish', () => {
+          fileStream.close()
+          debugLog('[Main] Update downloaded to: ' + filePath)
+          sendUpdateStatusToMain({ status: 'downloaded' })
+          // 打开安装程序后退出应用
+          shell.openPath(filePath).then((err) => {
+            if (err) {
+              debugLog('[Main] Failed to open installer: ' + err)
+              sendUpdateStatusToMain({ status: 'error', message: '无法打开安装程序：' + err })
+              return
+            }
+            isQuitting = true
+            app.quit()
+          })
+          resolve({ ok: true })
+        })
+        fileStream.on('error', (e) => {
+          debugLog('[Main] Write installer failed: ' + e.message)
+          sendUpdateStatusToMain({ status: 'error', message: e.message })
+          resolve({ ok: false, error: e.message })
+        })
+      }).on('error', (e) => {
+        debugLog('[Main] Download request error: ' + e.message)
+        sendUpdateStatusToMain({ status: 'error', message: e.message })
+        resolve({ ok: false, error: e.message })
+      })
+    }
+    try {
+      follow(downloadUrl)
+    } catch (e) {
+      debugLog('[Main] Download failed: ' + e.message)
+      resolve({ ok: false, error: e.message })
+    }
+  })
 })
 
 ipcMain.handle('save-file-dialog', async (_event, options) => {
@@ -1638,7 +1715,7 @@ app.whenReady().then(async () => {
       fetchLatestFromReleases().then((latest) => {
         if (latest && compareVersions(latest.version, app.getVersion()) > 0) {
           debugLog('[Updater] New version found at startup: ' + latest.version)
-          sendUpdateStatusToMain({ status: 'available', version: latest.version })
+          sendUpdateStatusToMain({ status: 'available', version: latest.version, downloadUrl: latest.downloadUrl })
         }
       }).catch(e => debugLog('[Updater] Check failed: ' + e.message))
     }, 5000)

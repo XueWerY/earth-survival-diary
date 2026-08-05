@@ -4,19 +4,7 @@
     <div class="card-header">
       <div class="card-header-left">
         <span class="category-badge">{{ categoryIcon }}</span>
-        <template v-if="isEditingName">
-          <textarea
-            ref="nameInputRef"
-            :value="editingNameValue"
-            class="inline-edit-textarea"
-            @input="$emit('update:editingNameValue', ($event.target as HTMLTextAreaElement).value)"
-            @blur="$emit('saveNameEdit')"
-            @keydown.escape.prevent="$emit('cancelNameEdit')"
-            @keydown.enter.prevent="$emit('saveNameEdit')"
-            rows="2"
-          />
-        </template>
-        <h3 v-else class="milestone-name" @dblclick="!compact && $emit('startNameEdit')">{{ milestone.name }}</h3>
+        <h3 class="milestone-name">{{ milestone.name }}</h3>
       </div>
       <div v-if="!compact" class="card-actions">
         <button
@@ -46,7 +34,7 @@
 
     <!-- 日期行 -->
     <div class="milestone-date">
-      <span class="date-plain-text" @click.stop="!compact && $emit('openDatePicker')">
+      <span class="date-plain-text">
         <el-icon><Calendar /></el-icon>
         {{ formatDate(milestone.targetDate) }}
       </span>
@@ -54,17 +42,15 @@
 
     <!-- 元数据行（重复策略和提醒策略） -->
     <div v-if="milestone.countMode !== 'countup'" class="milestone-meta">
-      <span class="meta-item repeat-text" @click.stop="!compact && $emit('toggleRepeat')">
+      <span class="meta-item repeat-text">
         {{ milestone.repeatStrategy === 'yearly' ? '每年重复' : '不重复' }}
       </span>
       <span class="meta-separator">·</span>
       <template v-if="reminderLabel">
-        <span class="meta-item reminder-has" @click.stop="!compact && $emit('openReminderPicker')">
-          {{ reminderLabel }}
-        </span>
+        <span class="meta-item reminder-has">{{ reminderLabel }}</span>
       </template>
       <template v-else>
-        <span class="meta-item reminder-none" @click.stop="!compact && $emit('openReminderPicker')">不提醒</span>
+        <span class="meta-item reminder-none">不提醒</span>
       </template>
     </div>
 
@@ -75,27 +61,13 @@
     </div>
 
     <!-- 描述 -->
-    <template v-if="isEditingDesc">
-      <textarea
-        ref="descInputRef"
-        :value="editingDescValue"
-        class="inline-edit-textarea desc-textarea"
-        @input="$emit('update:editingDescValue', ($event.target as HTMLTextAreaElement).value)"
-        @blur="$emit('saveDescEdit')"
-        @keydown.escape.prevent="$emit('cancelDescEdit')"
-        rows="2"
-        placeholder="添加描述"
-      />
-    </template>
-    <template v-else>
-      <p v-if="milestone.description" class="milestone-desc" @dblclick="!compact && $emit('startDescEdit')">{{ milestone.description }}</p>
-      <p v-else class="milestone-desc desc-placeholder" @dblclick="!compact && $emit('startDescEdit')">{{ compact ? '' : '双击添加描述' }}</p>
-    </template>
+    <p v-if="milestone.description" class="milestone-desc">{{ milestone.description }}</p>
+    <p v-else class="milestone-desc desc-placeholder">{{ compact ? '' : '暂无描述' }}</p>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed } from 'vue'
 import { Calendar, Star, Delete, Edit } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 
@@ -125,40 +97,14 @@ const props = defineProps<{
   countdownUnit: string
   reminderLabel: string
   compact?: boolean
-  isEditingName?: boolean
-  editingNameValue?: string
-  isEditingDesc?: boolean
-  editingDescValue?: string
 }>()
 
 defineEmits<{
-  (e: 'startNameEdit'): void
-  (e: 'saveNameEdit'): void
-  (e: 'cancelNameEdit'): void
-  (e: 'update:editingNameValue', value: string): void
-  (e: 'startDescEdit'): void
-  (e: 'saveDescEdit'): void
-  (e: 'cancelDescEdit'): void
-  (e: 'update:editingDescValue', value: string): void
   (e: 'pin'): void
   (e: 'unpin'): void
   (e: 'delete'): void
   (e: 'edit'): void
-  (e: 'openDatePicker'): void
-  (e: 'toggleRepeat'): void
-  (e: 'openReminderPicker'): void
 }>()
-
-const nameInputRef = ref<HTMLTextAreaElement | null>(null)
-const descInputRef = ref<HTMLTextAreaElement | null>(null)
-
-watch(() => props.isEditingName, (val) => {
-  if (val) nextTick(() => nameInputRef.value?.focus())
-})
-
-watch(() => props.isEditingDesc, (val) => {
-  if (val) nextTick(() => descInputRef.value?.focus())
-})
 
 const formatDate = (date: string): string => {
   return dayjs(date).format('YYYY年MM月DD日')
@@ -345,12 +291,9 @@ const countdownDisplayClass = computed(() => {
   gap: 4px;
   font-size: 13px;
   color: var(--chalk-muted);
-  cursor: pointer;
-  transition: color 0.15s;
 }
 
 .date-plain-text .el-icon { font-size: 13px; }
-.date-plain-text:hover { color: var(--chalk-white); }
 
 /* ===== 元数据行 ===== */
 .milestone-meta {
@@ -363,11 +306,9 @@ const countdownDisplayClass = computed(() => {
 }
 
 .meta-item {
-  cursor: pointer;
   transition: color 0.15s;
 }
 
-.meta-item:hover { color: var(--chalk-white); }
 .repeat-text { color: var(--chalk-blue); }
 .reminder-has { color: var(--chalk-orange); }
 .reminder-none { color: var(--chalk-muted); }
@@ -442,7 +383,6 @@ const countdownDisplayClass = computed(() => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  cursor: pointer;
 }
 
 .milestone-desc.desc-placeholder {

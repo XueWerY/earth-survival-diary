@@ -151,7 +151,7 @@ onMounted(() => {
 
 <style scoped>
 .marketplace-panel {
-  padding: 0 4px;
+  padding: 0;
 }
 
 .marketplace-loading,
@@ -168,9 +168,14 @@ onMounted(() => {
 
 .marketplace-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(var(--card-cols, 1), minmax(0, 1fr));
+  gap: 25px;
+  padding: 0 25px;
+  margin: 0 -16px;
+  align-items: stretch;
 }
+
+.marketplace-grid > .marketplace-card { min-width: 0; }
 
 .marketplace-card {
   background: rgba(255, 255, 255, 0.05);

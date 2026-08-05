@@ -11,7 +11,7 @@
     <BaseDialog
       :visible="open"
       title="选择图标"
-      :width="360"
+      :width="500"
       teleport
       @update:visible="open = $event"
     >

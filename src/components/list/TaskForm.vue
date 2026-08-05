@@ -36,7 +36,7 @@
 
     <div class="form-row">
       <span class="form-label">所属清单</span>
-      <el-select v-model="formListId" placeholder="选择清单" class="list-select" popper-class="dark-select-popper task-form-list-popper">
+      <el-select v-model="formListId" placeholder="选择清单" class="list-select" popper-class="dark-select-popper">
         <el-option v-for="list in availableLists" :key="list.id" :label="list.name" :value="list.id">
           <div class="select-option-row"><span class="select-option-dot" :style="{ background: list.color }"></span>{{ list.name }}</div>
         </el-option>
@@ -45,7 +45,7 @@
 
     <div class="form-row" v-if="formListId">
       <span class="form-label">所属分组</span>
-      <el-select v-model="formGroupId" placeholder="选择分组" class="group-select" popper-class="dark-select-popper task-form-group-popper">
+      <el-select v-model="formGroupId" placeholder="选择分组" class="group-select" popper-class="dark-select-popper">
         <el-option v-for="g in availableGroups" :key="g.id" :label="g.name" :value="g.id">
           <div class="select-option-row"><span class="select-option-dot" :style="{ background: g.color }"></span>{{ g.name }}</div>
         </el-option>
@@ -55,7 +55,7 @@
     <template v-if="formTime">
       <div class="form-row">
         <span class="form-label">重复</span>
-        <el-select v-model="formRepeatStrategy" placeholder="不重复" class="repeat-select" popper-class="dark-select-popper task-form-repeat-popper">
+        <el-select v-model="formRepeatStrategy" placeholder="不重复" class="repeat-select" popper-class="dark-select-popper">
           <el-option v-for="s in REPEAT_STRATEGIES" :key="s.value" :label="s.label" :value="s.value" />
         </el-select>
       </div>
@@ -89,7 +89,7 @@
 
       <div class="form-row" v-if="formRepeatStrategy !== 'none'">
         <span class="form-label">结束重复</span>
-        <el-select v-model="formRepeatEndStrategy" class="end-repeat-select" popper-class="dark-select-popper task-form-end-repeat-popper">
+        <el-select v-model="formRepeatEndStrategy" class="end-repeat-select" popper-class="dark-select-popper">
           <el-option v-for="s in REPEAT_END_STRATEGIES" :key="s.value" :label="s.label" :value="s.value" />
         </el-select>
       </div>
@@ -107,7 +107,7 @@
       <div class="form-row">
         <span class="form-label">提醒</span>
         <div class="reminder-area">
-          <el-select v-model="reminderEnabled" class="reminder-select" popper-class="task-form-reminder-popper">
+          <el-select v-model="reminderEnabled" class="reminder-select" popper-class="dark-select-popper">
             <el-option :value="false" label="不提醒" />
             <el-option :value="true" label="提醒" />
           </el-select>
@@ -120,7 +120,7 @@
 
     <div class="form-row">
       <span class="form-label">备注</span>
-      <el-input v-model="formNote" type="textarea" :rows="2" placeholder="添加备注..." />
+      <el-input v-model="formNote" type="textarea" :autosize="{ minRows: 1, maxRows: 5 }" placeholder="添加备注..." />
     </div>
 
     <div class="form-row">
@@ -163,7 +163,7 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Delete, Plus, Rank } from '@element-plus/icons-vue'
-import { useListStore, type RepeatStrategy, type RepeatEndStrategy, REPEAT_STRATEGIES, REPEAT_END_STRATEGIES, PRIORITIES, type ReminderStrategy, type ChecklistItem } from '../../stores/listStore'
+import { useListStore, type RepeatStrategy, type RepeatEndStrategy, REPEAT_STRATEGIES, REPEAT_END_STRATEGIES, PRIORITIES, type ReminderStrategy, type ChecklistItem, type Task } from '../../stores/listStore'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
 import ReminderTimePicker from '../common/picker/ReminderTimePicker.vue'
@@ -171,6 +171,7 @@ import ReminderTimePicker from '../common/picker/ReminderTimePicker.vue'
 const props = defineProps<{
   listId?: string
   groupId?: string
+  task?: Task
 }>()
 
 const emit = defineEmits<{
@@ -295,6 +296,7 @@ const handleSubmit = () => {
     .filter(item => item.text.trim())
     .map(item => ({ id: item.id, text: item.text.trim(), completed: false }))
   emit('submit', {
+    id: props.task?.id,
     name,
     date: formDate.value,
     time: formTime.value,
@@ -322,6 +324,34 @@ const handleSubmit = () => {
 const cancel = () => emit('cancel')
 
 onMounted(async () => {
+  if (props.task) {
+    const t = props.task
+    formName.value = t.name
+    formDate.value = t.date || ''
+    formTime.value = t.endTime || ''
+    formPriority.value = t.priority
+    formListId.value = t.listId
+    formGroupId.value = t.groupId
+    formRepeatStrategy.value = (t.repeatStrategy || 'none') as RepeatStrategy
+    formRepeatEndStrategy.value = (t.repeatEndStrategy || 'never') as RepeatEndStrategy
+    formRepeatEndDate.value = t.repeatEndDate || ''
+    formRepeatEndCount.value = t.repeatCount || 1
+    repeatDays.value = t.repeatCustomDays || 1
+    repeatWeekdays.value = (t.repeatWeekdays && t.repeatWeekdays.length ? [...t.repeatWeekdays] : [0, 1, 2, 3, 4])
+    repeatMonthDay.value = t.repeatMonthDay || 1
+    repeatLunarMonth.value = t.repeatLunarMonth || 1
+    repeatLunarDay.value = t.repeatLunarDay || 1
+    reminderEnabled.value = t.reminderStrategy !== 'none'
+    if (t.reminderStrategy === 'advance') {
+      reminderTime.value = { days: t.reminderDays || 0, hours: t.reminderHours || 0, minutes: t.reminderMinutes || 0 }
+    } else if (t.reminderStrategy === 'on_time') {
+      reminderTime.value = { days: 0, hours: 0, minutes: 0 }
+    } else {
+      reminderTime.value = { days: 0, hours: 0, minutes: 15 }
+    }
+    formNote.value = t.notes || ''
+    formChecklist.value = (t.checklist || []).map(c => ({ id: c.id, text: c.text }))
+  }
   await nextTick()
   const el = document.querySelector<HTMLInputElement>('.list-form .el-input__inner')
   el?.focus()
@@ -342,16 +372,16 @@ onMounted(async () => {
 .full-input-num { width: 100%; }
 .full-input-num :deep(.el-input__wrapper) { width: 100%; }
 
-.date-area-wrap { width: 130px; }
-.time-area-wrap { width: 60px; }
+.date-area-wrap { width: 100%; }
+.time-area-wrap { width: 100%; }
 .time-area-wrap :deep(.time-btn) { justify-content: center; }
 .time-area-wrap :deep(.time-picker-wrapper) { display: block; width: 100%; }
 
-.list-select { width: 90px; }
-.group-select { width: 120px; }
-.repeat-select { width: 140px; }
-.end-repeat-select { width: 110px; }
-.repeat-count-input { width: 120px !important; }
+.list-select { width: 100%; }
+.group-select { width: 100%; }
+.repeat-select { width: 100%; }
+.end-repeat-select { width: 100%; }
+.repeat-count-input { width: 100% !important; }
 .repeat-count-input :deep(.el-input__wrapper) { width: 100%; }
 
 .list-form-footer { display: flex; justify-content: center; gap: 12px; }
@@ -370,10 +400,10 @@ onMounted(async () => {
 .select-option-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 
 .reminder-area { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; }
-.reminder-select { width: 100px; }
+.reminder-select { width: 100%; }
 .reminder-select :deep(.el-select__wrapper) { padding: 0 8px; min-height: 28px; }
 .reminder-select :deep(.el-select__placeholder) { font-size: 12px; }
-.reminder-advance-wrap { width: 210px; }
+.reminder-advance-wrap { width: 100%; }
 .reminder-advance-wrap :deep(.reminder-trigger) { width: 100%; }
 
 :deep(.el-select__wrapper) { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); }
@@ -399,12 +429,4 @@ onMounted(async () => {
 .capsule-btn { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 18px; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 20px; background: transparent; color: var(--chalk-white-70); cursor: pointer; font-size: 13px; font-family: inherit; }
 .capsule-btn .capsule-icon { width: 14px; height: 14px; }
 .capsule-save { background: rgba(102, 126, 234, 0.2); border-color: rgba(102, 126, 234, 0.4); color: #93c5fd; }
-</style>
-
-<style>
-.task-form-list-popper { min-width: 90px !important; width: 90px !important; }
-.task-form-group-popper { min-width: 120px !important; width: 120px !important; }
-.task-form-repeat-popper { min-width: 140px !important; width: 140px !important; }
-.task-form-end-repeat-popper { min-width: 110px !important; width: 110px !important; }
-.task-form-reminder-popper { min-width: 100px !important; width: 100px !important; }
 </style>

@@ -53,6 +53,7 @@ const cancel = () => {
 .list-form :deep(.el-input__wrapper) { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
 .list-form :deep(.el-input__inner) { color: #fff; }
 .list-form :deep(.el-input__inner::placeholder) { color: rgba(255, 255, 255, 0.4); }
+.list-form :deep(.el-input) { width: 100%; }
 
 .list-color-section { display: flex; flex-direction: column; gap: 8px; }
 .list-color-label { font-size: 13px; color: var(--chalk-dim); }

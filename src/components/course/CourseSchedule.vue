@@ -1,5 +1,5 @@
 <template>
-  <div class="course-container" :class="{ 'is-electron': isElectron }">
+  <div class="course-container" :class="{ 'is-electron': isElectron }" ref="containerRef" :style="{ '--card-cols': cardCols }">
     <div class="course-inner">
       <div v-if="viewMode === 'schedule'" class="week-area">
         <el-button :icon="ArrowLeft" circle size="small" class="week-nav-btn" @click="prevWeek" :disabled="displayWeekNumber <= 1" />
@@ -107,7 +107,7 @@
   <BaseDialog
     :visible="dialogVisible"
     :title="editingCourse ? '编辑课程' : '添加课程'"
-    :width="420"
+    :width="500"
     teleport
     @update:visible="dialogVisible = $event"
   >
@@ -150,7 +150,7 @@
         </div>
       </el-form-item>
       <el-form-item label="备注">
-        <el-input v-model="courseForm.note" type="textarea" :rows="2" placeholder="添加备注（可选）" maxlength="100" show-word-limit />
+        <el-input v-model="courseForm.note" type="textarea" :autosize="{ minRows: 1, maxRows: 5 }" placeholder="添加备注（可选）" maxlength="100" show-word-limit />
       </el-form-item>
     </el-form>
     <template #footer>
@@ -169,7 +169,7 @@
   <BaseDialog
     :visible="showCourseDetail && !!detailCourse"
     :title="detailCourse?.name || ''"
-    :width="360"
+    :width="500"
     teleport
     @update:visible="showCourseDetail = $event"
   >
@@ -412,7 +412,7 @@
 <BaseDialog
   :visible="showCourseCustomBreakDialog"
   title="自由课间休息时长设置"
-  :width="400"
+  :width="500"
   teleport
   @update:visible="showCourseCustomBreakDialog = $event"
 >
@@ -539,6 +539,18 @@ const isElectron = computed(() => typeof window !== 'undefined' && !!(window as 
 // ===== 课程列表视图 =====
 const viewMode = ref<'schedule' | 'list'>('schedule')
 const allCourses = computed(() => courses.value)
+
+// 卡片网格响应式列数：实测可用区宽度 → 1/2/3 列（卡片间距 d = 25px）
+const containerRef = ref<HTMLElement | null>(null)
+const contentWidth = ref(0)
+const CARD_GAP = 25
+const computeCardCols = (w: number): number => {
+  if (w < 1000 + CARD_GAP) return 1
+  if (w < 1500 + 2 * CARD_GAP) return 2
+  return 3
+}
+const cardCols = computed(() => computeCardCols(contentWidth.value))
+let contentResizeObserver: ResizeObserver | null = null
 
 // ===== 课表行高自适应 =====
 const rowHeight = ref(64)
@@ -1214,10 +1226,18 @@ onMounted(async () => {
   await nextTick()
   calcRowHeight()
   window.addEventListener('resize', calcRowHeight)
+  if (containerRef.value) {
+    contentResizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) contentWidth.value = entry.contentRect.width
+    })
+    contentResizeObserver.observe(containerRef.value)
+    contentWidth.value = containerRef.value.clientWidth
+  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', calcRowHeight)
+  contentResizeObserver?.disconnect()
 })
 
 
@@ -1391,14 +1411,15 @@ onUnmounted(() => {
 .corner-toggle-btn:hover { color: var(--chalk-white); background: transparent; }
 
 /* 课程列表视图 */
-.course-list-wrapper { width: 100%; flex: 1; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+/* 抵消 .course-inner 左右 24px 内边距，使列表区宽度等于可用区宽度 */
+.course-list-wrapper { width: calc(100% + 48px); margin: 0 -24px; flex: 1; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
 .course-list-wrapper::-webkit-scrollbar { display: none; }
-.list-top-bar { padding: 8px 16px; }
+.list-top-bar { padding: 8px 25px; }
 .list-back-btn { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: transparent; color: var(--chalk-white-70); cursor: pointer; font-size: 12px; font-family: inherit; transition: all 0.2s; }
 .list-back-btn:hover { background: rgba(255,255,255,0.06); color: var(--chalk-white); }
 .list-back-btn .capsule-icon { width: 14px; height: 14px; }
 .list-empty { text-align: center; color: var(--chalk-muted); font-size: 14px; padding: 40px 0; }
-.course-list-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; padding: 16px; }
+.course-list-grid { display: grid; grid-template-columns: repeat(var(--card-cols, 1), minmax(0, 1fr)); gap: 25px; padding: 16px 25px; align-items: stretch; }
 .course-list-card {
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(255,255,255,0.08);
@@ -1427,7 +1448,7 @@ onUnmounted(() => {
 /* 课程表设置弹窗 */
 .dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
 .dialog-container { background: rgba(30,28,52,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; }
-.course-settings-dialog { width: 400px; }
+.course-settings-dialog { width: 500px; }
 .course-settings-dialog .dialog-header { padding-bottom: 12px; }
 .course-settings-dialog .dialog-body { padding-bottom: 0; }
 .course-settings-dialog .form-footer { position: sticky; bottom: 0; background: rgba(30,28,52,0.98); z-index: 1; padding-bottom: 16px; }
@@ -1471,10 +1492,16 @@ onUnmounted(() => {
 .detail-label { font-size: 11px; color: var(--chalk-muted); }
 .detail-value { font-size: 13px; color: var(--chalk-white-85); line-height: 1.5; }
 
-/* 设置弹窗 */
-.course-settings-dialog .setting-item .setting-control :deep(.date-trigger) { width: 110px; }
-.course-settings-dialog .setting-item .setting-control :deep(.pc-trigger) { width: 210px; justify-content: center; }
+/* 设置弹窗：输入区域宽度自适应弹窗（开关除外） */
+.course-settings-dialog .setting-item .setting-control { width: 100%; }
+.course-settings-dialog .setting-item .setting-control > :deep(*:not(.el-switch)) { flex: 1; min-width: 0; }
+.course-settings-dialog .setting-item .setting-control :deep(.date-trigger) { width: 100%; }
+.course-settings-dialog .setting-item .setting-control :deep(.pc-trigger) { width: 100%; justify-content: center; }
+.course-settings-dialog .setting-item .setting-control :deep(.time-btn) { width: 100%; }
 .course-settings-dialog .setting-item .setting-control :deep(.trigger-arrow) { display: none; }
+.course-settings-dialog .setting-item .break-mode-row :deep(.el-radio-group) { width: 100%; flex-wrap: nowrap; }
+.course-settings-dialog .setting-item .break-mode-row :deep(.el-radio-button) { flex: 1; }
+.course-settings-dialog .setting-item .break-mode-row :deep(.el-radio-button__inner) { width: 100%; }
 
 /* 删除课程确认弹窗 */
 .confirm-message { color: #fbbf24; }

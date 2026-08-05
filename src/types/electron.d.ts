@@ -12,6 +12,7 @@ declare global {
       installUpdate: () => Promise<void>
       checkForUpdate: () => Promise<{ updateAvailable?: boolean; error?: string }>
       openExternal: (url: string) => Promise<void>
+      downloadUpdate: (url: string) => Promise<{ ok: boolean; error?: string }>
       saveFileDialog: (options?: any) => Promise<string | null>
       openFileDialog: (options?: any) => Promise<string | null>
       readFile: (filePath: string) => Promise<string | null>
@@ -99,6 +100,7 @@ interface ReminderItem {
 interface UpdateStatus {
   status: 'available' | 'downloading' | 'downloaded' | 'error' | 'no-update'
   version?: string
+  downloadUrl?: string
   percent?: number
   message?: string
 }
