@@ -1,7 +1,7 @@
 {
   "name": "earth-survival-diary",
   "private": true,
-  "version": "2026.8.5-19",
+  "version": "2026.8.15-5",
   "author": "XueWerY <3073820063@qq.com>",
   "type": "module",
   "main": "electron/main.cjs",
@@ -72,6 +72,10 @@
       {
         "from": "electron/node_modules",
         "to": "node_modules"
+      },
+      {
+        "from": "vendor/snowbaby",
+        "to": "vendor/snowbaby"
       }
     ],
     "win": {
@@ -81,8 +85,8 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": false,
       "deleteAppDataOnUninstall": false,
       "include": "scripts/installer.nsh",
       "artifactName": "Earth-Survival-Diary-Setup-${version}.${ext}",

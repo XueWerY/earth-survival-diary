@@ -58,9 +58,50 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stopLanServer: () => ipcRenderer.invoke('stop-lan-server'),
   fetchLanData: (url) => ipcRenderer.invoke('fetch-lan-data', url),
 
+  // 终端命令执行（PowerShell，输出经 powershell-output 事件流式回推）
+  execPowerShell: (command) => ipcRenderer.invoke('exec-powershell', command),
+  onPowerShellOutput: (callback) => ipcRenderer.on('powershell-output', (_event, data) => callback(data)),
+  offPowerShellOutput: () => ipcRenderer.removeAllListeners('powershell-output'),
+  killPowerShell: () => ipcRenderer.invoke('kill-powershell'),
+
+  // 主进程 HTTPS JSON 请求（绕开渲染进程同源限制）
+  httpGetJson: (url) => ipcRenderer.invoke('http-get-json', url),
+  // 主进程 HTTPS 文本请求（下载插件源码等，返回 { status, text }）
+  httpGetText: (url) => ipcRenderer.invoke('http-get-text', url),
+
   // 插件管理
   getPluginsDirPath: () => ipcRenderer.invoke('get-plugins-dir-path'),
+  getSnowbabyDirPath: () => ipcRenderer.invoke('get-snowbaby-dir-path'),
   createDirectory: (dirPath) => ipcRenderer.invoke('create-directory', dirPath),
   removeDirectory: (dirPath) => ipcRenderer.invoke('remove-directory', dirPath),
-  getRuntimePluginManifests: () => ipcRenderer.invoke('get-runtime-plugin-manifests')
+  getRuntimePluginManifests: () => ipcRenderer.invoke('get-runtime-plugin-manifests'),
+  recompilePlugins: () => ipcRenderer.invoke('recompile-plugins'),
+
+  // 攻略视频全局快捷键（CommandOrControl+Shift+Space 播放/暂停，Ctrl+Left/Right 后退/快进）
+  onVideoGuideShortcut: (callback) => {
+    ipcRenderer.on('video-guide:prev-episode', () => callback('prev-episode'))
+    ipcRenderer.on('video-guide:seek-back', (_e, seconds) => callback('seek-back', seconds))
+    ipcRenderer.on('video-guide:play-pause', () => callback('play-pause'))
+    ipcRenderer.on('video-guide:seek-forward', (_e, seconds) => callback('seek-forward', seconds))
+    ipcRenderer.on('video-guide:next-episode', () => callback('next-episode'))
+  },
+  offVideoGuideShortcut: () => {
+    ipcRenderer.removeAllListeners('video-guide:prev-episode')
+    ipcRenderer.removeAllListeners('video-guide:seek-back')
+    ipcRenderer.removeAllListeners('video-guide:play-pause')
+    ipcRenderer.removeAllListeners('video-guide:seek-forward')
+    ipcRenderer.removeAllListeners('video-guide:next-episode')
+  },
+  getVideoShortcuts: () => ipcRenderer.invoke('video-guide:get-shortcuts'),
+  updateVideoShortcuts: (shortcuts) => ipcRenderer.invoke('video-guide:update-shortcuts', shortcuts),
+
+  // 视频悬浮播放器窗口控制
+  openVideoOverlay: (payload) => ipcRenderer.invoke('video-guide:open-overlay', payload),
+  closeVideoOverlay: () => ipcRenderer.invoke('video-guide:close-overlay'),
+  toggleOverlayCollapse: () => ipcRenderer.invoke('video-guide:overlay-collapse'),
+  controlBiliPlayer: (data) => ipcRenderer.send('video-guide:bili-control', data),
+  getBiliPages: (bvid) => ipcRenderer.invoke('video-guide:bili-pages', bvid),
+  onOverlayInit: (callback) => ipcRenderer.on('overlay:init', (_e, data) => callback(data)),
+  onOverlayCollapsed: (callback) => ipcRenderer.on('overlay:collapsed', (_e, collapsed) => callback(collapsed)),
+  onOverlayProgress: (callback) => ipcRenderer.on('overlay:progress', (_e, progress) => callback(progress))
 })

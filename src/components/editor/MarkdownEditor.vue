@@ -4,7 +4,7 @@
     <div class="md-toolbar" @mousedown.prevent>
       <!-- 插入按钮（编辑态自动禁用，工具栏最左侧） -->
       <div class="md-toolbar-dropdown">
-        <button class="md-toolbar-btn md-dropdown-trigger" title="插入" :disabled="activeBlockId !== null" @click="toggleInsertMenu">
+        <button class="md-toolbar-btn md-dropdown-trigger" title="插入" @click="toggleInsertMenu">
           <span>＋</span><span class="md-caret">▾</span>
         </button>
         <div v-if="insertMenuOpen" class="md-toolbar-menu">
@@ -514,35 +514,44 @@ const onImgSliderInput = (e: Event, block: MdBlockData) => {
   emitFullMd()
 }
 
-// ====== 末尾插入（工具栏用） ======
+// ====== 插入（工具栏用）：编辑态插入到当前编辑块之后，否则追加到末尾 ======
+const insertIndex = (): number => {
+  const id = activeBlockId.value
+  if (id !== null) {
+    const idx = blocks.value.findIndex(b => b.id === id)
+    if (idx !== -1) return idx + 1
+  }
+  return blocks.value.length
+}
+
 const insertBlockAtEnd = () => {
   const newBlock: MdBlockData = { id: nextId++, source: '', html: '', lineCount: 1 }
-  blocks.value.push(newBlock)
+  blocks.value.splice(insertIndex(), 0, newBlock)
   nextTick(() => activateBlock(newBlock.id))
 }
 
 const insertCodeBlockAtEnd = () => {
   const source = '```\n\n```'
   const newBlock: MdBlockData = { id: nextId++, source, html: blockToHtml(source), lineCount: 3 }
-  blocks.value.push(newBlock)
+  blocks.value.splice(insertIndex(), 0, newBlock)
   nextTick(() => activateBlock(newBlock.id, 4))
 }
 
 const insertDividerAtEnd = () => {
   const source = '---'
-  blocks.value.push({ id: nextId++, source, html: blockToHtml(source), lineCount: 1 })
+  blocks.value.splice(insertIndex(), 0, { id: nextId++, source, html: blockToHtml(source), lineCount: 1 })
   emitFullMd()
 }
 
 const insertTableAtEnd = () => {
   const source = '| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n| 内容 | 内容 | 内容 |'
-  blocks.value.push({ id: nextId++, source, html: blockToHtml(source), lineCount: 3 })
+  blocks.value.splice(insertIndex(), 0, { id: nextId++, source, html: blockToHtml(source), lineCount: 3 })
   emitFullMd()
 }
 
 const insertImageBlockAtEnd = () => {
   const newBlock: MdBlockData = { id: nextId++, source: '', html: '', lineCount: 1 }
-  blocks.value.push(newBlock)
+  blocks.value.splice(insertIndex(), 0, newBlock)
   nextTick(() => {
     activateBlock(newBlock.id)
     handleImageUpload(newBlock.id)

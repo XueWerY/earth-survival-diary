@@ -190,11 +190,19 @@
   </BaseDialog>
 
   <BaseDialog :visible="showTaskDialog" :title="'添加任务'" :width="500" teleport @update:visible="closeTaskDialog">
-    <TaskForm :list-id="listDialogListId" :group-id="listDialogGroupId" @submit="onTaskSubmit" @cancel="closeTaskDialog" />
+    <TaskForm ref="addTaskFormRef" :list-id="listDialogListId" :group-id="listDialogGroupId" @submit="onTaskSubmit" @cancel="closeTaskDialog" />
+    <template #footer>
+      <el-button @click="closeTaskDialog">取消</el-button>
+      <el-button type="primary" @click="addTaskFormRef?.submit()">保存</el-button>
+    </template>
   </BaseDialog>
 
   <BaseDialog :visible="showEditTaskDialog" :title="'编辑任务'" :width="500" teleport @update:visible="closeEditTaskDialog">
-    <TaskForm v-if="editingTask" :key="editingTask.id" :task="editingTask" @submit="onEditTaskSubmit" @cancel="closeEditTaskDialog" />
+    <TaskForm v-if="editingTask" ref="editTaskFormRef" :key="editingTask.id" :task="editingTask" @submit="onEditTaskSubmit" @cancel="closeEditTaskDialog" />
+    <template #footer>
+      <el-button @click="closeEditTaskDialog">取消</el-button>
+      <el-button type="primary" @click="editTaskFormRef?.submit()">保存</el-button>
+    </template>
   </BaseDialog>
 
   <div v-if="showMoveDialog" class="dialog-overlay" @click.self="closeMoveDialog">
@@ -214,7 +222,18 @@
     :title="confirmDialogTitle"
     :message="confirmDialogMessage"
     @confirm="handleConfirmAction"
-  />
+  >
+    <template #default>
+      <label v-if="deleteListTasksOpt.visible" class="delete-tasks-option">
+        <input type="checkbox" v-model="deleteListTasks" />
+        <span>同时删除清单下的 {{ deleteListTasksOpt.count }} 个任务</span>
+      </label>
+      <label v-if="deleteGroupTasksOpt.visible" class="delete-tasks-option">
+        <input type="checkbox" v-model="deleteGroupTasks" />
+        <span>同时删除分组下的 {{ deleteGroupTasksOpt.count }} 个任务</span>
+      </label>
+    </template>
+  </ConfirmDialog>
 </template>
 
 <script setup lang="ts">
@@ -814,6 +833,8 @@ const showConfirmDialog = ref(false)
 
 const showEditTaskDialog = ref(false)
 const editingTask = ref<Task | null>(null)
+const addTaskFormRef = ref<InstanceType<typeof TaskForm> | null>(null)
+const editTaskFormRef = ref<InstanceType<typeof TaskForm> | null>(null)
 
 const dialogFolder = ref<TaskFolder | null>(null)
 const dialogList = ref<ListPage | null>(null)
@@ -822,6 +843,10 @@ const dialogGroup = ref<TaskGroup | null>(null)
 const moveTaskId = ref('')
 const confirmDialogTitle = ref('')
 const confirmDialogMessage = ref('')
+const deleteListTasksOpt = ref<{ visible: boolean; count: number }>({ visible: false, count: 0 })
+const deleteListTasks = ref(true)
+const deleteGroupTasksOpt = ref<{ visible: boolean; count: number }>({ visible: false, count: 0 })
+const deleteGroupTasks = ref(false)
 let pendingConfirmAction: (() => void) | null = null
 
 
@@ -832,6 +857,7 @@ const handleAddList = () => { dialogList.value = null; showListDialog.value = tr
 const handleEditFolder = (folder: TaskFolder) => { dialogFolder.value = folder; folderFormName.value = folder.name; folderFormColor.value = folder.color; showFolderDialog.value = true }
 
 const handleDeleteFolder = (folder: TaskFolder) => {
+  deleteListTasksOpt.value = { visible: false, count: 0 }
   confirmDialogTitle.value = '删除文件夹'
   confirmDialogMessage.value = `确定要删除文件夹「${folder.name}」吗？`
   pendingConfirmAction = async () => {
@@ -848,11 +874,13 @@ const handleEditListCard = (list: ListPage) => { dialogList.value = list; showLi
 
 const handleDeleteListCard = (list: ListPage) => {
   const listCount = getListTaskCount(list.id)
+  deleteListTasksOpt.value = { visible: listCount > 0, count: listCount }
+  deleteListTasks.value = true
   confirmDialogTitle.value = '删除清单'
-  confirmDialogMessage.value = `确定要删除清单「${list.name}」吗？${listCount > 0 ? `该清单下有 ${listCount} 个任务，将一起被删除。` : ''}`
+  confirmDialogMessage.value = `确定要删除清单「${list.name}」吗？${listCount > 0 ? `该清单下有 ${listCount} 个任务${deleteListTasksOpt.value.visible ? '。' : ''}` : ''}`
   pendingConfirmAction = async () => {
-    await listStore.deleteList(list.id)
-    ElMessage.success('清单已删除')
+    await listStore.deleteList(list.id, { deleteTasks: deleteListTasks.value })
+    ElMessage.success(deleteListTasks.value ? '清单已删除' : '清单已删除，任务已转移')
     if (pageNav.navPath.value.length >= 4 && pageNav.navPath.value[3] === list.id) {
       const folderId = pageNav.navPath.value[2]
       pageNav.setNavPath(['list', 'custom', folderId])
@@ -865,13 +893,17 @@ const handleAddGroupToCurrent = () => { dialogGroup.value = null; showGroupDialo
 const handleEditGroupCard = (group: TaskGroup) => { dialogGroup.value = group; showGroupDialog.value = true }
 
 const handleDeleteGroupCard = (group: TaskGroup) => {
+  deleteListTasksOpt.value = { visible: false, count: 0 }
+  const groupCount = listStore.lists.filter(m => m.groupId === group.id).length
+  deleteGroupTasksOpt.value = { visible: groupCount > 0, count: groupCount }
+  deleteGroupTasks.value = false
   confirmDialogTitle.value = '删除分组'
   confirmDialogMessage.value = `确定要删除分组「${group.name}」吗？`
   pendingConfirmAction = async () => {
     const listId = currentListIdFromPath.value
     if (!listId) return
-    await listStore.deleteGroupFromList(listId, group.id)
-    ElMessage.success('分组已删除')
+    await listStore.deleteGroupFromList(listId, group.id, { deleteTasks: deleteGroupTasks.value })
+    ElMessage.success(deleteGroupTasks.value ? '分组已删除，其下任务已一并删除' : '分组已删除')
   }
   showConfirmDialog.value = true
 }
@@ -971,8 +1003,9 @@ const onEditTaskSubmit = async (data: Record<string, unknown>) => {
     reminderDays: data.reminderDays || 0,
     reminderHours: data.reminderHours || 0,
     reminderMinutes: data.reminderMinutes || 0,
-    notes: data.note || undefined,
+    notes: data.note ?? '',
     checklist: data.checklist,
+    linkedNoteIds: data.linkedNoteIds,
   } as any)
   ElMessage.success('任务已更新')
   closeEditTaskDialog()
@@ -994,6 +1027,18 @@ const handleConfirmAction = () => {
 
 <style scoped>
 .list-container { display: flex; flex-direction: column; height: 100%; position: relative; padding: 0; }
+
+.delete-tasks-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  user-select: none;
+}
+.delete-tasks-option input { accent-color: #667eea; cursor: pointer; }
 
 .list-breadcrumb-bar {
   display: flex;

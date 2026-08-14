@@ -23,58 +23,47 @@
 
     <!-- 已登录且数据加载完成，显示主界面 -->
     <template v-else>
-      <!-- 主导航栏 - 桌面端在左侧 -->
+      <!-- 主导航栏 - 桌面端底部常驻透明浮层 -->
       <MainNav
         v-if="isDesktop && !splitScreen.isSplitActive.value"
-        variant="left"
+        class="desktop-dock"
+        variant="bottom"
         :activeModule="pageNav.currentModule.value"
+        :split-active="splitScreen.isSplitActive.value"
         :hidden="isFocusFullscreen"
-        :collapsed="sidebarCollapsed"
         noHover
         @navigate="navigateTo"
-        @contextmenu="handleNavContextMenu"
-        @toggle-collapse="toggleSidebarCollapse"
+        @split="handleSplitToggle"
       />
-
-      <!-- 上下文菜单 -->
-      <teleport to="body">
-        <div v-if="contextMenuVisible" class="context-menu-overlay" @click="closeContextMenu"></div>
-        <div v-if="contextMenuVisible" class="context-menu" :style="contextMenuStyle">
-          <div v-if="!splitScreen.isSplitActive.value" class="context-menu-item" @click="handleEnterSplit">
-            <span>拆分界面</span>
-          </div>
-          <div v-if="splitScreen.isSplitActive.value" class="context-menu-item context-menu-item-danger" @click="handleExitSplitClick">
-            <span>退出拆分界面</span>
-          </div>
-        </div>
-      </teleport>
 
       <!-- 主内容区域 -->
       <main class="main-content">
         <div v-if="splitScreen.isSplitActive.value" class="split-container">
-          <div class="split-panel">
-            <MainNav variant="split" :activeModule="panelModules[0]" @navigate="(m: string) => panelNavigate(0, m)" />
-            <div class="split-panel-content">
-              <component :is="moduleComponents[panelModules[0]]" :key="`split-0-${panelModules[0]}`"
-                @fullscreen-change="handleFullscreenFromRoute"
-                @logout="handleLogout"
-                @refreshData="handleRefreshData"
-                @profile-updated="handleProfileUpdated"
-              />
-            </div>
-          </div>
+          <SplitPanel
+            :module="panelModules[0]"
+            :panel-index="0"
+            :module-components="moduleComponents"
+            @navigate="(m: string) => panelNavigate(0, m)"
+            @split="handleSplitToggle"
+            @fullscreen-change="handleFullscreenFromRoute"
+            @logout="handleLogout"
+            @refresh-data="handleRefreshData"
+            @profile-updated="handleProfileUpdated"
+            @close-profile="handleCloseProfile"
+          />
           <div class="split-divider"></div>
-          <div class="split-panel">
-            <MainNav variant="split" :activeModule="panelModules[1]" @navigate="(m: string) => panelNavigate(1, m)" />
-            <div class="split-panel-content">
-              <component :is="moduleComponents[panelModules[1]]" :key="`split-1-${panelModules[1]}`"
-                @fullscreen-change="handleFullscreenFromRoute"
-                @logout="handleLogout"
-                @refreshData="handleRefreshData"
-                @profile-updated="handleProfileUpdated"
-              />
-            </div>
-          </div>
+          <SplitPanel
+            :module="panelModules[1]"
+            :panel-index="1"
+            :module-components="moduleComponents"
+            @navigate="(m: string) => panelNavigate(1, m)"
+            @split="handleSplitToggle"
+            @fullscreen-change="handleFullscreenFromRoute"
+            @logout="handleLogout"
+            @refresh-data="handleRefreshData"
+            @profile-updated="handleProfileUpdated"
+            @close-profile="handleCloseProfile"
+          />
         </div>
         <div v-else class="panel-wrapper">
           <div v-if="capturedError" class="captured-error">
@@ -118,7 +107,7 @@
 
       <!-- 版本更新/更新日志面板 -->
       <template v-if="!guideVisible">
-      <BaseDialog :visible="updateDialogVisible" title="版本更新" :width="380" noOverlayClose @update:visible="updateDialogVisible = false">
+      <BaseDialog :visible="updateDialogVisible" title="版本更新" :width="380" :z-index="10000" noOverlayClose @update:visible="updateDialogVisible = false">
         <div class="update-status" :class="{ 'update-error': updateStatus === 'error', 'update-no-new': updateStatus === 'no-update' }" style="text-align: center;">
           <template v-if="updateStatus === 'available'">
             <p>发现新版本 v{{ updateVersion }}</p>
@@ -154,13 +143,15 @@
         <ReminderCard v-for="(r, i) in activeReminders" :key="r.id" :reminder="r" @dismiss="dismissReminder(i)" />
       </div>
 
-      <!-- 主导航栏 - 移动端在底部 -->
+      <!-- 主导航栏 - 移动端透明浮层 -->
       <MainNav
-        v-if="!isDesktop"
+        v-if="!isDesktop && !splitScreen.isSplitActive.value"
         variant="bottom"
         :activeModule="pageNav.currentModule.value"
+        :split-active="splitScreen.isSplitActive.value"
         :hidden="isFocusFullscreen"
         @navigate="navigateTo"
+        @split="handleSplitToggle"
       />
 
     </template>
@@ -186,6 +177,7 @@ import { logger } from './lib/logger'
 import { usePageNav, MODULE_ROUTES } from './composables/usePageNav'
 import { useSplitScreen } from './composables/useSplitScreen'
 import MainNav from './components/common/nav/MainNav.vue'
+import SplitPanel from './components/common/SplitPanel.vue'
 import dayjs from 'dayjs'
 // @ts-expect-error - Vite raw import
 import changelogContent from '../CHANGELOG.md?raw'
@@ -216,38 +208,30 @@ const moduleComponents: Record<string, ReturnType<typeof defineAsyncComponent>> 
 }
 
 const panelModules = ref<string[]>(['footprint', 'footprint'])
+const prevPanelModules = ref<string[]>(['footprint', 'footprint'])
 
-const contextMenuVisible = ref(false)
-const contextMenuStyle = ref({ top: '0px', left: '0px' })
-
-function handleNavContextMenu(event: MouseEvent) {
-  if (!isElectron.value) return
-  event.preventDefault()
-  contextMenuStyle.value = {
-    top: `${event.clientY}px`,
-    left: `${event.clientX}px`,
+function handleSplitToggle() {
+  if (splitScreen.isSplitActive.value) {
+    splitScreen.exitSplit()
+  } else {
+    const current = pageNav.currentModule.value
+    panelModules.value = [current, current]
+    prevPanelModules.value = [current, current]
+    splitScreen.enterSplit(current)
   }
-  contextMenuVisible.value = true
-}
-
-function closeContextMenu() {
-  contextMenuVisible.value = false
-}
-
-function handleEnterSplit() {
-  const current = pageNav.currentModule.value
-  panelModules.value = [current, current]
-  closeContextMenu()
-  splitScreen.enterSplit(current)
-}
-
-function handleExitSplitClick() {
-  closeContextMenu()
-  splitScreen.exitSplit()
 }
 
 function panelNavigate(panelIndex: number, module: string) {
+  prevPanelModules.value[panelIndex] = panelModules.value[panelIndex]
   panelModules.value[panelIndex] = module
+}
+
+// 拆分界面中关闭"我的"：把该面板切到上一个模块，保持拆分界面不退出
+function handleCloseProfile(panelIndex: number) {
+  if (panelModules.value[panelIndex] === 'profile') {
+    const prev = prevPanelModules.value[panelIndex] || 'footprint'
+    panelNavigate(panelIndex, prev)
+  }
 }
 
 const isElectron = computed(() => typeof window !== 'undefined' && !!(window as any).electronAPI)
@@ -274,12 +258,6 @@ const noteStore = useNoteStore()
 const authStore = useAuthStore()
 const settingsStore = useSettingsStore()
 const focusStore = useFocusStore()
-
-// 桌面端左侧导航栏收起状态（持久化在用户设置中）
-const sidebarCollapsed = computed(() => !!settingsStore.settings.sidebarCollapsed)
-const toggleSidebarCollapse = () => {
-  settingsStore.updateSettings({ sidebarCollapsed: !sidebarCollapsed.value })
-}
 
 // 星星画布显示条件
 const showStarCanvas = computed(() => {
@@ -1018,6 +996,7 @@ const ensureDefaultData = async () => {
         repeatCount: 1,
         priority: 'medium',
         checklist: [],
+        linkedNoteIds: [],
         completed: false,
         completedStartTime: '',
         completedEndTime: '',
@@ -1827,6 +1806,17 @@ onUnmounted(() => {
   min-width: 0;
 }
 
+/* 桌面端底部透明浮层导航（默认隐藏），内容仅保留 25px 下边界间距 */
+.app-container.desktop-layout .main-content {
+  padding-bottom: 25px;
+}
+
+/* 移动端导航改为固定浮层后，内容同样保留 25px 下边界间距 */
+.app-container:not(.desktop-layout) .main-content {
+  padding-bottom: 25px;
+}
+
+/* 导航栏展开按钮：默认隐藏时显示于页面底部居中、紧贴下边界的胶囊把手 */
 .panel-wrapper {
   width: 100%;
   height: 100%;
@@ -1998,56 +1988,6 @@ onUnmounted(() => {
 :deep(.cl-list li) { font-size: 12px; line-height: 1.7; padding: 2px 0; position: relative; padding-left: 14px; }
 :deep(.cl-list li)::before { content: '•'; position: absolute; left: 0; color: rgba(255,255,255,0.25); font-size: 10px; top: 5px; }
 
-.context-menu-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 10000;
-}
-
-.context-menu {
-  position: fixed;
-  z-index: 10001;
-  background: rgba(30, 28, 52, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  padding: 4px 0;
-  min-width: 150px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(12px);
-}
-
-.context-menu-item {
-  padding: 8px 16px;
-  font-size: 13px;
-  color: var(--chalk-white-85);
-  cursor: pointer;
-  transition: background 0.15s;
-  user-select: none;
-}
-
-.context-menu-item:hover {
-  background: rgba(102, 126, 234, 0.2);
-  color: var(--chalk-white);
-}
-
-.context-menu-item-danger {
-  color: var(--chalk-red);
-}
-
-.context-menu-item-danger:hover {
-  background: rgba(239, 68, 68, 0.15);
-  color: var(--chalk-red);
-}
-
-.context-menu-divider {
-  height: 1px;
-  margin: 4px 8px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
 .split-container {
   display: flex;
   width: 100%;
@@ -2061,6 +2001,7 @@ onUnmounted(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .split-panel-content {

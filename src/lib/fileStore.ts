@@ -410,11 +410,21 @@ export async function fsUpdateList(userId: string, listId: string, data: any) {
   return { list: lists[idx] }
 }
 
-export async function fsDeleteList(userId: string, listId: string) {
+export async function fsDeleteList(userId: string, listId: string, opts?: { deleteTasks?: boolean; transferToListId?: string }) {
   let lists = await readJson<any[]>(userDataPath(userId, 'list', 'lists'), [])
   let tasks = await readJson<any[]>(userDataPath(userId, 'list', 'tasks'), [])
+  if (opts?.deleteTasks === false) {
+    if (opts.transferToListId) {
+      const target = lists.find((l: any) => l.id === opts.transferToListId)
+      const targetGroupId = target?.groups?.[0]?.id || 'default'
+      tasks = tasks.map((m: any) => m.list_id === listId ? { ...m, list_id: opts.transferToListId!, group_id: targetGroupId } : m)
+    } else {
+      tasks = tasks.filter((m: any) => m.list_id !== listId)
+    }
+  } else {
+    tasks = tasks.filter((m: any) => m.list_id !== listId)
+  }
   lists = lists.filter((l: any) => l.id !== listId)
-  tasks = tasks.filter((m: any) => m.list_id !== listId)
   await writeJson(userDataPath(userId, 'list', 'lists'), lists)
   await writeJson(userDataPath(userId, 'list', 'tasks'), tasks)
   return { success: true }
@@ -454,7 +464,7 @@ export async function fsAddGroup(userId: string, listId: string, data: any) {
   return { group: newGroup }
 }
 
-export async function fsDeleteGroup(userId: string, listId: string, groupId: string) {
+export async function fsDeleteGroup(userId: string, listId: string, groupId: string, opts?: { deleteTasks?: boolean }) {
   const lists = await readJson<any[]>(userDataPath(userId, 'list', 'lists'), [])
   const idx = lists.findIndex((l: any) => l.id === listId)
   if (idx === -1) throw new Error('使命列表不存在')
@@ -463,6 +473,11 @@ export async function fsDeleteGroup(userId: string, listId: string, groupId: str
   if (list.groups.length <= 1) throw new Error('至少需要保留一个分组')
   list.groups = list.groups.filter((g: any) => g.id !== groupId)
   await writeJson(userDataPath(userId, 'list', 'lists'), lists)
+  if (opts?.deleteTasks) {
+    let tasks = await readJson<any[]>(userDataPath(userId, 'list', 'tasks'), [])
+    tasks = tasks.filter((m: any) => !(m.list_id === listId && m.group_id === groupId))
+    await writeJson(userDataPath(userId, 'list', 'tasks'), tasks)
+  }
   return { success: true }
 }
 
@@ -525,6 +540,7 @@ export async function fsAddListTask(userId: string, data: any) {
     repeat_completed_count: 0,
     priority: data.priority || 'none',
     checklist: data.checklist || [],
+    linked_note_ids: data.linkedNoteIds || [],
     completed_start_time: '',
     completed_end_time: '',
     notes: data.notes || '',
@@ -555,7 +571,7 @@ export async function fsUpdateListTask(userId: string, taskId: string, updates: 
     repeatLunarMonth: 'repeat_lunar_month', repeatLunarDay: 'repeat_lunar_day',
     repeatEndStrategy: 'repeat_end_strategy', repeatEndDate: 'repeat_end_date',
     repeatCount: 'repeat_count', repeatCompletedCount: 'repeat_completed_count',
-    priority: 'priority', checklist: 'checklist',
+    priority: 'priority', checklist: 'checklist', linkedNoteIds: 'linked_note_ids',
     completedStartTime: 'completed_start_time', completedEndTime: 'completed_end_time',
     notes: 'notes', reminderStrategy: 'reminder_strategy',
     reminderDays: 'reminder_days', reminderHours: 'reminder_hours',

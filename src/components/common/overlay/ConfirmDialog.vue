@@ -8,6 +8,7 @@
   >
     <div class="confirm-body">
       <p class="confirm-message">{{ messageText }}</p>
+      <slot />
     </div>
     <template #footer>
       <button class="capsule-btn cancel-btn" @click="handleCancel">

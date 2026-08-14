@@ -44,6 +44,8 @@ import ConfirmDialog from '../components/common/overlay/ConfirmDialog.vue'
   'stores/settingsStore': { useSettingsStore },
   'stores/focusStore': { useFocusStore },
   'stores/listStore': { useListStore },
+  'components/ui/BaseDialog.vue': BaseDialog,
+  // 历史别名：BaseDialog 曾位于 components/common/，旧插件产物仍按此键取值，保留以兼容未重新编译的已装插件
   'components/common/BaseDialog.vue': BaseDialog,
   'components/common/overlay/ConfirmDialog.vue': ConfirmDialog,
 }

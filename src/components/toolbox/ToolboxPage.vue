@@ -3,11 +3,11 @@
     <div v-if="activeTool" class="tool-page-overlay">
       <div class="tool-page-container">
         <div class="tool-page-header">
-          <button class="back-btn" @click="closeTool">
+          <button class="back-btn" @click="handleToolBack">
             <el-icon><ArrowLeft /></el-icon>
             <span>返回</span>
           </button>
-          <span class="tool-page-title">{{ activeTool.name }}</span>
+          <span class="tool-page-title">{{ activeTool.title || activeTool.name }}</span>
         </div>
         <div class="tool-page-body">
           <component :is="activeTool.component" />
@@ -16,24 +16,28 @@
     </div>
     <div v-else class="toolbox-content">
       <el-scrollbar>
-        <div class="section" v-if="tools.length > 0">
+        <div class="section" v-if="tagGroups.length > 0">
           <div class="section-title-row">
             <button class="collapse-btn" @click="toggleToolsCollapse">
               <el-icon><component :is="toolsCollapsed ? ArrowDown : ArrowUp" /></el-icon>
             </button>
             <h3 class="section-title">小工具</h3>
           </div>
-          <div v-show="!toolsCollapsed" class="tool-card-grid">
-            <div
-              v-for="tool in tools"
-              :key="tool.id"
-              class="tool-card"
-              @click="openTool(tool)"
-            >
-              <div class="tool-card-icon">{{ tool.icon }}</div>
-              <div class="tool-card-name">{{ tool.name }}</div>
-              <div class="tool-card-desc">{{ tool.description }}</div>
-              <div class="tool-card-plugin">{{ getPluginName(tool.pluginId) }}</div>
+          <div v-show="!toolsCollapsed">
+            <div class="tool-group" v-for="group in tagGroups" :key="group.pluginId">
+              <div class="tool-group-header">{{ group.pluginName }}</div>
+              <div class="tool-card-grid">
+                <div
+                  v-for="tool in group.tools"
+                  :key="tool.id"
+                  class="tool-card"
+                  @click="openTool(tool)"
+                >
+                  <div class="tool-card-icon">{{ tool.icon }}</div>
+                  <div class="tool-card-name">{{ tool.name }}</div>
+                  <div class="tool-card-desc">{{ tool.description }}</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -63,19 +67,8 @@
                 <span v-if="plugin.tools && plugin.tools.length > 0" class="plugin-tools-count">小工具 {{ plugin.tools.length }}个</span>
               </div>
               <div class="plugin-desc">{{ plugin.manifest.description }}</div>
-              <button
-                class="plugin-delete-btn"
-                :disabled="!isElectron || deletingPlugin === plugin.manifest.id"
-                @click="handleDeletePlugin(plugin.manifest.id)"
-              >
-                {{ deletingPlugin === plugin.manifest.id ? '删除中...' : '删除插件' }}
-              </button>
             </div>
           </div>
-          <p v-if="installedRestartNeeded" class="restart-hint">
-            插件已变更，请重启应用使更改生效。
-            <button v-if="isElectron" class="restart-btn" @click="doRestart">立即重启</button>
-          </p>
         </div>
 
         <div class="section">
@@ -84,41 +77,113 @@
               <el-icon><component :is="marketCollapsed ? ArrowDown : ArrowUp" /></el-icon>
             </button>
             <h3 class="section-title">插件市场</h3>
-            <button class="market-refresh-btn" @click="refreshMarketplace" :disabled="marketLoading">
-              <el-icon :class="{ spinning: marketLoading }"><Refresh /></el-icon>
+            <button class="market-refresh-btn" @click="handleRefreshClick" :disabled="marketLoading">
+              <el-icon v-if="marketLoading" :class="{ spinning: marketLoading }"><Refresh /></el-icon>
+              <span>{{ marketLoading ? '刷新中' : '刷新' }}</span>
             </button>
           </div>
           <div v-show="!marketCollapsed">
-            <MarketplacePanel ref="marketplaceRef" />
+            <MarketplacePanel ref="marketplaceRef" :loading="marketLoading" />
           </div>
         </div>
       </el-scrollbar>
     </div>
+
+    <!-- 刷新进度弹窗 -->
+    <BaseDialog
+      :visible="refreshDialogVisible"
+      title="刷新插件市场"
+      :width="420"
+      noOverlayClose
+      :inline="splitScreen.isSplitActive.value"
+      @update:visible="refreshDialogVisible = $event"
+    >
+      <div class="refresh-dialog-body">
+        <template v-if="refreshState === 'progress'">
+          <el-icon class="spinning refresh-progress-icon"><Refresh /></el-icon>
+          <p class="mp-popup-tip">正在刷新插件市场...</p>
+        </template>
+        <template v-else-if="refreshState === 'no-update'">
+          <p class="mp-popup-tip">刷新成功，无插件需要更新</p>
+        </template>
+        <template v-else>
+          <p class="mp-popup-tip">刷新失败，请重试</p>
+        </template>
+      </div>
+      <template #footer>
+        <template v-if="refreshState === 'failed'">
+          <el-button @click="handleRefreshClick">重试</el-button>
+          <el-button type="primary" @click="refreshDialogVisible = false">关闭</el-button>
+        </template>
+      </template>
+    </BaseDialog>
+
+    <!-- 插件更新可用提醒弹窗 -->
+    <BaseDialog
+      :visible="updateDialogVisible"
+      title="插件更新可用"
+      :width="420"
+      @update:visible="updateDialogVisible = $event"
+    >
+      <p class="mp-popup-tip">以下插件有可用更新：</p>
+      <div v-if="!updateDone" class="update-plugin-list">
+        <div v-for="u in updatablePlugins" :key="u.id" class="update-plugin-item">
+          <div class="up-info">
+            <div class="up-name">{{ u.name }}</div>
+            <div class="up-ver">v{{ u.currentVersion }} → v{{ u.version }}</div>
+          </div>
+          <button class="up-btn" @click="updateOne(u)" :disabled="updating">更新</button>
+        </div>
+      </div>
+      <p v-if="updating" class="mp-popup-tip update-progress">{{ updateProgressText }}</p>
+      <p v-if="updateDone" class="mp-popup-tip update-done-tip">更新完成</p>
+      <template #footer>
+        <template v-if="updateDone">
+          <el-button type="primary" @click="updateDialogVisible = false">关闭</el-button>
+        </template>
+        <template v-else>
+          <el-button @click="updateDialogVisible = false" :disabled="updating">稍后</el-button>
+          <el-button type="primary" @click="updateAllInDialog" :disabled="updating">全部更新</el-button>
+        </template>
+      </template>
+    </BaseDialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, shallowRef, onMounted, onUnmounted, computed, inject, defineAsyncComponent } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, shallowRef, onMounted, onUnmounted, computed, defineAsyncComponent, provide } from 'vue'
 import { ArrowLeft, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { logger } from '../../lib/logger'
 import { getAllTools, getPlugins, loadRuntimePlugins, type ToolInfo } from '../../lib/pluginLoader'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useSplitScreen } from '../../composables/useSplitScreen'
 import MarketplacePanel from './MarketplacePanel.vue'
+import BaseDialog from '../ui/BaseDialog.vue'
 import { Refresh } from '@element-plus/icons-vue'
+import { type MarketplacePlugin } from '../../lib/marketplace'
 
 const settingsStore = useSettingsStore()
-const isElectron = inject<boolean>('isElectron', false)
+const splitScreen = useSplitScreen()
 const tools = ref<ToolInfo[]>([])
 const plugins = ref<ReturnType<typeof getPlugins>>([])
-const activeTool = shallowRef<{ name: string; component: any } | null>(null)
+const activeTool = shallowRef<{ name: string; component: any; title?: string; onBack?: () => void } | null>(null)
+// 子工具可通过 setToolHeader 动态更新顶部标题与返回回调（如抽卡分析的子页面返回其首页）
+provide('toolHeader', (title?: string, onBack?: () => void) => {
+  if (!activeTool.value) return
+  activeTool.value = { ...activeTool.value, title, onBack }
+})
 const toolsCollapsed = ref(false)
 const pluginsCollapsed = ref(false)
 const marketCollapsed = ref(false)
-const deletingPlugin = ref<string | null>(null)
 const marketplaceRef = ref<InstanceType<typeof MarketplacePanel> | null>(null)
 const marketLoading = ref(false)
-const installedRestartNeeded = ref(false)
+const updatablePlugins = ref<MarketplacePlugin[]>([])
+const updateDialogVisible = ref(false)
+const refreshDialogVisible = ref(false)
+const refreshState = ref<'progress' | 'no-update' | 'failed'>('progress')
+const updating = ref(false)
+const updateDone = ref(false)
+const updateProgressText = ref('')
 
 // 卡片网格响应式列数：实测内容区宽度 → 1/2/3 列（卡片间距 d = 25px）
 const contentRef = ref<HTMLElement | null>(null)
@@ -133,14 +198,75 @@ const computeCardCols = (w: number): number => {
 const cardCols = computed(() => computeCardCols(contentWidth.value))
 let contentResizeObserver: ResizeObserver | null = null
 
-async function refreshMarketplace() {
-  if (marketplaceRef.value) {
-    marketLoading.value = true
-    try {
-      await marketplaceRef.value.refresh()
-    } finally {
-      marketLoading.value = false
+const tagGroups = computed(() => {
+  const buckets = new Map<string, ToolInfo[]>()
+  for (const t of tools.value) {
+    const arr = buckets.get(t.pluginId)
+    if (arr) arr.push(t)
+    else buckets.set(t.pluginId, [t])
+  }
+  return Array.from(buckets.entries()).map(([pluginId, groupTools]) => ({
+    pluginId,
+    pluginName: getPluginName(pluginId),
+    tools: groupTools,
+  }))
+})
+
+async function handleRefreshClick() {
+  if (!marketplaceRef.value || marketLoading.value) return
+  refreshState.value = 'progress'
+  refreshDialogVisible.value = true
+  marketLoading.value = true
+  try {
+    const list = await marketplaceRef.value.refresh()
+    const ups = list.filter(p => p.hasUpdate)
+    if (ups.length) {
+      updatablePlugins.value = ups
+      updating.value = false
+      updateDone.value = false
+      updateProgressText.value = ''
+      refreshDialogVisible.value = false
+      updateDialogVisible.value = true
+    } else {
+      refreshState.value = 'no-update'
+      setTimeout(() => { refreshDialogVisible.value = false }, 1500)
     }
+  } catch (e) {
+    refreshState.value = 'failed'
+    logger.warn('[工具箱] 插件市场刷新失败', { error: e instanceof Error ? e.message : String(e) })
+  } finally {
+    marketLoading.value = false
+  }
+}
+
+async function updateOne(p: MarketplacePlugin) {
+  if (!marketplaceRef.value || updating.value) return
+  updating.value = true
+  updateProgressText.value = `正在更新：${p.name}`
+  try {
+    await marketplaceRef.value.updatePlugin(p)
+  } catch (e) {
+    logger.warn('[工具箱] 插件更新失败', { id: p.id, error: e instanceof Error ? e.message : String(e) })
+  } finally {
+    updating.value = false
+    updateDone.value = true
+  }
+}
+
+async function updateAllInDialog() {
+  if (!marketplaceRef.value || updating.value) return
+  updating.value = true
+  try {
+    for (const p of updatablePlugins.value) {
+      if (!p.hasUpdate) continue
+      updateProgressText.value = `正在更新：${p.name}`
+      await marketplaceRef.value.updatePlugin(p)
+    }
+  } catch (e) {
+    logger.warn('[工具箱] 插件批量更新失败', { error: e instanceof Error ? e.message : String(e) })
+  } finally {
+    updating.value = false
+    updateDone.value = true
   }
 }
 
@@ -157,7 +283,7 @@ onMounted(async () => {
     marketCollapsed.value = !!settingsStore.settings.toolbox.marketCollapsed
   }
 
-  refreshMarketplace()
+  handleRefreshClick()
 
   if (contentRef.value) {
     contentResizeObserver = new ResizeObserver((entries) => {
@@ -196,40 +322,19 @@ async function toggleMarketCollapse() {
   })
 }
 
-async function handleDeletePlugin(pluginId: string) {
-  if (!window.electronAPI) {
-    ElMessage.info('插件删除需要在桌面端进行操作')
-    return
-  }
-  deletingPlugin.value = pluginId
-  try {
-    const pluginsDir = await window.electronAPI.getPluginsDirPath()
-    await window.electronAPI.removeDirectory(`${pluginsDir}/${pluginId}`)
-    ElMessage.success('插件已删除，重启后生效')
-    // 刷新本地插件列表
-    plugins.value = getPlugins()
-    tools.value = getAllTools()
-    installedRestartNeeded.value = true
-  } catch (e) {
-    logger.error(`[工具箱] 删除插件失败 ${pluginId}`, { error: e instanceof Error ? e.message : String(e) })
-    ElMessage.error('删除失败')
-  } finally {
-    deletingPlugin.value = null
-  }
-}
-
 async function openTool(tool: ToolInfo) {
   logger.info('[工具箱] 打开工具', { toolId: tool.id, toolName: tool.name })
   const comp = defineAsyncComponent(tool.component)
-  activeTool.value = { name: tool.name, component: comp }
+  activeTool.value = { name: tool.name, component: comp, title: tool.name, onBack: undefined }
 }
 
 function closeTool() {
   activeTool.value = null
 }
 
-function doRestart() {
-  window.electronAPI?.restartApp()
+function handleToolBack() {
+  if (activeTool.value?.onBack) activeTool.value.onBack()
+  else closeTool()
 }
 </script>
 
@@ -294,21 +399,99 @@ function doRestart() {
 }
 
 .market-refresh-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: transparent;
-  color: var(--chalk-white-70);
+  gap: 4px;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(102, 126, 234, 0.4);
+  background: rgba(102, 126, 234, 0.15);
+  color: var(--chalk-blue);
+  font-size: 13px;
   cursor: pointer;
-  transition: color 0.15s;
-  padding: 0;
+  transition: all 0.2s;
+  flex-shrink: 0;
 }
 
-.market-refresh-btn:hover { color: var(--chalk-white); }
+.market-refresh-btn:hover { background: rgba(102, 126, 234, 0.3); }
 .market-refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.mp-popup-tip {
+  font-size: 13px;
+  color: var(--chalk-white-70);
+  margin: 0 0 12px;
+  line-height: 1.6;
+}
+
+.refresh-dialog-body {
+  text-align: center;
+  padding: 8px 0;
+}
+
+.refresh-progress-icon {
+  font-size: 28px;
+  color: var(--chalk-blue);
+  margin-bottom: 8px;
+}
+
+.update-progress {
+  color: var(--chalk-blue);
+  margin-bottom: 0;
+}
+
+.update-done-tip {
+  color: #34d399;
+  font-weight: 600;
+  margin-bottom: 0;
+}
+
+.update-plugin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.update-plugin-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.up-info {
+  min-width: 0;
+}
+
+.up-name {
+  color: var(--chalk-white);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.up-ver {
+  color: var(--chalk-muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.up-btn {
+  padding: 4px 16px;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  border-radius: 6px;
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.up-btn:hover { background: rgba(52, 211, 153, 0.3); }
+.up-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .tool-card-grid {
   display: grid;
@@ -357,9 +540,26 @@ function doRestart() {
   flex: 1;
 }
 
-.tool-card-plugin {
-  color: var(--chalk-subtle);
-  font-size: 11px;
+.tool-group {
+  margin-bottom: 28px;
+}
+
+.tool-group:last-child {
+  margin-bottom: 0;
+}
+
+.tool-group-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px 9px;
+  padding: 4px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  color: var(--chalk-white-70);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .empty-state {
@@ -440,47 +640,6 @@ function doRestart() {
   word-break: break-all;
 }
 
-.plugin-delete-btn {
-  margin-top: 10px;
-  padding: 4px 14px;
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  border-radius: 6px;
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-  align-self: flex-start;
-}
-
-.plugin-delete-btn:hover { background: rgba(239, 68, 68, 0.2); }
-.plugin-delete-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-.restart-hint {
-  margin-top: 16px;
-  padding: 12px 16px;
-  background: rgba(102, 126, 234, 0.1);
-  border: 1px solid rgba(102, 126, 234, 0.3);
-  border-radius: 6px;
-  color: var(--chalk-blue);
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.restart-btn {
-  padding: 4px 12px;
-  border: 1px solid #667eea;
-  border-radius: 6px;
-  background: rgba(102, 126, 234, 0.2);
-  color: var(--chalk-blue);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.restart-btn:hover { background: rgba(102, 126, 234, 0.35); }
-
 .tool-page-overlay {
   position: absolute;
   top: 0;
@@ -507,9 +666,13 @@ function doRestart() {
   padding: 16px 0;
   gap: 12px;
   flex-shrink: 0;
+  position: relative;
+  justify-content: center;
 }
 
 .back-btn {
+  position: absolute;
+  left: 0;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -530,6 +693,8 @@ function doRestart() {
 }
 
 .tool-page-title {
+  flex: 1;
+  text-align: center;
   color: var(--chalk-white);
   font-size: 16px;
   font-weight: 600;

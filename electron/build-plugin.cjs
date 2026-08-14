@@ -24,7 +24,7 @@ const BARE_BRIDGE = new Set([
 const SRC_BRIDGE = new Set([
   'lib/logger', 'lib/api', 'services/storageService',
   'stores/settingsStore', 'stores/focusStore', 'stores/listStore',
-  'components/common/BaseDialog.vue', 'components/common/overlay/ConfirmDialog.vue',
+  'components/ui/BaseDialog.vue', 'components/common/overlay/ConfirmDialog.vue',
 ])
 
 function genPlaceholderToolJs(toolName) {

@@ -1,183 +1,179 @@
 <template>
   <div class="profile-page">
     <div class="profile-content">
-      <el-scrollbar>
-        <div class="profile-section" id="section-profile">
-          <h3 class="section-title">个人信息</h3>
+      <div class="profile-section" id="section-profile">
+        <h3 class="section-title">个人信息</h3>
 
-          <el-form
-              ref="formRef"
-              :model="form"
-              :rules="rules"
-              label-position="top"
-              class="profile-form"
-          >
-            <el-form-item label="昵称" prop="nickname">
-              <el-input
-                  v-model="form.nickname"
-                  placeholder="请输入昵称"
-                  maxlength="20"
-                  show-word-limit
+        <el-form
+            ref="formRef"
+            :model="form"
+            :rules="rules"
+            label-position="top"
+            class="profile-form"
+        >
+          <el-form-item label="昵称" prop="nickname">
+            <el-input
+                v-model="form.nickname"
+                placeholder="请输入昵称"
+                maxlength="20"
+                show-word-limit
+            />
+          </el-form-item>
+
+          <el-form-item label="生日">
+            <DateScrollPicker
+                v-model="form.birthday"
+            />
+          </el-form-item>
+        </el-form>
+      </div>
+
+      <div class="profile-section" id="section-security">
+        <h3 class="section-title">账号安全</h3>
+
+        <div class="security-item">
+          <button class="security-edit-btn" @click="showEmailDialog = true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="security-edit-icon"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <div class="security-info">
+            <span class="security-label">账号：</span>
+            <span class="security-value">{{ maskEmail(authStore.user?.email) }}</span>
+          </div>
+        </div>
+
+        <div class="security-item">
+          <button class="security-edit-btn" @click="showPasswordDialog = true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="security-edit-icon"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <div class="security-info">
+            <span class="security-label">密码：</span>
+            <span class="security-value">••••••••</span>
+          </div>
+        </div>
+
+        <div class="security-item">
+          <button class="security-edit-btn" @click="showPhoneDialog = true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="security-edit-icon"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <div class="security-info">
+            <span class="security-label">手机号：</span>
+            <span class="security-value">{{ form.phone || '未绑定' }}</span>
+          </div>
+        </div>
+
+        <div class="security-item">
+          <div class="security-info">
+            <span class="security-label">注册时间：</span>
+            <span class="security-value">{{ formatCreatedAt() }}</span>
+          </div>
+        </div>
+
+        <div class="security-actions">
+          <button class="capsule-btn capsule-btn-danger" @click="handleLogout" :disabled="loggingOut">
+            <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            <span>退出登录</span>
+          </button>
+          <button class="capsule-btn capsule-btn-danger" @click="handleDeleteAccount" :disabled="deletingAccount">
+            <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+            <span>注销账号</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="profile-section" id="section-system">
+        <h3 class="section-title">系统设置</h3>
+        <p class="section-desc">配置程序在系统中的行为。</p>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <span class="setting-label">开机自启动</span>
+            <span class="setting-desc">登录系统时自动启动程序</span>
+          </div>
+          <div class="setting-control">
+            <el-switch
+                v-model="autoLaunch"
+                inline-prompt
+                size="default"
+                :disabled="!isElectron"
+                @change="handleAutoLaunchChange"
+            />
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <span class="setting-label">关闭程序时</span>
+            <span class="setting-desc">点击窗口关闭按钮时的行为</span>
+          </div>
+          <div class="setting-control">
+            <el-select
+                v-model="closeAction"
+                size="default"
+                style="width: 140px;"
+                :disabled="!isElectron"
+                popper-class="system-select-popper"
+                @change="handleCloseActionChange"
+            >
+              <el-option label="隐藏到托盘" value="minimize" />
+              <el-option label="直接退出" value="exit" />
+            </el-select>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <span class="setting-label">窗口分辨率</span>
+            <span class="setting-desc">设置电脑端窗口显示尺寸</span>
+          </div>
+          <div class="setting-control">
+            <el-select
+                v-model="windowResolution"
+                size="default"
+                style="width: 140px;"
+                :disabled="!isElectron"
+                popper-class="system-select-popper"
+                @change="handleResolutionChange"
+            >
+              <el-option
+                v-for="opt in resolutionOptions"
+                :key="opt.value"
+                :label="opt.label"
+                :value="opt.value"
               />
-            </el-form-item>
-
-            <el-form-item label="生日">
-              <DateScrollPicker
-                  v-model="form.birthday"
-              />
-            </el-form-item>
-          </el-form>
-        </div>
-
-        <div class="profile-section" id="section-security">
-          <h3 class="section-title">账号安全</h3>
-
-          <div class="security-item">
-            <button class="security-edit-btn" @click="showEmailDialog = true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="security-edit-icon"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
-            <div class="security-info">
-              <span class="security-label">账号：</span>
-              <span class="security-value">{{ maskEmail(authStore.user?.email) }}</span>
-            </div>
-          </div>
-
-          <div class="security-item">
-            <button class="security-edit-btn" @click="showPasswordDialog = true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="security-edit-icon"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
-            <div class="security-info">
-              <span class="security-label">密码：</span>
-              <span class="security-value">••••••••</span>
-            </div>
-          </div>
-
-          <div class="security-item">
-            <button class="security-edit-btn" @click="showPhoneDialog = true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="security-edit-icon"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
-            <div class="security-info">
-              <span class="security-label">手机号：</span>
-              <span class="security-value">{{ form.phone || '未绑定' }}</span>
-            </div>
-          </div>
-
-          <div class="security-item">
-            <div class="security-info">
-              <span class="security-label">注册时间：</span>
-              <span class="security-value">{{ formatCreatedAt() }}</span>
-            </div>
-          </div>
-
-          <div class="security-actions">
-            <button class="capsule-btn capsule-btn-danger" @click="handleLogout" :disabled="loggingOut">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-              <span>退出登录</span>
-            </button>
-            <button class="capsule-btn capsule-btn-danger" @click="handleDeleteAccount" :disabled="deletingAccount">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-              <span>注销账号</span>
-            </button>
+            </el-select>
           </div>
         </div>
 
-        <div class="profile-section" id="section-system">
-          <h3 class="section-title">系统设置</h3>
-          <p class="section-desc">配置程序在系统中的行为。</p>
+      </div>
 
-          <div class="setting-item">
-            <div class="setting-info">
-              <span class="setting-label">开机自启动</span>
-              <span class="setting-desc">登录系统时自动启动程序</span>
-            </div>
-            <div class="setting-control">
-              <el-switch
-                  v-model="autoLaunch"
-                  inline-prompt
-                  size="default"
-                  :disabled="!isElectron"
-                  @change="handleAutoLaunchChange"
-              />
-            </div>
-          </div>
+      <div class="profile-section" id="section-about">
+        <h3 class="section-title">关于</h3>
 
-          <div class="setting-item">
-            <div class="setting-info">
-              <span class="setting-label">关闭程序时</span>
-              <span class="setting-desc">点击窗口关闭按钮时的行为</span>
-            </div>
-            <div class="setting-control">
-              <el-select
-                  v-model="closeAction"
-                  size="default"
-                  style="width: 140px;"
-                  :disabled="!isElectron"
-                  popper-class="system-select-popper"
-                  @change="handleCloseActionChange"
-              >
-                <el-option label="隐藏到托盘" value="minimize" />
-                <el-option label="直接退出" value="exit" />
-              </el-select>
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div class="setting-info">
-              <span class="setting-label">窗口分辨率</span>
-              <span class="setting-desc">设置电脑端窗口显示尺寸</span>
-            </div>
-            <div class="setting-control">
-              <el-select
-                  v-model="windowResolution"
-                  size="default"
-                  style="width: 140px;"
-                  :disabled="!isElectron"
-                  popper-class="system-select-popper"
-                  @change="handleResolutionChange"
-              >
-                <el-option
-                  v-for="opt in resolutionOptions"
-                  :key="opt.value"
-                  :label="opt.label"
-                  :value="opt.value"
-                />
-              </el-select>
-            </div>
-          </div>
-
+        <div class="about-item">
+          <span class="about-label">项目地址：</span>
+          <a class="about-link" @click.prevent="openProjectUrl">https://github.com/XueWerY/earth-survival-diary</a>
         </div>
 
-        <div class="profile-section" id="section-about">
-          <h3 class="section-title">关于</h3>
-
-          <div class="about-item">
-            <span class="about-label">项目地址：</span>
-            <a class="about-link" @click.prevent="openProjectUrl">https://github.com/XueWerY/earth-survival-diary</a>
-          </div>
-
-          <div class="about-item">
-            <span class="about-label">版本号：</span>
-            <span class="about-value">v{{ version }}</span>
-            
-          </div>
-          <div class="about-item about-tools-row">
-            <button class="capsule-btn" @click="checkForUpdate" :disabled="isGuideActive">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-              <span>检查更新</span>
-            </button>
-            <button class="capsule-btn" @click="openChangelogDialog" :disabled="isGuideActive">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-              <span>查看更新日志</span>
-            </button>
-            <button class="capsule-btn" @click="startGuide" :disabled="isGuideActive">
-              <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="12,2 17,12 12,22 7,12"/></svg>
-              <span>新手引导</span>
-            </button>
-          </div>
+        <div class="about-item">
+          <span class="about-label">版本号：</span>
+          <span class="about-value">v{{ version }}</span>
+          
         </div>
-
-        
-      </el-scrollbar>
+        <div class="about-item about-tools-row">
+          <button class="capsule-btn" @click="checkForUpdate" :disabled="isGuideActive">
+            <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            <span>检查更新</span>
+          </button>
+          <button class="capsule-btn" @click="openChangelogDialog" :disabled="isGuideActive">
+            <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <span>查看更新日志</span>
+          </button>
+          <button class="capsule-btn" @click="startGuide" :disabled="isGuideActive">
+            <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="12,2 17,12 12,22 7,12"/></svg>
+            <span>新手引导</span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- 手机号绑定对话框 -->
@@ -185,6 +181,7 @@
         :visible="showPhoneDialog"
         title="绑定手机号"
         :width="400"
+        teleport
         @update:visible="showPhoneDialog = $event"
     >
       <div class="dialog-centered-content">
@@ -205,6 +202,7 @@
         :visible="showEmailDialog"
         title="修改账号"
         :width="400"
+        teleport
         @update:visible="showEmailDialog = $event"
     >
       <div class="dialog-centered-content">
@@ -228,6 +226,7 @@
         :visible="showPasswordDialog"
         title="修改密码"
         :width="400"
+        teleport
         @update:visible="showPasswordDialog = $event"
     >
       <div class="dialog-centered-content">
@@ -249,8 +248,15 @@
       </template>
     </BaseDialog>
 
-    <BaseDialog :visible="showChangelogDialog" title="更新日志" :width="480" @update:visible="showChangelogDialog = $event">
-      <div v-html="changelogHtml"></div>
+    <BaseDialog :visible="showChangelogDialog" title="更新日志" :width="480" teleport @update:visible="showChangelogDialog = $event">
+      <div class="changelog-content">
+        <template v-for="entry in changelogEntries" :key="entry.version">
+          <h3 class="cl-version">{{ entry.version }}</h3>
+          <ul class="cl-list">
+            <li v-for="(item, i) in entry.items" :key="i">{{ item }}</li>
+          </ul>
+        </template>
+      </div>
       <template #footer>
         <el-button type="primary" @click="showChangelogDialog = false">确认</el-button>
       </template>
@@ -451,24 +457,19 @@ const showChangelogDialog = ref(false)
 const showLogoutDialog = ref(false)
 const showDeleteAccountDialog = ref(false)
 
-const changelogHtml = computed(() => {
+const changelogEntries = computed<{ version: string; items: string[] }[]>(() => {
   const content = changelogContent.replace(/^# 更新日志\n*/, '')
-  const lines = content.split('\n')
-  let html = ''
-  let inList = false
-  for (const line of lines) {
+  const entries: { version: string; items: string[] }[] = []
+  let current: { version: string; items: string[] } | null = null
+  for (const line of content.split('\n')) {
     if (line.startsWith('### ')) {
-      if (inList) { html += '</ul>'; inList = false }
-      html += `<h3 class="cl-version">${line.slice(4)}</h3>`
-    } else if (line.startsWith('- ')) {
-      if (!inList) { html += '<ul class="cl-list">'; inList = true }
-      html += `<li>${line.slice(2)}</li>`
-    } else if (!line.trim()) {
-      if (inList) { html += '</ul>'; inList = false }
+      current = { version: line.slice(4), items: [] }
+      entries.push(current)
+    } else if (line.startsWith('- ') && current) {
+      current.items.push(line.slice(2))
     }
   }
-  if (inList) html += '</ul>'
-  return html
+  return entries
 })
 
 const openChangelogDialog = () => {
@@ -692,46 +693,23 @@ watch(() => form.birthday, () => {
 
 <style scoped>
 .profile-page {
-  position: relative;
+  width: 500px;
+  max-width: 100%;
+  margin: 0 auto;
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: transparent;
-  justify-content: center;
-}
-
-.profile-content {
-  flex: 1;
-  overflow: hidden;
-  width: 100%;
-  padding: 0 16px;
-}
-
-@media (max-width: 499px) {
-  .profile-content {
-    width: 100%;
-  }
-}
-
-.profile-content :deep(.el-scrollbar__wrap) {
+  padding: 20px 16px;
+  overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
-
-.profile-content :deep(.el-scrollbar__wrap::-webkit-scrollbar) {
-  display: none;
+.profile-page::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.profile-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-
-.profile-content :deep(.el-scrollbar__bar) {
-  display: none !important;
-}
-
 .profile-section {
-  padding: 24px;
-}
-
-#section-system {
-  max-width: 400px;
+  padding: 8px 0 16px;
 }
 
 .section-title {
@@ -748,10 +726,6 @@ watch(() => form.birthday, () => {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.5);
   margin: 0 0 20px 0;
-}
-
-.profile-form {
-  max-width: 360px;
 }
 
 :deep(.el-form-item__label) {
@@ -898,6 +872,7 @@ watch(() => form.birthday, () => {
   padding: 16px 0;
 }
 
+/* TODO: 以下 .dialog-* / .form-footer / .submit-btn 样式似乎未被本组件使用（弹窗均由 BaseDialog 提供） */
 .dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
 .dialog-container { background: rgba(30,28,52,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; }
 
@@ -1077,9 +1052,9 @@ watch(() => form.birthday, () => {
   color: rgba(255, 255, 255, 0.4) !important;
 }
 
-/* 生日选择器宽度 */
+/* 生日选择器宽度自适应弹窗 */
 :deep(.date-trigger) {
-  width: 110px;
+  width: 100%;
 }
 
 /* 安全编辑按钮 */
@@ -1118,9 +1093,37 @@ watch(() => form.birthday, () => {
   height: 100%;
 }
 
-/* 去除 body 的垂直 padding，避免与 separator 上下 margin 叠加造成过大间距 */
-:deep(.dialog-body) {
-  padding: 0 20px;
+/* 更新日志内容（弹窗 teleport 到 body，需自带样式） */
+.cl-version {
+  color: var(--chalk-amber);
+  font-size: 14px;
+  font-weight: 600;
+  margin: 14px 0 6px;
+  padding: 5px 0 5px 10px;
+  border-left: 3px solid #f0c040;
+  background: linear-gradient(90deg, rgba(240, 192, 64, 0.06) 0%, transparent 100%);
+  border-radius: 0 4px 4px 0;
+}
+.cl-list {
+  margin: 0 0 4px 16px;
+  padding: 0;
+  list-style: none;
+  color: var(--chalk-white-75);
+}
+.cl-list li {
+  font-size: 12px;
+  line-height: 1.7;
+  padding: 2px 0;
+  position: relative;
+  padding-left: 14px;
+}
+.cl-list li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 10px;
+  top: 5px;
 }
 
 /* 最后一个表单项去掉默认 margin-bottom，确保表单底边与最后输入框底边对齐 */

@@ -161,12 +161,12 @@ async function capacitorRequest<T>(endpoint: string, options: RequestInit = {}):
     const listMatch = endpoint.match(/^\/list-lists\/([^/]+)$/)
     if (listMatch) {
         if (options.method === 'PUT') return await fs.fsUpdateList(userId, listMatch[1], body) as unknown as T
-        if (options.method === 'DELETE') return await fs.fsDeleteList(userId, listMatch[1]) as unknown as T
+        if (options.method === 'DELETE') return await fs.fsDeleteList(userId, listMatch[1], body) as unknown as T
     }
     const groupMatch = endpoint.match(/^\/list-lists\/([^/]+)\/groups\/([^/]+)$/)
     if (groupMatch) {
         if (options.method === 'PUT') return await fs.fsUpdateGroup(userId, groupMatch[1], groupMatch[2], body) as unknown as T
-        if (options.method === 'DELETE') return await fs.fsDeleteGroup(userId, groupMatch[1], groupMatch[2]) as unknown as T
+        if (options.method === 'DELETE') return await fs.fsDeleteGroup(userId, groupMatch[1], groupMatch[2], body) as unknown as T
     }
     const groupAddMatch = endpoint.match(/^\/list-lists\/([^/]+)\/groups$/)
     if (groupAddMatch && options.method === 'POST') {
@@ -443,8 +443,11 @@ export async function updateList(id: string, data: { name?: string; icon?: strin
     })
 }
 
-export async function deleteList(id: string): Promise<{ success: boolean }> {
-    return request(`/list-lists/${id}`, { method: 'DELETE' })
+export async function deleteList(id: string, opts?: { deleteTasks?: boolean; transferToListId?: string }): Promise<{ success: boolean }> {
+    return request(`/list-lists/${id}`, {
+        method: 'DELETE',
+        body: JSON.stringify(opts || {})
+    })
 }
 
 export async function updateGroup(listId: string, groupId: string, data: { name?: string; color?: string; order?: number }): Promise<{ group: Group }> {
@@ -461,8 +464,11 @@ export async function addGroup(listId: string, data: { name: string; color: stri
     })
 }
 
-export async function deleteGroup(listId: string, groupId: string): Promise<{ success: boolean }> {
-    return request(`/list-lists/${listId}/groups/${groupId}`, { method: 'DELETE' })
+export async function deleteGroup(listId: string, groupId: string, opts?: { deleteTasks?: boolean }): Promise<{ success: boolean }> {
+    return request(`/list-lists/${listId}/groups/${groupId}`, {
+        method: 'DELETE',
+        body: JSON.stringify(opts || {})
+    })
 }
 
 export async function reorderLists(orders: { id: string; order: number }[]): Promise<{ lists: List[] }> {
@@ -510,6 +516,7 @@ export interface ListTask {
     repeat_completed_count?: number
     priority?: string
     checklist?: ChecklistItem[]
+    linked_note_ids?: string[]
     completed_start_time?: string
     completed_end_time?: string
     notes?: string
@@ -544,6 +551,7 @@ export interface AddListTaskData {
     repeatCount?: number
     priority?: string
     checklist?: ChecklistItem[]
+    linkedNoteIds?: string[]
     notes?: string
     reminderStrategy?: string
     reminderDays?: number
@@ -579,6 +587,7 @@ export interface UpdateListTaskData {
     repeatCompletedCount?: number
     priority?: string
     checklist?: ChecklistItem[]
+    linkedNoteIds?: string[]
     completedStartTime?: string
     completedEndTime?: string
     notes?: string

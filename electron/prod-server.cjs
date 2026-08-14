@@ -583,14 +583,26 @@ function createProdServer(options = {}) {
     } catch (e) { console.error('Update list list error:', e); res.status(500).json({ error: '更新清单列表失败' }) }
   })
 
-  /** DELETE /api/list-lists/:id (auth) => 200 {success:true} (also deletes child lists) */
+  /** DELETE /api/list-lists/:id (auth) body:{deleteTasks?:boolean,transferToListId?:string} => 200 {success:true} */
   app.delete('/api/list-lists/:id', authMiddleware, async (req, res) => {
     try {
       const { id } = req.params
+      const { deleteTasks, transferToListId } = req.body || {}
       const lists = await getUserListChecklists(req.userId)
       const listTasks = await getUserListTasks(req.userId)
+      let newTasks = listTasks
+      if (deleteTasks === false) {
+        if (transferToListId) {
+          const target = lists.find(l => l.id === transferToListId)
+          const targetGroupId = target && target.groups && target.groups.length > 0 ? target.groups[0].id : 'default'
+          newTasks = listTasks.map(m => m.list_id === id ? { ...m, list_id: transferToListId, group_id: targetGroupId } : m)
+        } else {
+          newTasks = listTasks.filter(m => m.list_id !== id)
+        }
+      } else {
+        newTasks = listTasks.filter(m => m.list_id !== id)
+      }
       const newLists = lists.filter(l => l.id !== id)
-      const newTasks = listTasks.filter(m => m.list_id !== id)
       await setUserListChecklists(req.userId, newLists)
       await setUserListTasks(req.userId, newTasks)
       res.json({ success: true })
@@ -651,10 +663,11 @@ function createProdServer(options = {}) {
     } catch (e) { console.error('Update list group error:', e); res.status(500).json({ error: '更新分组失败' }) }
   })
 
-  /** DELETE /api/list-lists/:listId/groups/:groupId (auth) => 200 {success} (min 1 group enforced) */
+  /** DELETE /api/list-lists/:listId/groups/:groupId (auth) body:{deleteTasks?:boolean} => 200 {success} (min 1 group enforced) */
   app.delete('/api/list-lists/:listId/groups/:groupId', authMiddleware, async (req, res) => {
     try {
       const { listId, groupId } = req.params
+      const { deleteTasks } = req.body || {}
       const lists = await getUserListChecklists(req.userId)
       const listIndex = lists.findIndex(l => l.id === listId)
       if (listIndex === -1) return res.status(404).json({ error: '清单列表不存在' })
@@ -662,11 +675,17 @@ function createProdServer(options = {}) {
       if (list.groups.length <= 1) return res.status(400).json({ error: '至少需要保留一个分组' })
       const groupIndex = list.groups.findIndex(g => g.id === groupId)
       if (groupIndex === -1) return res.status(404).json({ error: '分组不存在' })
-      const defaultGroup = list.groups.find(g => g.id !== groupId)
-      if (defaultGroup) {
-        const listTasks = await getUserListTasks(req.userId)
-        listTasks.forEach(m => { if (m.list_id === listId && m.group_id === groupId) m.group_id = defaultGroup.id })
+      if (deleteTasks) {
+        let listTasks = await getUserListTasks(req.userId)
+        listTasks = listTasks.filter(m => !(m.list_id === listId && m.group_id === groupId))
         await setUserListTasks(req.userId, listTasks)
+      } else {
+        const defaultGroup = list.groups.find(g => g.id !== groupId)
+        if (defaultGroup) {
+          const listTasks = await getUserListTasks(req.userId)
+          listTasks.forEach(m => { if (m.list_id === listId && m.group_id === groupId) m.group_id = defaultGroup.id })
+          await setUserListTasks(req.userId, listTasks)
+        }
       }
       list.groups.splice(groupIndex, 1)
       await setUserListChecklists(req.userId, lists)
@@ -691,7 +710,7 @@ function createProdServer(options = {}) {
     try {
       const data = req.body
       const listTasks = await getUserListTasks(req.userId)
-      const newTask = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), list_id: data.listId, name: data.name, description: data.description || null, target_count: data.targetCount || 1, current_count: 0, completed: false, group_id: data.groupId || '', date: data.date || '', end_time: data.endTime || '', repeat_strategy: data.repeatStrategy || 'none', repeat_custom_days: data.repeatCustomDays || 1, repeat_weekdays: data.repeatWeekdays || [], repeat_month_day: data.repeatMonthDay || 1, repeat_lunar_month: data.repeatLunarMonth || 1, repeat_lunar_day: data.repeatLunarDay || 1, repeat_end_strategy: data.repeatEndStrategy || 'never', repeat_end_date: data.repeatEndDate || '', repeat_count: data.repeatCount || 1, repeat_completed_count: 0, priority: data.priority || 'none', checklist: data.checklist || [], completed_start_time: '', completed_end_time: '', notes: data.notes || '', reminder_strategy: data.reminderStrategy || 'none', reminder_days: data.reminderDays || 0, reminder_hours: data.reminderHours || 0, reminder_minutes: data.reminderMinutes || 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+      const newTask = { id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6), list_id: data.listId, name: data.name, description: data.description || null, target_count: data.targetCount || 1, current_count: 0, completed: false, group_id: data.groupId || '', date: data.date || '', end_time: data.endTime || '', repeat_strategy: data.repeatStrategy || 'none', repeat_custom_days: data.repeatCustomDays || 1, repeat_weekdays: data.repeatWeekdays || [], repeat_month_day: data.repeatMonthDay || 1, repeat_lunar_month: data.repeatLunarMonth || 1, repeat_lunar_day: data.repeatLunarDay || 1, repeat_end_strategy: data.repeatEndStrategy || 'never', repeat_end_date: data.repeatEndDate || '', repeat_count: data.repeatCount || 1, repeat_completed_count: 0, priority: data.priority || 'none', checklist: data.checklist || [], linked_note_ids: data.linkedNoteIds || [], completed_start_time: '', completed_end_time: '', notes: data.notes || '', reminder_strategy: data.reminderStrategy || 'none', reminder_days: data.reminderDays || 0, reminder_hours: data.reminderHours || 0, reminder_minutes: data.reminderMinutes || 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
       listTasks.push(newTask)
       await setUserListTasks(req.userId, listTasks)
       res.json({ listTask: newTask })
@@ -726,6 +745,7 @@ function createProdServer(options = {}) {
       if (updates.repeatCompletedCount !== undefined) listTask.repeat_completed_count = updates.repeatCompletedCount
       if (updates.priority !== undefined) listTask.priority = updates.priority
       if (updates.checklist !== undefined) listTask.checklist = updates.checklist
+      if (updates.linkedNoteIds !== undefined) listTask.linked_note_ids = updates.linkedNoteIds
       if (updates.completedStartTime !== undefined) listTask.completed_start_time = updates.completedStartTime
       if (updates.completedEndTime !== undefined) listTask.completed_end_time = updates.completedEndTime
       if (updates.notes !== undefined) listTask.notes = updates.notes

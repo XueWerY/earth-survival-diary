@@ -302,70 +302,108 @@ defineExpose({ saveAndGetData, setNoteTitle })
   list-style: none;
   padding: 0;
   margin: 0;
+  position: relative;
 }
 
-.editor-sidebar-nav li { margin: 2px 0; line-height: 1.4; }
+.editor-sidebar-nav li { margin: 2px 0; line-height: 1.4; position: relative; }
 
-/* 层级视觉区分：递增缩进 + 递减字号/字重/颜色 */
+/* 竖线连接线段：非首项从上一项圆点延伸到本项圆点，使相邻两点之间连线连通；首项上方、末项下方均不延伸 */
+.editor-sidebar-nav li:not(:first-child)::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: -50%;
+  width: 1px;
+  height: 100%;
+  background: rgba(102, 126, 234, 0.25);
+}
+
+/* 层级引导线：横线 + 节点圆点，横线长度随层级递增 */
+.editor-sidebar-nav a { position: relative; }
+.editor-sidebar-nav a::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 7px;
+  transform: translateY(-50%);
+  height: 1px;
+  background: rgba(102, 126, 234, 0.35);
+}
+.editor-sidebar-nav a::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 7px;
+  transform: translateY(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(102, 126, 234, 0.55);
+}
+.editor-sidebar-nav a:hover::after { background: #93c5fd; }
+
+/* 层级视觉区分：递增横线长度 + 缩进 + 递减字号/字重/颜色 */
 .editor-sidebar-nav .nav-l1 a {
   display: flex;
   align-items: center;
-  padding: 5px 8px;
+  padding: 5px 8px 5px 22px;
   font-size: 15px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.88);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
-  border-left: 3px solid rgba(102, 126, 234, 0.5);
 }
-.editor-sidebar-nav .nav-l1 a:hover { background: rgba(102, 126, 234, 0.18); color: #93c5fd; border-left-color: #93c5fd; }
+.editor-sidebar-nav .nav-l1 a::before { width: 13px; }
+.editor-sidebar-nav .nav-l1 a:hover { background: rgba(102, 126, 234, 0.18); color: #93c5fd; }
 
 .editor-sidebar-nav .nav-l2 a {
   display: flex;
   align-items: center;
-  padding: 4px 8px 4px 22px;
+  padding: 4px 8px 4px 30px;
   font-size: 14px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.72);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
-  border-left: 3px solid transparent;
 }
-.editor-sidebar-nav .nav-l2 a:hover { background: rgba(102, 126, 234, 0.14); color: #93c5fd; border-left-color: rgba(102, 126, 234, 0.35); }
+.editor-sidebar-nav .nav-l2 a::before { width: 21px; }
+.editor-sidebar-nav .nav-l2 a:hover { background: rgba(102, 126, 234, 0.14); color: #93c5fd; }
 
 .editor-sidebar-nav .nav-l3 a {
   display: flex;
   align-items: center;
-  padding: 3px 8px 3px 32px;
+  padding: 3px 8px 3px 38px;
   font-size: 13px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.58);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
-  border-left: 3px solid transparent;
 }
-.editor-sidebar-nav .nav-l3 a:hover { background: rgba(102, 126, 234, 0.1); color: #93c5fd; border-left-color: rgba(102, 126, 234, 0.25); }
+.editor-sidebar-nav .nav-l3 a::before { width: 29px; }
+.editor-sidebar-nav .nav-l3 a:hover { background: rgba(102, 126, 234, 0.1); color: #93c5fd; }
 
 .editor-sidebar-nav .nav-l4 a,
 .editor-sidebar-nav .nav-l5 a,
 .editor-sidebar-nav .nav-l6 a {
   display: flex;
   align-items: center;
-  padding: 3px 8px 3px 42px;
+  padding: 3px 8px 3px 46px;
   font-size: 12px;
   font-weight: 400;
   color: rgba(255, 255, 255, 0.45);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
-  border-left: 3px solid transparent;
 }
+.editor-sidebar-nav .nav-l4 a::before,
+.editor-sidebar-nav .nav-l5 a::before,
+.editor-sidebar-nav .nav-l6 a::before { width: 37px; }
 .editor-sidebar-nav .nav-l4 a:hover,
 .editor-sidebar-nav .nav-l5 a:hover,
-.editor-sidebar-nav .nav-l6 a:hover { background: rgba(102, 126, 234, 0.08); color: #93c5fd; border-left-color: rgba(102, 126, 234, 0.2); }
+.editor-sidebar-nav .nav-l6 a:hover { background: rgba(102, 126, 234, 0.08); color: #93c5fd; }
 
 .nav-title-text {
   flex: 1;
@@ -545,6 +583,10 @@ defineExpose({ saveAndGetData, setNoteTitle })
   .editor-sidebar-nav .nav-l1 a { padding: 4px 10px; font-size: 13px; }
   .editor-sidebar-nav .nav-l2 a { padding: 4px 8px 4px 10px; font-size: 12px; }
   .editor-sidebar-nav .nav-l3 a { padding: 4px 6px 4px 14px; font-size: 11px; }
+  /* 移动端横向标签流，不显示层级引导线 */
+  .editor-sidebar-nav li::before,
+  .editor-sidebar-nav a::before,
+  .editor-sidebar-nav a::after { display: none; }
 
   .editor-status-bar { padding: 6px 10px; font-size: 11px; flex-wrap: wrap; gap: 4px; }
   .editor-status-left { gap: 6px; }

@@ -45,22 +45,35 @@ const displayTime = computed(() => {
   return `${h.toString().padStart(2, '0')} ${m.toString().padStart(2, '0')} ${sec.toString().padStart(2, '0')}`
 })
 
-// 拖动逻辑
+// 拖动逻辑：仅允许移动位置，宽高锁定为按下时实测值，移动后位置持久化（不再回弹）
 const barRef = ref<HTMLElement | null>(null)
-const dragPos = ref({ x: 0, y: 0 })
+const pos = ref<{ left: number; top: number } | null>(null)
 const isDragging = ref(false)
 let hasDragged = false
 let offsetX = 0; let offsetY = 0
+let dragW = 0; let dragH = 0
 
 const barStyle = computed(() => {
-  if (!isDragging.value) return {}
-  return { left: dragPos.value.x + 'px', top: dragPos.value.y + 'px', transform: 'none' }
+  if (!pos.value) return {}
+  // 锁定 right/bottom 为 auto，避免与 left/top 同时生效导致拉伸变形；
+  // width/height 锁定为按下时实测值，确保宽高不可被修改。
+  return {
+    left: pos.value.left + 'px',
+    top: pos.value.top + 'px',
+    right: 'auto',
+    bottom: 'auto',
+    transform: 'none',
+    width: dragW + 'px',
+    height: dragH + 'px',
+  }
 })
 
 const handleMouseDown = (e: MouseEvent) => {
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
   offsetX = e.clientX - rect.left
   offsetY = e.clientY - rect.top
+  dragW = rect.width
+  dragH = rect.height
   hasDragged = false
   document.addEventListener('mousemove', handleMouseMove)
   document.addEventListener('mouseup', handleMouseUp)
@@ -69,13 +82,11 @@ const handleMouseDown = (e: MouseEvent) => {
 const handleMouseMove = (e: MouseEvent) => {
   if (!hasDragged && Math.abs(e.movementX) + Math.abs(e.movementY) > 2) hasDragged = true
   if (hasDragged) {
-    isDragging.value = true
-    const bar = barRef.value
-    const bw = bar ? bar.offsetWidth : 200
-    const bh = bar ? bar.offsetHeight : 40
-    dragPos.value = {
-      x: Math.max(0, Math.min(e.clientX - offsetX, window.innerWidth - bw)),
-      y: Math.max(0, Math.min(e.clientY - offsetY, window.innerHeight - bh))
+    const bw = dragW || 200
+    const bh = dragH || 40
+    pos.value = {
+      left: Math.max(0, Math.min(e.clientX - offsetX, window.innerWidth - bw)),
+      top: Math.max(0, Math.min(e.clientY - offsetY, window.innerHeight - bh)),
     }
   }
 }
@@ -106,9 +117,8 @@ onUnmounted(() => {
 <style scoped>
 .floating-timer-bar {
   position: fixed;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
+  right: 25px;
+  bottom: 25px;
   z-index: 2800;
   display: flex;
   align-items: center;

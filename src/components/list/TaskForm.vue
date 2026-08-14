@@ -6,7 +6,7 @@
         ref="nameInputRef"
         v-model="formName"
         placeholder="请输入任务名称"
-        @keyup.enter="handleSubmit"
+        @keyup.enter="submit"
       />
     </div>
 
@@ -124,6 +124,16 @@
     </div>
 
     <div class="form-row">
+      <span class="form-label">关联笔记</span>
+      <el-select v-model="formLinkedNoteIds" multiple filterable clearable collapse-tags collapse-tags-tooltip
+        placeholder="选择要关联的笔记" class="linked-note-select" popper-class="dark-select-popper">
+        <el-option-group v-for="grp in noteOptionGroups" :key="grp.categoryId" :label="grp.categoryName">
+          <el-option v-for="n in grp.notes" :key="n.id" :value="n.id" :label="n.title || '无标题笔记'" />
+        </el-option-group>
+      </el-select>
+    </div>
+
+    <div class="form-row">
       <span class="form-label">检查事项</span>
       <div class="checklist-form-items" ref="checklistContainerRef">
         <div v-for="(item, idx) in formChecklist" :key="item.id" class="checklist-form-item" :class="{ 'drag-over': formDragOverIdx === idx }"
@@ -144,18 +154,6 @@
       </div>
     </div>
 
-    <div class="task-wavy-divider"></div>
-
-    <div class="list-form-footer">
-      <button class="capsule-btn" style="border-radius:8px" @click="cancel">
-        <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-        <span>取消</span>
-      </button>
-      <button class="capsule-btn capsule-save" style="border-radius:8px" @click="handleSubmit">
-        <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
-        <span>保存</span>
-      </button>
-    </div>
   </div>
 </template>
 
@@ -164,6 +162,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Delete, Plus, Rank } from '@element-plus/icons-vue'
 import { useListStore, type RepeatStrategy, type RepeatEndStrategy, REPEAT_STRATEGIES, REPEAT_END_STRATEGIES, PRIORITIES, type ReminderStrategy, type ChecklistItem, type Task } from '../../stores/listStore'
+import { useNoteStore } from '../../stores/noteStore'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
 import ReminderTimePicker from '../common/picker/ReminderTimePicker.vue'
@@ -180,6 +179,7 @@ const emit = defineEmits<{
 }>()
 
 const listStore = useListStore()
+const noteStore = useNoteStore()
 
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']
 const LUNAR_MONTHS = ['正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月']
@@ -198,7 +198,8 @@ const formRepeatEndStrategy = ref<RepeatEndStrategy>('never')
 const formRepeatEndDate = ref('')
 const formRepeatEndCount = ref(1)
 const formNote = ref('')
-const formChecklist = ref<{ id: string; text: string }[]>([])
+const formChecklist = ref<ChecklistItem[]>([])
+const formLinkedNoteIds = ref<string[]>([])
 const repeatDays = ref(1)
 const repeatWeekdays = ref<number[]>([0, 1, 2, 3, 4])
 const repeatMonthDay = ref(1)
@@ -209,6 +210,17 @@ const reminderEnabled = ref(false)
 
 const availableLists = computed(() => {
   return listStore.taskLists.filter(l => !l.deleted)
+})
+
+// 关联笔记下拉：按分类分组，空分类不展示
+const noteOptionGroups = computed(() => {
+  return noteStore.categories
+    .map(c => ({
+      categoryId: c.id,
+      categoryName: `${c.icon} ${c.name}`,
+      notes: noteStore.notes.filter(n => n.categoryId === c.id),
+    }))
+    .filter(g => g.notes.length > 0)
 })
 
 const availableGroups = computed(() => {
@@ -230,7 +242,7 @@ const toggleWeekday = (idx: number) => {
 }
 
 const addChecklistItem = async () => {
-  formChecklist.value.push({ id: 'cl-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8), text: '' })
+  formChecklist.value.push({ id: 'cl-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8), text: '', completed: false })
   await nextTick()
   const textareas = checklistContainerRef.value?.querySelectorAll('textarea')
   const last = textareas?.[textareas.length - 1] as HTMLTextAreaElement | undefined
@@ -273,7 +285,7 @@ const onFormChecklistDrop = (targetIdx: number) => {
   formChecklist.value = items
 }
 
-const handleSubmit = () => {
+const submit = () => {
   const name = formName.value.trim()
   if (!name) { ElMessage.warning({ message: '任务名称没有填写', customClass: 'message-above-dialog' }); return }
   if (!formListId.value) { ElMessage.warning({ message: '请选择清单', customClass: 'message-above-dialog' }); return }
@@ -294,7 +306,7 @@ const handleSubmit = () => {
   }
   const checklist: ChecklistItem[] = formChecklist.value
     .filter(item => item.text.trim())
-    .map(item => ({ id: item.id, text: item.text.trim(), completed: false }))
+    .map(item => ({ id: item.id, text: item.text.trim(), completed: item.completed }))
   emit('submit', {
     id: props.task?.id,
     name,
@@ -316,8 +328,9 @@ const handleSubmit = () => {
     reminderDays,
     reminderHours,
     reminderMinutes,
-    note: formNote.value || undefined,
+    note: formNote.value,
     checklist,
+    linkedNoteIds: [...formLinkedNoteIds.value],
   })
 }
 
@@ -350,12 +363,16 @@ onMounted(async () => {
       reminderTime.value = { days: 0, hours: 0, minutes: 15 }
     }
     formNote.value = t.notes || ''
-    formChecklist.value = (t.checklist || []).map(c => ({ id: c.id, text: c.text }))
+    formChecklist.value = (t.checklist || []).map(c => ({ id: c.id, text: c.text, completed: !!c.completed }))
+    // 过滤已被删除的笔记，避免下拉里出现空白项
+    formLinkedNoteIds.value = (t.linkedNoteIds || []).filter(id => noteStore.notes.some(n => n.id === id))
   }
   await nextTick()
   const el = document.querySelector<HTMLInputElement>('.list-form .el-input__inner')
   el?.focus()
 })
+
+defineExpose({ submit, cancel })
 </script>
 
 <style scoped>
@@ -381,10 +398,12 @@ onMounted(async () => {
 .group-select { width: 100%; }
 .repeat-select { width: 100%; }
 .end-repeat-select { width: 100%; }
+.linked-note-select { width: 100%; }
+.linked-note-select :deep(.el-tag) { background: rgba(102,126,234,0.25); border-color: rgba(102,126,234,0.45); color: var(--chalk-white); }
+.linked-note-select :deep(.el-tag .el-tag__close) { color: var(--chalk-white-70); }
+.linked-note-select :deep(.el-tag .el-tag__close:hover) { background: rgba(255,255,255,0.2); color: var(--chalk-white); }
 .repeat-count-input { width: 100% !important; }
 .repeat-count-input :deep(.el-input__wrapper) { width: 100%; }
-
-.list-form-footer { display: flex; justify-content: center; gap: 12px; }
 
 .priority-buttons { display: flex; gap: 6px; }
 .priority-btn { flex: 1; padding: 6px 4px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: var(--chalk-white-70); border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.15s; }
@@ -423,10 +442,4 @@ onMounted(async () => {
 .checklist-form-delete:hover { background: rgba(255,255,255,0.1); color: var(--chalk-danger); }
 .checklist-form-add { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--chalk-subtle); padding: 4px 8px; border-radius: 6px; cursor: pointer; transition: all 0.15s; }
 .checklist-form-add:hover { color: var(--chalk-white-70); background: rgba(255,255,255,0.05); }
-
-.task-wavy-divider { height: 1px; background: rgba(255, 255, 255, 0.15); }
-
-.capsule-btn { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 18px; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 20px; background: transparent; color: var(--chalk-white-70); cursor: pointer; font-size: 13px; font-family: inherit; }
-.capsule-btn .capsule-icon { width: 14px; height: 14px; }
-.capsule-save { background: rgba(102, 126, 234, 0.2); border-color: rgba(102, 126, 234, 0.4); color: #93c5fd; }
 </style>

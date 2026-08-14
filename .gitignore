@@ -49,8 +49,8 @@ __screenshots__/
 /release/*.exe
 /release/*.blockmap
 
-# WorkBuddy
-.workbuddy/
+# CodeBuddy
+.codebuddy/
 
 # plugins
 src/plugins/*

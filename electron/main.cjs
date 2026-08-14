@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, shell, dialog, Tray, screen, clipboard } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, shell, dialog, Tray, screen, clipboard, globalShortcut } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const https = require('https')
@@ -254,6 +254,321 @@ function sendUpdateStatusToMain(data) {
   }
 }
 
+// ========== 视频插件全局快捷键 ==========
+const DEFAULT_VIDEO_SHORTCUTS = {
+  prevEpisode: 'CommandOrControl+1',
+  seekBack: 'CommandOrControl+2',
+  playPause: 'CommandOrControl+3',
+  seekForward: 'CommandOrControl+4',
+  nextEpisode: 'CommandOrControl+5'
+}
+const DEFAULT_VIDEO_SEEK_SECONDS = 10
+
+function getVideoShortcutsPath() {
+  return path.join(app.getPath('userData'), 'video-shortcuts.json')
+}
+
+function readVideoShortcuts() {
+  try {
+    const p = getVideoShortcutsPath()
+    if (fs.existsSync(p)) {
+      const saved = JSON.parse(fs.readFileSync(p, 'utf-8'))
+      // 剔除空字符串键，避免用户清空配置后覆盖默认快捷键导致失效
+      const cleaned = {}
+      for (const k of Object.keys(DEFAULT_VIDEO_SHORTCUTS)) {
+        if (typeof saved[k] === 'string' && saved[k].trim()) cleaned[k] = saved[k]
+      }
+      return { ...DEFAULT_VIDEO_SHORTCUTS, ...cleaned }
+    }
+  } catch (e) {
+    errorLog('[Electron] 读取视频快捷键失败: ' + e.message)
+  }
+  return { ...DEFAULT_VIDEO_SHORTCUTS }
+}
+
+function writeVideoShortcuts(shortcuts) {
+  try {
+    fs.writeFileSync(getVideoShortcutsPath(), JSON.stringify(shortcuts, null, 2), 'utf-8')
+  } catch (e) {
+    errorLog('[Electron] 保存视频快捷键失败: ' + e.message)
+  }
+}
+
+// 注册视频全局快捷键（支持自定义配置），返回是否全部注册成功
+function registerVideoGuideShortcuts(shortcuts) {
+  const cfg = shortcuts || readVideoShortcuts()
+  const seekSeconds = typeof cfg.seekSeconds === 'number' ? cfg.seekSeconds : DEFAULT_VIDEO_SEEK_SECONDS
+  const send = (channel, ...args) => {
+    // 优先发送到视频悬浮播放器窗口，否则发送到主窗口
+    if (videoOverlayWindow && !videoOverlayWindow.isDestroyed()) {
+      videoOverlayWindow.webContents.send(channel, ...args)
+    } else if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(channel, ...args)
+    }
+  }
+  const binds = [
+    [cfg.prevEpisode, () => send('video-guide:prev-episode')],
+    [cfg.seekBack, () => send('video-guide:seek-back', seekSeconds)],
+    [cfg.playPause, () => send('video-guide:play-pause')],
+    [cfg.seekForward, () => send('video-guide:seek-forward', seekSeconds)],
+    [cfg.nextEpisode, () => send('video-guide:next-episode')]
+  ]
+  let ok = true
+  try {
+    globalShortcut.unregisterAll()
+    for (const [accelerator, cb] of binds) {
+      if (!accelerator) continue
+      const registered = globalShortcut.register(accelerator, cb)
+      if (!registered) {
+        errorLog('[Electron] 快捷键注册失败(可能被占用): ' + accelerator)
+        ok = false
+      }
+    }
+    debugLog('[Electron] 视频全局快捷键注册完成, 全部成功: ' + ok)
+  } catch (e) {
+    errorLog('[Electron] 注册视频全局快捷键失败: ' + e.message)
+    ok = false
+  }
+  return ok
+}
+
+// 查询/更新视频快捷键配置
+ipcMain.handle('video-guide:get-shortcuts', () => readVideoShortcuts())
+ipcMain.handle('video-guide:update-shortcuts', (e, shortcuts) => {
+  const next = { ...DEFAULT_VIDEO_SHORTCUTS }
+  for (const k of Object.keys(DEFAULT_VIDEO_SHORTCUTS)) {
+    if (typeof shortcuts?.[k] === 'string' && shortcuts[k].trim()) next[k] = shortcuts[k]
+  }
+  if (typeof shortcuts?.seekSeconds === 'number') next.seekSeconds = shortcuts.seekSeconds
+  writeVideoShortcuts(next)
+  const ok = registerVideoGuideShortcuts(next)
+  return { success: ok, shortcuts: next }
+})
+
+// ========== 视频悬浮播放器窗口（透明置顶，始终显示在所有窗口上方） ==========
+let videoOverlayWindow = null
+let pendingOverlayData = null
+let overlayBaseSize = { w: 500, h: 300 }
+let overlayBasePos = { x: 0, y: 0 }
+let overlayCollapsed = false
+// 播放器窗口页面（由插件通过 IPC 传入，随插件编译产物分发）
+let overlayHtml = ''
+const OVERLAY_COLLAPSED_W = 200
+const OVERLAY_COLLAPSED_H = 40
+
+function createVideoOverlayWindow() {
+  if (videoOverlayWindow && !videoOverlayWindow.isDestroyed()) return videoOverlayWindow
+  videoOverlayWindow = new BrowserWindow({
+    width: overlayBaseSize.w,
+    height: overlayBaseSize.h,
+    frame: false,
+    alwaysOnTop: true,
+    resizable: false,
+    skipTaskbar: true,
+    hasShadow: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+  const html = overlayHtml || '<body style="margin:0;background:#060918;color:#fff;font:14px sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">请更新视频插件后重试</body>'
+  videoOverlayWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+  // 页面加载完成后发送初始数据，避免消息在监听注册前丢失
+  videoOverlayWindow.webContents.on('did-finish-load', () => {
+    if (!videoOverlayWindow.isDestroyed()) {
+      const seekSeconds = (readVideoShortcuts().seekSeconds) || DEFAULT_VIDEO_SEEK_SECONDS
+      videoOverlayWindow.webContents.send('overlay:init', {
+        url: (pendingOverlayData && pendingOverlayData.url) || '',
+        playlist: (pendingOverlayData && pendingOverlayData.playlist) || [],
+        startPage: (pendingOverlayData && pendingOverlayData.startPage) || 0,
+        seekSeconds: seekSeconds,
+        width: overlayBaseSize.w,
+        height: overlayBaseSize.h
+      })
+      pendingOverlayData = null
+    }
+  })
+  videoOverlayWindow.on('closed', () => {
+    videoOverlayWindow = null
+    stopOverlayProgress()
+  })
+  return videoOverlayWindow
+}
+
+// 根据位置配置计算窗口坐标（默认右下角，支持角落/水平居中 + 边缘间距）
+function computeOverlayPos(w, h, position, margin) {
+  const wa = screen.getPrimaryDisplay().workArea
+  let x = wa.x + wa.width - w - margin
+  let y = wa.y + wa.height - h - margin
+  if (position === 'bottom-left') { x = wa.x + margin; y = wa.y + wa.height - h - margin }
+  else if (position === 'top-right') { x = wa.x + wa.width - w - margin; y = wa.y + margin }
+  else if (position === 'top-left') { x = wa.x + margin; y = wa.y + margin }
+  else if (position === 'top-center') { x = wa.x + Math.round((wa.width - w) / 2); y = wa.y + margin }
+  else if (position === 'bottom-center') { x = wa.x + Math.round((wa.width - w) / 2); y = wa.y + wa.height - h - margin }
+  return { x: Math.round(x), y: Math.round(y) }
+}
+
+// 根据展开/收起状态设置窗口尺寸与位置（锚定在原定位角，避免收起/展开时跳动）
+function applyOverlayBounds() {
+  if (!videoOverlayWindow || videoOverlayWindow.isDestroyed()) return
+  if (overlayCollapsed) {
+    videoOverlayWindow.setBounds({ x: overlayBasePos.x, y: overlayBasePos.y + overlayBaseSize.h - OVERLAY_COLLAPSED_H, width: OVERLAY_COLLAPSED_W, height: OVERLAY_COLLAPSED_H })
+  } else {
+    videoOverlayWindow.setBounds({ x: overlayBasePos.x, y: overlayBasePos.y, width: overlayBaseSize.w, height: overlayBaseSize.h })
+  }
+}
+
+// 播放进度轮询：读取 B 站播放器 iframe 内 video 的播放进度，推送给悬浮窗页面渲染常驻进度条
+let overlayProgressTimer = null
+function startOverlayProgress() {
+  clearInterval(overlayProgressTimer)
+  overlayProgressTimer = setInterval(async () => {
+    if (!videoOverlayWindow || videoOverlayWindow.isDestroyed()) {
+      clearInterval(overlayProgressTimer)
+      return
+    }
+    try {
+      for (const frame of videoOverlayWindow.webContents.mainFrame.frames) {
+        if (!frame.url || !frame.url.includes('player.bilibili.com')) continue
+        const r = await frame.executeJavaScript('var v=document.querySelector("video");v&&isFinite(v.duration)&&v.duration>0?JSON.stringify([v.currentTime,v.duration]):null')
+        if (r && videoOverlayWindow && !videoOverlayWindow.isDestroyed()) {
+          const [t, d] = JSON.parse(r)
+          videoOverlayWindow.webContents.send('overlay:progress', { t, d })
+        }
+        break
+      }
+    } catch {}
+  }, 500)
+}
+
+function stopOverlayProgress() {
+  clearInterval(overlayProgressTimer)
+  overlayProgressTimer = null
+}
+
+ipcMain.handle('video-guide:open-overlay', (e, payload) => {
+  const w = payload?.width || 500
+  const h = payload?.height || 300
+  overlayBaseSize = { w, h }
+  overlayCollapsed = false
+  if (typeof payload?.overlayHtml === 'string' && payload.overlayHtml) overlayHtml = payload.overlayHtml
+  const position = payload?.position || 'bottom-right'
+  const margin = typeof payload?.margin === 'number' ? payload.margin : 16
+  try {
+    overlayBasePos = computeOverlayPos(w, h, position, margin)
+  } catch (err) {
+    errorLog('[Electron] 定位视频播放器窗口失败: ' + err.message)
+  }
+  const win = createVideoOverlayWindow()
+  applyOverlayBounds()
+  win.show()
+  win.focus()
+  // 通知页面恢复展开状态（窗口复用场景：上次收起后页面内容仍为隐藏）
+  if (!win.webContents.isLoading()) {
+    win.webContents.send('overlay:collapsed', false)
+  }
+  if (payload?.url) {
+    pendingOverlayData = {
+      url: payload.url,
+      playlist: Array.isArray(payload.playlist) ? payload.playlist : [],
+      startPage: typeof payload.startPage === 'number' ? payload.startPage : 0
+    }
+    if (!win.webContents.isLoading()) {
+      const seekSeconds = (readVideoShortcuts().seekSeconds) || DEFAULT_VIDEO_SEEK_SECONDS
+      win.webContents.send('overlay:init', {
+        url: payload.url,
+        playlist: pendingOverlayData.playlist,
+        startPage: pendingOverlayData.startPage,
+        seekSeconds: seekSeconds,
+        width: overlayBaseSize.w,
+        height: overlayBaseSize.h
+      })
+      pendingOverlayData = null
+    }
+  }
+  startOverlayProgress()
+  return { success: true }
+})
+
+// 展开/收起切换
+ipcMain.handle('video-guide:overlay-collapse', () => {
+  overlayCollapsed = !overlayCollapsed
+  applyOverlayBounds()
+  if (videoOverlayWindow && !videoOverlayWindow.isDestroyed()) {
+    videoOverlayWindow.webContents.send('overlay:collapsed', overlayCollapsed)
+  }
+  return { success: true, collapsed: overlayCollapsed }
+})
+
+ipcMain.handle('video-guide:close-overlay', () => {
+  stopOverlayProgress()
+  if (videoOverlayWindow && !videoOverlayWindow.isDestroyed()) {
+    videoOverlayWindow.close()
+  }
+  return { success: true }
+})
+
+// 哔哩哔哩 iframe 播放控制：跨域 iframe 无法由页面直接控制，经主进程在 B 站播放器 frame 内执行 JS
+ipcMain.on('video-guide:bili-control', (_e, payload) => {
+  if (!videoOverlayWindow || videoOverlayWindow.isDestroyed()) return
+  const action = payload?.action
+  const seconds = Number(payload?.seconds) > 0 ? Number(payload?.seconds) : DEFAULT_VIDEO_SEEK_SECONDS
+  let code = ''
+  if (action === 'play-pause') {
+    code = 'var v=document.querySelector("video");if(v){v.paused?v.play().catch(function(){}):v.pause()}'
+  } else if (action === 'seek-back' || action === 'seek-forward') {
+    const delta = action === 'seek-back' ? -seconds : seconds
+    code = 'var v=document.querySelector("video");if(v){v.currentTime=Math.max(0,v.currentTime+(' + delta + '))}'
+  } else if (action === 'hide-ui') {
+    // B 站 bpx 播放器自带 UI 强制隐藏：顶部标题/作者/关注区、底部控制栏、弹幕发送栏、"进入哔哩哔哩"跳转区、播放结束浮层（跳转按钮+推荐列表），带 id 防重复注入
+    code = 'if(!document.getElementById("esd-bili-hide-ui")){var s=document.createElement("style");s.id="esd-bili-hide-ui";s.textContent=".bpx-player-top-wrap,.bpx-player-control-wrap,.bpx-player-sending-bar,.bpx-player-relation-wrap,.bpx-player-ending-wrap,.bpx-player-rcmd-list{display:none!important}";document.head.appendChild(s)}'
+  } else if (action === 'hide-end-screen') {
+    // 视频播放完毕后隐藏"进入哔哩哔哩观看"提示：监听 video 的 ended 事件，强制隐藏 ended 推荐浮层与关联跳转区（带 id 防重复注入）
+    code = 'if(!document.getElementById("esd-bili-hide-end")){var s=document.createElement("style");s.id="esd-bili-hide-end";s.textContent=".bpx-player-ending-wrap,.bpx-player-relation-wrap{display:none!important}";document.head.appendChild(s);var v=document.querySelector("video");if(v){v.addEventListener("ended",function(){var w=document.querySelector(".bpx-player-ending-wrap");if(w)w.style.display="none";var r=document.querySelector(".bpx-player-relation-wrap");if(r)r.style.display="none"})}}}'
+  } else {
+    return
+  }
+  for (const frame of videoOverlayWindow.webContents.mainFrame.frames) {
+    if (!frame.url || !frame.url.includes('player.bilibili.com')) continue
+    frame.executeJavaScript(code).catch((e) => errorLog('[Electron] B站播放器控制失败: ' + e.message))
+    break
+  }
+})
+
+// 查询哔哩哔哩视频信息（标题 + 分 p 列表），供视频插件构建分 p 播放列表（渲染进程直连受 CORS 限制，由主进程代理）
+function fetchBiliView(bvid) {
+  return new Promise((resolve) => {
+    const req = https.get('https://api.bilibili.com/x/web-interface/view?bvid=' + encodeURIComponent(bvid), {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        Referer: 'https://www.bilibili.com/'
+      }
+    }, (res) => {
+      let body = ''
+      res.on('data', (c) => { body += c })
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(body)
+          if (json.code !== 0 || !json.data) return resolve({ success: false })
+          resolve({
+            success: true,
+            title: json.data.title,
+            pages: (json.data.pages || []).map((p) => ({ page: p.page, title: p.part || ('P' + p.page) }))
+          })
+        } catch { resolve({ success: false }) }
+      })
+    })
+    req.on('error', () => resolve({ success: false }))
+    req.setTimeout(8000, () => { req.destroy(); resolve({ success: false }) })
+  })
+}
+
+ipcMain.handle('video-guide:bili-pages', async (_e, bvid) => {
+  if (typeof bvid !== 'string' || !/^[0-9A-Za-z]{5,32}$/.test(bvid)) return { success: false }
+  return fetchBiliView(bvid)
+})
+
 // ========== 跨平台版本检测（从发布文件名提取版本号） ==========
 const RELEASES_API = 'https://api.github.com/repos/XueWerY/earth-survival-diary/releases'
 /** 从构建产物文件名中提取版本号，如 Earth-Survival-Diary-Setup-2026.7.18-20.exe */
@@ -458,6 +773,11 @@ const PLUGINS_DIR = app.isPackaged
   ? path.join(app.getPath('userData'), 'plugins')
   : path.join(__dirname, '..', 'src', 'plugins')
 
+/** snowbaby 框架目录（生产部署到 resources/vendor/snowbaby，开发在项目根 vendor/snowbaby） */
+const SNOWBABY_DIR = app.isPackaged
+  ? path.join(process.resourcesPath, 'vendor', 'snowbaby')
+  : path.join(__dirname, '..', 'vendor', 'snowbaby')
+
 const ALLOWED_DIRS = [
   path.join(app.getPath('userData'), 'data'),
   path.join(app.getPath('userData'), 'logs'),
@@ -539,6 +859,10 @@ ipcMain.handle('get-plugins-dir-path', async () => {
   return PLUGINS_DIR
 })
 
+ipcMain.handle('get-snowbaby-dir-path', async () => {
+  return SNOWBABY_DIR
+})
+
 // ====== 运行时插件编译 IPC ======
 // 编译标记内容：打包器变更或产物异常时递增，强制已安装插件重新编译
 const COMPILED_TAG = 'esbuild-v3'
@@ -603,6 +927,24 @@ async function ensurePluginsCompiled() {
     }
   }
 }
+
+// 强制重新编译全部已装插件：清掉编译标记后复用 ensurePluginsCompiled
+ipcMain.handle('recompile-plugins', async () => {
+  try {
+    if (fs.existsSync(PLUGINS_DIR)) {
+      for (const entry of fs.readdirSync(PLUGINS_DIR, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue
+        const marker = path.join(PLUGINS_DIR, entry.name, 'dist', '.compiled')
+        if (fs.existsSync(marker)) fs.rmSync(marker, { force: true })
+      }
+    }
+    await ensurePluginsCompiled()
+    return true
+  } catch (e) {
+    errorLog('[Plugins] recompile-plugins failed: ' + e.message)
+    return false
+  }
+})
 
 ipcMain.handle('get-runtime-plugin-manifests', async () => {
   const manifests = []
@@ -776,6 +1118,102 @@ ipcMain.handle('fetch-lan-data', async (_event, url) => {
   }
 })
 // ====== 局域网传输 IPC 结束 ======
+
+// ====== 终端命令执行 / 主进程 HTTPS 请求 IPC 开始 ======
+// 执行 PowerShell 命令，stdout/stderr 通过 powershell-output 事件流式回推渲染进程
+// 当前正在执行的 PowerShell 子进程引用，供 kill-powershell 终止使用
+let currentPowerShell = null
+
+ipcMain.handle('exec-powershell', async (event, command) => {
+  try {
+    // 统一 UTF-8 输出，避免脚本中文提示乱码
+    const wrapped = `[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; ${command}`
+    const child = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', wrapped], { windowsHide: true })
+    currentPowerShell = child
+    const clearRef = () => { if (currentPowerShell === child) currentPowerShell = null }
+    const send = (stream, text) => {
+      if (!event.sender.isDestroyed()) event.sender.send('powershell-output', { stream, text })
+    }
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', (text) => send('stdout', text))
+    child.stderr.on('data', (text) => send('stderr', text))
+    return await new Promise((resolve) => {
+      child.on('close', (code) => {
+        clearRef()
+        send('exit', String(code))
+        resolve({ success: code === 0, code })
+      })
+      child.on('error', (err) => {
+        clearRef()
+        send('stderr', err.message)
+        send('exit', '-1')
+        resolve({ success: false, code: -1, error: err.message })
+      })
+    })
+  } catch (e) {
+    errorLog('[PS] exec-powershell failed: ' + e.message)
+    return { success: false, code: -1, error: e.message }
+  }
+})
+
+// 终止当前正在执行的 PowerShell 子进程（抽卡分析「停止」按钮）
+// 仅 kill powershell.exe 无法终止其派生的子进程，故用 taskkill /T 递归终止整棵进程树
+ipcMain.handle('kill-powershell', async () => {
+  try {
+    if (!currentPowerShell) return { success: false, error: 'no running process' }
+    const child = currentPowerShell
+    currentPowerShell = null
+    if (child.pid) {
+      try {
+        execSync(`taskkill /F /T /PID ${child.pid}`, { windowsHide: true })
+      } catch (e) {
+        errorLog('[PS] taskkill failed: ' + e.message)
+      }
+    }
+    try { child.kill('SIGKILL') } catch {}
+    return { success: true }
+  } catch (e) {
+    errorLog('[PS] kill-powershell failed: ' + e.message)
+    return { success: false, error: e.message }
+  }
+})
+
+// 主进程发起 HTTPS GET 并解析 JSON（渲染进程直连第三方接口会被同源策略拦截）
+ipcMain.handle('http-get-json', async (_event, url) => {
+  return new Promise((resolve, reject) => {
+    https.get(url, { headers: { 'User-Agent': 'earth-survival-diary' } }, (res) => {
+      let data = ''
+      res.on('data', (chunk) => { data += chunk })
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data))
+        } catch {
+          reject(new Error('返回内容不是合法 JSON'))
+        }
+      })
+    }).on('error', (err) => {
+      reject(new Error('请求失败: ' + err.message))
+    })
+  })
+})
+
+// 主进程发起 HTTPS GET 并返回原始文本（含 HTTP 状态码）。
+// 供插件市场等场景下载 GitHub 源文件用，渲染进程直连第三方接口会被同源策略拦截或网络波动影响。
+ipcMain.handle('http-get-text', async (_event, url) => {
+  return new Promise((resolve) => {
+    https.get(url, { headers: { 'User-Agent': 'earth-survival-diary' } }, (res) => {
+      let data = ''
+      res.on('data', (chunk) => { data += chunk })
+      res.on('end', () => {
+        resolve({ status: res.statusCode, text: data })
+      })
+    }).on('error', (err) => {
+      resolve({ status: 0, text: '', error: err.message })
+    })
+  })
+})
+// ====== 终端命令执行 / 主进程 HTTPS 请求 IPC 结束 ======
 
 const logFile = path.join(app.getPath('userData'), 'logs', 'app-' + new Date().toISOString().slice(0, 10) + '.log')
 const p = (n, l = 2) => String(n).padStart(l, '0')
@@ -1710,6 +2148,7 @@ app.whenReady().then(async () => {
     debugLog('[Electron] Loading URL: ' + url)
     createWindow(url)
     setupTray()
+    registerVideoGuideShortcuts()
 
     setTimeout(() => {
       fetchLatestFromReleases().then((latest) => {
@@ -1736,6 +2175,7 @@ app.on('before-quit', async () => {
   debugLog('[Electron] App is about to quit (system shutdown/user exit)')
   isQuitting = true
   cancelAllReminderTimers()
+  globalShortcut.unregisterAll()
   if (serverInstance) {
     try { serverInstance.close() } catch (e) {}
   }

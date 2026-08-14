@@ -536,13 +536,21 @@ npx cap sync android</code></pre>
     </div>
   </div>
 
+  <h3>主进程能力（IPC）</h3>
+  <ul>
+    <li>渲染进程与插件<strong>不得直接使用 Node 能力</strong>（<code>contextIsolation: true</code> / <code>nodeIntegration: false</code>），所有系统能力统一由 <code>electron/preload.cjs</code> 挂到 <code>window.electronAPI</code>，实现放在 <code>electron/main.cjs</code> 的 <code>ipcMain.handle</code>，类型在 <code>src/types/electron.d.ts</code> 同步声明（三处需一并修改）</li>
+    <li><code>execPowerShell(command)</code> — 执行 PowerShell 命令；stdout/stderr 经 <code>powershell-output</code> 事件流式回推，渲染端用 <code>onPowerShellOutput(cb)</code> 订阅、<code>offPowerShellOutput()</code> 取消订阅（组件卸载时必须取消）；主进程已统一 UTF-8 输出编码</li>
+    <li><code>httpGetJson(url)</code> — 由主进程发起 HTTPS GET 并解析 JSON。<strong>访问第三方接口一律走此通道</strong>，渲染进程直连会被同源策略拦截</li>
+    <li><code>httpGetText(url)</code> — 由主进程发起 HTTPS GET 并返回原始文本 <code>{status, text}</code>。<strong>插件市场下载 GitHub 源文件（README、plugin.json、源码等）统一走此通道</strong>，返回的 <code>status</code> 用于判断 HTTP 状态；主进程 <code>https.get</code> 已带 User-Agent，避免渲染进程 fetch 因同源策略/网络波动导致 <code>Failed to fetch</code> 或超时中止</li>
+  </ul>
+
   <h3>插件系统架构</h3>
   <ul>
     <li>插件仅支持 Electron 端，以源码形式分发（插件市场从 GitHub 仓库下载源码），<strong>不打包进 exe</strong></li>
     <li><strong>开发模式</strong>：<code>src/lib/pluginLoader.dev.ts</code> 通过 Vite glob 加载 <code>src/plugins/&lt;插件ID&gt;/</code>，随主应用一起编译</li>
     <li><strong>生产模式</strong>：插件安装到 <code>userData/plugins/&lt;插件ID&gt;/</code>；应用启动时主进程用 esbuild 将每个工具打包为单文件 ESM（<code>dist/&lt;工具ID&gt;.js</code>），渲染端经 Express <code>/api/plugins/&lt;插件ID&gt;/dist/&lt;工具ID&gt;.js</code> 动态导入，重启后生效</li>
     <li><strong>运行时桥</strong>：共享依赖（vue / pinia / element-plus / 应用内部模块等）<strong>不打包进插件产物</strong>，由 <code>src/lib/pluginBridge.ts</code> 暴露到 <code>window.__ESD_BRIDGE__</code>，保证插件与主应用共用同一 Vue / Pinia 实例</li>
-    <li><strong>桥接白名单</strong>：插件可引用的模块受白名单约束，在 <code>electron/build-plugin.cjs</code>（<code>BARE_BRIDGE</code> / <code>SRC_BRIDGE</code>）与 <code>src/lib/pluginBridge.ts</code> 两端登记，新增可桥接模块需同步修改两处</li>
+    <li><strong>桥接白名单</strong>：插件可引用的模块受白名单约束，在 <code>electron/build-plugin.cjs</code>（<code>BARE_BRIDGE</code> / <code>SRC_BRIDGE</code>）与 <code>src/lib/pluginBridge.ts</code> 两端登记，新增可桥接模块需同步修改两处。白名单<strong>键名必须与插件内实际 import 路径一致</strong>：例如通用对话框键为 <code>components/ui/BaseDialog.vue</code>（组件已从 <code>components/common/</code> 迁移至 <code>components/ui/</code>），<code>components/common/BaseDialog.vue</code> 仅作为历史别名保留以支持未重新编译的旧插件产物</li>
     <li>编译标记 <code>dist/.compiled</code> 内容版本化（main.cjs <code>COMPILED_TAG</code>），打包器变更时递增，强制已安装插件重编译</li>
     <li>Electron 运行时依赖（<code>electron/package.json</code>）：<code>@vue/compiler-sfc</code>（SFC 编译）、<code>esbuild</code>（打包），经 extraResources 随安装包分发</li>
   </ul>
@@ -618,13 +626,23 @@ npx cap sync android</code></pre>
   <h3>常用组件</h3>
   <table class="ver-table">
     <tr><th>组件</th><th>说明</th></tr>
-    <tr><td><code>MainNav</code></td><td>全局导航栏（桌面左侧/移动底部/拆分顶部），桌面端左侧支持收起为图标窄条，通过 <code>collapsed</code> prop 与 <code>toggle-collapse</code> 事件控制，收起状态持久化在用户设置 <code>sidebarCollapsed</code> 字段</td></tr>
+    <tr><td><code>MainNav</code></td><td>全局导航栏（桌面端/移动端/Android/拆分面板底部）。所有平台均为常驻显示的页面底部透明浮层，不占用页面空间，距页面下边界 25px，导航项统一样式（图标在上、标签在下），始终可见、无需展开；交互：单击导航项切换页面，长按左键（约 0.3 秒）进入滑动模式可左右滑动（通过 pointerdown/move/up + setPointerCapture + 长按计时器实现，长按/滑动会抑制随后的点击；拆分的 <code>variant="split"</code> 同样支持，flex-start 布局便于溢出滚动）；导航项末尾提供「拆分」入口（进入/退出拆分界面，通过 <code>split</code> 事件与 <code>splitActive</code> prop 控制）；拆分界面下每个面板底部各有全局导航栏（absolute 定位距下边界 25px、水平居中），拆分项文案随 <code>splitActive</code> 变为「合并」；已移除左侧标题与折叠收起功能。拆分功能从右键菜单迁移至导航栏，原右键菜单已删除</td></tr>
     <tr><td><code>ReminderCard</code></td><td>提醒卡片，每 5 秒弹出</td></tr>
-    <tr><td><code>ConfirmDialog</code></td><td>确认弹窗，v-model:visible 控制</td></tr>
+    <tr><td><code>SplitPanel</code>（<code>components/common/</code>）</td><td>拆分界面的单个面板组件。内部调用 <code>provideNavState()</code> 为每个面板提供独立导航状态（各面板路由互不污染）；渲染模块组件（<code>:module-components</code>）与底部 <code>MainNav variant="split"</code>；透传 <code>navigate</code>/<code>split</code>/<code>fullscreenChange</code>/<code>logout</code>/<code>refreshData</code>/<code>profileUpdated</code>/<code>closeProfile</code>（携带 <code>panelIndex</code>）事件。App 端关闭「我的」时由 <code>handleCloseProfile</code> 把该面板切回上一个模块（<code>prevPanelModules</code> 记录）、保持拆分界面不退出</td></tr>
+    <tr><td><code>BaseDialog</code>（<code>components/ui/</code>）</td><td>通用弹窗。内容区可滚动（<code>.dialog-body</code> 滚动条已隐藏但保留滚动）；提供 <code>#footer</code> 插槽放置底部按钮（自动带分隔线、固定在 body 外不随内容滚动）；提供 <code>inline</code> prop 使弹窗相对最近定位祖先渲染（如拆分面板内显示，不 teleport 时生效）；提供 <code>noOverlayClose</code> 禁止点击遮罩关闭。注：「我的」页面已改回独立路由页面（不再使用 BaseDialog），<code>ProfilePage.vue</code> 为独立页面（内容区 500px 居中）</td></tr>
+    <tr><td><code>ConfirmDialog</code></td><td>确认弹窗，v-model:visible 控制；message 下方提供默认插槽用于放置额外内容（如勾选项）</td></tr>
     <tr><td><code>ColorPickerPanel</code></td><td>颜色选择面板，自带 max-height: 90vh + overflow-y: auto</td></tr>
     <tr><td><code>GuideOverlay</code></td><td>新手引导遮罩层</td></tr>
-    <tr><td><code>FloatingTimerBar</code>（<code>components/timer/</code>）</td><td>计时中跨页面常驻弹窗，窗口顶部居中显示</td></tr>
+    <tr><td><code>FloatingTimerBar</code>（<code>components/timer/</code>）</td><td>计时中跨页面常驻弹窗，窗口右下角显示，可拖动</td></tr>
   </table>
+
+  <p><strong>视频插件悬浮播放器窗口与快捷键</strong>（<code>src/plugins/video/</code>）：</p>
+  <ul>
+    <li>视频播放器采用 Electron 独立置顶窗口（<code>main.cjs</code> 中 <code>createVideoOverlayWindow</code>，<code>frame:false + alwaysOnTop + resizable:false</code>，非透明），始终显示在所有窗口上方；页面 HTML 内嵌于插件工具组件 <code>src/plugins/video/tools/video/index.vue</code> 的 <code>OVERLAY_HTML</code> 常量（随插件编译产物分发），打开时经 <code>open-overlay</code> IPC 传给主进程，以 <code>data:</code> URL 加载（页面脚本须用 IIFE 包裹，避免顶层 <code>const electronAPI</code> 与 contextBridge 暴露的不可配置全局属性冲突）</li>
+    <li>播放器窗口控制走 IPC：<code>video-guide:open-overlay</code> / <code>video-guide:close-overlay</code> / <code>video-guide:overlay-collapse</code>（展开/收起切换，preload 暴露 <code>openVideoOverlay</code>/<code>closeVideoOverlay</code>/<code>toggleOverlayCollapse</code>/<code>onOverlayInit</code>/<code>onOverlayCollapsed</code>）；页面提供「展开/收起」与「关闭」按钮，收起时窗口缩小为小条（<code>OVERLAY_COLLAPSED_W/H</code>）并隐藏视频；播放器窗口禁止拖拽（<code>-webkit-app-region</code> 未设置，且 BrowserWindow 设置 <code>resizable: false</code> 禁止调整大小）</li>
+    <li>播放器窗口定位：<code>open-overlay</code> 支持 <code>position</code>（bottom-left/bottom-right/top-right/top-left/top-center/bottom-center，默认 bottom-right）与 <code>margin</code>（边缘间距），用 <code>screen.getPrimaryDisplay().workArea</code> 计算窗口坐标（<code>computeOverlayPos</code>）；展开/收起用 <code>applyOverlayBounds</code> 保持位置锚定；<code>open-overlay</code> 支持 <code>playlist</code>（收藏视频列表），遮罩窗口据此维护播放列表支持上一集/下一集切换</li>
+    <li>全局快捷键由 Electron <code>globalShortcut</code> 注册（5 个：上一集/后退/播放暂停/前进/下一集，seek 时间可配置 <code>seekSeconds</code>），配置存 <code>userData/video-shortcuts.json</code>；支持动态重注册（<code>video-guide:get-shortcuts</code>/<code>update-shortcuts</code> IPC），工具页提供快捷键配置 UI</li>
+  </ul>
 
   <h3>选择器组件</h3>
   <div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;">
@@ -694,6 +712,8 @@ npx cap sync android</code></pre>
     <tr><td>日记数据</td><td><code>data/&lt;用户ID&gt;/footprint/diary.json</code>（与足迹记录分文件存储）</td></tr>
     <tr><td>笔记分类</td><td><code>data/&lt;用户ID&gt;/notes/categories.json</code></td></tr>
     <tr><td>笔记样式</td><td><code>data/&lt;用户ID&gt;/notes/style.json</code>（仅当前会话有效）</td></tr>
+    <tr><td>snowbaby（Yunzai）机器人数据</td><td><code>data/&lt;用户ID&gt;/snowbaby/</code>（原 Redis 数据以本地 KV 文件存储，不再依赖 Redis/Valkey 服务）</td></tr>
+    <tr><td>视频收藏/历史</td><td><code>data/&lt;用户ID&gt;/video/favorites.json</code>（命名收藏列表）、<code>data/&lt;用户ID&gt;/video/history.json</code>（播放历史，上限 50 条），均经 storageService 读写</td></tr>
   </table>
 
   <div class="callout green">

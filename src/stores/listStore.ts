@@ -61,6 +61,7 @@ export interface Task {
   repeatCompletedCount: number
   priority: Priority
   checklist: ChecklistItem[]
+  linkedNoteIds: string[]
   completed: boolean
   completedStartTime: string
   completedEndTime: string
@@ -284,6 +285,7 @@ export const useListStore = defineStore('list', () => {
         repeatCompletedCount: db.repeat_completed_count ?? db.current_count ?? 0,
         priority: (db.priority || 'none') as Priority,
         checklist: db.checklist || [],
+        linkedNoteIds: db.linked_note_ids || [],
         completed: db.completed,
         completedStartTime: db.completed_start_time || '',
         completedEndTime: db.completed_end_time || '',
@@ -377,10 +379,33 @@ export const useListStore = defineStore('list', () => {
   }
 
   // 删除清单（同时删除该清单下的所有任务）
-  const deleteList = async (id: string) => {
+  const deleteList = async (id: string, opts?: { deleteTasks?: boolean }) => {
     try {
-      await api.deleteList(id)
-      lists.value = lists.value.filter(m => m.listId !== id)
+      const deleteTasks = opts?.deleteTasks ?? true
+      let transferToListId: string | undefined
+      if (!deleteTasks) {
+        const folder = folders.value.find(f => f.listIds.includes(id))
+        const siblings = (folder ? folder.listIds : []).filter(lid => lid !== id)
+        const target = taskLists.value.filter(l => siblings.includes(l.id)).sort((a, b) => (a.order || 0) - (b.order || 0))[0]
+        transferToListId = target ? target.id : undefined
+        if (!transferToListId) {
+          // 同文件夹无其他清单，只能连同任务一起删除
+          await api.deleteList(id, { deleteTasks: true })
+          lists.value = lists.value.filter(m => m.listId !== id)
+          taskLists.value = taskLists.value.filter(l => l.id !== id)
+          folders.value.forEach(f => { f.listIds = f.listIds.filter(lid => lid !== id) })
+          await saveFolders()
+          return
+        }
+      }
+      await api.deleteList(id, { deleteTasks, transferToListId })
+      if (!deleteTasks && transferToListId) {
+        const target = taskLists.value.find(l => l.id === transferToListId)
+        const targetGroupId = target?.groups?.[0]?.id || ''
+        lists.value = lists.value.map(m => m.listId === id ? { ...m, listId: transferToListId!, groupId: targetGroupId } : m)
+      } else {
+        lists.value = lists.value.filter(m => m.listId !== id)
+      }
       taskLists.value = taskLists.value.filter(l => l.id !== id)
       // 从所有文件夹中移除该清单
       folders.value.forEach(f => { f.listIds = f.listIds.filter(lid => lid !== id) })
@@ -567,14 +592,15 @@ export const useListStore = defineStore('list', () => {
   }
 
   // 删除清单内的分组（任务移到默认分组）
-  const deleteGroupFromList = async (listId: string, groupId: string) => {
+  const deleteGroupFromList = async (listId: string, groupId: string, opts?: { deleteTasks?: boolean }) => {
     const list = taskLists.value.find(l => l.id === listId)
     if (!list || list.groups.length <= 1) return
 
     const defaultGroup = list.groups.find(g => g.id !== groupId)
-    
+    const deleteTasks = opts?.deleteTasks ?? false
+
     try {
-      await api.deleteGroup(listId, groupId)
+      await api.deleteGroup(listId, groupId, { deleteTasks })
     } catch (error) {
       console.error('Failed to delete group:', error)
       return
@@ -584,8 +610,11 @@ export const useListStore = defineStore('list', () => {
     list.groups.forEach((g, i) => { g.order = i })
     saveGroupsLocal()
 
-    // 更新任务的分组
-    if (defaultGroup) {
+    if (deleteTasks) {
+      // 删除该分组下的所有任务
+      lists.value = lists.value.filter(m => !(m.listId === listId && m.groupId === groupId))
+    } else if (defaultGroup) {
+      // 更新任务的分组（转移到默认分组）
       lists.value.forEach(m => {
         if (m.listId === listId && m.groupId === groupId) {
           m.groupId = defaultGroup.id
@@ -709,6 +738,7 @@ export const useListStore = defineStore('list', () => {
         repeatCount: task.repeatCount,
         priority: task.priority,
         checklist: task.checklist,
+        linkedNoteIds: task.linkedNoteIds,
         notes: task.notes,
         reminderStrategy: task.reminderStrategy,
         reminderDays: task.reminderDays,
@@ -735,6 +765,7 @@ export const useListStore = defineStore('list', () => {
         repeatCompletedCount: dbTask.repeat_completed_count ?? dbTask.current_count ?? 0,
         priority: (dbTask.priority || 'none') as Priority,
         checklist: dbTask.checklist || [],
+        linkedNoteIds: dbTask.linked_note_ids || [],
         completed: dbTask.completed,
         completedStartTime: dbTask.completed_start_time || '',
         completedEndTime: dbTask.completed_end_time || '',
@@ -782,6 +813,7 @@ export const useListStore = defineStore('list', () => {
         repeatCount: updates.repeatCount,
         priority: updates.priority,
         checklist: updates.checklist,
+        linkedNoteIds: updates.linkedNoteIds,
         completedStartTime: updates.completedStartTime,
         completedEndTime: updates.completedEndTime,
         notes: updates.notes,
@@ -808,6 +840,7 @@ export const useListStore = defineStore('list', () => {
       if (updates.repeatCompletedCount !== undefined) task.repeatCompletedCount = updates.repeatCompletedCount
       if (updates.priority !== undefined) task.priority = updates.priority
       if (updates.checklist !== undefined) task.checklist = updates.checklist
+      if (updates.linkedNoteIds !== undefined) task.linkedNoteIds = updates.linkedNoteIds
       if (updates.completed !== undefined) task.completed = updates.completed
       if (updates.completedStartTime !== undefined) task.completedStartTime = updates.completedStartTime
       if (updates.completedEndTime !== undefined) task.completedEndTime = updates.completedEndTime

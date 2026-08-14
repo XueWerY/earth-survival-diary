@@ -53,6 +53,17 @@
       </div>
 
       <div v-if="list.notes" class="list-notes-content">{{ list.notes }}</div>
+
+      <div class="linked-notes-line" v-if="linkedNotes.length" @click.stop>
+        <span v-for="n in linkedNotes" :key="n.id" class="linked-note-tag" :style="{ borderColor: n.color, color: n.color }"
+          @click="openLinkedNote(n)" @mouseenter="fitNotePreview">
+          <span class="linked-note-label"><el-icon><Notebook /></el-icon>{{ n.title || '无标题笔记' }}</span>
+          <span class="linked-note-preview">
+            <span class="linked-note-preview-title">{{ n.title || '无标题笔记' }}</span>
+            <span class="linked-note-preview-body">{{ notePreview(n) }}</span>
+          </span>
+        </span>
+      </div>
     </div>
 
     <ConfirmDialog
@@ -66,9 +77,12 @@
 
 <script setup lang="ts">
 import { ref, inject, computed } from 'vue'
-import { Calendar, RefreshRight, Check, CircleCheck, Bell, Delete, Edit, Clock } from '@element-plus/icons-vue'
+import { Calendar, RefreshRight, Check, CircleCheck, Bell, Delete, Edit, Clock, Notebook } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
+import { useRouter } from 'vue-router'
 import { useListStore, REPEAT_STRATEGIES, type Task } from '../../stores/listStore'
+import { useNoteStore, getMdPlainText, type Note } from '../../stores/noteStore'
+import { usePageNav, MODULE_ROUTES } from '../../composables/usePageNav'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
 
 const props = withDefaults(defineProps<{
@@ -87,8 +101,49 @@ const emit = defineEmits<{
 }>()
 
 const listStore = useListStore()
+const noteStore = useNoteStore()
+const router = useRouter()
+const { setNavPath } = usePageNav()
 const refreshReminders = inject<() => void>('refreshReminders', () => {})
 const isGuideActive = inject('guideVisible', ref(false))
+
+// 关联笔记：按 id 取笔记本体，已删除的自动跳过
+const linkedNotes = computed(() => {
+  return (props.list.linkedNoteIds || [])
+    .map(id => noteStore.notes.find(n => n.id === id))
+    .filter((n): n is Note => !!n)
+})
+
+const openLinkedNote = (note: Note) => {
+  setNavPath(['notes', note.categoryId, note.id])
+  router.push(MODULE_ROUTES.notes)
+}
+
+// 预览浮层最大高度：上边界距面包屑地址栏保持与卡片-地址栏一致的 16px 间距
+const fitNotePreview = (e: MouseEvent) => {
+  const tag = e.currentTarget as HTMLElement
+  const preview = tag.querySelector('.linked-note-preview') as HTMLElement | null
+  if (!preview) return
+  const crumb = document.querySelector('.list-breadcrumb-bar')
+  let maxH = window.innerHeight * 0.4
+  if (crumb) {
+    const available = tag.getBoundingClientRect().top - crumb.getBoundingClientRect().bottom - 16
+    if (available > 120) maxH = available
+  }
+  preview.style.maxHeight = maxH + 'px'
+}
+
+const notePreview = (note: Note): string => {
+  const text = getMdPlainText(note.content || '').trim()
+  if (!text) return '（空笔记）'
+  // 正文首行若与标题相同，则去掉，避免标题重复显示
+  const title = (note.title || '').trim()
+  const lines = text.split('\n')
+  if (title && lines.length && lines[0].trim() === title) {
+    lines.shift()
+  }
+  return lines.join('\n').trim()
+}
 
 const showEndDate = computed(() => {
   return props.context !== 'footprint' && props.context !== 'today'
@@ -291,6 +346,45 @@ const showDeleteConfirm = ref(false)
 .checklist-item.completed .check-icon { color: var(--chalk-primary); }
 
 .list-notes-content { margin-top: 8px; font-size: 13px; color: rgba(180, 170, 150, 0.75); line-height: 1.6; word-break: break-word; white-space: pre-wrap; }
+
+.linked-notes-line { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.linked-note-tag { display: inline-flex; align-items: center; max-width: 100%; padding: 2px 8px; border: 1px solid; border-radius: 10px; background: rgba(255,255,255,0.05); font-size: 12px; line-height: 1.6; cursor: pointer; transition: all 0.15s; position: relative; z-index: 5; }
+.linked-note-label { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.linked-note-tag:hover { background: rgba(255,255,255,0.14); transform: translateY(-1px); }
+/* 预览浮层：显示在标签上方，层级高于卡片的标记完成框/编辑删除按钮 */
+.linked-note-preview {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  z-index: 999;
+  width: 500px;
+  max-width: calc(100vw - 40px);
+  padding: 8px 10px;
+  background: rgba(24, 22, 42, 0.98);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--chalk-white-80);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  pointer-events: auto;
+}
+.linked-note-preview-title {
+  display: block;
+  text-align: center;
+  font-weight: 600;
+  color: var(--chalk-white);
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.linked-note-tag:hover .linked-note-preview, .linked-note-preview:hover { display: block; }
 
 :deep(.el-checkbox__inner) { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
 </style>

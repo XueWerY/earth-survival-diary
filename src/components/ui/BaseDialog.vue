@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body" :disabled="!teleport">
-    <div v-if="visible" class="dialog-overlay" :class="{ 'dialog-overlay-fullscreen': fullscreen }" @click.self="!noOverlayClose && $emit('update:visible', false)">
+    <div v-if="visible" class="dialog-overlay" :class="{ 'dialog-overlay-fullscreen': fullscreen, 'dialog-overlay-inline': inline }" :style="{ zIndex }" @click.self="!noOverlayClose && $emit('update:visible', false)">
       <div class="dialog-container" :class="{ 'dialog-container-fullscreen': fullscreen }" :style="width && !fullscreen ? { width: width + 'px' } : {}">
         <div class="dialog-header">
           <span class="dialog-header-title">{{ title }}</span>
@@ -30,10 +30,14 @@ withDefaults(defineProps<{
   teleport?: boolean
   noOverlayClose?: boolean
   fullscreen?: boolean
+  inline?: boolean
+  zIndex?: number
 }>(), {
   teleport: false,
   noOverlayClose: false,
-  fullscreen: false
+  fullscreen: false,
+  inline: false,
+  zIndex: 9999
 })
 
 defineEmits<{
@@ -121,4 +125,6 @@ defineEmits<{
 
 .dialog-overlay-fullscreen { align-items: stretch; }
 .dialog-container-fullscreen { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; border-radius: 0; }
+/* 容器内弹窗：相对最近定位祖先（如拆分面板），限定在容器内显示 */
+.dialog-overlay-inline { position: absolute; }
 </style>

@@ -57,10 +57,41 @@ declare global {
       fetchLanData: (url: string) => Promise<any>
       setWindowTitle: (title: string) => Promise<boolean>
 
+      // 终端命令执行（PowerShell，输出经 powershell-output 事件流式回推）
+      execPowerShell: (command: string) => Promise<{ success: boolean; code: number; error?: string }>
+      onPowerShellOutput: (callback: (data: { stream: 'stdout' | 'stderr' | 'exit'; text: string }) => void) => void
+      offPowerShellOutput: () => void
+      killPowerShell: () => Promise<{ success: boolean; error?: string }>
+
+      // 主进程 HTTPS JSON 请求（绕开渲染进程同源限制）
+      httpGetJson: (url: string) => Promise<any>
+      // 主进程 HTTPS 文本请求（下载插件源码等，返回 { status, text }）
+      httpGetText: (url: string) => Promise<{ status: number; text: string; error?: string }>
+
       // 插件管理
       getPluginsDirPath: () => Promise<string>
+      getSnowbabyDirPath: () => Promise<string>
       createDirectory: (dirPath: string) => Promise<boolean>
       removeDirectory: (dirPath: string) => Promise<boolean>
+      recompilePlugins: () => Promise<boolean>
+
+      // 视频全局快捷键
+      onVideoGuideShortcut: (callback: (action: 'prev-episode' | 'seek-back' | 'play-pause' | 'seek-forward' | 'next-episode', seekSeconds?: number) => void) => void
+      offVideoGuideShortcut: () => void
+      getVideoShortcuts: () => Promise<VideoShortcutConfig>
+      updateVideoShortcuts: (shortcuts: Partial<VideoShortcutConfig>) => Promise<{ success: boolean; shortcuts: VideoShortcutConfig }>
+      interface VideoShortcutConfig {
+        prevEpisode: string; seekBack: string; playPause: string; seekForward: string; nextEpisode: string; seekSeconds: number
+      }
+      // 视频悬浮播放器窗口
+      openVideoOverlay: (payload: { url: string; width?: number; height?: number; position?: string; margin?: number; playlist?: { url: string; page: number; title: string }[]; startPage?: number }) => Promise<{ success: boolean }>
+      closeVideoOverlay: () => Promise<{ success: boolean }>
+      toggleOverlayCollapse: () => Promise<{ success: boolean; collapsed: boolean }>
+      controlBiliPlayer: (data: { action: 'play-pause' | 'seek-back' | 'seek-forward' | 'hide-ui' | 'hide-end-screen'; seconds?: number }) => void
+      getBiliPages: (bvid: string) => Promise<{ success: boolean; title?: string; pages?: { page: number; title: string }[] }>
+      onOverlayInit: (callback: (data: { url: string; width: number; height: number }) => void) => void
+      onOverlayCollapsed: (callback: (collapsed: boolean) => void) => void
+      onOverlayProgress: (callback: (progress: { t: number; d: number }) => void) => void
     }
 
   }

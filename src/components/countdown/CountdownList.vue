@@ -275,9 +275,10 @@ const navPath = computed(() => pageNav.navPath.value)
 
 const ALL_CATEGORY_VALUE = 'all'
 
-const isCountdownHome = computed(() => navPath.value.length === 1 && navPath.value[0] === 'countdown')
-const isCategoryView = computed(() => navPath.value.length === 2 && navPath.value[0] === 'countdown')
-const isAllView = computed(() => navPath.value.length === 2 && navPath.value[0] === 'countdown' && navPath.value[1] === ALL_CATEGORY_VALUE)
+// navPath 为全局共享单例：拆分界面中可能被其他面板改写。当路径不属于 countdown 时回退为首页视图，避免空白
+const isCountdownHome = computed(() => navPath.value[0] === 'countdown' ? navPath.value.length === 1 : true)
+const isCategoryView = computed(() => navPath.value[0] === 'countdown' && navPath.value.length === 2)
+const isAllView = computed(() => navPath.value[0] === 'countdown' && navPath.value.length === 2 && navPath.value[1] === ALL_CATEGORY_VALUE)
 
 const currentCategoryFromPath = computed(() => {
   if (isCategoryView.value) return navPath.value[1]
