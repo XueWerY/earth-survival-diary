@@ -537,6 +537,8 @@ function createVideoOverlayWindow() {
   })
   const html = overlayHtml || '<body style="margin:0;background:#060918;color:#fff;font:14px sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">请更新视频插件后重试</body>'
   videoOverlayWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+  // 置顶层级设为最高（screen-saver 级），确保不被无边框全屏游戏覆盖
+  videoOverlayWindow.setAlwaysOnTop(true, 'screen-saver')
   // 页面加载完成后发送初始数据，避免消息在监听注册前丢失
   videoOverlayWindow.webContents.on('did-finish-load', () => {
     if (!videoOverlayWindow.isDestroyed()) {
@@ -2312,6 +2314,14 @@ function formatDelay(ms) {
 
 const MAX_SCHEDULE_DELAY = 20 * 24 * 3600 * 1000
 // ====== 提醒系统结束 ======
+
+// ====== 全屏游戏前台时视频播放器卡顿修复（须在 app ready 前设置） ======
+// Windows 上 Chromium 的原生窗口遮挡检测（CalculateNativeWinOcclusion）会把置顶的播放器窗口
+// 误判为被全屏游戏"遮挡"，进而停止/降频该窗口的合成渲染导致播放卡顿（游戏切后台即恢复正常）。
+// 禁用遮挡检测与被遮挡窗口的后台化/渲染器降频，保证播放器在全屏游戏前台时持续正常渲染。
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
 
 app.whenReady().then(async () => {
   if (!gotTheLock) {
