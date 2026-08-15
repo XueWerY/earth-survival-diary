@@ -106,6 +106,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getVideoHistory: (userId) => ipcRenderer.invoke('video-guide:history-get', userId),
   recordVideoHistory: (userId, entry) => ipcRenderer.invoke('video-guide:history-record', { userId, ...entry }),
   removeVideoHistory: (userId, url) => ipcRenderer.invoke('video-guide:history-remove', { userId, url }),
+  getVideoSettings: (userId) => ipcRenderer.invoke('video-guide:settings-get', userId),
+  updateVideoSettings: (userId, settings) => ipcRenderer.invoke('video-guide:settings-set', { userId, settings }),
   onOverlayInit: (callback) => ipcRenderer.on('overlay:init', (_e, data) => callback(data)),
   onOverlayCollapsed: (callback) => ipcRenderer.on('overlay:collapsed', (_e, collapsed) => callback(collapsed)),
   onOverlayProgress: (callback) => ipcRenderer.on('overlay:progress', (_e, progress) => callback(progress))

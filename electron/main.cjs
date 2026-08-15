@@ -388,6 +388,60 @@ ipcMain.handle('video-guide:history-remove', (_e, payload) => {
   return rest
 })
 
+// ========== 视频其他设置持久化（data/<用户ID>/video/settings.json） ==========
+// 包含：前进/后退时间、播放器宽度/高度/位置/屏幕边缘间距，修改后立即保存
+function getVideoSettingsPath(userId) {
+  return path.join(DATA_DIR, userId, 'video', 'settings.json')
+}
+
+const DEFAULT_VIDEO_SETTINGS = { seekSeconds: 10, width: 500, height: 300, position: 'bottom-left', margin: 16 }
+
+function readVideoSettings(userId) {
+  try {
+    const p = getVideoSettingsPath(userId)
+    if (fs.existsSync(p)) {
+      const obj = JSON.parse(fs.readFileSync(p, 'utf-8'))
+      return { ...DEFAULT_VIDEO_SETTINGS, ...(obj && typeof obj === 'object' ? obj : {}) }
+    }
+  } catch (e) {
+    errorLog('[Electron] 读取视频设置失败: ' + e.message)
+  }
+  return { ...DEFAULT_VIDEO_SETTINGS }
+}
+
+function writeVideoSettings(userId, patch) {
+  try {
+    const merged = { ...readVideoSettings(userId), ...(patch && typeof patch === 'object' ? patch : {}) }
+    const p = getVideoSettingsPath(userId)
+    fs.mkdirSync(path.dirname(p), { recursive: true })
+    fs.writeFileSync(p, JSON.stringify(merged, null, 2), 'utf-8')
+    return merged
+  } catch (e) {
+    errorLog('[Electron] 保存视频设置失败: ' + e.message)
+    return readVideoSettings(userId)
+  }
+}
+
+ipcMain.handle('video-guide:settings-get', (_e, userId) => {
+  const uid = sanitizeUserId(userId)
+  return uid ? readVideoSettings(uid) : { ...DEFAULT_VIDEO_SETTINGS }
+})
+
+ipcMain.handle('video-guide:settings-set', (_e, payload) => {
+  const uid = sanitizeUserId(payload?.userId)
+  if (!uid) return { success: false }
+  return { success: true, settings: writeVideoSettings(uid, payload?.settings) }
+})
+
+// 悬浮窗初始化用的前进/后退时间：优先用户级设置，回退快捷键配置文件（旧版本存储位置），最后默认值
+function getOverlaySeekSeconds() {
+  if (overlayUserId) {
+    const v = readVideoSettings(overlayUserId).seekSeconds
+    if (typeof v === 'number' && v > 0) return v
+  }
+  return (readVideoShortcuts().seekSeconds) || DEFAULT_VIDEO_SEEK_SECONDS
+}
+
 // 悬浮窗页面报告当前播放项（切集时触发），主进程据此结合进度轮询更新历史记录
 ipcMain.on('video-guide:playback-state', (_e, payload) => {
   if (!payload || typeof payload.url !== 'string' || !payload.url) return
@@ -476,7 +530,9 @@ function createVideoOverlayWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      // 播放器窗口常在游戏等全屏应用前台失焦时使用：禁用后台节流，避免失焦后渲染/定时器被降频导致播放卡顿
+      backgroundThrottling: false
     }
   })
   const html = overlayHtml || '<body style="margin:0;background:#060918;color:#fff;font:14px sans-serif;display:flex;align-items:center;justify-content:center;height:100vh">请更新视频插件后重试</body>'
@@ -484,13 +540,12 @@ function createVideoOverlayWindow() {
   // 页面加载完成后发送初始数据，避免消息在监听注册前丢失
   videoOverlayWindow.webContents.on('did-finish-load', () => {
     if (!videoOverlayWindow.isDestroyed()) {
-      const seekSeconds = (readVideoShortcuts().seekSeconds) || DEFAULT_VIDEO_SEEK_SECONDS
       videoOverlayWindow.webContents.send('overlay:init', {
         url: (pendingOverlayData && pendingOverlayData.url) || '',
         playlist: (pendingOverlayData && pendingOverlayData.playlist) || [],
         startPage: (pendingOverlayData && pendingOverlayData.startPage) || 0,
         seekTo: (pendingOverlayData && pendingOverlayData.seekTo) || 0,
-        seekSeconds: seekSeconds,
+        seekSeconds: getOverlaySeekSeconds(),
         width: overlayBaseSize.w,
         height: overlayBaseSize.h
       })
@@ -530,6 +585,7 @@ function applyOverlayBounds() {
 }
 
 // 播放进度轮询：读取 B 站播放器 iframe 内 video 的播放进度，推送给悬浮窗页面渲染常驻进度条
+// 轮询周期 1 秒：兼顾进度条流畅度与开销（游戏时降低主进程/页面负载）
 let overlayProgressTimer = null
 function startOverlayProgress() {
   clearInterval(overlayProgressTimer)
@@ -552,7 +608,7 @@ function startOverlayProgress() {
         break
       }
     } catch {}
-  }, 500)
+  }, 1000)
 }
 
 function stopOverlayProgress() {
@@ -593,13 +649,12 @@ ipcMain.handle('video-guide:open-overlay', (e, payload) => {
       seekTo: Number(payload.seekTo) > 0 ? Number(payload.seekTo) : 0
     }
     if (!win.webContents.isLoading()) {
-      const seekSeconds = (readVideoShortcuts().seekSeconds) || DEFAULT_VIDEO_SEEK_SECONDS
       win.webContents.send('overlay:init', {
         url: payload.url,
         playlist: pendingOverlayData.playlist,
         startPage: pendingOverlayData.startPage,
         seekTo: pendingOverlayData.seekTo,
-        seekSeconds: seekSeconds,
+        seekSeconds: getOverlaySeekSeconds(),
         width: overlayBaseSize.w,
         height: overlayBaseSize.h
       })

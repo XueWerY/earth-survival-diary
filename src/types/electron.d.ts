@@ -97,6 +97,8 @@ declare global {
       getVideoHistory: (userId: string) => Promise<VideoHistoryItem[]>
       recordVideoHistory: (userId: string, entry: { name: string; url: string; page?: number }) => Promise<VideoHistoryItem[]>
       removeVideoHistory: (userId: string, url: string) => Promise<VideoHistoryItem[]>
+      getVideoSettings: (userId: string) => Promise<{ seekSeconds: number; width: number; height: number; position: string; margin: number }>
+      updateVideoSettings: (userId: string, settings: { seekSeconds?: number; width?: number; height?: number; position?: string; margin?: number }) => Promise<{ success: boolean; settings: { seekSeconds: number; width: number; height: number; position: string; margin: number } }>
       onOverlayInit: (callback: (data: { url: string; width: number; height: number }) => void) => void
       onOverlayCollapsed: (callback: (collapsed: boolean) => void) => void
       onOverlayProgress: (callback: (progress: { t: number; d: number }) => void) => void
