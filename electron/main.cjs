@@ -256,11 +256,11 @@ function sendUpdateStatusToMain(data) {
 
 // ========== 视频插件全局快捷键 ==========
 const DEFAULT_VIDEO_SHORTCUTS = {
-  prevEpisode: 'CommandOrControl+1',
-  seekBack: 'CommandOrControl+2',
-  playPause: 'CommandOrControl+3',
-  seekForward: 'CommandOrControl+4',
-  nextEpisode: 'CommandOrControl+5'
+  prevEpisode: 'Alt+1',
+  seekBack: 'Alt+2',
+  playPause: 'Alt+3',
+  seekForward: 'Alt+4',
+  nextEpisode: 'Alt+5'
 }
 const DEFAULT_VIDEO_SEEK_SECONDS = 10
 
@@ -293,6 +293,113 @@ function writeVideoShortcuts(shortcuts) {
     errorLog('[Electron] 保存视频快捷键失败: ' + e.message)
   }
 }
+
+// ========== 视频历史记录持久化（data/<用户ID>/video/history.json，与服务端 /api/data 存储同格式） ==========
+// 悬浮播放器独立于工具页存在，分 p 与播放进度由主进程持续跟踪并落盘，保证历史记录精确到 p 数和播放时长
+let overlayUserId = ''   // 当前打开播放器的用户（由工具页从登录 token 解码后传入）
+let overlayPlayback = null // { url, page, title, t, d }：页面报告 + 进度轮询合并
+let overlayHistorySavedAt = 0
+
+function sanitizeUserId(id) {
+  return typeof id === 'string' && /^[A-Za-z0-9_-]+$/.test(id) ? id : ''
+}
+
+function getVideoHistoryPath(userId) {
+  return path.join(DATA_DIR, userId, 'video', 'history.json')
+}
+
+function readVideoHistory(userId) {
+  try {
+    const p = getVideoHistoryPath(userId)
+    if (fs.existsSync(p)) {
+      const arr = JSON.parse(fs.readFileSync(p, 'utf-8'))
+      return Array.isArray(arr) ? arr : []
+    }
+  } catch (e) {
+    errorLog('[Electron] 读取视频历史记录失败: ' + e.message)
+  }
+  return []
+}
+
+function writeVideoHistory(userId, list) {
+  try {
+    const p = getVideoHistoryPath(userId)
+    fs.mkdirSync(path.dirname(p), { recursive: true })
+    fs.writeFileSync(p, JSON.stringify(list, null, 2), 'utf-8')
+  } catch (e) {
+    errorLog('[Electron] 保存视频历史记录失败: ' + e.message)
+  }
+}
+
+// 历史记录合并写入（唯一写入方）：按 url 去重后置顶；同一分 p 且未提供新进度时保留旧播放时长
+function upsertVideoHistory(userId, entry, preferEntryName) {
+  const list = readVideoHistory(userId)
+  const prev = list.find(h => h && h.url === entry.url)
+  const rest = list.filter(h => h && h.url !== entry.url)
+  const page = Number(entry.page) > 0 ? Number(entry.page) : 1
+  const samePage = prev && (prev.page || 1) === page
+  const name = preferEntryName
+    ? (entry.name || (prev && prev.name) || entry.url)
+    : ((prev && prev.name) || entry.name || entry.url)
+  rest.unshift({
+    name,
+    url: entry.url,
+    page,
+    progress: Math.max(0, Math.floor(Number(entry.progress) || (samePage && prev.progress) || 0)),
+    duration: Math.max(0, Math.floor(Number(entry.duration) || (samePage && prev.duration) || 0)),
+    time: Date.now()
+  })
+  if (rest.length > 50) rest.length = 50
+  writeVideoHistory(userId, rest)
+  return rest
+}
+
+// 将当前播放状态（分 p + 播放时长）合并进历史记录（默认 5 秒节流，切集/关窗时强制保存）
+function saveOverlayHistory(force) {
+  if (!overlayPlayback || !overlayUserId) return
+  if (!force && Date.now() - overlayHistorySavedAt < 5000) return
+  overlayHistorySavedAt = Date.now()
+  upsertVideoHistory(overlayUserId, {
+    url: overlayPlayback.url,
+    name: overlayPlayback.title,
+    page: overlayPlayback.page,
+    progress: overlayPlayback.t,
+    duration: overlayPlayback.d
+  }, false)
+}
+
+ipcMain.handle('video-guide:history-get', (_e, userId) => {
+  const uid = sanitizeUserId(userId)
+  return uid ? readVideoHistory(uid) : []
+})
+
+// 工具页播放视频时记录历史（经主进程合并写入，避免整表覆盖播放期间更新的进度）
+ipcMain.handle('video-guide:history-record', (_e, payload) => {
+  const uid = sanitizeUserId(payload?.userId)
+  if (!uid || typeof payload?.url !== 'string' || !payload.url) return []
+  return upsertVideoHistory(uid, { url: payload.url, name: payload.name, page: payload.page }, true)
+})
+
+ipcMain.handle('video-guide:history-remove', (_e, payload) => {
+  const uid = sanitizeUserId(payload?.userId)
+  if (!uid || typeof payload?.url !== 'string' || !payload.url) return []
+  const rest = readVideoHistory(uid).filter(h => h && h.url !== payload.url)
+  writeVideoHistory(uid, rest)
+  return rest
+})
+
+// 悬浮窗页面报告当前播放项（切集时触发），主进程据此结合进度轮询更新历史记录
+ipcMain.on('video-guide:playback-state', (_e, payload) => {
+  if (!payload || typeof payload.url !== 'string' || !payload.url) return
+  overlayPlayback = {
+    url: payload.url,
+    page: Number(payload.page) > 0 ? Number(payload.page) : 1,
+    title: typeof payload.title === 'string' ? payload.title : '',
+    t: 0,
+    d: 0
+  }
+  saveOverlayHistory(true)
+})
 
 // 注册视频全局快捷键（支持自定义配置），返回是否全部注册成功
 function registerVideoGuideShortcuts(shortcuts) {
@@ -382,6 +489,7 @@ function createVideoOverlayWindow() {
         url: (pendingOverlayData && pendingOverlayData.url) || '',
         playlist: (pendingOverlayData && pendingOverlayData.playlist) || [],
         startPage: (pendingOverlayData && pendingOverlayData.startPage) || 0,
+        seekTo: (pendingOverlayData && pendingOverlayData.seekTo) || 0,
         seekSeconds: seekSeconds,
         width: overlayBaseSize.w,
         height: overlayBaseSize.h
@@ -391,17 +499,19 @@ function createVideoOverlayWindow() {
   })
   videoOverlayWindow.on('closed', () => {
     videoOverlayWindow = null
+    // 关窗时强制保存一次历史记录（精确到最后观看的 p 数与播放时长）
+    saveOverlayHistory(true)
     stopOverlayProgress()
   })
   return videoOverlayWindow
 }
 
-// 根据位置配置计算窗口坐标（默认右下角，支持角落/水平居中 + 边缘间距）
+// 根据位置配置计算窗口坐标（默认左下角，支持角落/水平居中 + 边缘间距；间距 0 时贴合工作区边界）
 function computeOverlayPos(w, h, position, margin) {
   const wa = screen.getPrimaryDisplay().workArea
-  let x = wa.x + wa.width - w - margin
+  let x = wa.x + margin
   let y = wa.y + wa.height - h - margin
-  if (position === 'bottom-left') { x = wa.x + margin; y = wa.y + wa.height - h - margin }
+  if (position === 'bottom-right') { x = wa.x + wa.width - w - margin; y = wa.y + wa.height - h - margin }
   else if (position === 'top-right') { x = wa.x + wa.width - w - margin; y = wa.y + margin }
   else if (position === 'top-left') { x = wa.x + margin; y = wa.y + margin }
   else if (position === 'top-center') { x = wa.x + Math.round((wa.width - w) / 2); y = wa.y + margin }
@@ -435,6 +545,9 @@ function startOverlayProgress() {
         if (r && videoOverlayWindow && !videoOverlayWindow.isDestroyed()) {
           const [t, d] = JSON.parse(r)
           videoOverlayWindow.webContents.send('overlay:progress', { t, d })
+          // 跟踪播放进度并节流落盘历史记录（精确到 p 数和播放时长）
+          if (overlayPlayback) { overlayPlayback.t = t; overlayPlayback.d = d }
+          saveOverlayHistory(false)
         }
         break
       }
@@ -453,8 +566,11 @@ ipcMain.handle('video-guide:open-overlay', (e, payload) => {
   overlayBaseSize = { w, h }
   overlayCollapsed = false
   if (typeof payload?.overlayHtml === 'string' && payload.overlayHtml) overlayHtml = payload.overlayHtml
-  const position = payload?.position || 'bottom-right'
-  const margin = typeof payload?.margin === 'number' ? payload.margin : 16
+  // 默认左下角；间距相对工作区边界，支持 0（真正贴合屏幕边界）
+  const position = payload?.position || 'bottom-left'
+  const margin = typeof payload?.margin === 'number' && payload.margin >= 0 ? payload.margin : 16
+  // 历史记录落盘所需的用户 ID（由工具页从登录 token 解码后传入）
+  if (sanitizeUserId(payload?.userId)) overlayUserId = sanitizeUserId(payload.userId)
   try {
     overlayBasePos = computeOverlayPos(w, h, position, margin)
   } catch (err) {
@@ -472,7 +588,9 @@ ipcMain.handle('video-guide:open-overlay', (e, payload) => {
     pendingOverlayData = {
       url: payload.url,
       playlist: Array.isArray(payload.playlist) ? payload.playlist : [],
-      startPage: typeof payload.startPage === 'number' ? payload.startPage : 0
+      startPage: typeof payload.startPage === 'number' ? payload.startPage : 0,
+      // 续播：跳转到历史记录保存的播放进度（秒）
+      seekTo: Number(payload.seekTo) > 0 ? Number(payload.seekTo) : 0
     }
     if (!win.webContents.isLoading()) {
       const seekSeconds = (readVideoShortcuts().seekSeconds) || DEFAULT_VIDEO_SEEK_SECONDS
@@ -480,6 +598,7 @@ ipcMain.handle('video-guide:open-overlay', (e, payload) => {
         url: payload.url,
         playlist: pendingOverlayData.playlist,
         startPage: pendingOverlayData.startPage,
+        seekTo: pendingOverlayData.seekTo,
         seekSeconds: seekSeconds,
         width: overlayBaseSize.w,
         height: overlayBaseSize.h
@@ -488,6 +607,24 @@ ipcMain.handle('video-guide:open-overlay', (e, payload) => {
     }
   }
   startOverlayProgress()
+  return { success: true }
+})
+
+// 工具页修改播放器位置/尺寸/间距后立即生效（窗口已打开时实时调整边界）
+ipcMain.handle('video-guide:update-overlay-bounds', (_e, payload) => {
+  const wNum = Number(payload?.width)
+  const hNum = Number(payload?.height)
+  const w = Number.isFinite(wNum) && wNum > 0 ? Math.round(wNum) : overlayBaseSize.w
+  const h = Number.isFinite(hNum) && hNum > 0 ? Math.round(hNum) : overlayBaseSize.h
+  overlayBaseSize = { w, h }
+  const marginNum = Number(payload?.margin)
+  const margin = Number.isFinite(marginNum) && marginNum >= 0 ? marginNum : 16
+  try {
+    overlayBasePos = computeOverlayPos(w, h, payload?.position || 'bottom-left', margin)
+    applyOverlayBounds()
+  } catch (err) {
+    errorLog('[Electron] 调整视频播放器窗口边界失败: ' + err.message)
+  }
   return { success: true }
 })
 
@@ -502,6 +639,8 @@ ipcMain.handle('video-guide:overlay-collapse', () => {
 })
 
 ipcMain.handle('video-guide:close-overlay', () => {
+  // 关闭前强制保存历史记录（精确到最后观看的 p 数与播放时长）
+  saveOverlayHistory(true)
   stopOverlayProgress()
   if (videoOverlayWindow && !videoOverlayWindow.isDestroyed()) {
     videoOverlayWindow.close()
@@ -520,6 +659,9 @@ ipcMain.on('video-guide:bili-control', (_e, payload) => {
   } else if (action === 'seek-back' || action === 'seek-forward') {
     const delta = action === 'seek-back' ? -seconds : seconds
     code = 'var v=document.querySelector("video");if(v){v.currentTime=Math.max(0,v.currentTime+(' + delta + '))}'
+  } else if (action === 'seek-to') {
+    // 跳转到指定进度（历史记录续播）
+    code = 'var v=document.querySelector("video");if(v){try{v.currentTime=Math.max(0,' + seconds + ')}catch(e){}}'
   } else if (action === 'hide-ui') {
     // B 站 bpx 播放器自带 UI 强制隐藏：顶部标题/作者/关注区、底部控制栏、弹幕发送栏、"进入哔哩哔哩"跳转区、播放结束浮层（跳转按钮+推荐列表），带 id 防重复注入
     code = 'if(!document.getElementById("esd-bili-hide-ui")){var s=document.createElement("style");s.id="esd-bili-hide-ui";s.textContent=".bpx-player-top-wrap,.bpx-player-control-wrap,.bpx-player-sending-bar,.bpx-player-relation-wrap,.bpx-player-ending-wrap,.bpx-player-rcmd-list{display:none!important}";document.head.appendChild(s)}'
@@ -2174,6 +2316,8 @@ app.whenReady().then(async () => {
 app.on('before-quit', async () => {
   debugLog('[Electron] App is about to quit (system shutdown/user exit)')
   isQuitting = true
+  // 退出前强制保存视频播放历史（悬浮窗随应用退出可能不触发 closed 事件）
+  saveOverlayHistory(true)
   cancelAllReminderTimers()
   globalShortcut.unregisterAll()
   if (serverInstance) {

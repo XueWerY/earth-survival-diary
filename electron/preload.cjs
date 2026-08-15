@@ -99,8 +99,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openVideoOverlay: (payload) => ipcRenderer.invoke('video-guide:open-overlay', payload),
   closeVideoOverlay: () => ipcRenderer.invoke('video-guide:close-overlay'),
   toggleOverlayCollapse: () => ipcRenderer.invoke('video-guide:overlay-collapse'),
+  updateOverlayBounds: (payload) => ipcRenderer.invoke('video-guide:update-overlay-bounds', payload),
   controlBiliPlayer: (data) => ipcRenderer.send('video-guide:bili-control', data),
+  reportPlaybackState: (data) => ipcRenderer.send('video-guide:playback-state', data),
   getBiliPages: (bvid) => ipcRenderer.invoke('video-guide:bili-pages', bvid),
+  getVideoHistory: (userId) => ipcRenderer.invoke('video-guide:history-get', userId),
+  recordVideoHistory: (userId, entry) => ipcRenderer.invoke('video-guide:history-record', { userId, ...entry }),
+  removeVideoHistory: (userId, url) => ipcRenderer.invoke('video-guide:history-remove', { userId, url }),
   onOverlayInit: (callback) => ipcRenderer.on('overlay:init', (_e, data) => callback(data)),
   onOverlayCollapsed: (callback) => ipcRenderer.on('overlay:collapsed', (_e, collapsed) => callback(collapsed)),
   onOverlayProgress: (callback) => ipcRenderer.on('overlay:progress', (_e, progress) => callback(progress))

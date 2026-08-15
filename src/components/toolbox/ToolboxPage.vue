@@ -175,6 +175,20 @@ provide('toolHeader', (title?: string, onBack?: () => void) => {
 const toolsCollapsed = ref(false)
 const pluginsCollapsed = ref(false)
 const marketCollapsed = ref(false)
+// 当前打开的小工具 ID（持久化：重新进入工具箱页面时自动恢复）
+const activeToolId = ref('')
+
+// 持久化工具箱设置（折叠状态 + 当前小工具页面）
+function persistToolbox() {
+  settingsStore.updateSettings({
+    toolbox: {
+      toolsCollapsed: toolsCollapsed.value,
+      pluginsCollapsed: pluginsCollapsed.value,
+      marketCollapsed: marketCollapsed.value,
+      activeTool: activeToolId.value
+    }
+  })
+}
 const marketplaceRef = ref<InstanceType<typeof MarketplacePanel> | null>(null)
 const marketLoading = ref(false)
 const updatablePlugins = ref<MarketplacePlugin[]>([])
@@ -283,7 +297,14 @@ onMounted(async () => {
     marketCollapsed.value = !!settingsStore.settings.toolbox.marketCollapsed
   }
 
-  handleRefreshClick()
+  // 恢复上次打开的小工具页面（持久化保存，重新进入工具箱时自动打开）
+  const savedActiveTool = settingsStore.settings.toolbox?.activeTool
+  if (savedActiveTool) {
+    const tool = tools.value.find(t => t.id === savedActiveTool)
+    if (tool) openTool(tool)
+  }
+
+  if (!activeTool.value) handleRefreshClick()
 
   if (contentRef.value) {
     contentResizeObserver = new ResizeObserver((entries) => {
@@ -303,33 +324,36 @@ function getPluginName(pluginId: string): string {
 
 async function toggleToolsCollapse() {
   toolsCollapsed.value = !toolsCollapsed.value
-  settingsStore.updateSettings({
-    toolbox: { toolsCollapsed: toolsCollapsed.value, pluginsCollapsed: pluginsCollapsed.value, marketCollapsed: marketCollapsed.value }
-  })
+  persistToolbox()
 }
 
 async function togglePluginsCollapse() {
   pluginsCollapsed.value = !pluginsCollapsed.value
-  settingsStore.updateSettings({
-    toolbox: { toolsCollapsed: toolsCollapsed.value, pluginsCollapsed: pluginsCollapsed.value, marketCollapsed: marketCollapsed.value }
-  })
+  persistToolbox()
 }
 
 async function toggleMarketCollapse() {
   marketCollapsed.value = !marketCollapsed.value
-  settingsStore.updateSettings({
-    toolbox: { toolsCollapsed: toolsCollapsed.value, pluginsCollapsed: pluginsCollapsed.value, marketCollapsed: marketCollapsed.value }
-  })
+  persistToolbox()
 }
 
 async function openTool(tool: ToolInfo) {
   logger.info('[工具箱] 打开工具', { toolId: tool.id, toolName: tool.name })
   const comp = defineAsyncComponent(tool.component)
   activeTool.value = { name: tool.name, component: comp, title: tool.name, onBack: undefined }
+  // 持久化当前小工具页面：重新进入工具箱时自动恢复
+  if (activeToolId.value !== tool.id) {
+    activeToolId.value = tool.id
+    persistToolbox()
+  }
 }
 
 function closeTool() {
   activeTool.value = null
+  if (activeToolId.value) {
+    activeToolId.value = ''
+    persistToolbox()
+  }
 }
 
 function handleToolBack() {

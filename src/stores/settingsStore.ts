@@ -33,11 +33,12 @@ export interface ExtendedUserSettings {
     reminderPersistDuration: number
     // 桌面端左侧导航栏是否收起
     sidebarCollapsed: boolean
-    // 工具箱折叠状态
+    // 工具箱折叠状态与当前打开的小工具页面
     toolbox: {
         pluginsCollapsed: boolean
         toolsCollapsed: boolean
         marketCollapsed: boolean
+        activeTool: string
     }
 }
 
@@ -71,7 +72,8 @@ export const defaultSettings: ExtendedUserSettings = {
     toolbox: {
         pluginsCollapsed: false,
         toolsCollapsed: false,
-        marketCollapsed: false
+        marketCollapsed: false,
+        activeTool: ''
     }
 }
 
