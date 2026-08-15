@@ -1368,9 +1368,11 @@ ipcMain.handle('kill-powershell', async () => {
 })
 
 // 主进程发起 HTTPS GET 并解析 JSON（渲染进程直连第三方接口会被同源策略拦截）
+// net.request 使用 Chromium 网络栈，自动遵循系统代理（有代理时走代理）
 ipcMain.handle('http-get-json', async (_event, url) => {
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { 'User-Agent': 'earth-survival-diary' } }, (res) => {
+    const request = net.request({ url, headers: { 'User-Agent': 'earth-survival-diary' } })
+    request.on('response', (res) => {
       let data = ''
       res.on('data', (chunk) => { data += chunk })
       res.on('end', () => {
@@ -1380,25 +1382,31 @@ ipcMain.handle('http-get-json', async (_event, url) => {
           reject(new Error('返回内容不是合法 JSON'))
         }
       })
-    }).on('error', (err) => {
+    })
+    request.on('error', (err) => {
       reject(new Error('请求失败: ' + err.message))
     })
+    request.end()
   })
 })
 
 // 主进程发起 HTTPS GET 并返回原始文本（含 HTTP 状态码）。
 // 供插件市场等场景下载 GitHub 源文件用，渲染进程直连第三方接口会被同源策略拦截或网络波动影响。
+// net.request 自动遵循系统代理（有代理时走代理）。
 ipcMain.handle('http-get-text', async (_event, url) => {
   return new Promise((resolve) => {
-    https.get(url, { headers: { 'User-Agent': 'earth-survival-diary' } }, (res) => {
+    const request = net.request({ url, headers: { 'User-Agent': 'earth-survival-diary' } })
+    request.on('response', (res) => {
       let data = ''
       res.on('data', (chunk) => { data += chunk })
       res.on('end', () => {
         resolve({ status: res.statusCode, text: data })
       })
-    }).on('error', (err) => {
+    })
+    request.on('error', (err) => {
       resolve({ status: 0, text: '', error: err.message })
     })
+    request.end()
   })
 })
 // ====== 终端命令执行 / 主进程 HTTPS 请求 IPC 结束 ======
