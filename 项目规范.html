@@ -636,14 +636,6 @@ npx cap sync android</code></pre>
     <tr><td><code>FloatingTimerBar</code>（<code>components/timer/</code>）</td><td>计时中跨页面常驻弹窗，窗口右下角显示，可拖动</td></tr>
   </table>
 
-  <p><strong>视频插件悬浮播放器窗口与快捷键</strong>（<code>src/plugins/video/</code>）：</p>
-  <ul>
-    <li>视频播放器采用 Electron 独立置顶窗口（<code>main.cjs</code> 中 <code>createVideoOverlayWindow</code>，<code>frame:false + alwaysOnTop + resizable:false</code>，非透明），始终显示在所有窗口上方；页面 HTML 内嵌于插件工具组件 <code>src/plugins/video/tools/video/index.vue</code> 的 <code>OVERLAY_HTML</code> 常量（随插件编译产物分发），打开时经 <code>open-overlay</code> IPC 传给主进程，以 <code>data:</code> URL 加载（页面脚本须用 IIFE 包裹，避免顶层 <code>const electronAPI</code> 与 contextBridge 暴露的不可配置全局属性冲突）</li>
-    <li>播放器窗口控制走 IPC：<code>video-guide:open-overlay</code> / <code>video-guide:close-overlay</code> / <code>video-guide:overlay-collapse</code>（展开/收起切换，preload 暴露 <code>openVideoOverlay</code>/<code>closeVideoOverlay</code>/<code>toggleOverlayCollapse</code>/<code>onOverlayInit</code>/<code>onOverlayCollapsed</code>）；页面提供「展开/收起」与「关闭」按钮，收起时窗口缩小为小条（<code>OVERLAY_COLLAPSED_W/H</code>）并隐藏视频；播放器窗口禁止拖拽（<code>-webkit-app-region</code> 未设置，且 BrowserWindow 设置 <code>resizable: false</code> 禁止调整大小）</li>
-    <li>播放器窗口定位：<code>open-overlay</code> 支持 <code>position</code>（bottom-left/bottom-right/top-right/top-left/top-center/bottom-center，默认 bottom-right）与 <code>margin</code>（边缘间距），用 <code>screen.getPrimaryDisplay().workArea</code> 计算窗口坐标（<code>computeOverlayPos</code>）；展开/收起用 <code>applyOverlayBounds</code> 保持位置锚定；<code>open-overlay</code> 支持 <code>playlist</code>（收藏视频列表），遮罩窗口据此维护播放列表支持上一集/下一集切换</li>
-    <li>全局快捷键由 Electron <code>globalShortcut</code> 注册（5 个：上一集/后退/播放暂停/前进/下一集，seek 时间可配置 <code>seekSeconds</code>），配置存 <code>userData/video-shortcuts.json</code>；支持动态重注册（<code>video-guide:get-shortcuts</code>/<code>update-shortcuts</code> IPC），工具页提供快捷键配置 UI</li>
-  </ul>
-
   <h3>选择器组件</h3>
   <div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;">
     <span class="tag">DateScrollPicker</span><span class="tag">InlineLunarDatePicker</span>
@@ -713,7 +705,6 @@ npx cap sync android</code></pre>
     <tr><td>笔记分类</td><td><code>data/&lt;用户ID&gt;/notes/categories.json</code></td></tr>
     <tr><td>笔记样式</td><td><code>data/&lt;用户ID&gt;/notes/style.json</code>（仅当前会话有效）</td></tr>
     <tr><td>snowbaby（Yunzai）机器人数据</td><td><code>data/&lt;用户ID&gt;/snowbaby/</code>（原 Redis 数据以本地 KV 文件存储，不再依赖 Redis/Valkey 服务）</td></tr>
-    <tr><td>视频收藏/历史</td><td><code>data/&lt;用户ID&gt;/video/favorites.json</code>（命名收藏列表）、<code>data/&lt;用户ID&gt;/video/history.json</code>（播放历史，上限 50 条），均经 storageService 读写</td></tr>
   </table>
 
   <div class="callout green">

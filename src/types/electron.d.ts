@@ -74,34 +74,6 @@ declare global {
       createDirectory: (dirPath: string) => Promise<boolean>
       removeDirectory: (dirPath: string) => Promise<boolean>
       recompilePlugins: () => Promise<boolean>
-
-      // 视频全局快捷键
-      onVideoGuideShortcut: (callback: (action: 'prev-episode' | 'seek-back' | 'play-pause' | 'seek-forward' | 'next-episode', seekSeconds?: number) => void) => void
-      offVideoGuideShortcut: () => void
-      getVideoShortcuts: () => Promise<VideoShortcutConfig>
-      updateVideoShortcuts: (shortcuts: Partial<VideoShortcutConfig>) => Promise<{ success: boolean; shortcuts: VideoShortcutConfig }>
-      interface VideoShortcutConfig {
-        prevEpisode: string; seekBack: string; playPause: string; seekForward: string; nextEpisode: string; seekSeconds: number
-      }
-      // 视频悬浮播放器窗口
-      interface VideoHistoryItem {
-        name: string; url: string; page: number; progress: number; duration: number; time: number
-      }
-      openVideoOverlay: (payload: { url: string; width?: number; height?: number; position?: string; margin?: number; overlayHtml?: string; playlist?: { url: string; page: number; title: string }[]; startPage?: number; userId?: string; seekTo?: number }) => Promise<{ success: boolean }>
-      closeVideoOverlay: () => Promise<{ success: boolean }>
-      toggleOverlayCollapse: () => Promise<{ success: boolean; collapsed: boolean }>
-      updateOverlayBounds: (payload: { width?: number; height?: number; position?: string; margin?: number }) => Promise<{ success: boolean }>
-      controlBiliPlayer: (data: { action: 'play-pause' | 'seek-back' | 'seek-forward' | 'seek-to' | 'hide-ui' | 'hide-end-screen'; seconds?: number }) => void
-      reportPlaybackState: (data: { url: string; page?: number; title?: string }) => void
-      getBiliPages: (bvid: string) => Promise<{ success: boolean; title?: string; pages?: { page: number; title: string }[] }>
-      getVideoHistory: (userId: string) => Promise<VideoHistoryItem[]>
-      recordVideoHistory: (userId: string, entry: { name: string; url: string; page?: number }) => Promise<VideoHistoryItem[]>
-      removeVideoHistory: (userId: string, url: string) => Promise<VideoHistoryItem[]>
-      getVideoSettings: (userId: string) => Promise<{ seekSeconds: number; width: number; height: number; position: string; margin: number }>
-      updateVideoSettings: (userId: string, settings: { seekSeconds?: number; width?: number; height?: number; position?: string; margin?: number }) => Promise<{ success: boolean; settings: { seekSeconds: number; width: number; height: number; position: string; margin: number } }>
-      onOverlayInit: (callback: (data: { url: string; width: number; height: number }) => void) => void
-      onOverlayCollapsed: (callback: (collapsed: boolean) => void) => void
-      onOverlayProgress: (callback: (progress: { t: number; d: number }) => void) => void
     }
 
   }
