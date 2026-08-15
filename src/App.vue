@@ -111,7 +111,6 @@
         <div class="update-status" :class="{ 'update-error': updateStatus === 'error', 'update-no-new': updateStatus === 'no-update' }" style="text-align: center;">
           <template v-if="updateStatus === 'available'">
             <p>发现新版本 v{{ updateVersion }}</p>
-            <el-button type="primary" @click="handleDownloadUpdate">下载更新</el-button>
             <p class="update-hint">
               或前往
               <a class="update-link" href="#" @click.prevent="openReleasesUrl">GitHub Releases</a>
@@ -120,7 +119,6 @@
           </template>
           <template v-else-if="updateStatus === 'downloading'">
             <el-progress type="line" :percentage="updatePercent" :stroke-width="10" />
-            <p class="update-hint">{{ updateStatusText }}</p>
           </template>
           <template v-else>{{ updateStatusText }}</template>
         </div>
@@ -128,6 +126,7 @@
           {{ updateMessage }}
         </div>
         <template #footer>
+          <el-button v-if="updateStatus === 'available'" type="primary" @click="handleDownloadUpdate">下载更新</el-button>
           <el-button type="primary" @click="updateDialogVisible = false">确认</el-button>
         </template>
       </BaseDialog>

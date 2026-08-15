@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, shell, dialog, Tray, screen, clipboard, globalShortcut } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, shell, dialog, Tray, screen, clipboard, globalShortcut, net, session } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const https = require('https')
@@ -854,79 +854,70 @@ ipcMain.handle('open-external', async (_event, url) => {
   await shell.openExternal(url)
 })
 
-// 下载更新安装包（处理 GitHub Release 资产 302 跳转，回传进度并自动打开安装程序）
+// 下载更新安装包（回传进度并自动打开安装程序；net.request 使用 Chromium 网络栈，自动遵循系统代理，有代理时下载走代理）
 ipcMain.handle('download-update', async (_event, downloadUrl) => {
   debugLog('[Main] Downloading update from: ' + downloadUrl)
+  // 检测系统代理（仅记录，net.request 自动使用系统代理）
+  try {
+    const proxy = await session.defaultSession.resolveProxy(downloadUrl)
+    debugLog('[Main] System proxy for update download: ' + proxy)
+  } catch (e) {
+    debugLog('[Main] Proxy detection failed: ' + e.message)
+  }
   return new Promise((resolve) => {
-    const follow = (urlStr) => {
-      const url = new URL(urlStr)
-      const opts = {
-        hostname: url.hostname,
-        path: url.pathname + url.search,
-        headers: { 'User-Agent': 'earth-survival-diary' }
+    const fileName = path.basename(new URL(downloadUrl).pathname) || 'Earth-Survival-Diary-Setup.exe'
+    const filePath = path.join(app.getPath('temp'), fileName)
+    const request = net.request({ url: downloadUrl, useSessionCookies: false, redirect: 'follow', headers: { 'User-Agent': 'earth-survival-diary' } })
+    request.on('response', (res) => {
+      if (res.statusCode !== 200) {
+        const msg = '下载失败，HTTP 状态码 ' + res.statusCode
+        debugLog('[Main] ' + msg)
+        sendUpdateStatusToMain({ status: 'error', message: msg })
+        return resolve({ ok: false, error: msg })
       }
-      https.get(opts, (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          const next = new URL(res.headers.location, url).toString()
-          res.resume() // 消费重定向响应
-          return follow(next)
-        }
-        if (res.statusCode !== 200) {
-          const msg = '下载失败，HTTP 状态码 ' + res.statusCode
-          debugLog('[Main] ' + msg)
-          sendUpdateStatusToMain({ status: 'error', message: msg })
-          return resolve({ ok: false, error: msg })
-        }
-        const total = parseInt(res.headers['content-length'] || '0', 10)
-        const fileName = path.basename(url.pathname) || 'Earth-Survival-Diary-Setup.exe'
-        const filePath = path.join(app.getPath('temp'), fileName)
-        const fileStream = fs.createWriteStream(filePath)
-        let received = 0
-        let lastPercent = -1
-        res.on('data', (chunk) => {
-          received += chunk.length
-          if (total > 0) {
-            const percent = Math.floor((received / total) * 100)
-            if (percent !== lastPercent) {
-              lastPercent = percent
-              sendUpdateStatusToMain({ status: 'downloading', percent })
-            }
+      const total = parseInt(res.headers['content-length'] || '0', 10)
+      const fileStream = fs.createWriteStream(filePath)
+      let received = 0
+      let lastPercent = -1
+      res.on('data', (chunk) => {
+        received += chunk.length
+        if (total > 0) {
+          const percent = Math.floor((received / total) * 100)
+          if (percent !== lastPercent) {
+            lastPercent = percent
+            sendUpdateStatusToMain({ status: 'downloading', percent })
           }
+        }
+      })
+      res.pipe(fileStream)
+      fileStream.on('finish', () => {
+        fileStream.close()
+        debugLog('[Main] Update downloaded to: ' + filePath)
+        sendUpdateStatusToMain({ status: 'downloaded' })
+        // 打开安装程序后退出应用
+        shell.openPath(filePath).then((err) => {
+          if (err) {
+            debugLog('[Main] Failed to open installer: ' + err)
+            sendUpdateStatusToMain({ status: 'error', message: '无法打开安装程序：' + err })
+            return
+          }
+          isQuitting = true
+          app.quit()
         })
-        res.pipe(fileStream)
-        fileStream.on('finish', () => {
-          fileStream.close()
-          debugLog('[Main] Update downloaded to: ' + filePath)
-          sendUpdateStatusToMain({ status: 'downloaded' })
-          // 打开安装程序后退出应用
-          shell.openPath(filePath).then((err) => {
-            if (err) {
-              debugLog('[Main] Failed to open installer: ' + err)
-              sendUpdateStatusToMain({ status: 'error', message: '无法打开安装程序：' + err })
-              return
-            }
-            isQuitting = true
-            app.quit()
-          })
-          resolve({ ok: true })
-        })
-        fileStream.on('error', (e) => {
-          debugLog('[Main] Write installer failed: ' + e.message)
-          sendUpdateStatusToMain({ status: 'error', message: e.message })
-          resolve({ ok: false, error: e.message })
-        })
-      }).on('error', (e) => {
-        debugLog('[Main] Download request error: ' + e.message)
+        resolve({ ok: true })
+      })
+      fileStream.on('error', (e) => {
+        debugLog('[Main] Write installer failed: ' + e.message)
         sendUpdateStatusToMain({ status: 'error', message: e.message })
         resolve({ ok: false, error: e.message })
       })
-    }
-    try {
-      follow(downloadUrl)
-    } catch (e) {
-      debugLog('[Main] Download failed: ' + e.message)
+    })
+    request.on('error', (e) => {
+      debugLog('[Main] Download request error: ' + e.message)
+      sendUpdateStatusToMain({ status: 'error', message: e.message })
       resolve({ ok: false, error: e.message })
-    }
+    })
+    request.end()
   })
 })
 
