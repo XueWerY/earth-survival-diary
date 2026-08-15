@@ -517,16 +517,27 @@ let overlayHtml = ''
 const OVERLAY_COLLAPSED_W = 200
 const OVERLAY_COLLAPSED_H = 40
 
-// 播放器打开期间提升本应用进程优先级（主进程 + 渲染/GPU 子进程）：
-// 全屏游戏前台时 Windows 会大幅提升前台游戏线程的调度优先级，普通优先级的应用渲染/GPU 进程
-// 易被抢占导致播放卡顿；提升到 ABOVE_NORMAL 可缓解，关闭播放器后恢复 NORMAL
+// 播放器打开期间提升本应用进程优先级（主进程 + 悬浮窗渲染 + GPU 子进程 → HIGH）：
+// 游戏前台时 Windows 会大幅提升前台进程线程的调度优先级（前台 boost），普通优先级的
+// 媒体/合成线程会被抢占，导致音画同时卡顿；提到 HIGH 保证播放线程获得稳定调度，关窗后恢复 NORMAL
+let videoPriorityPids = []
 function setVideoProcessPriority(level) {
   try {
-    const targets = new Set([process.pid])
-    for (const m of app.getAppMetrics()) {
-      if (m.type === 'GPU' || m.type === 'Renderer') targets.add(m.pid)
+    if (level !== os.constants.priority.PRIORITY_NORMAL) {
+      // 提级：主进程 + 悬浮窗渲染进程 + GPU 进程
+      const pids = new Set([process.pid])
+      try {
+        if (videoOverlayWindow && !videoOverlayWindow.isDestroyed()) {
+          pids.add(videoOverlayWindow.webContents.getProcessId())
+        }
+      } catch (e) {}
+      for (const m of app.getAppMetrics()) {
+        if (m.type === 'GPU') pids.add(m.pid)
+      }
+      videoPriorityPids = [...pids]
     }
-    for (const pid of targets) {
+    // 恢复：只还原提级时记录的进程（渲染进程可能已随窗口销毁，逐个容错）
+    for (const pid of videoPriorityPids) {
       try { os.setPriority(pid, level) } catch (e) {}
     }
   } catch (e) {}
@@ -558,8 +569,8 @@ function createVideoOverlayWindow() {
   videoOverlayWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
   // 置顶层级设为最高（screen-saver 级），确保不被无边框全屏游戏覆盖
   videoOverlayWindow.setAlwaysOnTop(true, 'screen-saver')
-  // 播放期间提升进程优先级，缓解全屏游戏前台时的调度抢占
-  setVideoProcessPriority(os.constants.priority.PRIORITY_ABOVE_NORMAL)
+  // 播放期间提升进程优先级（HIGH），缓解游戏前台时的调度抢占导致的音画卡顿
+  setVideoProcessPriority(os.constants.priority.PRIORITY_HIGH)
   // 页面加载完成后发送初始数据，避免消息在监听注册前丢失
   videoOverlayWindow.webContents.on('did-finish-load', () => {
     if (!videoOverlayWindow.isDestroyed()) {
@@ -573,6 +584,8 @@ function createVideoOverlayWindow() {
         height: overlayBaseSize.h
       })
       pendingOverlayData = null
+      // 渲染进程此时必然存在：再次提级确保悬浮窗渲染进程被准确覆盖
+      setVideoProcessPriority(os.constants.priority.PRIORITY_HIGH)
     }
   })
   videoOverlayWindow.on('closed', () => {
@@ -877,6 +890,26 @@ ipcMain.handle('open-external', async (_event, url) => {
   debugLog('[Main] Opening external link: ' + url)
   await shell.openExternal(url)
 })
+
+// 启动时清理更新安装包：安装包下载到系统临时目录（app.getPath('temp')），
+// 更新安装完成并启动新版本后遗留的安装包在此删除
+function cleanupUpdateInstallers() {
+  try {
+    const tempDir = app.getPath('temp')
+    for (const f of fs.readdirSync(tempDir)) {
+      if (/^Earth-Survival-Diary-Setup.*\.exe$/i.test(f)) {
+        try {
+          fs.unlinkSync(path.join(tempDir, f))
+          debugLog('[Main] 已删除更新安装包: ' + f)
+        } catch (e) {
+          debugLog('[Main] 删除安装包失败: ' + f + ' - ' + e.message)
+        }
+      }
+    }
+  } catch (e) {
+    debugLog('[Main] 清理安装包目录失败: ' + e.message)
+  }
+}
 
 // 下载更新安装包（回传进度并自动打开安装程序；net.request 使用 Chromium 网络栈，自动遵循系统代理，有代理时下载走代理）
 ipcMain.handle('download-update', async (_event, downloadUrl) => {
@@ -2350,6 +2383,8 @@ app.whenReady().then(async () => {
     debugLog('[Main] Did not obtain single instance lock, skipping launch')
     return
   }
+  // 更新安装完成启动新版本后，删除临时目录中遗留的更新安装包
+  cleanupUpdateInstallers()
   closeAction = getCloseAction()
   debugLog('[Main] Close button behavior', { action: closeAction })
   const sep = '─'.repeat(60)
