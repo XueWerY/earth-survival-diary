@@ -517,6 +517,21 @@ let overlayHtml = ''
 const OVERLAY_COLLAPSED_W = 200
 const OVERLAY_COLLAPSED_H = 40
 
+// 播放器打开期间提升本应用进程优先级（主进程 + 渲染/GPU 子进程）：
+// 全屏游戏前台时 Windows 会大幅提升前台游戏线程的调度优先级，普通优先级的应用渲染/GPU 进程
+// 易被抢占导致播放卡顿；提升到 ABOVE_NORMAL 可缓解，关闭播放器后恢复 NORMAL
+function setVideoProcessPriority(level) {
+  try {
+    const targets = new Set([process.pid])
+    for (const m of app.getAppMetrics()) {
+      if (m.type === 'GPU' || m.type === 'Renderer') targets.add(m.pid)
+    }
+    for (const pid of targets) {
+      try { os.setPriority(pid, level) } catch (e) {}
+    }
+  } catch (e) {}
+}
+
 function createVideoOverlayWindow() {
   if (videoOverlayWindow && !videoOverlayWindow.isDestroyed()) return videoOverlayWindow
   videoOverlayWindow = new BrowserWindow({
@@ -527,6 +542,10 @@ function createVideoOverlayWindow() {
     resizable: false,
     skipTaskbar: true,
     hasShadow: false,
+    // 与页面同色的不透明底色：避免默认白色底增加一层合成，降低全屏游戏前台时的合成负担
+    backgroundColor: '#060918',
+    // 播放器不抢占键盘焦点：游戏全屏前台时操作播放器不会使游戏失焦/触发游戏全屏模式切换
+    focusable: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -539,6 +558,8 @@ function createVideoOverlayWindow() {
   videoOverlayWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
   // 置顶层级设为最高（screen-saver 级），确保不被无边框全屏游戏覆盖
   videoOverlayWindow.setAlwaysOnTop(true, 'screen-saver')
+  // 播放期间提升进程优先级，缓解全屏游戏前台时的调度抢占
+  setVideoProcessPriority(os.constants.priority.PRIORITY_ABOVE_NORMAL)
   // 页面加载完成后发送初始数据，避免消息在监听注册前丢失
   videoOverlayWindow.webContents.on('did-finish-load', () => {
     if (!videoOverlayWindow.isDestroyed()) {
@@ -556,7 +577,8 @@ function createVideoOverlayWindow() {
   })
   videoOverlayWindow.on('closed', () => {
     videoOverlayWindow = null
-    // 关窗时强制保存一次历史记录（精确到最后观看的 p 数与播放时长）
+    // 恢复进程优先级并强制保存一次历史记录（精确到最后观看的 p 数与播放时长）
+    setVideoProcessPriority(os.constants.priority.PRIORITY_NORMAL)
     saveOverlayHistory(true)
     stopOverlayProgress()
   })
