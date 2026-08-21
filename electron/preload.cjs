@@ -78,6 +78,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSnowbabyStatus: () => ipcRenderer.invoke('snowbaby-get-status'),
   installSnowbaby: () => ipcRenderer.invoke('snowbaby-install'),
   updateSnowbaby: () => ipcRenderer.invoke('snowbaby-update'),
+  checkSnowbabyUpdate: () => ipcRenderer.invoke('snowbaby-check-update'),
   uninstallSnowbaby: () => ipcRenderer.invoke('snowbaby-uninstall'),
   startSnowbaby: (payload) => ipcRenderer.invoke('snowbaby-start', payload),
   stopSnowbaby: () => ipcRenderer.invoke('snowbaby-stop'),

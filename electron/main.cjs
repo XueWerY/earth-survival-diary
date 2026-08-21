@@ -185,7 +185,7 @@ ipcMain.handle('apply-window-size', async (_event, userId) => {
 ipcMain.on('restart-app', () => { 
   debugLog('[Main] Received restart request')
   closeAction = 'exit'
-  app.relaunch()
+  app.relaunch({ execPath: process.execPath })
   app.quit()
 })
 
@@ -628,6 +628,27 @@ ipcMain.handle('snowbaby-update', async () => {
   } catch (e) {
     errorLog('[snowbaby] 更新失败: ' + e.message)
     return { success: false, error: e.message }
+  }
+})
+
+// 检查 snowbaby 是否存在新版本（只读，不拉取代码）
+ipcMain.handle('snowbaby-check-update', async () => {
+  try {
+    if (!fs.existsSync(path.join(SNOWBABY_DIR, '.git'))) {
+      return { hasUpdate: false, error: '非 git 方式安装，无法检查更新' }
+    }
+    await runGit(['fetch', 'origin'], SNOWBABY_DIR)
+    const currentPkg = JSON.parse(fs.readFileSync(path.join(SNOWBABY_DIR, 'package.json'), 'utf-8'))
+    const currentVersion = currentPkg.version || null
+    const remotePkgRaw = await runGit(['show', 'origin/main:package.json'], SNOWBABY_DIR)
+    const remotePkg = JSON.parse(remotePkgRaw)
+    const latestVersion = remotePkg.version || null
+    const log = await runGit(['log', 'HEAD..origin/main', '--oneline'], SNOWBABY_DIR)
+    const hasUpdate = log.trim().length > 0
+    return { hasUpdate, currentVersion, latestVersion }
+  } catch (e) {
+    errorLog('[snowbaby] 检查更新失败: ' + e.message)
+    return { hasUpdate: false, error: e.message }
   }
 })
 
@@ -2039,11 +2060,12 @@ app.whenReady().then(async () => {
       }
     }
     const port = await startServer()
-    await ensurePluginsCompiled()
     const url = 'http://127.0.0.1:' + port
     debugLog('[Electron] Loading URL: ' + url)
     createWindow(url)
     setupTray()
+    // 插件编译在后台进行，避免阻塞窗口首次显示
+    ensurePluginsCompiled().catch((err) => errorLog('[Electron] Plugin compilation failed: ' + err.message))
 
     setTimeout(() => {
       fetchLatestFromReleases().then((latest) => {
