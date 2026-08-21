@@ -15,6 +15,7 @@ declare global {
       downloadUpdate: (url: string) => Promise<{ ok: boolean; error?: string }>
       saveFileDialog: (options?: any) => Promise<string | null>
       openFileDialog: (options?: any) => Promise<string | null>
+      openDirectory: () => Promise<string | null>
       readFile: (filePath: string) => Promise<string | null>
       writeFile: (filePath: string, content: string) => Promise<boolean>
       restartApp: () => void
@@ -65,12 +66,20 @@ declare global {
 
       // 主进程 HTTPS JSON 请求（绕开渲染进程同源限制）
       httpGetJson: (url: string) => Promise<any>
+      // 主进程 HTTPS PATCH JSON 请求（保存 snowbaby 配置等，返回 { status, data }）
+      httpPatchJson: (url: string, body: any) => Promise<{ status: number; data: any }>
       // 主进程 HTTPS 文本请求（下载插件源码等，返回 { status, text }）
       httpGetText: (url: string) => Promise<{ status: number; text: string; error?: string }>
 
       // 插件管理
       getPluginsDirPath: () => Promise<string>
       getSnowbabyDirPath: () => Promise<string>
+      getSnowbabyStatus: () => Promise<{ installed: boolean; version: string | null }>
+      installSnowbaby: () => Promise<{ success: boolean; error?: string }>
+      updateSnowbaby: () => Promise<{ success: boolean; error?: string }>
+      uninstallSnowbaby: () => Promise<{ success: boolean; error?: string }>
+      startSnowbaby: (payload: { dataDir: string; pluginDir: string }) => Promise<{ success: boolean; pid?: number; error?: string }>
+      stopSnowbaby: () => Promise<{ success: boolean; error?: string }>
       createDirectory: (dirPath: string) => Promise<boolean>
       removeDirectory: (dirPath: string) => Promise<boolean>
       recompilePlugins: () => Promise<boolean>

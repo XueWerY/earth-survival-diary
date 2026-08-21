@@ -2,7 +2,7 @@
   <div
     ref="navBarRef"
     class="main-nav-bar"
-    :class="[`nav-${variant}`, { 'nav-hidden': hidden, 'no-hover': noHover }]"
+    :class="[`nav-${variant}`, { 'nav-hidden': hidden, 'no-hover': noHover, 'collapsed': collapsed && variant === 'left' }]"
     @click.capture="onClickCapture"
   >
     <div class="nav-items-scroll" ref="scrollRef">
@@ -30,12 +30,20 @@
         <span class="nav-item-label">{{ splitActive ? '合并' : '拆分' }}</span>
       </button>
     </div>
+    <button
+      v-if="variant === 'left'"
+      class="nav-toggle"
+      :title="collapsed ? '展开导航' : '收起导航'"
+      @click="emit('toggle')"
+    >
+      <el-icon><component :is="collapsed ? Expand : Fold" /></el-icon>
+    </button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { Operation } from '@element-plus/icons-vue'
+import { Operation, Fold, Expand } from '@element-plus/icons-vue'
 import { MODULES, MODULE_ICONS, MODULE_LABELS } from '../../../composables/usePageNav'
 
 const props = withDefaults(defineProps<{
@@ -44,16 +52,19 @@ const props = withDefaults(defineProps<{
   hidden?: boolean
   noHover?: boolean
   splitActive?: boolean
+  collapsed?: boolean
 }>(), {
   variant: 'bottom',
   hidden: false,
   noHover: false,
   splitActive: false,
+  collapsed: false,
 })
 
 const emit = defineEmits<{
   (e: 'navigate', module: string): void
   (e: 'split'): void
+  (e: 'toggle'): void
 }>()
 
 const scrollRef = ref<HTMLElement | null>(null)
@@ -167,13 +178,59 @@ onBeforeUnmount(() => {
 
 /* === 桌面端左侧垂直导航栏 === */
 .nav-left {
-  width: 210px;
+  width: 120px;
   height: 100%;
   margin: 0;
   border-radius: 0;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
+}
+
+/* 左侧导航栏收起态：仅显示图标 */
+.nav-left.collapsed {
+  width: 64px;
+}
+
+.nav-left.collapsed .nav-item-label {
+  display: none;
+}
+
+.nav-left.collapsed .nav-items-scroll {
+  align-items: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.nav-left.collapsed .nav-item {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* 收起/展开按钮：位于导航栏底部 */
+.nav-toggle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 12px 0;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  color: var(--chalk-white-60);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.nav-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--chalk-white-85);
+}
+
+.nav-toggle .el-icon {
+  font-size: 18px;
 }
 
 /* 桌面端导航栏已移至底部常驻浮条，左侧 logo+标题已移除 */
@@ -239,21 +296,16 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
-/* === 拆分面板顶部水平导航栏 === */
-/* 拆分面板底部常驻全局导航：距下边界 25px、水平居中 */
+/* === 拆分面板底部导航区（顶部内容区 + 底部导航区，撑满拆分面板宽度） === */
 .nav-split {
-  position: absolute;
-  bottom: 25px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 50;
-  width: 500px;
-  max-width: calc(100% - 50px);
+  position: relative;
+  width: 100%;
+  flex-shrink: 0;
   margin: 0;
   border: none;
-  border-radius: 16px;
-  /* 透明浮层 */
-  background: transparent;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0;
+  background: var(--chalk-white-04);
   backdrop-filter: none;
   box-shadow: none;
 }

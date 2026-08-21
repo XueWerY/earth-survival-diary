@@ -1,6 +1,12 @@
 <template>
   <div class="profile-page">
-    <div class="profile-content">
+    <div
+        class="profile-content"
+        :style="{
+        gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
+        gridTemplateRows: `repeat(${gridRows}, minmax(0, 1fr))`
+      }"
+    >
       <div class="profile-section" id="section-profile">
         <h3 class="section-title">个人信息</h3>
 
@@ -8,8 +14,10 @@
             ref="formRef"
             :model="form"
             :rules="rules"
-            label-position="top"
+            label-position="left"
+            label-suffix="："
             class="profile-form"
+            hide-required-asterisk
         >
           <el-form-item label="昵称" prop="nickname">
             <el-input
@@ -31,41 +39,24 @@
       <div class="profile-section" id="section-security">
         <h3 class="section-title">账号安全</h3>
 
-        <div class="security-item">
-          <button class="security-edit-btn" @click="showEmailDialog = true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="security-edit-icon"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
-          <div class="security-info">
-            <span class="security-label">账号：</span>
-            <span class="security-value">{{ maskEmail(authStore.user?.email) }}</span>
-          </div>
+        <div class="security-item" @click="showEmailDialog = true">
+          <span class="security-label">账号：</span>
+          <span class="security-value">{{ maskEmail(authStore.user?.email) }}</span>
         </div>
 
-        <div class="security-item">
-          <button class="security-edit-btn" @click="showPasswordDialog = true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="security-edit-icon"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
-          <div class="security-info">
-            <span class="security-label">密码：</span>
-            <span class="security-value">••••••••</span>
-          </div>
+        <div class="security-item" @click="showPasswordDialog = true">
+          <span class="security-label">密码：</span>
+          <span class="security-value">••••••••</span>
         </div>
 
-        <div class="security-item">
-          <button class="security-edit-btn" @click="showPhoneDialog = true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="security-edit-icon"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
-          <div class="security-info">
-            <span class="security-label">手机号：</span>
-            <span class="security-value">{{ form.phone || '未绑定' }}</span>
-          </div>
+        <div class="security-item" @click="showPhoneDialog = true">
+          <span class="security-label">手机号：</span>
+          <span class="security-value">{{ form.phone || '未绑定' }}</span>
         </div>
 
-        <div class="security-item">
-          <div class="security-info">
-            <span class="security-label">注册时间：</span>
-            <span class="security-value">{{ formatCreatedAt() }}</span>
-          </div>
+        <div class="security-item security-item-static">
+          <span class="security-label">注册时间：</span>
+          <span class="security-value">{{ formatCreatedAt() }}</span>
         </div>
 
         <div class="security-actions">
@@ -308,6 +299,26 @@ const isElectron = inject<boolean>('isElectron', false)
 
 const authStore = useAuthStore()
 const pageNav = usePageNav()
+
+const GAP = 25
+const windowWidth = ref(window.innerWidth)
+function maxColsPerRow(w: number) {
+  const d = GAP
+  if (w < 1000 + d) return 1
+  if (w < 1500 + 2 * d) return 2
+  return 2
+}
+const gridCols = ref(maxColsPerRow(windowWidth.value))
+const gridRows = computed(() => Math.ceil(4 / gridCols.value))
+
+function onResize() {
+  windowWidth.value = window.innerWidth
+  gridCols.value = maxColsPerRow(windowWidth.value)
+}
+
+onMounted(() => {
+  window.addEventListener('resize', onResize)
+})
 
 const formRef = ref<FormInstance>()
 const loggingOut = ref(false)
@@ -693,33 +704,38 @@ watch(() => form.birthday, () => {
 
 <style scoped>
 .profile-page {
-  width: 500px;
-  max-width: 100%;
-  margin: 0 auto;
   height: 100%;
-  padding: 20px 16px;
+  padding: 25px;
   overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 .profile-page::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .profile-content {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  gap: 25px;
+  height: 100%;
 }
+
 .profile-section {
-  padding: 8px 0 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.profile-form :deep(.el-form-item__label) {
+  width: 70px;
+  text-align: right;
+  justify-content: flex-end;
 }
 
 .section-title {
   font-size: 16px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.9);
-  margin: 0 0 8px 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  margin: 0 0 12px 0;
+  text-align: center;
 }
 
 .section-desc {
@@ -767,24 +783,27 @@ watch(() => form.birthday, () => {
   display: flex;
   align-items: center;
   padding: 12px 0;
-  gap: 10px;
+  gap: 8px;
+  cursor: pointer;
 }
 
-.security-info {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 4px;
+.security-item-static {
+  cursor: default;
 }
 
 .security-label {
-  font-size: 12px;
+  font-size: 13px;
   color: rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+  white-space: nowrap;
+  width: 70px;
+  text-align: right;
 }
 
 .security-value {
   font-size: 14px;
   color: rgba(255, 255, 255, 0.9);
+  flex: 1;
 }
 
 /* 设置项 */
@@ -915,6 +934,8 @@ watch(() => form.birthday, () => {
   color: rgba(255, 255, 255, 0.5);
   flex-shrink: 0;
   white-space: nowrap;
+  width: 70px;
+  text-align: right;
 }
 
 .about-value {
@@ -1055,33 +1076,6 @@ watch(() => form.birthday, () => {
 /* 生日选择器宽度自适应弹窗 */
 :deep(.date-trigger) {
   width: 100%;
-}
-
-/* 安全编辑按钮 */
-.security-edit-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.4);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: all 0.2s;
-}
-
-.security-edit-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.security-edit-icon {
-  width: 16px;
-  height: 16px;
 }
 
 /* 弹窗内容垂直居中 */

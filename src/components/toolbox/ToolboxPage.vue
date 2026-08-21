@@ -1,5 +1,5 @@
 <template>
-  <div class="toolbox-page" ref="contentRef" :style="{ '--card-cols': cardCols }">
+  <div class="toolbox-page" ref="contentRef" :style="{ '--card-cols': cardCols, '--nav-h': navH + 'px' }">
     <div v-if="activeTool" class="tool-page-overlay">
       <div class="tool-page-container">
         <div class="tool-page-header">
@@ -212,6 +212,20 @@ const computeCardCols = (w: number): number => {
 const cardCols = computed(() => computeCardCols(contentWidth.value))
 let contentResizeObserver: ResizeObserver | null = null
 
+// 全局导航栏高度（窗口高度 - 导航高度 = 小工具页面可用高度）
+const navH = ref(0)
+function measureNavHeight() {
+  const bar = document.querySelector<HTMLElement>('.main-nav-bar')
+  if (!bar) { navH.value = 0; return }
+  const rect = bar.getBoundingClientRect()
+  // 侧边导航（高度 > 宽度）不占用小工具页面高度
+  if (rect.height > rect.width) { navH.value = 0; return }
+  navH.value = getComputedStyle(bar).position === 'fixed'
+    ? window.innerHeight - rect.top
+    : bar.offsetHeight
+}
+const onResize = () => measureNavHeight()
+
 const tagGroups = computed(() => {
   const buckets = new Map<string, ToolInfo[]>()
   for (const t of tools.value) {
@@ -304,8 +318,6 @@ onMounted(async () => {
     if (tool) openTool(tool)
   }
 
-  if (!activeTool.value) handleRefreshClick()
-
   if (contentRef.value) {
     contentResizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) contentWidth.value = entry.contentRect.width
@@ -313,9 +325,15 @@ onMounted(async () => {
     contentResizeObserver.observe(contentRef.value)
     contentWidth.value = contentRef.value.clientWidth
   }
+
+  measureNavHeight()
+  window.addEventListener('resize', onResize)
 })
 
-onUnmounted(() => { contentResizeObserver?.disconnect() })
+onUnmounted(() => {
+  contentResizeObserver?.disconnect()
+  window.removeEventListener('resize', onResize)
+})
 
 function getPluginName(pluginId: string): string {
   const plugin = plugins.value.find(p => p.manifest.id === pluginId)
@@ -368,6 +386,7 @@ function handleToolBack() {
   height: 100%;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .toolbox-content {
@@ -669,7 +688,7 @@ function handleToolBack() {
   top: 0;
   left: 0;
   right: 0;
-  bottom: 0;
+  height: calc(100vh - var(--nav-h, 0px));
   z-index: 100;
   display: flex;
   flex-direction: column;

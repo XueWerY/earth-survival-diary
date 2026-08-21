@@ -158,6 +158,7 @@ export interface SystemState {
   guideCompleted?: boolean
   version?: string
   defaultsInitialized?: boolean
+  navCollapsed?: boolean
 }
 
 async function loadSystemState(): Promise<SystemState> {

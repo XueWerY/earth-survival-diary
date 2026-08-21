@@ -23,17 +23,17 @@
 
     <!-- 已登录且数据加载完成，显示主界面 -->
     <template v-else>
-      <!-- 主导航栏 - 桌面端底部常驻透明浮层 -->
+      <!-- 主导航栏 - 桌面端左侧导航区 -->
       <MainNav
         v-if="isDesktop && !splitScreen.isSplitActive.value"
-        class="desktop-dock"
-        variant="bottom"
+        variant="left"
+        :collapsed="navCollapsed"
         :activeModule="pageNav.currentModule.value"
         :split-active="splitScreen.isSplitActive.value"
         :hidden="isFocusFullscreen"
-        noHover
         @navigate="navigateTo"
         @split="handleSplitToggle"
+        @toggle="toggleNav"
       />
 
       <!-- 主内容区域 -->
@@ -1142,6 +1142,10 @@ const initializeData = async () => {
       }, 800)
     }
 
+    try {
+      navCollapsed.value = (await getSystemStateField('navCollapsed')) === true
+    } catch {}
+
   } catch (error) {
     logger.error('[App] 初始化数据失败:', { error: error instanceof Error ? error.message : String(error) })
   } finally {
@@ -1477,6 +1481,13 @@ watch(
 // 专注模块全屏状态
 const isFocusFullscreen = ref(false)
 
+// 桌面端左侧导航栏收起状态（持久化到 data/<用户ID>/system/state.json）
+const navCollapsed = ref(false)
+const toggleNav = () => {
+  navCollapsed.value = !navCollapsed.value
+  setSystemStateField('navCollapsed', navCollapsed.value).catch(() => {})
+}
+
 // 统计模块全屏状态
 const isStatsFullscreen = ref(false)
 
@@ -1805,12 +1816,12 @@ onUnmounted(() => {
   min-width: 0;
 }
 
-/* 桌面端底部透明浮层导航（默认隐藏），内容仅保留 25px 下边界间距 */
+/* 桌面端导航移至左侧，内容不再需要底部间距 */
 .app-container.desktop-layout .main-content {
-  padding-bottom: 25px;
+  padding-bottom: 0;
 }
 
-/* 移动端导航改为固定浮层后，内容同样保留 25px 下边界间距 */
+/* 移动端导航仍为固定浮层，内容保留 25px 下边界间距 */
 .app-container:not(.desktop-layout) .main-content {
   padding-bottom: 25px;
 }

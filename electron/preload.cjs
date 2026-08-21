@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   downloadUpdate: (url) => ipcRenderer.invoke('download-update', url),
   saveFileDialog: (options) => ipcRenderer.invoke('save-file-dialog', options),
   openFileDialog: (options) => ipcRenderer.invoke('open-file-dialog', options),
+  openDirectory: () => ipcRenderer.invoke('open-directory'),
   readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
   writeFile: (filePath, content) => ipcRenderer.invoke('write-file', filePath, content),
   restartApp: () => ipcRenderer.send('restart-app'),
@@ -66,12 +67,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 主进程 HTTPS JSON 请求（绕开渲染进程同源限制）
   httpGetJson: (url) => ipcRenderer.invoke('http-get-json', url),
+  // 主进程 HTTPS PATCH JSON 请求（保存 snowbaby 配置等）
+  httpPatchJson: (url, body) => ipcRenderer.invoke('http-patch-json', url, body),
   // 主进程 HTTPS 文本请求（下载插件源码等，返回 { status, text }）
   httpGetText: (url) => ipcRenderer.invoke('http-get-text', url),
 
   // 插件管理
   getPluginsDirPath: () => ipcRenderer.invoke('get-plugins-dir-path'),
   getSnowbabyDirPath: () => ipcRenderer.invoke('get-snowbaby-dir-path'),
+  getSnowbabyStatus: () => ipcRenderer.invoke('snowbaby-get-status'),
+  installSnowbaby: () => ipcRenderer.invoke('snowbaby-install'),
+  updateSnowbaby: () => ipcRenderer.invoke('snowbaby-update'),
+  uninstallSnowbaby: () => ipcRenderer.invoke('snowbaby-uninstall'),
+  startSnowbaby: (payload) => ipcRenderer.invoke('snowbaby-start', payload),
+  stopSnowbaby: () => ipcRenderer.invoke('snowbaby-stop'),
   createDirectory: (dirPath) => ipcRenderer.invoke('create-directory', dirPath),
   removeDirectory: (dirPath) => ipcRenderer.invoke('remove-directory', dirPath),
   getRuntimePluginManifests: () => ipcRenderer.invoke('get-runtime-plugin-manifests'),

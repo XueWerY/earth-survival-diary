@@ -447,6 +447,13 @@ ipcMain.handle('open-file-dialog', async (_event, options) => {
   return result.canceled ? null : result.filePaths[0]
 })
 
+ipcMain.handle('open-directory', async () => {
+  const result = await dialog.showOpenDialog(mainWindow || BrowserWindow.getFocusedWindow(), {
+    properties: ['openDirectory']
+  })
+  return result.canceled ? null : result.filePaths[0]
+})
+
 ipcMain.handle('read-file', async (_event, filePath) => {
   try {
     return fs.readFileSync(filePath, 'utf-8')
@@ -471,10 +478,8 @@ const PLUGINS_DIR = app.isPackaged
   ? path.join(app.getPath('userData'), 'plugins')
   : path.join(__dirname, '..', 'src', 'plugins')
 
-/** snowbaby 框架目录（生产部署到 resources/vendor/snowbaby，开发在项目根 vendor/snowbaby） */
-const SNOWBABY_DIR = app.isPackaged
-  ? path.join(process.resourcesPath, 'vendor', 'snowbaby')
-  : path.join(__dirname, '..', 'vendor', 'snowbaby')
+/** snowbaby 框架目录：不再内置，改为安装到 userData（即 %APPDATA%/earth-survival-diary/snowbaby），不硬编码用户名 */
+const SNOWBABY_DIR = path.join(app.getPath('userData'), 'snowbaby')
 
 const ALLOWED_DIRS = [
   path.join(app.getPath('userData'), 'data'),
@@ -559,6 +564,148 @@ ipcMain.handle('get-plugins-dir-path', async () => {
 
 ipcMain.handle('get-snowbaby-dir-path', async () => {
   return SNOWBABY_DIR
+})
+
+// ====== snowbaby 安装管理（远程从 https://github.com/XueWerY/snowbaby 拉取代码到 userData/snowbaby） ======
+const SNOWBABY_REPO = 'https://github.com/XueWerY/snowbaby'
+
+function runGit(args, cwd) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+    let out = ''
+    let err = ''
+    child.stdout.on('data', (d) => { out += d.toString() })
+    child.stderr.on('data', (d) => { err += d.toString() })
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (code === 0) resolve(out)
+      else reject(new Error(err.trim() || ('git ' + args.join(' ') + ' 失败，退出码 ' + code)))
+    })
+  })
+}
+
+function hasGit() {
+  return new Promise((resolve) => {
+    const child = spawn('git', ['--version'])
+    child.on('error', () => resolve(false))
+    child.on('close', (code) => resolve(code === 0))
+  })
+}
+
+async function getSnowbabyStatus() {
+  try {
+    const pkgPath = path.join(SNOWBABY_DIR, 'package.json')
+    if (!fs.existsSync(pkgPath)) return { installed: false, version: null }
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
+    return { installed: true, version: pkg.version || null }
+  } catch (e) {
+    return { installed: false, version: null }
+  }
+}
+
+ipcMain.handle('snowbaby-get-status', async () => getSnowbabyStatus())
+
+ipcMain.handle('snowbaby-install', async () => {
+  try {
+    if (fs.existsSync(SNOWBABY_DIR)) return { success: false, error: 'snowbaby 目录已存在，无需重复安装' }
+    if (!(await hasGit())) return { success: false, error: '未检测到 git，无法安装 snowbaby' }
+    await runGit(['clone', SNOWBABY_REPO, SNOWBABY_DIR])
+    return { success: true }
+  } catch (e) {
+    errorLog('[snowbaby] 安装失败: ' + e.message)
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('snowbaby-update', async () => {
+  try {
+    if (!fs.existsSync(path.join(SNOWBABY_DIR, '.git'))) {
+      return { success: false, error: '非 git 方式安装，无法更新' }
+    }
+    const out = await runGit(['pull'], SNOWBABY_DIR)
+    const upToDate = /Already up to date\./i.test(out)
+    return { success: true, upToDate }
+  } catch (e) {
+    errorLog('[snowbaby] 更新失败: ' + e.message)
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('snowbaby-uninstall', async () => {
+  try {
+    if (snowbabyProcess && !snowbabyProcess.killed) {
+      const child = snowbabyProcess
+      snowbabyProcess = null
+      try { child.kill('SIGTERM') } catch (_) {}
+    }
+    if (fs.existsSync(SNOWBABY_DIR)) {
+      fs.rmSync(SNOWBABY_DIR, { recursive: true, force: true })
+    }
+    return { success: true }
+  } catch (e) {
+    errorLog('[snowbaby] 卸载失败: ' + e.message)
+    return { success: false, error: e.message }
+  }
+})
+
+// ====== snowbaby 进程管理（主进程 spawn node，捕获其 stdout/stderr 实时回推渲染进程） ======
+let snowbabyProcess = null
+
+ipcMain.handle('snowbaby-start', async (_event, payload) => {
+  const { pluginDir } = payload || {}
+  try {
+    if (!fs.existsSync(SNOWBABY_DIR)) {
+      return { success: false, error: 'snowbaby 尚未安装，请先安装' }
+    }
+    if (snowbabyProcess && !snowbabyProcess.killed) {
+      return { success: false, error: 'snowbaby 已在运行' }
+    }
+    const child = spawn('node', ['app.js'], {
+      cwd: pluginDir || SNOWBABY_DIR,
+      env: { ...process.env },
+      windowsHide: true
+    })
+    snowbabyProcess = child
+    const send = (stream, text) => {
+      // 剥离 ANSI 颜色转义码（如 [32m、[39m 等）
+      let clean = String(text).replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+      // 过滤掉仅含 "0" 的无意义行（log4js/Node.js 启动副作用）
+      clean = clean.replace(/^0\r?\n?/gm, '')
+      // 清理 [] 内多余空格（如 [ MARK ] → [MARK]，[  snowbaby  ] → [snowbaby]）
+      clean = clean.replace(/\[\s+/g, '[').replace(/\s+\]/g, ']')
+      if (!_event.sender.isDestroyed()) _event.sender.send('powershell-output', { stream, text: clean, source: 'snowbaby' })
+    }
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', (text) => send('stdout', text))
+    child.stderr.on('data', (text) => send('stderr', text))
+    child.on('exit', () => { snowbabyProcess = null })
+    child.on('error', (err) => {
+      send('stderr', err.message)
+      snowbabyProcess = null
+    })
+    return { success: true, pid: child.pid }
+  } catch (e) {
+    errorLog('[snowbaby] 启动失败: ' + e.message)
+    return { success: false, error: e.message }
+  }
+})
+
+ipcMain.handle('snowbaby-stop', async () => {
+  try {
+    if (!snowbabyProcess) return { success: true }
+    const child = snowbabyProcess
+    snowbabyProcess = null
+    // 递归终止整棵进程树（node 可能派生子进程）
+    if (child.pid) {
+      try { execSync(`taskkill /F /T /PID ${child.pid}`, { windowsHide: true }) } catch {}
+    }
+    try { child.kill('SIGKILL') } catch {}
+    return { success: true }
+  } catch (e) {
+    errorLog('[snowbaby] 停止失败: ' + e.message)
+    return { success: false, error: e.message }
+  }
 })
 
 // ====== 运行时插件编译 IPC ======
@@ -830,7 +977,8 @@ ipcMain.handle('exec-powershell', async (event, command) => {
     currentPowerShell = child
     const clearRef = () => { if (currentPowerShell === child) currentPowerShell = null }
     const send = (stream, text) => {
-      if (!event.sender.isDestroyed()) event.sender.send('powershell-output', { stream, text })
+      const clean = String(text).replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+      if (!event.sender.isDestroyed()) event.sender.send('powershell-output', { stream, text: clean })
     }
     child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
@@ -896,6 +1044,38 @@ ipcMain.handle('http-get-json', async (_event, url) => {
     request.on('error', (err) => {
       reject(new Error('请求失败: ' + err.message))
     })
+    request.end()
+  })
+})
+
+// 主进程发起 HTTPS PATCH JSON 请求（snowbaby /config 等配置接口）。
+ipcMain.handle('http-patch-json', async (_event, url, body) => {
+  return new Promise((resolve, reject) => {
+    const json = JSON.stringify(body)
+    const request = net.request({
+      url,
+      method: 'PATCH',
+      headers: {
+        'User-Agent': 'earth-survival-diary',
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(json)
+      }
+    })
+    request.on('response', (res) => {
+      let data = ''
+      res.on('data', (chunk) => { data += chunk })
+      res.on('end', () => {
+        try {
+          resolve({ status: res.statusCode, data: JSON.parse(data) })
+        } catch {
+          reject(new Error('返回内容不是合法 JSON'))
+        }
+      })
+    })
+    request.on('error', (err) => {
+      reject(new Error('请求失败: ' + err.message))
+    })
+    request.write(json)
     request.end()
   })
 })
@@ -1097,7 +1277,7 @@ function setupTray() {
   const contextMenu = Menu.buildFromTemplate([
     { label: '打开', click: () => { if (mainWindow) { mainWindow.show(); mainWindow.setSkipTaskbar(false); mainWindow.focus() } } },
     { type: 'separator' },
-    { label: '退出', click: () => { closeAction = 'exit'; cancelAllReminderTimers(); if (serverInstance) { try { serverInstance.close() } catch (e) {} }; app.exit(0) } }
+    { label: '退出', click: () => { closeAction = 'exit'; cancelAllReminderTimers(); if (serverInstance) { try { serverInstance.close() } catch (e) {} }; app.quit() } }
   ])
   appTray.setContextMenu(contextMenu)
   debugLog('[Main] System tray created')
@@ -1886,11 +2066,20 @@ app.whenReady().then(async () => {
   })
 })
 
-app.on('before-quit', async () => {
+app.on('before-quit', () => {
   debugLog('[Electron] App is about to quit (system shutdown/user exit)')
   isQuitting = true
   cancelAllReminderTimers()
   globalShortcut.unregisterAll()
+  // 终止 snowbaby 子进程：防止其残留运行占用安装目录文件，导致安装新版本时提示"无法停止运行应用"
+  if (snowbabyProcess) {
+    const child = snowbabyProcess
+    snowbabyProcess = null
+    if (child.pid) {
+      try { execSync(`taskkill /F /T /PID ${child.pid}`, { windowsHide: true }) } catch {}
+    }
+    try { child.kill('SIGKILL') } catch {}
+  }
   if (serverInstance) {
     try { serverInstance.close() } catch (e) {}
   }
