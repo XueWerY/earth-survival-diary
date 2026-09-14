@@ -24,6 +24,16 @@ function fixVueuseCore(): Plugin {
 
 export default defineConfig({
   base: './',
+  // 开发模式配置：dev server 提供前端 HMR，/api 转发到 Electron 内置 Express 服务。
+  // 仅 `vite` dev 生效，`vite build` 忽略该键，不影响生产构建。
+  server: {
+    host: '127.0.0.1',
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      '/api': 'http://127.0.0.1:5000'
+    }
+  },
   plugins: [vue(), fixVueuseCore(), {
     name: 'version-inline',
     resolveId(id) {

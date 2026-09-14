@@ -82,6 +82,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   uninstallSnowbaby: () => ipcRenderer.invoke('snowbaby-uninstall'),
   startSnowbaby: (payload) => ipcRenderer.invoke('snowbaby-start', payload),
   stopSnowbaby: () => ipcRenderer.invoke('snowbaby-stop'),
+  isSnowbabyRunning: (payload) => ipcRenderer.invoke('snowbaby-is-running', payload),
   createDirectory: (dirPath) => ipcRenderer.invoke('create-directory', dirPath),
   removeDirectory: (dirPath) => ipcRenderer.invoke('remove-directory', dirPath),
   getRuntimePluginManifests: () => ipcRenderer.invoke('get-runtime-plugin-manifests'),

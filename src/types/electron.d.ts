@@ -79,8 +79,9 @@ declare global {
       updateSnowbaby: () => Promise<{ success: boolean; upToDate?: boolean; error?: string }>
       checkSnowbabyUpdate: () => Promise<{ hasUpdate: boolean; currentVersion?: string | null; latestVersion?: string | null; error?: string }>
       uninstallSnowbaby: () => Promise<{ success: boolean; error?: string }>
-      startSnowbaby: (payload: { dataDir: string; pluginDir: string }) => Promise<{ success: boolean; pid?: number; error?: string }>
+      startSnowbaby: (payload: { dataDir?: string; pluginDir: string }) => Promise<{ success: boolean; pid?: number; error?: string }>
       stopSnowbaby: () => Promise<{ success: boolean; error?: string }>
+      isSnowbabyRunning: (payload: { pidPath: string; pluginDir: string }) => Promise<{ running: boolean; pid?: number | null; error?: string }>
       createDirectory: (dirPath: string) => Promise<boolean>
       removeDirectory: (dirPath: string) => Promise<boolean>
       recompilePlugins: () => Promise<boolean>

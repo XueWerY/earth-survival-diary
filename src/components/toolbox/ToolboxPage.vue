@@ -1,7 +1,7 @@
 <template>
   <div class="toolbox-page" ref="contentRef" :style="{ '--card-cols': cardCols, '--nav-h': navH + 'px' }">
     <div v-if="activeTool" class="tool-page-overlay">
-      <div class="tool-page-container">
+      <div class="tool-page-container" :class="{ 'no-h-padding': activeTool?.id === 'snowbaby-tool' }">
         <div class="tool-page-header">
           <button class="back-btn" @click="handleToolBack">
             <el-icon><ArrowLeft /></el-icon>
@@ -166,7 +166,7 @@ const settingsStore = useSettingsStore()
 const splitScreen = useSplitScreen()
 const tools = ref<ToolInfo[]>([])
 const plugins = ref<ReturnType<typeof getPlugins>>([])
-const activeTool = shallowRef<{ name: string; component: any; title?: string; onBack?: () => void } | null>(null)
+const activeTool = shallowRef<{ id?: string; name: string; component: any; title?: string; onBack?: () => void } | null>(null)
 // 子工具可通过 setToolHeader 动态更新顶部标题与返回回调（如抽卡分析的子页面返回其首页）
 provide('toolHeader', (title?: string, onBack?: () => void) => {
   if (!activeTool.value) return
@@ -358,7 +358,7 @@ async function toggleMarketCollapse() {
 async function openTool(tool: ToolInfo) {
   logger.info('[工具箱] 打开工具', { toolId: tool.id, toolName: tool.name })
   const comp = defineAsyncComponent(tool.component)
-  activeTool.value = { name: tool.name, component: comp, title: tool.name, onBack: undefined }
+  activeTool.value = { id: tool.id, name: tool.name, component: comp, title: tool.name, onBack: undefined }
   // 持久化当前小工具页面：重新进入工具箱时自动恢复
   if (activeToolId.value !== tool.id) {
     activeToolId.value = tool.id
@@ -701,6 +701,11 @@ function handleToolBack() {
   height: 100%;
   display: flex;
   flex-direction: column;
+}
+
+.tool-page-container.no-h-padding {
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .tool-page-header {

@@ -25,6 +25,7 @@ const SRC_BRIDGE = new Set([
   'lib/logger', 'lib/api', 'services/storageService',
   'stores/settingsStore', 'stores/focusStore', 'stores/listStore',
   'components/ui/BaseDialog.vue', 'components/common/overlay/ConfirmDialog.vue',
+  'components/ui/ErrorDialog.vue',
 ])
 
 function genPlaceholderToolJs(toolName) {
@@ -199,13 +200,32 @@ module.exports = { compilePlugin }
 
 // CLI（仅在直接运行时执行，被 require 时不执行）
 if (require.main === module) {
-  const pluginDir = process.argv[2]
-  if (!pluginDir) {
-    console.error('用法: node build-plugin.cjs <插件目录>')
-    process.exit(1)
+  const arg = process.argv[2]
+  if (arg) {
+    // 单插件编译：node build-plugin.cjs <插件目录>
+    const outputDir = path.join(arg, 'dist')
+    compilePlugin(arg, outputDir)
+      .then(ok => process.exit(ok ? 0 : 1))
+      .catch(() => process.exit(1))
+    return
   }
-  const outputDir = path.join(pluginDir, 'dist')
-  compilePlugin(pluginDir, outputDir)
-    .then(ok => process.exit(ok ? 0 : 1))
-    .catch(() => process.exit(1))
+
+  // 无参数：编译 src/plugins 下所有本地插件（供 pnpm build 使用）
+  const pluginsRoot = path.join(__dirname, '..', 'src', 'plugins')
+  if (!fs.existsSync(pluginsRoot)) {
+    console.log(`[build-plugin] 本地插件目录不存在，跳过: ${pluginsRoot}`)
+    process.exit(0)
+  }
+  const entries = fs.readdirSync(pluginsRoot, { withFileTypes: true })
+  ;(async () => {
+    let ok = true
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const dir = path.join(pluginsRoot, entry.name)
+      const success = await compilePlugin(dir, path.join(dir, 'dist'))
+      if (!success) ok = false
+    }
+    console.log('[build-plugin] 本地插件编译完成')
+    process.exit(ok ? 0 : 1)
+  })()
 }

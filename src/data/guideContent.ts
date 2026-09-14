@@ -180,6 +180,7 @@ snowbaby 为独立仓库（https://github.com/XueWerY/snowbaby），不再内置
 - 状态持久化：控制台的运行时状态（如进程 PID）持久化到 \`data/<用户ID>/snowbaby-tool/\`，不写入浏览器 localStorage；控制台「snowbaby 目录」行提供「打开文件夹」按钮可直接打开 \`%APPDATA%/earth-survival-diary/snowbaby\` 所在目录
 - 连接平台（NapCat）：snowbaby 通过 OneBot 11 协议接入 QQ，需借助连接平台 NapCat。控制台「连接平台」区域提供 NapCat 卡片与「前往安装与配置」跳转按钮（链接至官方引导 https://napcat.napneko.icu/guide/boot/Shell），请按官方文档安装 NapCat 并注入已登录的 QQ（NT 版），在 snowbaby 配置中填写 OneBot 连接地址后即可接入（控制台仅负责启动/停止 snowbaby，不再管理 NapCat 的安装与运行）
 - 账号管理：控制台「账号管理」卡片实时展示所有登录的 NapCat 账号及其信息（通过请求 \`http://localhost:<server.port>/bots\` 获取，每 5 秒轮询刷新）。接口返回登录账号总数、跨账号去重后的总好友/群规模，以及每个账号的头像、昵称、QQ 号、在线状态、好友数与群数；端口从 snowbaby 配置 \`userData/snowbaby/data/config.json\` 的 \`server.port\` 读取，默认 2536。snowbaby 未运行时卡片提示无法获取
+- 配置管理：控制台「配置管理」分页可在线查看与修改 snowbaby 的全部配置项（按模块分组：bot / group / other / renderer / puppeteer / server）。配置通过 snowbaby 重构后的 HTTP 接口 \`GET /config\` 读取（返回合并配置 merged 与用户增量 user），通过 \`PATCH /config\` 保存（仅提交相对加载快照真正改动的字段，保存后热重载生效）。\`server.auth\` 为脱敏字段不参与编辑；端口读取规则同账号管理，默认 2536。snowbaby 未运行或端口不可达时分页提示无法读取配置
 
 #### 原神工具箱
 

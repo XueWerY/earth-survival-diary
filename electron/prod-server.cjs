@@ -9,12 +9,26 @@ function createProdServer(options = {}) {
     dataDir, 
     distPath,
     resourcesPath,
-    pluginsDir
+    pluginsDir,
+    localPluginsDir
   } = options
 
   // Resolve paths
   const DATA_DIR = dataDir || path.join(resourcesPath, 'data')
   const DIST_PATH = distPath || path.join(resourcesPath, 'app.asar', 'dist')
+
+  // 插件查找目录：本地优先，其次远程。本地插件=src/plugins，远程=已安装/下载的插件目录
+  const pluginLookupDirs = [localPluginsDir, pluginsDir].filter(Boolean)
+  const resolvePluginDist = (id, file) => {
+    for (const dir of pluginLookupDirs) {
+      const candidate = path.join(dir, id, 'dist', file)
+      const base = path.resolve(dir)
+      // 安全校验：防止路径穿越
+      if (!path.resolve(candidate).startsWith(base)) continue
+      if (fs.existsSync(candidate)) return candidate
+    }
+    return null
+  }
 
   // Ensure directories exist
   if (!fs.existsSync(DATA_DIR)) {
@@ -1027,17 +1041,13 @@ function createProdServer(options = {}) {
 
   // ============ Plugin dist files ============
 
-  /** GET /api/plugins/:id/dist/:file => 200 {JS module} - 提供编译后的插件 JS 文件 */
-  if (pluginsDir && fs.existsSync(pluginsDir)) {
+  /** GET /api/plugins/:id/dist/:file => 200 {JS module} - 提供编译后的插件 JS 文件（本地优先） */
+  if (pluginLookupDirs.length) {
     app.get('/api/plugins/:id/dist/:file', (req, res) => {
       try {
         const { id, file } = req.params
-        const filePath = path.join(pluginsDir, id, 'dist', file)
-        // 安全校验：防止路径穿越
-        if (!filePath.startsWith(path.resolve(pluginsDir))) {
-          return res.status(403).json({ error: 'Forbidden' })
-        }
-        if (!fs.existsSync(filePath)) {
+        const filePath = resolvePluginDist(id, file)
+        if (!filePath) {
           return res.status(404).json({ error: 'File not found' })
         }
         res.setHeader('Content-Type', 'application/javascript')

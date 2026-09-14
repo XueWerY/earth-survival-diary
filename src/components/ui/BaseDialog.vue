@@ -6,7 +6,7 @@
           <span class="dialog-header-title">{{ title }}</span>
         </div>
         <div class="dialog-separator"></div>
-        <div class="dialog-body">
+        <div class="dialog-body" :class="{ 'dialog-body--auto': autoHeight }">
           <slot></slot>
         </div>
         <template v-if="slots.footer">
@@ -32,12 +32,14 @@ withDefaults(defineProps<{
   fullscreen?: boolean
   inline?: boolean
   zIndex?: number
+  autoHeight?: boolean
 }>(), {
   teleport: false,
   noOverlayClose: false,
   fullscreen: false,
   inline: false,
-  zIndex: 9999
+  zIndex: 9999,
+  autoHeight: false
 })
 
 defineEmits<{
@@ -95,6 +97,11 @@ defineEmits<{
   flex: 1;
   overflow-y: auto;
   padding: 12px 20px;
+}
+
+.dialog-body--auto {
+  flex: none;
+  overflow-y: visible;
 }
 
 .dialog-footer {

@@ -52,7 +52,14 @@ export async function loadRuntimePlugins(): Promise<void> {
 
   try {
     const manifests: PluginManifest[] = await electronAPI.getRuntimePluginManifests()
+    const existingIds = new Set(plugins.map((p) => p.manifest.id))
     for (const m of manifests) {
+      // 本地优先：已加载过同 id 插件（如 dev 模式已加载的本地插件）则跳过远程版本
+      if (existingIds.has(m.id)) {
+        logger.info(`[插件] 跳过重复插件 ${m.id}（已优先加载本地版本）`)
+        continue
+      }
+      existingIds.add(m.id)
       const plugin: PluginExport = { manifest: m, tools: [] }
       const toolsMeta = (m as any).tools || {}
 

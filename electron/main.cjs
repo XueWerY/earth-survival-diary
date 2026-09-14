@@ -12,6 +12,17 @@ if (fs.existsSync(esbuildBinaryPath)) {
 const { spawn, execSync } = require('child_process')
 let autoUpdater = null
 
+// 调试态（npx electron 直接跑主进程）下 app.name 为 "Electron"，userData 会落到
+// %APPDATA%/Electron，与正式安装的 earth-survival-diary 数据隔离。这里在读取 userData
+// 之前把它重定向回项目数据目录，确保调试时存取的是同一份数据。
+if (app.name === 'Electron' && !app.isPackaged) {
+  try {
+    app.setPath('userData', path.join(app.getPath('appData'), 'earth-survival-diary'))
+  } catch (e) {
+    console.warn('[Electron] set userData failed:', e.message)
+  }
+}
+
 Menu.setApplicationMenu(null)
 
 let appTray = null
@@ -51,8 +62,17 @@ if (!gotTheLock) {
 }
 
 let mainWindow
+let retryCount = 0
 let serverInstance = null
 let serverPort = 5000
+
+// ====== 开发模式支持 ======
+// `npm run dev`（scripts/dev.cjs）会注入 ESD_DEV_URL（Vite dev server 地址）与 ESD_SERVER_PORT（固定后端端口）。
+// 存在 ESD_DEV_URL 时窗口加载 Vite dev server 获得 HMR，否则（生产/普通调试）维持加载内置服务地址。
+const DEV_SERVER_URL = process.env.ESD_DEV_URL || null
+function entryUrl(port) {
+  return DEV_SERVER_URL || ('http://127.0.0.1:' + port)
+}
 
 // ====== 窗口分辨率设置 ======
 function getUserSettingsPath(userId) {
@@ -478,6 +498,9 @@ const PLUGINS_DIR = app.isPackaged
   ? path.join(app.getPath('userData'), 'plugins')
   : path.join(__dirname, '..', 'src', 'plugins')
 
+// 本地插件目录（始终为项目仓库自带的 src/plugins），用于「本地优先于远程」的合并逻辑
+const LOCAL_PLUGINS_DIR = path.join(__dirname, '..', 'src', 'plugins')
+
 /** snowbaby 框架目录：不再内置，改为安装到 userData（即 %APPDATA%/earth-survival-diary/snowbaby），不硬编码用户名 */
 const SNOWBABY_DIR = path.join(app.getPath('userData'), 'snowbaby')
 
@@ -672,6 +695,51 @@ ipcMain.handle('snowbaby-uninstall', async () => {
 // ====== snowbaby 进程管理（主进程 spawn node，捕获其 stdout/stderr 实时回推渲染进程） ======
 let snowbabyProcess = null
 
+function getSnowbabyPort(pluginDir = SNOWBABY_DIR) {
+  try {
+    const cfgPath = path.join(pluginDir, 'data', 'config.json')
+    if (fs.existsSync(cfgPath)) {
+      const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'))
+      if (cfg?.server?.port) return Number(cfg.server.port)
+    }
+  } catch (e) {
+    debugLog('[Snowbaby] read port failed: ' + e.message)
+  }
+  return 2536
+}
+
+function isProcessAlive(pid) {
+  try {
+    const out = execSync(`tasklist /FI "PID eq ${pid}" /NH`, { windowsHide: true, encoding: 'utf8' })
+    return out.includes(String(pid))
+  } catch {
+    return false
+  }
+}
+
+function waitForSnowbabyReady(port, timeout = 30000) {
+  const url = `http://localhost:${port}/bots`
+  const start = Date.now()
+  return new Promise((resolve, reject) => {
+    const tryOnce = () => {
+      const request = net.request({ url, headers: { 'User-Agent': 'earth-survival-diary' } })
+      request.on('response', () => {
+        // 只要收到 HTTP 响应就认为服务已就绪，不校验状态码/内容
+        resolve()
+      })
+      request.on('error', () => {
+        if (Date.now() - start > timeout) {
+          reject(new Error('等待 snowbaby HTTP 服务就绪超时'))
+        } else {
+          setTimeout(tryOnce, 300)
+        }
+      })
+      request.end()
+    }
+    tryOnce()
+  })
+}
+
 ipcMain.handle('snowbaby-start', async (_event, payload) => {
   const { pluginDir } = payload || {}
   try {
@@ -705,7 +773,19 @@ ipcMain.handle('snowbaby-start', async (_event, payload) => {
       send('stderr', err.message)
       snowbabyProcess = null
     })
-    return { success: true, pid: child.pid }
+    // 等待 HTTP 服务就绪后再返回成功，避免渲染进程立即请求 /config 被拒绝
+    const port = getSnowbabyPort(pluginDir || SNOWBABY_DIR)
+    try {
+      await waitForSnowbabyReady(port, 30000)
+      return { success: true, pid: child.pid }
+    } catch (e) {
+      try { child.kill('SIGKILL') } catch {}
+      if (child.pid) {
+        try { execSync(`taskkill /F /T /PID ${child.pid}`, { windowsHide: true }) } catch {}
+      }
+      snowbabyProcess = null
+      return { success: false, error: e.message }
+    }
   } catch (e) {
     errorLog('[snowbaby] 启动失败: ' + e.message)
     return { success: false, error: e.message }
@@ -726,6 +806,29 @@ ipcMain.handle('snowbaby-stop', async () => {
   } catch (e) {
     errorLog('[snowbaby] 停止失败: ' + e.message)
     return { success: false, error: e.message }
+  }
+})
+
+// 检测 snowbaby 是否真正在运行（进程存活），并清理过期的 pid 文件
+ipcMain.handle('snowbaby-is-running', async (_event, { pidPath, pluginDir }) => {
+  try {
+    // 1. 若当前主进程持有进程对象且未退出，直接认为在运行
+    if (snowbabyProcess && !snowbabyProcess.killed) {
+      return { running: true, pid: snowbabyProcess.pid }
+    }
+    // 2. 读取 pid 文件校验进程是否真实存活
+    if (pidPath && fs.existsSync(pidPath)) {
+      const pid = Number(fs.readFileSync(pidPath, 'utf-8').trim())
+      if (pid && isProcessAlive(pid)) {
+        return { running: true, pid }
+      }
+      // 进程已不存在，清理过期 pid 文件
+      try { fs.unlinkSync(pidPath) } catch {}
+    }
+    return { running: false, pid: null }
+  } catch (e) {
+    debugLog('[Snowbaby] is-running check failed: ' + e.message)
+    return { running: false, pid: null, error: e.message }
   }
 })
 
@@ -814,20 +917,38 @@ ipcMain.handle('recompile-plugins', async () => {
 
 ipcMain.handle('get-runtime-plugin-manifests', async () => {
   const manifests = []
-  if (!fs.existsSync(PLUGINS_DIR)) return manifests
-
-  const entries = fs.readdirSync(PLUGINS_DIR, { withFileTypes: true })
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue
-    const pluginJson = path.join(PLUGINS_DIR, entry.name, 'plugin.json')
-    if (!fs.existsSync(pluginJson)) continue
+  const seenIds = new Set()
+  const scanDir = (dir, source) => {
+    if (!fs.existsSync(dir)) return
+    let entries = []
     try {
-      const manifest = JSON.parse(fs.readFileSync(pluginJson, 'utf-8'))
-      manifests.push(manifest)
+      entries = fs.readdirSync(dir, { withFileTypes: true })
     } catch (e) {
-      errorLog(`[Plugins] Failed to read plugin.json for ${entry.name}: ${e.message}`)
+      return
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const pluginJson = path.join(dir, entry.name, 'plugin.json')
+      if (!fs.existsSync(pluginJson)) continue
+      try {
+        const manifest = JSON.parse(fs.readFileSync(pluginJson, 'utf-8'))
+        const id = manifest?.id
+        if (id && seenIds.has(id)) continue
+        if (id) seenIds.add(id)
+        manifests.push({ ...manifest, _source: source })
+      } catch (e) {
+        errorLog(`[Plugins] Failed to read plugin.json for ${entry.name}: ${e.message}`)
+      }
     }
   }
+  // 本地插件（src/plugins）只允许在调试态加载；打包态仅加载远程插件（userData/plugins）
+  if (!app.isPackaged) {
+    scanDir(LOCAL_PLUGINS_DIR, 'local')
+  } else {
+    debugLog('[Plugins] 打包态：跳过本地插件，仅加载远程插件')
+  }
+  scanDir(PLUGINS_DIR, 'remote')
+  debugLog(`[Plugins] manifests: total ${manifests.length}, ids=${[...seenIds].join(',')}`)
   return manifests
 })
 
@@ -1046,58 +1167,87 @@ ipcMain.handle('kill-powershell', async () => {
   }
 })
 
-// 主进程发起 HTTPS GET 并解析 JSON（渲染进程直连第三方接口会被同源策略拦截）
-// net.request 使用 Chromium 网络栈，自动遵循系统代理（有代理时走代理）
+// 主进程发起 GET 并解析 JSON（snowbaby /config、/bots 等本地接口，无需代理）
 ipcMain.handle('http-get-json', async (_event, url) => {
   return new Promise((resolve, reject) => {
-    const request = net.request({ url, headers: { 'User-Agent': 'earth-survival-diary' } })
-    request.on('response', (res) => {
-      let data = ''
-      res.on('data', (chunk) => { data += chunk })
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(data))
-        } catch {
-          reject(new Error('返回内容不是合法 JSON'))
-        }
-      })
+    let target
+    try {
+      target = new URL(url)
+    } catch (e) {
+      return reject(new Error('无效的请求地址: ' + url))
+    }
+    const req = http.request(
+      {
+        protocol: target.protocol,
+        hostname: target.hostname,
+        port: target.port,
+        path: target.pathname + target.search,
+        method: 'GET',
+        headers: { 'User-Agent': 'earth-survival-diary' }
+      },
+      (res) => {
+        let data = ''
+        res.on('data', (chunk) => { data += chunk })
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(data))
+          } catch {
+            reject(new Error('返回内容不是合法 JSON'))
+          }
+        })
+      }
+    )
+    req.on('error', (err) => {
+      const detail = err?.message || err?.code || String(err)
+      reject(new Error('请求失败: ' + detail))
     })
-    request.on('error', (err) => {
-      reject(new Error('请求失败: ' + err.message))
-    })
-    request.end()
+    req.end()
   })
 })
 
-// 主进程发起 HTTPS PATCH JSON 请求（snowbaby /config 等配置接口）。
+// 主进程发起 PATCH JSON 请求（snowbaby /config 等配置接口）。
+// 使用 Node 内置 http 模块，避免 electron net.request 对 headers/方法参数的严格校验
+// （如 Content-Length 传入非字符串或自定义方法可能抛出 net::ERR_INVALID_ARGUMENT）。
 ipcMain.handle('http-patch-json', async (_event, url, body) => {
   return new Promise((resolve, reject) => {
-    const json = JSON.stringify(body)
-    const request = net.request({
-      url,
-      method: 'PATCH',
-      headers: {
-        'User-Agent': 'earth-survival-diary',
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(json)
-      }
-    })
-    request.on('response', (res) => {
-      let data = ''
-      res.on('data', (chunk) => { data += chunk })
-      res.on('end', () => {
-        try {
-          resolve({ status: res.statusCode, data: JSON.parse(data) })
-        } catch {
-          reject(new Error('返回内容不是合法 JSON'))
+    let target
+    try {
+      target = new URL(url)
+    } catch (e) {
+      return reject(new Error('无效的请求地址: ' + url))
+    }
+    const json = JSON.stringify(body ?? {})
+    const req = http.request(
+      {
+        protocol: target.protocol,
+        hostname: target.hostname,
+        port: target.port,
+        path: target.pathname + target.search,
+        method: 'PATCH',
+        headers: {
+          'User-Agent': 'earth-survival-diary',
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(json)
         }
-      })
+      },
+      (res) => {
+        let data = ''
+        res.on('data', (chunk) => { data += chunk })
+        res.on('end', () => {
+          try {
+            resolve({ status: res.statusCode, data: JSON.parse(data) })
+          } catch {
+            reject(new Error('返回内容不是合法 JSON'))
+          }
+        })
+      }
+    )
+    req.on('error', (err) => {
+      const detail = err?.message || err?.code || String(err)
+      reject(new Error('请求失败: ' + detail))
     })
-    request.on('error', (err) => {
-      reject(new Error('请求失败: ' + err.message))
-    })
-    request.write(json)
-    request.end()
+    req.write(json)
+    req.end()
   })
 })
 
@@ -1146,6 +1296,10 @@ function errorLog(msg) {
 
 async function startServer() {
   debugLog('[Electron] Starting server...')
+  // 调试用：确认当前运行态下 userData 真实路径（npx electron 直接跑时可能与预期不同）
+  debugLog('[Electron] userData = ' + app.getPath('userData'))
+  debugLog('[Electron] dataDir  = ' + path.join(app.getPath('userData'), 'data'))
+  debugLog('[Electron] app.name = ' + app.name)
 
   const serverModulePath = path.join(__dirname, 'prod-server.cjs')
   if (!fs.existsSync(serverModulePath)) {
@@ -1163,7 +1317,9 @@ async function startServer() {
     : path.join(__dirname, '..', 'node_modules')
 
   const { createProdServer } = require(serverModulePath)
-  const portsToTry = [5000, 5001, 5002, 5003]
+  // 开发模式（dev.cjs 注入 ESD_SERVER_PORT）固定端口，便于 Vite proxy 转发；否则依次尝试 5000-5003
+  const specifiedPort = process.env.ESD_SERVER_PORT ? Number(process.env.ESD_SERVER_PORT) : null
+  const portsToTry = specifiedPort ? [specifiedPort] : [5000, 5001, 5002, 5003]
 
   for (const port of portsToTry) {
     try {
@@ -1173,7 +1329,9 @@ async function startServer() {
         distPath: distPath,
         resourcesPath: resourcesPath,
         nodeModulesPath: nodeModulesPath,
-        pluginsDir: PLUGINS_DIR
+        pluginsDir: PLUGINS_DIR,
+        // 本地插件（src/plugins）仅在调试态注入，打包态不暴露
+        localPluginsDir: app.isPackaged ? undefined : LOCAL_PLUGINS_DIR
       })
 
       await new Promise((resolve, reject) => {
@@ -1224,7 +1382,7 @@ function createWindow(url) {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      devTools: false,
+      devTools: !!DEV_SERVER_URL,
       nativeWindowOpen: true,
       preload: path.join(__dirname, 'preload.cjs')
     }
@@ -1254,6 +1412,21 @@ function createWindow(url) {
 
   mainWindow.webContents.on('did-fail-load', (event, code, desc) => {
     errorLog('[Electron] Page load failed: ' + code + ' ' + desc)
+    // 开发模式：dev server 短暂中断（如 vite 重启）导致瞬时加载失败时自动重试
+    if (DEV_SERVER_URL && mainWindow && !mainWindow.isDestroyed()) {
+      if (retryCount < 3) {
+        retryCount++
+        setTimeout(() => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.loadURL(DEV_SERVER_URL).catch(() => {})
+          }
+        }, 600)
+      }
+    }
+  })
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    retryCount = 0
   })
 
   mainWindow.on('closed', () => {
@@ -2060,7 +2233,7 @@ app.whenReady().then(async () => {
       }
     }
     const port = await startServer()
-    const url = 'http://127.0.0.1:' + port
+    const url = entryUrl(port)
     debugLog('[Electron] Loading URL: ' + url)
     createWindow(url)
     setupTray()
@@ -2083,7 +2256,7 @@ app.whenReady().then(async () => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow('http://127.0.0.1:' + serverPort)
+      createWindow(entryUrl(serverPort))
     }
   })
 })

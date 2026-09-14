@@ -66,17 +66,12 @@
           />
         </div>
         <div v-else class="panel-wrapper">
-          <div v-if="capturedError" class="captured-error">
-            <div class="captured-error-header">
-              <span class="captured-error-title">应用发生错误</span>
-            </div>
-            <pre>{{ capturedError }}</pre>
-            <div class="captured-error-separator"></div>
-            <div class="captured-error-buttons">
-              <button class="error-btn copy" @click="copyError">复制错误</button>
-              <button class="error-btn close" @click="capturedError = null">关闭</button>
-            </div>
-          </div>
+          <ErrorDialog
+            :visible="!!capturedError"
+            :message="capturedError || ''"
+            title="应用发生错误"
+            @update:visible="capturedError = null"
+          />
           <router-view v-slot="{ Component }">
             <template v-if="Component">
               <component
@@ -175,6 +170,7 @@ import { fetchLatestReleaseVersion, RELEASES_PAGE_URL } from './services/version
 import { logger } from './lib/logger'
 import { usePageNav, MODULE_ROUTES } from './composables/usePageNav'
 import { useSplitScreen } from './composables/useSplitScreen'
+import ErrorDialog from './components/ui/ErrorDialog.vue'
 import MainNav from './components/common/nav/MainNav.vue'
 import SplitPanel from './components/common/SplitPanel.vue'
 import dayjs from 'dayjs'
@@ -269,12 +265,6 @@ const isInitializing = ref(false)
 const userKey = ref(0)
 
 const capturedError = ref<string | null>(null)
-
-const copyError = () => {
-  if (capturedError.value) {
-    navigator.clipboard.writeText(capturedError.value).catch(() => {})
-  }
-}
 
 onErrorCaptured((err, instance, info) => {
   const errMsg = err instanceof Error ? `${err.message}\n${err.stack || ''}` : String(err)
@@ -1830,84 +1820,6 @@ onUnmounted(() => {
 .panel-wrapper {
   width: 100%;
   height: 100%;
-}
-
-.captured-error {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 9999;
-  max-width: 90vw;
-  max-height: 80vh;
-  overflow: auto;
-  padding: 12px;
-  background: rgba(40, 0, 0, 0.95);
-  border: 1px solid rgba(255, 80, 80, 0.5);
-  border-radius: 8px;
-}
-
-.captured-error-header {
-  text-align: center;
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 80, 80, 0.3);
-}
-
-.captured-error-title {
-  color: #ffcccc;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.captured-error-separator {
-  border-top: 1px solid rgba(255, 80, 80, 0.3);
-  margin: 8px 0;
-}
-
-.captured-error-buttons {
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-}
-
-.captured-error-buttons .error-btn {
-  padding: 4px 10px;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.captured-error-buttons .error-btn.copy {
-  background: rgba(59, 130, 246, 0.3);
-  color: #93c5fd;
-  border-color: rgba(59, 130, 246, 0.5);
-}
-
-.captured-error-buttons .error-btn.copy:hover {
-  background: rgba(59, 130, 246, 0.5);
-  color: #ffffff;
-}
-
-.captured-error-buttons .error-btn.close {
-  background: rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
-  border-color: rgba(239, 68, 68, 0.5);
-}
-
-.captured-error-buttons .error-btn.close:hover {
-  background: rgba(239, 68, 68, 0.5);
-  color: #ffffff;
-}
-
-.captured-error pre {
-  margin: 0;
-  color: #ff8080;
-  font-size: 13px;
-  white-space: pre-wrap;
-  word-break: break-all;
 }
 
 .loading-container {

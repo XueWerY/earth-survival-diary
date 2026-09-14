@@ -49,7 +49,10 @@ pnpm install
 # 浏览器端开发（调试 UI）
 npx vite
 
-# Electron 桌面端开发
+# Electron 桌面端开发（热重载：前端 HMR + 主进程改动自动重启）
+pnpm dev
+
+# 部署形态运行（加载构建产物，模拟生产）
 pnpm build
 npx electron electron/main.cjs
 

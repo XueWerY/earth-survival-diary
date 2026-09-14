@@ -25,6 +25,7 @@ import { useFocusStore } from '../stores/focusStore'
 import { useListStore } from '../stores/listStore'
 import BaseDialog from '../components/ui/BaseDialog.vue'
 import ConfirmDialog from '../components/common/overlay/ConfirmDialog.vue'
+import ErrorDialog from '../components/ui/ErrorDialog.vue'
 
 ;(window as any).__ESD_BRIDGE__ = {
   // npm 依赖
@@ -48,4 +49,5 @@ import ConfirmDialog from '../components/common/overlay/ConfirmDialog.vue'
   // 历史别名：BaseDialog 曾位于 components/common/，旧插件产物仍按此键取值，保留以兼容未重新编译的已装插件
   'components/common/BaseDialog.vue': BaseDialog,
   'components/common/overlay/ConfirmDialog.vue': ConfirmDialog,
+  'components/ui/ErrorDialog.vue': ErrorDialog,
 }
