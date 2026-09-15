@@ -152,7 +152,7 @@ onUnmounted(() => {
 }
 
 .ft-time {
-  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
   font-size: 15px;
   font-weight: 700;
   color: #a78bfa;

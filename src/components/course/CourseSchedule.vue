@@ -444,7 +444,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch, inject } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight } from '@lucide/vue'
 import dayjs from 'dayjs'
 import { getData, setData } from '../../services/storageService'
 import { useSettingsStore } from '../../stores/settingsStore'

@@ -10,14 +10,14 @@
       <div class="guide-tooltip-header">
         <div class="guide-step-badge">{{ currentIndex + 1 }} / {{ steps.length }}</div>
         <button class="guide-exit-btn" @click="emit('exit')" title="退出引导">
-          <el-icon><Close /></el-icon>
+          <el-icon><X /></el-icon>
         </button>
       </div>
       <h3 class="guide-step-title">{{ currentStep.title }}</h3>
       <p class="guide-step-desc" v-html="currentStep.description"></p>
       <div class="guide-actions">
         <el-button size="small" plain @click="skip">
-          <el-icon><Close /></el-icon> 跳过引导
+          <el-icon><X /></el-icon> 跳过引导
         </el-button>
         <el-button v-if="currentIndex > 0" size="small" @click="prev">
           <el-icon><ArrowLeft /></el-icon> 上一步
@@ -33,7 +33,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { Close, ArrowLeft, ArrowRight, Check } from '@element-plus/icons-vue'
+import { X, ArrowLeft, ArrowRight, Check } from '@lucide/vue'
 
 export interface GuideStep {
   route: string

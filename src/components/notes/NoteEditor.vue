@@ -57,7 +57,7 @@
       </div>
       <div class="editor-status-right">
         <button class="editor-pin-btn" :class="{ active: note?.pinned }" @click="$emit('togglePin')" :title="note?.pinned ? '取消置顶' : '置顶'">
-          <el-icon><StarFilled v-if="note?.pinned" /><Star v-else /></el-icon>
+          <el-icon><Star fill="currentColor" v-if="note?.pinned" /><Star v-else /></el-icon>
         </button>
         <button class="editor-save-btn" @click="handleSave">保存</button>
       </div>
@@ -67,7 +67,7 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
-import { ArrowLeft, ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, Star } from '@lucide/vue'
 import dayjs from 'dayjs'
 import type { Note, MdOutlineItem } from '../../stores/noteStore'
 import { extractMdOutline } from '../../stores/noteStore'

@@ -24,10 +24,10 @@
           <el-icon><Star /></el-icon>
         </button>
         <button class="card-btn card-btn-edit" @click.stop="$emit('edit')" title="编辑">
-          <el-icon><Edit /></el-icon>
+          <el-icon><Pencil /></el-icon>
         </button>
         <button class="card-btn card-btn-delete" @click.stop="$emit('delete')" title="删除">
-          <el-icon><Delete /></el-icon>
+          <el-icon><Trash2 /></el-icon>
         </button>
       </div>
     </div>
@@ -56,7 +56,7 @@
 
     <!-- "xx天" / "xx天后" 区域 -->
     <div class="countdown-display" :class="countdownDisplayClass">
-      <span class="countdown-number">{{ countdownDays }}</span>
+      <span class="countdown-number">{{ displayDays }}</span>
       <span class="countdown-unit">{{ countdownUnit }}</span>
     </div>
 
@@ -67,8 +67,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { Calendar, Star, Delete, Edit } from '@element-plus/icons-vue'
+import { ref, computed, watch } from 'vue'
+import { useCountTween } from '../../composables/useMotion'
+import { Calendar, Star, Trash2, Pencil } from '@lucide/vue'
 import dayjs from 'dayjs'
 
 interface Milestone {
@@ -109,6 +110,11 @@ defineEmits<{
 const formatDate = (date: string): string => {
   return dayjs(date).format('YYYY年MM月DD日')
 }
+
+// 天数数字滚动动效
+const displayDays = ref(props.countdownDays)
+const countTween = useCountTween(() => props.countdownDays, (v) => { displayDays.value = v })
+watch(() => props.countdownDays, (v) => { countTween.to(v) })
 
 const cardClasses = computed(() => ({
   pinned: props.cardType === 'pinned',

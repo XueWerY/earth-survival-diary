@@ -15,15 +15,15 @@
         </template>
       </div>
       <button v-if="navPath.length >= 2" class="breadcrumb-fav-btn" :class="{ active: isCurrentFavorited }" @click="toggleFavorite" title="收藏当前视图">
-        <el-icon><StarFilled v-if="isCurrentFavorited" /><Star v-else /></el-icon>
+        <el-icon><Star fill="currentColor" v-if="isCurrentFavorited" /><Star v-else /></el-icon>
       </button>
       <button class="breadcrumb-quick-btn" @click="openFavoritesDropdown" title="快速访问">
-        <el-icon><CollectionTag /></el-icon>
+        <el-icon><Tags /></el-icon>
       </button>
       <button v-if="showSortButton" class="breadcrumb-sort-btn" @click="openSortDropdown" title="排序">
-        <el-icon><Sort /></el-icon>
+        <el-icon><ArrowUpDown /></el-icon>
       </button>
-      <button v-if="plusAction" class="breadcrumb-plus-btn" @click="plusAction" title="添加"><el-icon><PlusIcon /></el-icon></button>
+      <button v-if="plusAction" class="breadcrumb-plus-btn" @click="plusAction" title="添加"><el-icon><Plus /></el-icon></button>
     </div>
 
     <div v-if="activeDropdown === 'segment'" class="page-dropdown" :style="dropdownPosStyle" @click.stop>
@@ -68,8 +68,8 @@
           </div>
           <div v-for="folder in sortedFolders" :key="folder.id" class="folder-card has-actions" @click="pageNav.setNavPath(['list', 'custom', folder.id])">
             <div class="card-top-actions" @click.stop>
-              <button class="card-icon-btn" title="编辑文件夹" @click="handleEditFolder(folder)"><el-icon><Edit /></el-icon></button>
-              <button class="card-icon-btn danger" title="删除文件夹" @click="handleDeleteFolder(folder)"><el-icon><Delete /></el-icon></button>
+              <button class="card-icon-btn" title="编辑文件夹" @click="handleEditFolder(folder)"><el-icon><Pencil /></el-icon></button>
+              <button class="card-icon-btn danger" title="删除文件夹" @click="handleDeleteFolder(folder)"><el-icon><Trash2 /></el-icon></button>
             </div>
             <div class="folder-card-icon" :style="{ background: folder.color }"><el-icon><Folder /></el-icon></div>
             <span class="folder-card-name">{{ folder.name }}</span>
@@ -109,8 +109,8 @@
           <div v-else class="card-grid">
             <div v-for="folder in sortedFolders" :key="folder.id" class="folder-card has-actions" @click="pageNav.setNavPath(['list', 'custom', folder.id])">
               <div class="card-top-actions" @click.stop>
-                <button class="card-icon-btn" title="编辑文件夹" @click="handleEditFolder(folder)"><el-icon><Edit /></el-icon></button>
-                <button class="card-icon-btn danger" title="删除文件夹" @click="handleDeleteFolder(folder)"><el-icon><Delete /></el-icon></button>
+                <button class="card-icon-btn" title="编辑文件夹" @click="handleEditFolder(folder)"><el-icon><Pencil /></el-icon></button>
+                <button class="card-icon-btn danger" title="删除文件夹" @click="handleDeleteFolder(folder)"><el-icon><Trash2 /></el-icon></button>
               </div>
               <div class="folder-card-icon" :style="{ background: folder.color }"><el-icon><Folder /></el-icon></div>
               <span class="folder-card-name">{{ folder.name }}</span>
@@ -124,8 +124,8 @@
           <div v-else class="card-grid">
             <div v-for="list in sortedFolderLists" :key="list.id" class="folder-card has-actions" @click="pageNav.setNavPath(['list', 'custom', currentFolderIdFromPath, list.id])">
               <div class="card-top-actions" @click.stop>
-                <button class="card-icon-btn" title="编辑清单" @click="handleEditListCard(list)"><el-icon><Edit /></el-icon></button>
-                <button class="card-icon-btn danger" title="删除清单" @click="handleDeleteListCard(list)"><el-icon><Delete /></el-icon></button>
+                <button class="card-icon-btn" title="编辑清单" @click="handleEditListCard(list)"><el-icon><Pencil /></el-icon></button>
+                <button class="card-icon-btn danger" title="删除清单" @click="handleDeleteListCard(list)"><el-icon><Trash2 /></el-icon></button>
               </div>
               <div class="folder-card-icon" :style="{ background: list.color }">
                 <el-icon><Folder /></el-icon>
@@ -141,8 +141,8 @@
           <div v-else class="card-grid">
             <div v-for="group in currentSortedGroups" :key="group.id" class="folder-card has-actions" @click="pageNav.setNavPath(['list', 'custom', currentFolderIdFromPath, currentListIdFromPath, group.id])">
               <div class="card-top-actions" @click.stop>
-                <button class="card-icon-btn" title="编辑分组" @click="handleEditGroupCard(group)"><el-icon><Edit /></el-icon></button>
-                <button v-if="!isDefaultGroup(group.id)" class="card-icon-btn danger" title="删除分组" @click="handleDeleteGroupCard(group)"><el-icon><Delete /></el-icon></button>
+                <button class="card-icon-btn" title="编辑分组" @click="handleEditGroupCard(group)"><el-icon><Pencil /></el-icon></button>
+                <button v-if="!isDefaultGroup(group.id)" class="card-icon-btn danger" title="删除分组" @click="handleDeleteGroupCard(group)"><el-icon><Trash2 /></el-icon></button>
               </div>
               <div class="folder-card-icon" :style="{ background: group.color }">
                 <el-icon><Folder /></el-icon>
@@ -209,7 +209,7 @@
     <div class="dialog-container">
       <div class="dialog-header">
         <span class="dialog-header-title">移动任务</span>
-        <el-button class="dialog-close-btn" text @click="closeMoveDialog"><el-icon><Close /></el-icon></el-button>
+        <el-button class="dialog-close-btn" text @click="closeMoveDialog"><el-icon><X /></el-icon></el-button>
       </div>
       <div class="dialog-body">
         <MoveTaskPage :list-id="moveTaskId" @submit="onMoveSubmit" @cancel="closeMoveDialog" />
@@ -239,7 +239,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch, inject } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Calendar, Clock, Timer, Close, Warning, Edit, Plus as PlusIcon, Delete, List, Folder, Check, Sort, Star, StarFilled, CollectionTag } from '@element-plus/icons-vue'
+import { Calendar, Clock, Timer, X, TriangleAlert, Pencil, Plus, Trash2, List, Folder, Check, ArrowUpDown, Star, Tags } from '@lucide/vue'
 import ListFormPage from './ListFormPage.vue'
 import GroupFormPage from './GroupFormPage.vue'
 import TaskForm from './TaskForm.vue'
@@ -251,6 +251,7 @@ import ColorGrid from '../ui/ColorGrid.vue'
 import dayjs from 'dayjs'
 import { useListStore, DEFAULT_FOLDER_COLORS, EXTENDED_FOLDER_COLORS, type Task, type ListPage, type TaskGroup, type TaskFolder } from '../../stores/listStore'
 import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem, type FavoriteItem } from '../../composables/usePageNav'
+import { useCardEntrance } from '../../composables/useMotion'
 import { getData, setData } from '../../services/storageService'
 import { logger } from '../../lib/logger'
 
@@ -265,6 +266,7 @@ const isElectron = computed(() => typeof window !== 'undefined' && !!(window as 
 
 // 卡片网格响应式列数：实测内容区宽度 → 1/2/3 列（卡片间距 d = 25px）
 const mainContentRef = ref<HTMLElement | null>(null)
+const entrance = useCardEntrance(mainContentRef, '.folder-card, .list-card, .task-card')
 const contentWidth = ref(0)
 const CARD_GAP = 25
 const computeCardCols = (w: number): number => {
@@ -707,12 +709,17 @@ const currentGroups = computed(() => {
 })
 const currentSortedGroups = computed(() => currentGroups.value)
 
-watch([navPath, sortedFolders, () => listStore.lists], () => {
+watch([navPath, sortedFolders, () => listStore.lists], async () => {
   logger.debug('[ListPage] breadcrumb watch 触发', { navPath: [...navPath.value], foldersCount: sortedFolders.value.length, listsCount: listStore.lists?.length })
   localBreadcrumbSegments.value = computeBreadcrumbSegments()
   logger.debug('[ListPage] breadcrumb watch 结果', { segments: localBreadcrumbSegments.value })
   closeDropdown()
   scrollBreadcrumbToEnd()
+  await nextTick()
+
+  // 所有视图变化（切入/下钻/返回/数据增删改）统一效果：
+  // 页面先空白，卡片按行序一张张浮现（entrance.play 内部会先同步隐藏卡片并防抖合并）
+  entrance.play()
 }, { immediate: true, deep: true })
 
 const smartListCount = computed(() => 3)
@@ -1154,6 +1161,19 @@ const handleConfirmAction = () => {
   color: var(--chalk-warning);
 }
 
+/* 收藏切换反馈：星标图标弹性弹跳 */
+.breadcrumb-fav-btn .el-icon {
+  transition: transform 0.2s ease;
+}
+.breadcrumb-fav-btn.active .el-icon {
+  animation: fav-pop 0.3s ease-out;
+}
+@keyframes fav-pop {
+  0% { transform: scale(0.5); }
+  60% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
 .page-dropdown-empty {
   padding: 12px;
   text-align: center;
@@ -1276,8 +1296,9 @@ const handleConfirmAction = () => {
   padding: 0 25px;
   align-items: stretch;
 }
-.folder-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 16px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; cursor: pointer; transition: all 0.2s; position: relative; }
-.folder-card:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(102, 126, 234, 0.3); transform: translateY(-2px); }
+.folder-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 44px 16px 24px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; cursor: pointer; transition: all 0.2s; position: relative; }
+.folder-card:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(102, 126, 234, 0.3); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102, 126, 234, 0.18); }
+.folder-card:active { transform: scale(0.97); }
 .folder-card-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; background: rgba(102, 126, 234, 0.6); }
 .folder-card-icon.smart-icon-bg { background: rgba(102, 126, 234, 0.6); }
 .folder-card-icon.custom-icon-bg { background: rgba(244, 114, 182, 0.6); }
@@ -1291,9 +1312,8 @@ const handleConfirmAction = () => {
 .card-top-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 2px; z-index: 2; }
 .card-icon-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: transparent; color: var(--chalk-white-60); cursor: pointer; border-radius: 4px; font-size: 12px; transition: all 0.15s; }
 .card-icon-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--chalk-white); }
+.card-icon-btn:active { transform: scale(0.9); }
 .card-icon-btn.danger:hover { color: var(--chalk-danger); }
-
-.folder-card.has-actions { padding-top: 44px; }
 
 /* 卡片网格已在上方统一为 grid 布局（最多 3 列，卡片间距 25px，同行等高） */
 

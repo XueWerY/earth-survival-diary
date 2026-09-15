@@ -14,10 +14,17 @@ html, body {
 }
 
 body {
-  font-family: 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: #0f0c29;
+}
+
+/* Lucide 图标跟随 el-icon 字体尺寸：所有 el-icon 内的 svg 统一样式 */
+.el-icon svg {
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
 }
 
 #app {

@@ -1,8 +1,8 @@
 import { ref, computed, watch, nextTick, inject, provide } from 'vue'
 import type { Ref, InjectionKey } from 'vue'
 import {
-  MapLocation, Notebook, Timer, List, AlarmClock, Calendar, Histogram, Grid, User
-} from '@element-plus/icons-vue'
+  MapPin, Notebook, Timer, List, Clock, Calendar, BarChart3, LayoutGrid, User
+} from '@lucide/vue'
 import { getSystemStateField, setSystemStateField, type SystemState } from '../services/storageService'
 import { logger } from '../lib/logger'
 
@@ -45,7 +45,7 @@ export interface NavContext {
 export const MODULES = ['footprint', 'notes', 'focus', 'list', 'countdown', 'course', 'statistics', 'toolbox', 'profile']
 
 export const MODULE_ICONS: Record<string, any> = {
-  footprint: MapLocation, notes: Notebook, focus: Timer, list: List, countdown: AlarmClock, course: Calendar, statistics: Histogram, toolbox: Grid, profile: User
+  footprint: MapPin, notes: Notebook, focus: Timer, list: List, countdown: Clock, course: Calendar, statistics: BarChart3, toolbox: LayoutGrid, profile: User
 }
 
 export const MODULE_LABELS: Record<string, string> = {

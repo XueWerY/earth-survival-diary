@@ -4,13 +4,13 @@
       <span class="note-card-title" :title="note.title">{{ note.title }}</span>
       <div class="note-card-actions">
         <button class="card-icon-btn" :title="isPinned ? '取消置顶' : '置顶'" @click.stop="$emit('togglePin')">
-          <el-icon><Star v-if="isPinned" /><StarFilled v-else /></el-icon>
+          <el-icon><Star v-if="isPinned" /><Star fill="currentColor" v-else /></el-icon>
         </button>
         <button class="card-icon-btn" title="编辑" @click.stop="$emit('edit')">
-          <el-icon><Edit /></el-icon>
+          <el-icon><Pencil /></el-icon>
         </button>
         <button class="card-icon-btn danger" title="删除" @click.stop="$emit('delete')">
-          <el-icon><Delete /></el-icon>
+          <el-icon><Trash2 /></el-icon>
         </button>
       </div>
     </div>
@@ -21,7 +21,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Star, StarFilled, Edit, Delete } from '@element-plus/icons-vue'
+import { Star, Pencil, Trash2 } from '@lucide/vue'
 import dayjs from 'dayjs'
 import { extractMdOutline, getMdPlainText } from '../../stores/noteStore'
 import type { Note } from '../../stores/noteStore'

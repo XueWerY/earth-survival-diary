@@ -78,7 +78,7 @@
             </button>
             <h3 class="section-title">插件市场</h3>
             <button class="market-refresh-btn" @click="handleRefreshClick" :disabled="marketLoading">
-              <el-icon v-if="marketLoading" :class="{ spinning: marketLoading }"><Refresh /></el-icon>
+              <el-icon v-if="marketLoading" :class="{ spinning: marketLoading }"><RefreshCw /></el-icon>
               <span>{{ marketLoading ? '刷新中' : '刷新' }}</span>
             </button>
           </div>
@@ -100,7 +100,7 @@
     >
       <div class="refresh-dialog-body">
         <template v-if="refreshState === 'progress'">
-          <el-icon class="spinning refresh-progress-icon"><Refresh /></el-icon>
+          <el-icon class="spinning refresh-progress-icon"><RefreshCw /></el-icon>
           <p class="mp-popup-tip">正在刷新插件市场...</p>
         </template>
         <template v-else-if="refreshState === 'no-update'">
@@ -152,14 +152,14 @@
 
 <script setup lang="ts">
 import { ref, shallowRef, onMounted, onUnmounted, computed, defineAsyncComponent, provide } from 'vue'
-import { ArrowLeft, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowDown, ArrowUp } from '@lucide/vue'
 import { logger } from '../../lib/logger'
 import { getAllTools, getPlugins, loadRuntimePlugins, type ToolInfo } from '../../lib/pluginLoader'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useSplitScreen } from '../../composables/useSplitScreen'
 import MarketplacePanel from './MarketplacePanel.vue'
 import BaseDialog from '../ui/BaseDialog.vue'
-import { Refresh } from '@element-plus/icons-vue'
+import { RefreshCw } from '@lucide/vue'
 import { type MarketplacePlugin } from '../../lib/marketplace'
 
 const settingsStore = useSettingsStore()

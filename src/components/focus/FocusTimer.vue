@@ -134,7 +134,7 @@
                 <div v-if="fav.notes" class="fav-notes">{{ fav.notes }}</div>
                 <el-button
                     type="danger"
-                    :icon="Delete"
+                    :icon="Trash2"
                     circle
                     size="small"
                     class="fav-delete"
@@ -236,7 +236,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, onActivated, watch, nextTick, inject, provide } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Star, Delete } from '@element-plus/icons-vue'
+import { Star, Trash2 } from '@lucide/vue'
 import dayjs from 'dayjs'
 import { useFocusStore, type FavoriteFocus, type TimerState as StoredTimerState } from '../../stores/focusStore'
 import { useTaskStore } from '../../stores/taskStore'
@@ -943,7 +943,7 @@ onUnmounted(async () => {
 
 /* 时间数字 */
 .timer-time {
-  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
   font-weight: 700;
   font-size: 72px;
   color: #a78bfa;
@@ -987,7 +987,7 @@ onUnmounted(async () => {
 .ring-progress {
   fill: none;
   stroke-width: 6;
-  transition: stroke-dashoffset 0.3s ease;
+  transition: stroke-dashoffset 0.9s linear, stroke 0.3s ease;
 }
 
 .ring-sweep {
@@ -1009,7 +1009,7 @@ onUnmounted(async () => {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
   font-weight: 800;
   font-size: 32px;
   color: currentColor;

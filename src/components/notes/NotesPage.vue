@@ -16,16 +16,16 @@
         </template>
       </div>
       <button v-if="detailNote" class="breadcrumb-rename-btn" @click="startRenameNote" title="重命名笔记">
-        <el-icon><EditPen /></el-icon>
+        <el-icon><PenLine /></el-icon>
       </button>
       <button v-if="navPath.length >= 2" class="breadcrumb-fav-btn" :class="{ active: isCurrentFavorited }" @click="toggleFavorite" title="收藏当前视图">
-        <el-icon><StarFilled v-if="isCurrentFavorited" /><Star v-else /></el-icon>
+        <el-icon><Star fill="currentColor" v-if="isCurrentFavorited" /><Star v-else /></el-icon>
       </button>
       <button v-if="navPath.length >= 2" class="breadcrumb-quick-btn" @click="openFavoritesDropdown" title="快速访问">
-        <el-icon><CollectionTag /></el-icon>
+        <el-icon><Tags /></el-icon>
       </button>
       <button v-if="isCategoryView && viewMode === 'list'" class="breadcrumb-sort-btn" @click="openSortDropdown" title="排序">
-        <el-icon><Sort /></el-icon>
+        <el-icon><ArrowUpDown /></el-icon>
       </button>
       <button v-if="plusAction" class="breadcrumb-plus-btn" @click="plusAction" :title="plusActionTitle"><el-icon><Plus /></el-icon></button>
     </div>
@@ -71,8 +71,8 @@
         </div>
         <div v-for="cat in noteStore.categories" :key="cat.id" class="folder-card has-actions" @click="pageNav.setNavPath(['notes', cat.id])">
           <div class="card-top-actions" @click.stop>
-            <button class="card-icon-btn" title="编辑分类" @click="editCategoryFromCard(cat)"><el-icon><Edit /></el-icon></button>
-            <button class="card-icon-btn danger" title="删除分类" @click="deleteCategoryFromCard(cat)"><el-icon><Delete /></el-icon></button>
+            <button class="card-icon-btn" title="编辑分类" @click="editCategoryFromCard(cat)"><el-icon><Pencil /></el-icon></button>
+            <button class="card-icon-btn danger" title="删除分类" @click="deleteCategoryFromCard(cat)"><el-icon><Trash2 /></el-icon></button>
           </div>
           <div class="folder-card-icon" :style="{ background: cat.color }">{{ cat.icon }}</div>
           <span class="folder-card-name">{{ cat.name }}</span>
@@ -110,7 +110,7 @@
 
               <div v-if="otherNotes.length > 0" class="section">
                 <div v-if="pinnedNotes.length > 0" class="section-title">
-                  <el-icon><Document /></el-icon>
+                  <el-icon><FileText /></el-icon>
                   <span>其他</span>
                 </div>
                 <div class="note-grid" :style="{ gridTemplateColumns: `repeat(${cardColumns}, 1fr)` }">
@@ -181,7 +181,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch, inject, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Edit, Delete, Star, StarFilled, Document, CollectionTag, Sort, EditPen } from '@element-plus/icons-vue'
+import { Plus, Pencil, Trash2, Star, FileText, Tags, ArrowUpDown, PenLine } from '@lucide/vue'
 import NoteEditor from './NoteEditor.vue'
 import NoteCard from './NoteCard.vue'
 import CategoryForm from './CategoryForm.vue'
@@ -189,6 +189,7 @@ import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
 import BaseDialog from '../ui/BaseDialog.vue'
 import { useNoteStore, ALL_CATEGORY_VALUE, getMdPlainText, type Note, type NoteCategory } from '../../stores/noteStore'
 import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem, type FavoriteItem } from '../../composables/usePageNav'
+import { useCardEntrance } from '../../composables/useMotion'
 import { getData, setData } from '../../services/storageService'
 import { logger } from '../../lib/logger'
 
@@ -506,6 +507,7 @@ onBeforeUnmount(() => {
 
 // 动态卡片列数（笔记页面卡片布局）
 const containerRef = ref<HTMLElement | null>(null)
+const entrance = useCardEntrance(containerRef, '.folder-card, .note-card')
 const containerWidth = ref(800)
 const d = 25 // 卡片间距常量 d = 25px
 const cardColumns = computed(() => {
@@ -779,6 +781,8 @@ onMounted(async () => {
     resizeObserver = new ResizeObserver(() => updateWidth())
     resizeObserver.observe(containerRef.value)
   }
+  await nextTick()
+  entrance.play()
   logger.info('[笔记] 页面已挂载', { notes: noteStore.notes.length, categories: noteStore.categories.length })
 })
 

@@ -1,7 +1,7 @@
 <template>
   <div class="marketplace-panel">
     <div v-if="loading && plugins.length === 0" class="marketplace-loading">
-      <el-icon class="spinning"><Refresh /></el-icon>
+      <el-icon class="spinning"><RefreshCw /></el-icon>
       <span>正在查询插件市场...</span>
     </div>
 
@@ -81,7 +81,7 @@
 <script setup lang="ts">
 import { ref, inject } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
+import { RefreshCw } from '@lucide/vue'
 import { fetchMarketplacePlugins, installPlugin, deletePlugin, type MarketplacePlugin } from '../../lib/marketplace'
 import { logger } from '../../lib/logger'
 import BaseDialog from '../ui/BaseDialog.vue'

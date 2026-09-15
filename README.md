@@ -32,8 +32,9 @@
 ## 🛠️ 技术栈
 
 - **前端**：Vue 3 + TypeScript + Composition API + Pinia + Vue Router
-- **UI**：Element Plus + 深色星空主题
-- **3D 可视化**：Three.js（NASA 卫星纹理地球、月球、太阳，Canvas 流星粒子动画）
+- **UI**：Element Plus + 深色星空主题 + Lucide 图标（`@lucide/vue`，与 Element Plus 图标统一为线性风格）
+- **字体**：Noto Sans SC（思源黑体，正文）+ JetBrains Mono（计时器数字 / 代码，经 Fontsource 自托管）
+- **动效**：GSAP（卡片逐个出现·行优先顺序、倒数日数字滚动，尊重系统减少动态效果偏好）
 - **编辑器与图表**：自研 Markdown 编辑器 · ECharts · lunar-javascript（农历）
 - **跨平台**：Electron（桌面）+ Capacitor（Android）
 - **日志**：Pino + pino-roll（按日滚动 + gzip）+ 自定义 _pretty-stream 格式化，含持久化提醒调度器
@@ -251,7 +252,8 @@ flowchart LR
 
 - **配色**：深色星空背景、蓝紫渐变（`#667eea`）、琥珀强调（`#fbbf24`）
 - **文字**：rgba 白色透明度梯度，深色背景下 clear 可读
-- **3D 场景层级**：Canvas 流星画布 z-index 必须低于 Three.js 元素（地球、月球、太阳）
+- **图标**：Lucide 线性图标（`@lucide/vue`），`el-icon` 内经 CSS 统一为 `1em` 跟随字体尺寸
+- **动效**：GSAP 卡片逐个出现（行优先顺序、防抖合并收敛，切入/下钻/返回统一为此效果），全程仅使用 `transform/opacity`，全局遵循 `prefers-reduced-motion` 降级
 
 ### 布局
 
@@ -261,7 +263,7 @@ flowchart LR
 
 ### 交互
 
-- 卡片右上角 hover 显示操作按钮
+- 卡片操作按钮（完成/编辑/删除/星标）始终显示在右上角标题一行，独立配色
 - 下拉菜单使用固定定位 + backdrop-filter 模糊背景
 - 确认操作使用 `ConfirmDialog`，消息提示使用 `ElMessage`
 
@@ -318,7 +320,7 @@ pnpm electron:build:win:release
 
 **更新链路**：
 
-- **发布侧**：`electron-builder` 自动打包 NSIS 安装包 `.exe`、差分更新 `.blockmap`、元数据 `latest.yml`，以 release tag（如 `v2026.9.15-8`）上传到 GitHub Releases
+- **发布侧**：`electron-builder` 自动打包 NSIS 安装包 `.exe`、差分更新 `.blockmap`、元数据 `latest.yml`，以 release tag（如 `v2026.9.15-17`）上传到 GitHub Releases
 - **运行时**：`electron-updater`（provider: github）从 GitHub Releases API 读取 `tag_name` 作为最新版本号和安装包地址，不依赖文件名正则
 - **触发时机**：启动 5s 后自动检查一次 + 每 6 小时静默轮询 + 用户手动触发
 - **完整流程**：检查 → 提示有更新 → 用户点下载（显示进度）→ 下载完成提示重启 → 用户确认后 `quitAndInstall` 自动重启安装

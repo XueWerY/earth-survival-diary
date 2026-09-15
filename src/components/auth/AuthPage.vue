@@ -55,7 +55,7 @@
                     :value="item.email"
                 >
                   <div class="history-option">
-                    <el-icon><Message /></el-icon>
+                    <el-icon><MessageSquare /></el-icon>
                     <span>{{ item.email }}</span>
                   </div>
                 </el-option>
@@ -123,7 +123,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, inject } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Message, Lock, User } from '@element-plus/icons-vue'
+import { MessageSquare, Lock, User } from '@lucide/vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useAuthStore } from '../../stores/authStore'
 import { logger } from '../../lib/logger'

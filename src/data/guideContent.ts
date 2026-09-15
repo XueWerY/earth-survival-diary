@@ -246,7 +246,7 @@ Windows 桌面端支持自动更新，通过 GitHub Releases 比对版本实现�
 
 ## 技术栈
 
-**前端**：Vue 3 + TypeScript + Pinia + Vue Router + Element Plus + 自研 Markdown 编辑器 + ECharts + Three.js + lunar-javascript
+**前端**：Vue 3 + TypeScript + Pinia + Vue Router + Element Plus + 自研 Markdown 编辑器 + ECharts + Lucide Icons + GSAP 动效 + lunar-javascript
 
 **跨平台**：Electron（Windows 桌面端）、Capacitor（Android）
 

@@ -143,9 +143,9 @@
           <el-icon class="checklist-drag-handle" draggable="true"
             @dragstart="onFormChecklistDragStart($event, idx)"
             @dragend="formDragOverIdx = null"
-          ><Rank /></el-icon>
+          ><GripVertical /></el-icon>
           <el-input v-model="item.text" type="textarea" autosize placeholder="输入检查事项" size="small" class="checklist-form-input" @blur="onChecklistItemBlur(idx)" />
-          <button class="checklist-form-delete" @click="removeChecklistItem(idx)"><el-icon><Delete /></el-icon></button>
+          <button class="checklist-form-delete" @click="removeChecklistItem(idx)"><el-icon><Trash2 /></el-icon></button>
         </div>
         <div class="checklist-form-add" @click="addChecklistItem">
           <el-icon><Plus /></el-icon>
@@ -160,7 +160,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Delete, Plus, Rank } from '@element-plus/icons-vue'
+import { Trash2, Plus, GripVertical } from '@lucide/vue'
 import { useListStore, type RepeatStrategy, type RepeatEndStrategy, REPEAT_STRATEGIES, REPEAT_END_STRATEGIES, PRIORITIES, type ReminderStrategy, type ChecklistItem, type Task } from '../../stores/listStore'
 import { useNoteStore } from '../../stores/noteStore'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'

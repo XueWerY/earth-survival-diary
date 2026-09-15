@@ -33,8 +33,8 @@
         </div>
         <div v-for="cat in categories" :key="cat.value" class="folder-card has-actions" @click="pageNav.setNavPath(['countdown', cat.value])">
           <div class="card-top-actions" @click.stop>
-            <button class="card-icon-btn" title="编辑分类" @click="editCategoryFromCard(cat)"><el-icon><Edit /></el-icon></button>
-            <button class="card-icon-btn danger" title="删除分类" @click="deleteCategoryFromCard(cat)"><el-icon><Delete /></el-icon></button>
+            <button class="card-icon-btn" title="编辑分类" @click="editCategoryFromCard(cat)"><el-icon><Pencil /></el-icon></button>
+            <button class="card-icon-btn danger" title="删除分类" @click="deleteCategoryFromCard(cat)"><el-icon><Trash2 /></el-icon></button>
           </div>
           <div class="folder-card-icon" :style="{ background: cat.color }">{{ cat.icon }}</div>
           <span class="folder-card-name">{{ cat.label }}</span>
@@ -98,7 +98,7 @@
 
               <div v-if="futureMilestones.length > 0" class="section future-section">
                 <div class="section-title">
-                  <el-icon><Sunny /></el-icon>
+                  <el-icon><Sun /></el-icon>
                   <span>未来展望</span>
                 </div>
                 <div class="milestone-grid">
@@ -201,7 +201,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, inject, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Clock, Timer, Star, Sunny, Delete, Plus, Check, Close, Edit } from '@element-plus/icons-vue'
+import { Calendar, Clock, Timer, Star, Sun, Trash2, Plus, Check, X, Pencil } from '@lucide/vue'
 import dayjs from 'dayjs'
 import CountdownForm from './CountdownForm.vue'
 import CountdownCard from './CountdownCard.vue'

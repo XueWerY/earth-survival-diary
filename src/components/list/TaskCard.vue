@@ -4,10 +4,10 @@
       <div class="list-name">{{ list.name }}</div>
       <div class="card-top-actions" @click.stop>
         <button class="card-icon-btn card-icon-btn-complete" :title="list.completed ? '取消完成' : '标记完成'" :class="{ active: list.completed }" @click="handleTaskComplete(list)">
-          <el-icon><Check v-if="list.completed" /><CircleCheck v-else /></el-icon>
+          <el-icon><Check v-if="list.completed" /><CircleCheckBig v-else /></el-icon>
         </button>
-        <button class="card-icon-btn card-icon-btn-edit" title="编辑任务" @click="emitEdit"><el-icon><Edit /></el-icon></button>
-        <button class="card-icon-btn card-icon-btn-delete" title="删除任务" @click="showDeleteConfirm = true"><el-icon><Delete /></el-icon></button>
+        <button class="card-icon-btn card-icon-btn-edit" title="编辑任务" @click="emitEdit"><el-icon><Pencil /></el-icon></button>
+        <button class="card-icon-btn card-icon-btn-delete" title="删除任务" @click="showDeleteConfirm = true"><el-icon><Trash2 /></el-icon></button>
       </div>
     </div>
 
@@ -40,7 +40,7 @@
 
       <div class="list-meta-line" v-if="hasRepeat">
         <span class="meta-item repeat">
-          <el-icon><RefreshRight /></el-icon>{{ repeatLabel }}
+          <el-icon><RotateCcw /></el-icon>{{ repeatLabel }}
         </span>
         <span v-if="endRepeatLabel" class="meta-item repeat-end-label">{{ endRepeatLabel }}</span>
       </div>
@@ -48,7 +48,7 @@
       <div class="checklist-items-always" v-if="list.checklist && list.checklist.length">
         <div v-for="item in list.checklist" :key="item.id" class="checklist-item" :class="{ completed: item.completed }">
           <el-icon class="check-icon" v-if="item.completed" @click.stop="toggleChecklistItem(list.id, item.id, $event)"><Check /></el-icon>
-          <el-icon class="check-icon" v-else @click.stop="toggleChecklistItem(list.id, item.id, $event)"><CircleCheck /></el-icon>
+          <el-icon class="check-icon" v-else @click.stop="toggleChecklistItem(list.id, item.id, $event)"><CircleCheckBig /></el-icon>
           <span class="check-text" :class="{ completed: item.completed }">{{ item.text }}</span>
         </div>
       </div>
@@ -58,7 +58,7 @@
       <div class="linked-notes-line" v-if="linkedNotes.length" @click.stop>
         <span v-for="n in linkedNotes" :key="n.id" class="linked-note-tag" :style="{ borderColor: n.color, color: n.color }"
           @click="openLinkedNote(n)" @mouseenter="fitNotePreview">
-          <span class="linked-note-label"><el-icon><Notebook /></el-icon>{{ n.title || '无标题笔记' }}</span>
+          <span class="linked-note-label"><el-icon><BookOpen /></el-icon>{{ n.title || '无标题笔记' }}</span>
           <span class="linked-note-preview">
             <span class="linked-note-preview-title">{{ n.title || '无标题笔记' }}</span>
             <span class="linked-note-preview-body">{{ notePreview(n) }}</span>
@@ -78,7 +78,7 @@
 
 <script setup lang="ts">
 import { ref, inject, computed } from 'vue'
-import { Calendar, RefreshRight, Check, CircleCheck, Bell, Delete, Edit, Clock, Notebook } from '@element-plus/icons-vue'
+import { Calendar, RotateCcw, Check, CircleCheckBig, Bell, Trash2, Pencil, Clock, BookOpen } from '@lucide/vue'
 import dayjs from 'dayjs'
 import { useRouter } from 'vue-router'
 import { useListStore, REPEAT_STRATEGIES, type Task } from '../../stores/listStore'
@@ -298,6 +298,7 @@ const showDeleteConfirm = ref(false)
   border-left: 3px solid transparent;
 }
 .list-card:hover { background: rgba(255, 255, 255, 0.08); }
+.list-card:active { transform: scale(0.98); }
 .list-card.completed { opacity: 0.6; }
 .list-card.priority-bg-high { background: rgba(239, 68, 68, 0.10); border-left-color: rgba(239, 68, 68, 0.55); }
 .list-card.priority-bg-high:hover { background: rgba(239, 68, 68, 0.16); }
@@ -313,6 +314,7 @@ const showDeleteConfirm = ref(false)
 .card-top-actions { display: flex; align-items: center; gap: 2px; margin-left: auto; flex-shrink: 0; }
 .card-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: transparent; cursor: pointer; border-radius: 5px; font-size: 13px; transition: all 0.15s; opacity: 0.7; }
 .card-icon-btn:hover { opacity: 1; transform: scale(1.1); }
+.card-icon-btn:active { transform: scale(0.9); }
 .card-icon-btn-complete { color: #34d399; }
 .card-icon-btn-complete:hover { background: rgba(52, 211, 153, 0.15); }
 .card-icon-btn-complete.active { opacity: 1; color: #10b981; }

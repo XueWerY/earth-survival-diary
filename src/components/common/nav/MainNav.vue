@@ -25,7 +25,7 @@
         @click="emit('split')"
       >
         <span class="nav-item-icon">
-          <el-icon><Operation /></el-icon>
+          <el-icon><SlidersHorizontal /></el-icon>
         </span>
         <span class="nav-item-label">{{ splitActive ? '合并' : '拆分' }}</span>
       </button>
@@ -43,7 +43,7 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { Operation, Fold, Expand } from '@element-plus/icons-vue'
+import { SlidersHorizontal, PanelLeftClose, PanelLeftOpen } from '@lucide/vue'
 import { MODULES, MODULE_ICONS, MODULE_LABELS } from '../../../composables/usePageNav'
 
 const props = withDefaults(defineProps<{

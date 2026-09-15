@@ -1,5 +1,5 @@
 <template>
-  <div class="footprint-container" :class="{ 'is-mobile': !isElectron }">
+  <div class="footprint-container" ref="containerRef" :class="{ 'is-mobile': !isElectron }">
     <div class="page-header">
       <div class="date-nav-area">
         <button class="header-nav-btn" @click="shiftDate(-1)" title="前一天">
@@ -15,11 +15,11 @@
       </div>
       <div class="header-actions">
         <button class="header-action-btn add-btn" @click="handleAddTask" title="记录足迹">
-          <el-icon><DocumentAdd /></el-icon>
+          <el-icon><FilePlus /></el-icon>
           <span class="btn-text">记录足迹</span>
         </button>
         <button class="header-action-btn diary-btn" @click="handleAddDiary" title="写日记">
-          <el-icon><EditPen /></el-icon>
+          <el-icon><PenLine /></el-icon>
           <span class="btn-text">写日记</span>
         </button>
       </div>
@@ -188,15 +188,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, inject, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, inject, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, ArrowRight, DocumentAdd, EditPen } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, FilePlus, PenLine } from '@lucide/vue'
 import { Solar } from 'lunar-javascript'
 import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
 import { useTaskStore, type Task } from '../../stores/taskStore'
 import { useFootprintCards } from '../../composables/useFootprintCards'
 import { usePageNav } from '../../composables/usePageNav'
+import { useCardEntrance } from '../../composables/useMotion'
 import RecordCard from './RecordCard.vue'
 import DiaryCard from './DiaryCard.vue'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
@@ -216,6 +217,9 @@ const isElectron = inject<boolean>('isElectron', false)
 
 const taskStore = useTaskStore()
 const pageNav = usePageNav()
+
+const containerRef = ref<HTMLElement | null>(null)
+const entrance = useCardEntrance(containerRef, '.period-column .period-item')
 
 const handleAddTask = () => {
   editingTask.value = null
@@ -269,12 +273,14 @@ const handleFormSubmit = () => {
   editingTask.value = null
 }
 
-onMounted(() => {
+onMounted(async () => {
   logger.debug('[TaskList] onMounted', { navPath: pageNav.navPath.value })
   if (pageNav.navPath.value.length === 0) {
     logger.debug('[TaskList] onMounted navPath为空，设为[footprint]')
     pageNav.setNavPath(['footprint'])
   }
+  await nextTick()
+  entrance.play()
 })
 
 onBeforeUnmount(() => {
@@ -282,8 +288,10 @@ onBeforeUnmount(() => {
 
 const selectedDateValue = ref(dayjs().format('YYYY-MM-DD'))
 
-watch(selectedDateValue, (newDate) => {
+watch(selectedDateValue, async (newDate) => {
   logger.info('[足迹] 切换日期', { date: newDate })
+  await nextTick()
+  entrance.play()
 })
 
 const dateRange = computed(() => {

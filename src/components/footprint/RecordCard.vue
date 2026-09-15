@@ -4,13 +4,13 @@
       <span class="task-card-name">{{ record.icon || '📋' }} {{ record.name }}</span>
       <div class="task-card-actions">
         <button class="card-btn card-btn-star" :class="{ starred: record.pinned }" @click.stop="emit('star', record)" title="星标">
-          <el-icon><Star v-if="!record.pinned" /><StarFilled v-else /></el-icon>
+          <el-icon><Star v-if="!record.pinned" /><Star fill="currentColor" v-else /></el-icon>
         </button>
         <button class="card-btn card-btn-edit" @click.stop="emit('edit', record)" title="编辑">
-          <el-icon><Edit /></el-icon>
+          <el-icon><Pencil /></el-icon>
         </button>
         <button class="card-btn card-btn-delete" @click.stop="emit('delete', record.id)" title="删除">
-          <el-icon><Delete /></el-icon>
+          <el-icon><Trash2 /></el-icon>
         </button>
       </div>
     </div>
@@ -24,7 +24,7 @@
 </template>
 
 <script setup lang="ts">
-import { Delete, Edit, Star, StarFilled } from '@element-plus/icons-vue'
+import { Trash2, Pencil, Star } from '@lucide/vue'
 import dayjs from 'dayjs'
 import type { Task } from '../../stores/taskStore'
 
