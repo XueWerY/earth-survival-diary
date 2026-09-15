@@ -40,6 +40,11 @@ class Logger {
   // 磁盘上已有的历史日志内容（首次写入时加载，避免重启后覆盖历史）
   private loadedHistory: string | null = null
 
+  // 远程上传：防抖合并，避免每条日志单独 POST
+  private uploadBuffer: LogEntry[] = []
+  private uploadTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly uploadDebounceMs = 1000
+
   private addToBuffer(entry: LogEntry) {
     const levelName = LogLevel[entry.level].toUpperCase()
     const timestamp = formatBeijingTimestamp(entry.timestamp)
@@ -122,8 +127,19 @@ class Logger {
     await this.flushPromise
   }
 
-  // 上传到远程服务器
-  private async uploadToRemote(entry: LogEntry): Promise<void> {
+  // 上传到远程服务器（防抖合并）
+  private scheduleUpload(entry: LogEntry) {
+    this.uploadBuffer.push(entry)
+    if (this.uploadTimer) clearTimeout(this.uploadTimer)
+    this.uploadTimer = setTimeout(() => {
+      this.uploadTimer = null
+      this.flushUpload()
+    }, this.uploadDebounceMs)
+  }
+
+  private async flushUpload(): Promise<void> {
+    if (this.uploadBuffer.length === 0) return
+    const batch = this.uploadBuffer.splice(0)
     try {
       const token = localStorage.getItem('auth_token');
       const headers: Record<string, string> = {
@@ -137,13 +153,13 @@ class Logger {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          logs: [{
-            ...entry,
-            timestamp: entry.timestamp.toISOString()
-          }]
+          logs: batch.map(e => ({
+            ...e,
+            timestamp: e.timestamp.toISOString()
+          }))
         })
       });
-    } catch (error) {
+    } catch {
       // 静默失败，不影响用户体验
     }
   }
@@ -185,7 +201,7 @@ class Logger {
     }
 
     this.outputToConsole(logEntry);
-    this.uploadToRemote(logEntry);
+    this.scheduleUpload(logEntry);
     this.addToBuffer(logEntry);
     this.writeToDisk(logEntry);
   }

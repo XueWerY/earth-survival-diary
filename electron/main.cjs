@@ -12,6 +12,17 @@ if (fs.existsSync(esbuildBinaryPath)) {
 const { spawn, execSync } = require('child_process')
 let autoUpdater = null
 
+// Pino 日志（与 prod-server.cjs 共享同一实例）
+// 委托给 logger.cjs 的兼容函数：动态检查 state.logger（未初始化时降级 console），
+// 避免 "_logger 捕获一次后永久为 null" 导致主进程日志静默丢失。
+const loggerMod = require('./lib/logger.cjs')
+const { findLatestLogFile } = loggerMod
+function initLogger() {
+  loggerMod.initLogger(path.join(app.getPath('userData'), 'logs'))
+}
+function debugLog(msg, meta) { loggerMod.debugLog(msg, meta) }
+function errorLog(msg, meta) { loggerMod.errorLog(msg, meta) }
+
 // 调试态（npx electron 直接跑主进程）下 app.name 为 "Electron"，userData 会落到
 // %APPDATA%/Electron，与正式安装的 earth-survival-diary 数据隔离。这里在读取 userData
 // 之前把它重定向回项目数据目录，确保调试时存取的是同一份数据。
@@ -1272,34 +1283,12 @@ ipcMain.handle('http-get-text', async (_event, url) => {
 })
 // ====== 终端命令执行 / 主进程 HTTPS 请求 IPC 结束 ======
 
-const logFile = path.join(app.getPath('userData'), 'logs', 'app-' + new Date().toISOString().slice(0, 10) + '.log')
-const p = (n, l = 2) => String(n).padStart(l, '0')
-const formatTs = () => { const d = new Date(); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}:${p(d.getMilliseconds(), 3)}` }
-
-function debugLog(msg) {
-  console.log(msg)
-  try {
-    const dir = path.dirname(logFile)
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.appendFileSync(logFile, `[${formatTs()}] [DEBUG] ${msg}\n`)
-  } catch (e) {}
-}
-
-function errorLog(msg) {
-  console.error(msg)
-  try {
-    const dir = path.dirname(logFile)
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.appendFileSync(logFile, `[${formatTs()}] [ERROR] ${msg}\n`)
-  } catch (e) {}
-}
-
 async function startServer() {
-  debugLog('[Electron] Starting server...')
+  debugLog('[Electron] Express 服务启动中...')
   // 调试用：确认当前运行态下 userData 真实路径（npx electron 直接跑时可能与预期不同）
-  debugLog('[Electron] userData = ' + app.getPath('userData'))
-  debugLog('[Electron] dataDir  = ' + path.join(app.getPath('userData'), 'data'))
-  debugLog('[Electron] app.name = ' + app.name)
+  debugLog('[Electron] 用户数据目录 = ' + app.getPath('userData'))
+  debugLog('[Electron] 数据目录     = ' + path.join(app.getPath('userData'), 'data'))
+  debugLog('[Electron] 应用名称     = ' + app.name)
 
   const serverModulePath = path.join(__dirname, 'prod-server.cjs')
   if (!fs.existsSync(serverModulePath)) {
@@ -1336,7 +1325,7 @@ async function startServer() {
 
       await new Promise((resolve, reject) => {
         server.listen(port, '127.0.0.1', () => {
-          debugLog('[Electron] Server started on port ' + port)
+          debugLog('[Electron] 服务器已启动，端口 = ' + port)
           serverInstance = server
           serverPort = port
           resolve(port)
@@ -1474,7 +1463,7 @@ function setupTray() {
     { label: '退出', click: () => { closeAction = 'exit'; cancelAllReminderTimers(); if (serverInstance) { try { serverInstance.close() } catch (e) {} }; app.quit() } }
   ])
   appTray.setContextMenu(contextMenu)
-  debugLog('[Main] System tray created')
+  debugLog('[Main] 系统托盘已创建')
 }
 
 ipcMain.on('resize-window', (event, width, height) => {
@@ -1523,10 +1512,9 @@ function formatSize(bytes) {
 }
 
 ipcMain.handle('get-log-file-size', async () => {
-  const today = new Date().toISOString().slice(0, 10)
-  const logFilePath = path.join(LOG_DIR, `app-${today}.log`)
-  if (!fs.existsSync(logFilePath)) return { size: 0, exists: false }
-  return { size: fs.statSync(logFilePath).size, exists: true }
+  const logFilePath = findLatestLogFile(LOG_DIR)
+  if (!logFilePath || !fs.existsSync(logFilePath)) return { size: 0, exists: false }
+  return { size: fs.statSync(logFilePath).size, exists: true, path: logFilePath }
 })
 
 ipcMain.handle('get-log-dir-size', async () => {
@@ -1538,17 +1526,15 @@ ipcMain.handle('get-data-dir-size', async () => {
 })
 
 ipcMain.handle('get-log-content', async () => {
-  const today = new Date().toISOString().slice(0, 10)
-  const logFilePath = path.join(LOG_DIR, `app-${today}.log`)
-  if (!fs.existsSync(logFilePath)) return ''
+  const logFilePath = findLatestLogFile(LOG_DIR)
+  if (!logFilePath || !fs.existsSync(logFilePath)) return ''
   return fs.readFileSync(logFilePath, 'utf-8')
 })
 
 ipcMain.handle('clear-logs', async () => {
-  const today = new Date().toISOString().slice(0, 10)
-  const logFilePath = path.join(LOG_DIR, `app-${today}.log`)
-  if (fs.existsSync(logFilePath)) {
-    fs.rmSync(logFilePath)
+  if (fs.existsSync(LOG_DIR)) {
+    fs.rmSync(LOG_DIR, { recursive: true, force: true })
+    fs.mkdirSync(LOG_DIR, { recursive: true })
   }
   return true
 })
@@ -1915,9 +1901,10 @@ ipcMain.handle('open-clean-data-window', async (_event, windowData) => {
 let _versionUpdateNotified = false
 
 ipcMain.handle('check-version-update', async (_event, userId) => {
+  if (userId) currentUserId = userId   // 顺便设 userId，供提醒系统使用
   try {
     if (_versionUpdateNotified) {
-      debugLog('[Main] check-version-update already notified, skipping')
+      debugLog('[Main] 版本检查已通知过，跳过')
       return { isUpdated: false, oldVersion: null, newVersion: null }
     }
 
@@ -1953,10 +1940,10 @@ ipcMain.handle('check-version-update', async (_event, userId) => {
       _versionUpdateNotified = true
     }
 
-    debugLog('[Main] check-version-update', { userId, storedVersion, currentVersion, isUpdated })
+    debugLog(`[Main] 版本检查：存储版本 = ${storedVersion}, 当前版本 = ${currentVersion}，${isUpdated ? '版本已更新' : '已是最新版'}`)
     return { isUpdated, oldVersion: storedVersion, newVersion: currentVersion }
   } catch (e) {
-    errorLog('[Main] check-version-update failed: ' + e.message)
+    errorLog('[Main] 版本检查失败：' + e.message)
     return { isUpdated: false, oldVersion: null, newVersion: null }
   }
 })
@@ -2029,172 +2016,202 @@ ipcMain.handle('open-changelog-window', async (_event, content) => {
   })
 })
 
-// ====== 提醒系统 ======
+// ====== 提醒系统 v2 ======
+let currentUserId = null
+const getRemindersFile = () => currentUserId ? path.join(DATA_DIR, currentUserId, 'system', 'reminders.json') : null
+
+const SCAN_INTERVAL_MS = 60_000
+const SCAN_AHEAD_MS = 5 * 60_000
+const MAX_SAFE_DELAY = 2_000_000_000
+
 let reminderTimers = []
 let reminderQueue = []
 let reminderPersistDuration = 30
-let allScheduledReminders = []
+let reminderStore = []
 let isShowingReminder = false
 let showReminderTimer = null
+let scanIntervalId = null
+let storeDirty = false
+let persistDebounceTimer = null
+
+function loadReminders() {
+  try {
+    if (!currentUserId) return
+    const REMINDERS_FILE = getRemindersFile()
+    if (!fs.existsSync(REMINDERS_FILE)) { reminderStore = []; return }
+    reminderStore = JSON.parse(fs.readFileSync(REMINDERS_FILE, 'utf8')).reminders || []
+  } catch (e) { errorLog('[Reminder] 加载提醒失败：' + e.message); reminderStore = [] }
+}
+
+function persistReminders() {
+  if (!storeDirty || !currentUserId) return
+  try {
+    const REMINDERS_FILE = getRemindersFile()
+    fs.mkdirSync(path.dirname(REMINDERS_FILE), { recursive: true })
+    fs.writeFileSync(REMINDERS_FILE, JSON.stringify({ version: 1, reminders: reminderStore }, null, 2), 'utf8')
+    storeDirty = false
+  } catch (e) { errorLog('[Reminder] 持久化提醒失败：' + e.message) }
+}
+
+function schedulePersist() {
+  storeDirty = true
+  if (persistDebounceTimer) clearTimeout(persistDebounceTimer)
+  persistDebounceTimer = setTimeout(() => { persistDebounceTimer = null; persistReminders() }, 3000)
+}
+
+function upsertReminders(reminders) {
+  const existing = new Map(reminderStore.map(r => [r.id, r]))
+  reminderStore = reminders.map(r => { const o = existing.get(r.id); return o ? { ...o, ...r } : { ...r, status: 'pending', lastTriggeredAt: null } })
+  storeDirty = true
+}
+
+function findReminder(id) { return reminderStore.find(r => r.id === id) }
+
+function scheduleReminderRuntime(reminder) {
+  const delay = new Date(reminder.triggerTime).getTime() - Date.now()
+  if (delay <= 0) { enqueueReminder(reminder); return }
+  if (delay > MAX_SAFE_DELAY) {
+    debugLog('[Reminder] 远期提醒跳过定时器，由扫描器负责：' + (reminder.name || reminder.id) + ' (' + formatDelay(delay) + ')')
+    return
+  }
+  reminderTimers.push({ id: reminder.id, timeout: setTimeout(() => enqueueReminder(reminder), delay) })
+  debugLog('[Reminder] 已调度：' + (reminder.name || reminder.id) + '，还有 ' + formatDelay(delay))
+}
+
+function scanDueReminders() {
+  const now = Date.now(), dueSoon = [], overdue = []
+  for (const r of reminderStore) {
+    if (r.status === 'cancelled' || r.status === 'done') continue
+    if (r.status === 'triggered' && r.lastShownAt) continue
+    const t = new Date(r.triggerTime).getTime()
+    if (t - now <= SCAN_AHEAD_MS + 60000) {
+      if (t - now <= SCAN_AHEAD_MS) dueSoon.push(r)
+      else if (t <= now) overdue.push(r)
+    }
+  }
+  for (const r of dueSoon) if (!reminderTimers.some(t => t.id === r.id)) scheduleReminderRuntime(r)
+  for (const r of overdue) if (!reminderTimers.some(t => t.id === r.id)) { debugLog('[Reminder] 补触发过期提醒：' + (r.name || r.id)); enqueueReminder(r) }
+}
+
+function startTicker() { if (scanIntervalId) return; scanDueReminders(); scanIntervalId = setInterval(scanDueReminders, SCAN_INTERVAL_MS) }
+function stopTicker() { if (scanIntervalId) { clearInterval(scanIntervalId); scanIntervalId = null } }
 
 function cancelAllReminderTimers() {
-  reminderTimers.forEach(t => clearTimeout(t.timeout))
-  reminderTimers = []
-  reminderQueue = []
+  reminderTimers.forEach(t => clearTimeout(t.timeout)); reminderTimers = []; reminderQueue = []
   isShowingReminder = false
-  if (showReminderTimer) {
-    clearTimeout(showReminderTimer)
-    showReminderTimer = null
-  }
+  if (showReminderTimer) { clearTimeout(showReminderTimer); showReminderTimer = null }
 }
+
+function enqueueReminder(reminder) { reminderQueue.push(reminder); showNextReminder() }
 
 function showNextReminder() {
   if (isShowingReminder) return
-  if (reminderQueue.length === 0) {
-    debugLog('[Reminder] Queue is empty, reminder flow ended')
-    return
-  }
-
+  if (reminderQueue.length === 0) return
   isShowingReminder = true
   const reminder = reminderQueue.shift()
-  debugLog('[Reminder] Sending reminder to main window: ' + reminder.name + ' (id=' + reminder.id + ', remaining=' + reminderQueue.length + ')')
-
-  if (reminder.repeatStrategy && reminder.repeatStrategy !== 'none') {
-    scheduleNextRepeat(reminder)
-  }
-
-  if (mainWindow && !mainWindow.isDestroyed()) {
+  const storeR = findReminder(reminder.id)
+  if (storeR) { storeR.status = 'triggered'; storeR.lastTriggeredAt = new Date().toISOString(); schedulePersist() }
+  if (reminder.repeatStrategy && reminder.repeatStrategy !== 'none') scheduleNextRepeat(reminder)
+  const canUseInApp = mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized()
+  if (canUseInApp) {
     mainWindow.webContents.send('show-reminder', reminder)
+    debugLog('[Reminder] 应用内弹窗：' + reminder.name + ' (剩余 ' + reminderQueue.length + ')')
+  } else {
+    sendSystemNotification(reminder)
+    debugLog('[Reminder] 系统通知：' + reminder.name + ' (剩余 ' + reminderQueue.length + ')')
   }
+  showReminderTimer = setTimeout(() => { showReminderTimer = null; isShowingReminder = false; showNextReminder() }, (reminderPersistDuration || 30) * 1000)
+}
 
-  showReminderTimer = setTimeout(() => {
-    showReminderTimer = null
-    isShowingReminder = false
-    showNextReminder()
-  }, 5000)
+function sendSystemNotification(reminder) {
+  try {
+    const Notification = require('electron').Notification
+    if (!Notification.isSupported()) return
+    new Notification({ title: reminder.name || '提醒', body: reminder.body || '', silent: false }).show()
+  } catch (e) { errorLog('[Reminder] 系统通知发送失败：' + e.message) }
 }
 
 function scheduleNextRepeat(reminder) {
-  if (reminder.repeatEndStrategy === 'count' && reminder.repeatCount && reminder.repeatCompletedCount >= reminder.repeatCount) {
-    debugLog('[Reminder] Repeat ended (count reached): ' + reminder.name)
-    return
+  const storeR = findReminder(reminder.id); if (!storeR) return
+  if (storeR.repeatEndStrategy === 'count' && storeR.repeatCount && storeR.repeatCompletedCount >= storeR.repeatCount) {
+    storeR.status = 'done'; schedulePersist(); return
   }
-
-  const prevTrigger = new Date(reminder.triggerTime)
-  const nextTrigger = new Date(prevTrigger)
-
-  switch (reminder.repeatStrategy) {
-    case 'daily': nextTrigger.setDate(nextTrigger.getDate() + 1); break
-    case 'weekdays': {
-      nextTrigger.setDate(nextTrigger.getDate() + 1)
-      const dow = nextTrigger.getDay()
-      if (dow === 0) nextTrigger.setDate(nextTrigger.getDate() + 1)
-      else if (dow === 6) nextTrigger.setDate(nextTrigger.getDate() + 2)
-      break
-    }
-    case 'weekly': nextTrigger.setDate(nextTrigger.getDate() + 7); break
-    case 'monthly': nextTrigger.setMonth(nextTrigger.getMonth() + 1); break
-    case 'yearly': nextTrigger.setFullYear(nextTrigger.getFullYear() + 1); break
-    case 'hourly': nextTrigger.setHours(nextTrigger.getHours() + 1); break
-    case 'custom_days': nextTrigger.setDate(nextTrigger.getDate() + (reminder.repeatCustomDays || 1)); break
+  const next = new Date(storeR.triggerTime)
+  switch (storeR.repeatStrategy) {
+    case 'daily': next.setDate(next.getDate() + 1); break
+    case 'weekdays': next.setDate(next.getDate() + 1); { const d = next.getDay(); if (d === 0) next.setDate(next.getDate() + 1); else if (d === 6) next.setDate(next.getDate() + 2) } break
+    case 'weekly': next.setDate(next.getDate() + 7); break
+    case 'monthly': next.setMonth(next.getMonth() + 1); break
+    case 'yearly': next.setFullYear(next.getFullYear() + 1); break
+    case 'hourly': next.setHours(next.getHours() + 1); break
+    case 'custom_days': next.setDate(next.getDate() + (storeR.repeatCustomDays || 1)); break
     default: return
   }
-
-  if (reminder.repeatEndStrategy === 'date' && reminder.repeatEndDate) {
-    if (nextTrigger > new Date(reminder.repeatEndDate + 'T23:59:59')) {
-      debugLog('[Reminder] Repeat ended (past end date): ' + reminder.name)
-      return
-    }
+  if (storeR.repeatEndStrategy === 'date' && storeR.repeatEndDate && next > new Date(storeR.repeatEndDate + 'T23:59:59')) {
+    storeR.status = 'done'; schedulePersist(); return
   }
-
-  if (reminder.reminderStrategy === 'advance') {
-    const offsetMs = ((reminder.reminderDays || 0) * 1440 + (reminder.reminderHours || 0) * 60 + (reminder.reminderMinutes || 0)) * 60000
-    if (offsetMs > 0) nextTrigger.setTime(nextTrigger.getTime() - offsetMs)
+  if (storeR.reminderStrategy === 'advance') {
+    const o = ((storeR.reminderDays || 0) * 1440 + (storeR.reminderHours || 0) * 60 + (storeR.reminderMinutes || 0)) * 60000
+    if (o > 0) next.setTime(next.getTime() - o)
   }
-
-  const delay = nextTrigger.getTime() - Date.now()
-  if (delay <= 0) {
-    debugLog('[Reminder] Next round reminder has expired: ' + reminder.name)
-    return
+  const delay = next.getTime() - Date.now()
+  if (delay > MAX_SAFE_DELAY) debugLog('[Reminder] 下一轮太远，跳过定时器：' + reminder.name + ' (' + formatDelay(delay) + ')')
+  storeR.triggerTime = next.toISOString()
+  storeR.repeatCompletedCount = (storeR.repeatCompletedCount || 0) + 1
+  storeR.status = 'pending'
+  if (storeR.repeatStrategy === 'hourly' && storeR.focusStartTimestamp) {
+    storeR.body = '您已专注 ' + Math.round((next.getTime() - storeR.focusStartTimestamp) / 3600000) + ' 小时，请注意休息！'
   }
-
-  if (delay > MAX_SCHEDULE_DELAY) {
-    debugLog('[Reminder] Next round reminder too far in future (' + formatDelay(delay) + '): ' + reminder.name + ', will reschedule on next launch')
-    return
-  }
-
-  debugLog('[Reminder] Next round: ' + reminder.name + ' in ' + formatDelay(delay))
-  const nextReminder = { ...reminder, triggerTime: nextTrigger.toISOString() }
-  if (reminder.repeatStrategy === 'hourly' && reminder.focusStartTimestamp) {
-    const elapsedHours = Math.round((nextTrigger.getTime() - reminder.focusStartTimestamp) / 3600000)
-    nextReminder.body = `您已专注 ${elapsedHours} 小时，请注意休息！`
-  }
-  const timer = setTimeout(() => enqueueReminder(nextReminder), delay)
-  reminderTimers.push({ id: reminder.id, timeout: timer })
-}
-
-function enqueueReminder(reminder) {
-  debugLog('[Reminder] Enqueued: ' + (reminder.name || reminder.id))
-  reminderQueue.push(reminder)
-  showNextReminder()
-}
-
-ipcMain.handle('schedule-reminders', async (_event, reminders, persistDuration) => {
-  debugLog('[Reminder] Received schedule request, total ' + (reminders ? reminders.length : 0) + ' reminders')
-  cancelAllReminderTimers()
-  if (persistDuration != null) reminderPersistDuration = persistDuration
-  allScheduledReminders = reminders || []
-
-  if (!reminders || reminders.length === 0) return { ok: true, count: 0 }
-
-  reminders.forEach(r => {
-    const delay = new Date(r.triggerTime).getTime() - Date.now()
-    if (delay <= 0) {
-      debugLog('[Reminder] Triggering immediately: ' + (r.name || r.id))
-      enqueueReminder(r)
-    } else if (delay > MAX_SCHEDULE_DELAY) {
-      debugLog('[Reminder] Skipping far-future reminder: ' + (r.name || r.id) + ' (' + formatDelay(delay) + '), will reschedule on next launch')
-    } else {
-      debugLog('[Reminder] Scheduled: ' + (r.name || r.id) + ' in ' + formatDelay(delay))
-      const timer = setTimeout(() => enqueueReminder(r), delay)
-      reminderTimers.push({ id: r.id, timeout: timer })
-    }
-  })
-  return { ok: true, count: reminders.length }
-})
-
-ipcMain.handle('cancel-all-reminders', async () => {
-  debugLog('[Reminder] Cancelling all reminders')
-  cancelAllReminderTimers()
-  return { ok: true }
-})
-
-ipcMain.handle('get-reminder-persist-duration', async () => {
-  return { persistDuration: reminderPersistDuration }
-})
-
-ipcMain.handle('get-all-reminders', async () => {
-  return allScheduledReminders
-})
-
-function escapeHtml(str) {
-  if (!str) return ''
-  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  schedulePersist()
 }
 
 function formatDelay(ms) {
   const totalSec = Math.round(ms / 1000)
-  const days = Math.floor(totalSec / 86400)
-  const hours = Math.floor((totalSec % 86400) / 3600)
-  const minutes = Math.floor((totalSec % 3600) / 60)
-  const seconds = totalSec % 60
-  if (days > 0) return days + 'd' + hours + 'h' + minutes + 'm' + seconds + 's'
-  if (hours > 0) return hours + 'h' + minutes + 'm' + seconds + 's'
-  if (minutes > 0) return minutes + 'm' + seconds + 's'
-  return seconds + 's'
+  const days = Math.floor(totalSec / 86400), hours = Math.floor((totalSec % 86400) / 3600)
+  const minutes = Math.floor((totalSec % 3600) / 60), seconds = totalSec % 60
+  if (days > 0) return days + ' 天 ' + hours + ' 时 ' + minutes + ' 分 ' + seconds + ' 秒'
+  if (hours > 0) return hours + ' 时 ' + minutes + ' 分 ' + seconds + ' 秒'
+  if (minutes > 0) return minutes + ' 分 ' + seconds + ' 秒'
+  return seconds + ' 秒'
 }
 
-const MAX_SCHEDULE_DELAY = 20 * 24 * 3600 * 1000
+ipcMain.handle('schedule-reminders', async (_event, a1, a2, a3) => {
+  // 兼容两种签名：
+  //   新签名：(userId, reminders, persistDuration)
+  //   旧签名：(reminders, persistDuration) — 从其他 IPC 已知 currentUserId
+  let userId, reminders, persistDuration
+  if (Array.isArray(a1)) {
+    userId = currentUserId   // 旧签名：用已设置的
+    reminders = a1
+    persistDuration = a2
+  } else {
+    userId = a1
+    reminders = a2
+    persistDuration = a3
+  }
+  if (userId) currentUserId = userId
+  loadReminders()
+  debugLog('[Reminder] 收到调度请求，用户=' + userId + '，共 ' + (reminders ? reminders.length : 0) + ' 条')
+  cancelAllReminderTimers()
+  if (persistDuration != null) reminderPersistDuration = persistDuration
+  if (!reminders || reminders.length === 0) { reminderStore = []; schedulePersist(); return { ok: true, count: 0 } }
+  upsertReminders(reminders)
+  reminders.forEach(r => scheduleReminderRuntime(r))
+  return { ok: true, count: reminders.length }
+})
+
+ipcMain.handle('cancel-all-reminders', async () => {
+  debugLog('[Reminder] 取消所有提醒')
+  cancelAllReminderTimers(); reminderStore.forEach(r => { r.status = 'cancelled' }); schedulePersist()
+  return { ok: true }
+})
+
+ipcMain.handle('get-reminder-persist-duration', async () => ({ persistDuration: reminderPersistDuration }))
+
+ipcMain.handle('get-all-reminders', async () => reminderStore.map(r => { const t = reminderTimers.find(x => x.id === r.id); return t ? { ...r, runtimeScheduled: true } : r }))
+
+function initReminderSystem() { startTicker(); debugLog('[Reminder] 调度器已启动，等待登录后加载用户提醒') }
+
 // ====== 提醒系统结束 ======
 
 // ====== 全屏游戏前台时视频播放器卡顿修复（须在 app ready 前设置） ======
@@ -2213,12 +2230,9 @@ app.whenReady().then(async () => {
   // 更新安装完成启动新版本后，删除临时目录中遗留的更新安装包
   cleanupUpdateInstallers()
   closeAction = getCloseAction()
-  debugLog('[Main] Close button behavior', { action: closeAction })
-  const sep = '─'.repeat(60)
-  const dir = path.dirname(logFile)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  fs.appendFileSync(logFile, `\n${sep}\n[${formatTs()}] [INFO] ===== App Launch =====\n${sep}\n`)
-  debugLog('[Electron] App ready')
+  initLogger()
+  debugLog('[Main] 关闭按钮行为：' + (closeAction === 'exit' ? '直接退出' : '最小化到系统托盘'))
+  debugLog('[Electron] 应用就绪')
 
   try {
     const oldDataDir = path.join(process.resourcesPath, 'data')
@@ -2227,16 +2241,17 @@ app.whenReady().then(async () => {
       try {
         fs.mkdirSync(app.getPath('userData'), { recursive: true })
         fs.renameSync(oldDataDir, newDataDir)
-        debugLog('[Electron] Data migrated to userData: ' + newDataDir)
+        debugLog('[Electron] 数据已迁移至用户目录：' + newDataDir)
       } catch (e) {
         errorLog('[Electron] Data migration failed: ' + e.message)
       }
     }
     const port = await startServer()
     const url = entryUrl(port)
-    debugLog('[Electron] Loading URL: ' + url)
+    debugLog('[Electron] 正在加载页面：' + url)
     createWindow(url)
     setupTray()
+    initReminderSystem()
     // 插件编译在后台进行，避免阻塞窗口首次显示
     ensurePluginsCompiled().catch((err) => errorLog('[Electron] Plugin compilation failed: ' + err.message))
 
@@ -2265,6 +2280,8 @@ app.on('before-quit', () => {
   debugLog('[Electron] App is about to quit (system shutdown/user exit)')
   isQuitting = true
   cancelAllReminderTimers()
+  stopTicker()
+  if (storeDirty && currentUserId) persistReminders()
   globalShortcut.unregisterAll()
   // 终止 snowbaby 子进程：防止其残留运行占用安装目录文件，导致安装新版本时提示"无法停止运行应用"
   if (snowbabyProcess) {

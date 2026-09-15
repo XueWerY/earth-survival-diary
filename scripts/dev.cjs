@@ -24,6 +24,8 @@ const ROOT = path.resolve(__dirname, '..')
 const VITE_PORT = 5173
 const SERVER_PORT = 5000
 const RENDERER_URL = 'http://127.0.0.1:' + VITE_PORT
+// 与 electron/main.cjs 的 DEV_RESTART_EXIT_CODE 保持一致：应用请求重启（如注销/清理数据）时的约定退出码
+const DEV_RESTART_EXIT_CODE = 58
 
 let viteChild = null
 let electronChild = null
@@ -31,6 +33,7 @@ let restarting = false
 let shuttingDown = false
 let lockRejected = false
 let watchTimer = null
+let changedFile = null
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -51,7 +54,7 @@ function probePort(port) {
   })
 }
 
-/** 等待 Vite dev server 就绪 */
+/** 等待 Vite 开发服务器就绪 */
 async function waitDevServerReady(timeout = 30000) {
   const start = Date.now()
   while (Date.now() - start < timeout) {
@@ -87,8 +90,13 @@ function spawnElectron() {
     process.stdout.write(text)
   })
   electronChild.stderr.on('data', (data) => process.stderr.write(data))
-  electronChild.on('close', () => {
+  electronChild.on('close', (code) => {
     electronChild = null
+    // 退出码为约定值时（应用主动请求重启，如注销/清理数据），重新拉起 Electron
+    if (!shuttingDown && !restarting && code === DEV_RESTART_EXIT_CODE) {
+      console.log('应用请求重启（退出码 ' + code + '），重新拉起 Electron...')
+      restartElectron('应用请求重启')
+    }
   })
 }
 
@@ -114,20 +122,20 @@ async function startElectronWithRetry() {
     spawnElectron()
     await sleep(400)
     if (lockRejected) {
-      console.log('[dev] 检测到单实例锁冲突，等待旧实例退出后重试...')
+      console.log('检测到单实例锁冲突，等待旧实例退出后重试...')
       await killElectronTree()
       await sleep(300)
       continue
     }
     return
   }
-  console.error('[dev] 多次启动失败（单实例锁持续冲突），请确认无其他实例占用 userData 目录')
+  console.error('多次启动失败（单实例锁持续冲突），请确认无其他实例占用 userData 目录')
 }
 
 /** 重启 Electron：杀树 → 释放锁/端口 → 重新启动 */
-async function restartElectron() {
+async function restartElectron(reason) {
   restarting = true
-  console.log('[dev] electron/*.cjs 发生变化，重启主进程...')
+  console.log(reason + '，重启主进程...')
   await killElectronTree()
   // 等待单实例命名互斥锁与内置服务端口释放，避免新实例被误判为重复启动
   await sleep(250)
@@ -144,8 +152,9 @@ function setupWatch() {
     if (restarting || shuttingDown || !electronChild) return
     if (filename.includes('node_modules')) return
     if (!filename.endsWith('.cjs')) return
+    changedFile = filename
     clearTimeout(watchTimer)
-    watchTimer = setTimeout(restartElectron, 200)
+    watchTimer = setTimeout(() => { restartElectron(filename + ' 发生变化') }, 200)
   })
 }
 
@@ -157,7 +166,7 @@ function startVite() {
   viteChild.on('exit', (code) => {
     viteChild = null
     if (!shuttingDown) {
-      console.log('[dev] Vite dev server 已退出（exit=' + code + '），本开发环境结束')
+      console.log('Vite 开发服务器已退出（exit=' + code + '），本开发环境结束')
       cleanup()
     }
   })
@@ -185,18 +194,18 @@ function cleanup() {
 
 async function main() {
   if (await probePort(VITE_PORT)) {
-    console.error('[dev] 端口 ' + VITE_PORT + ' 已被占用，请先关闭占用进程（strictPort 要求固定端口）')
+    console.error('端口 ' + VITE_PORT + ' 已被占用，请先关闭占用进程（strictPort 要求固定端口）')
     process.exit(1)
   }
 
   startVite()
   const ready = await waitDevServerReady()
   if (!ready) {
-    console.error('[dev] Vite dev server 未在 ' + VITE_PORT + ' 端口就绪，请查看上方 Vite 日志')
+    console.error('Vite 开发服务器未在 ' + VITE_PORT + ' 端口就绪，请查看上方 Vite 日志')
     cleanup()
     return
   }
-  console.log('[dev] Vite dev server 就绪：' + RENDERER_URL)
+  console.log('Vite 开发服务器就绪：' + RENDERER_URL)
 
   // 给可能残留的旧服务/旧实例让出锁与端口
   await sleep(200)
@@ -206,11 +215,11 @@ async function main() {
   setupWatch()
 
   process.on('SIGINT', () => {
-    console.log('\n[dev] 正在退出...')
+    console.log('\n正在退出...')
     cleanup()
   })
   process.on('SIGTERM', () => {
-    console.log('[dev] 正在退出...')
+    console.log('正在退出...')
     cleanup()
   })
 }

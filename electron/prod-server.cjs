@@ -3,6 +3,9 @@ const fs = require('fs')
 const crypto = require('crypto')
 const http = require('http')
 
+// Pino 日志（与 electron/main.cjs 共享同一个日志实例 + 日志文件）
+const { initLogger, state, findLatestLogFile } = require(path.join(__dirname, 'lib', 'logger.cjs'))
+
 function createProdServer(options = {}) {
   const { 
     port = 5000, 
@@ -16,6 +19,11 @@ function createProdServer(options = {}) {
   // Resolve paths
   const DATA_DIR = dataDir || path.join(resourcesPath, 'data')
   const DIST_PATH = distPath || path.join(resourcesPath, 'app.asar', 'dist')
+  const LOG_DIR = path.join(path.dirname(DATA_DIR), 'logs')   // 与 main.cjs 的 LOG_DIR 指向同一目录：userData/logs
+
+  // 初始化 Pino 日志（单例，若 main.cjs 已初始化则无效果）
+  initLogger(LOG_DIR)
+  state.logger.info('[ProdServer] Express 启动中...')
 
   // 插件查找目录：本地优先，其次远程。本地插件=src/plugins，远程=已安装/下载的插件目录
   const pluginLookupDirs = [localPluginsDir, pluginsDir].filter(Boolean)
@@ -200,6 +208,18 @@ function createProdServer(options = {}) {
   }))
   app.use(express.json({ limit: '10mb' }))
 
+  // 请求访问日志：简洁中文格式 "接口 GET /api/xxx 返回 200 (2ms)"
+  // 高频低价值端点跳过，零附加字段（msg 即全部）
+  app.use((req, res, next) => {
+    const start = Date.now()
+    res.on('finish', () => {
+      if (req.url === '/api/health') return
+      const duration = Date.now() - start
+      state.logger.info(`[HTTP] 接口 ${req.method} ${req.url} 返回 ${res.statusCode} (${duration}ms)`)
+    })
+    next()
+  })
+
   // Auth middleware
   async function authMiddleware(req, res, next) {
     try {
@@ -228,7 +248,7 @@ function createProdServer(options = {}) {
       req.userEmail = userEntry.email
       next()
     } catch (e) {
-      console.error('Auth middleware error:', e)
+      state.logger.error({ err: e }, "鉴权中间件错误")
       res.status(500).json({ error: '认证服务异常' })
     }
   }
@@ -254,7 +274,7 @@ function createProdServer(options = {}) {
       await setUserProfile(userId, { id: userId, nickname: userEntry.nickname, createdAt: userEntry.createdAt })
       const token = generateToken(userId)
       res.json({ user: { id: userId, email, nickname: userEntry.nickname, createdAt: userEntry.createdAt }, session: { access_token: token } })
-    } catch (e) { console.error('Signup error:', e); res.status(500).json({ error: '注册失败，请稍后重试' }) }
+    } catch (e) { state.logger.error({ err: e }, "注册错误"); res.status(500).json({ error: '注册失败，请稍后重试' }) }
   })
 
   /** POST /api/auth/signin
@@ -269,7 +289,7 @@ function createProdServer(options = {}) {
       if (userEntry.passwordHash !== hashPassword(password)) return res.status(400).json({ error: '密码错误' })
       const token = generateToken(userEntry.id)
       res.json({ user: { id: userEntry.id, email: userEntry.email, nickname: userEntry.nickname, createdAt: userEntry.createdAt }, session: { access_token: token } })
-    } catch (e) { console.error('Signin error:', e); res.status(500).json({ error: '登录失败，请稍后重试' }) }
+    } catch (e) { state.logger.error({ err: e }, "登录错误"); res.status(500).json({ error: '登录失败，请稍后重试' }) }
   })
 
   /** POST /api/auth/signout => 200 {success:true} */
@@ -292,10 +312,10 @@ function createProdServer(options = {}) {
         fs.rmSync(userDir, { recursive: true, force: true })
       }
 
-      console.log(`[Account] User deleted: ${userEmail} (${userId})`)
+      state.logger.info({ userEmail, userId }, '[账号] 用户已删除')
       res.json({ success: true })
     } catch (e) {
-      console.error('Delete account error:', e)
+      state.logger.error({ err: e }, "删除账号错误")
       res.status(500).json({ error: '注销账号失败' })
     }
   })
@@ -308,10 +328,10 @@ function createProdServer(options = {}) {
         fs.rmSync(DATA_DIR, { recursive: true, force: true })
         fs.mkdirSync(DATA_DIR, { recursive: true })
       }
-      console.log('[Data] All user data cleared')
+      state.logger.info("[Data] 所有用户数据已清空")
       res.json({ success: true })
     } catch (e) {
-      console.error('Clear all data error:', e)
+      state.logger.error({ err: e }, "清空数据错误")
       res.status(500).json({ error: '清空数据失败' })
     }
   })
@@ -328,7 +348,7 @@ function createProdServer(options = {}) {
       await deleteUserIndex(req.userEmail)
       req.userEmail = newEmail
       res.json({ success: true, email: newEmail })
-    } catch (e) { console.error('Change email error:', e); res.status(500).json({ error: '修改邮箱失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "修改邮箱错误"); res.status(500).json({ error: '修改邮箱失败' }) }
   })
 
   /** POST /api/auth/change-password (auth) body:{oldPassword,newPassword} => 200 {success} */
@@ -342,7 +362,7 @@ function createProdServer(options = {}) {
       currentUser.passwordHash = hashPassword(newPassword)
       await setUserIndex(req.userEmail, currentUser)
       res.json({ success: true })
-    } catch (e) { console.error('Change password error:', e); res.status(500).json({ error: '修改密码失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "修改密码错误"); res.status(500).json({ error: '修改密码失败' }) }
   })
 
   /** GET /api/auth/users => 200 {users:[{email,nickname,createdAt}]} - 获取所有用户列表（登录界面备选项） */
@@ -355,7 +375,7 @@ function createProdServer(options = {}) {
       }).filter(Boolean)
       res.json({ users })
     } catch (e) {
-      console.error('Get users error:', e)
+      state.logger.error({ err: e }, "获取用户列表错误")
       res.status(500).json({ error: '获取用户列表失败' })
     }
   })
@@ -380,7 +400,7 @@ function createProdServer(options = {}) {
       writeJson(settingsPath, settings)
       res.json({ success: true })
     } catch (e) {
-      console.error('Update settings error:', e)
+      state.logger.error({ err: e }, "更新设置错误")
       res.status(500).json({ error: '更新设置失败' })
     }
   })
@@ -390,7 +410,7 @@ function createProdServer(options = {}) {
     try {
       const profile = await getUserProfile(req.userId)
       res.json({ user: { id: req.userId, email: req.userEmail, nickname: profile?.nickname || req.userEmail.split('@')[0], createdAt: profile?.createdAt } })
-    } catch (e) { console.error('Get user error:', e); res.status(500).json({ error: '获取用户信息失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "获取用户错误"); res.status(500).json({ error: '获取用户信息失败' }) }
   })
 
   /** POST /api/auth/check-session => 200 {valid:bool, kicked:bool} */
@@ -415,7 +435,7 @@ function createProdServer(options = {}) {
     try {
       const profile = await getUserProfile(req.userId)
       res.json({ profile: { id: req.userId, nickname: profile?.nickname || req.userEmail.split('@')[0], birthday: profile?.birthday || '', phone: profile?.phone || '', createdAt: profile?.createdAt } })
-    } catch (e) { console.error('Get profile error:', e); res.status(500).json({ error: '获取配置失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "获取配置错误"); res.status(500).json({ error: '获取配置失败' }) }
   })
 
   /** PUT /api/profile (auth) body:{nickname?,birthday?,phone?} => 200 {profile} */
@@ -432,7 +452,7 @@ function createProdServer(options = {}) {
         if (currentUser) { currentUser.nickname = nickname; await setUserIndex(req.userEmail, currentUser) }
       }
       res.json({ profile: { id: req.userId, nickname: profile.nickname || req.userEmail.split('@')[0], birthday: profile.birthday || '', phone: profile.phone || '', createdAt: profile.createdAt } })
-    } catch (e) { console.error('Update profile error:', e); res.status(500).json({ error: '更新配置失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "更新配置错误"); res.status(500).json({ error: '更新配置失败' }) }
   })
 
   // ============ Tasks API ============
@@ -440,7 +460,7 @@ function createProdServer(options = {}) {
   /** GET /api/tasks (auth) => 200 {tasks:Task[]} */
   app.get('/api/tasks', authMiddleware, async (req, res) => {
     try { const tasks = await getUserFootprintTasks(req.userId); res.json({ tasks }) }
-    catch (e) { console.error('Get tasks error:', e); res.status(500).json({ error: '获取任务失败' }) }
+    catch (e) { state.logger.error({ err: e }, "获取任务错误"); res.status(500).json({ error: '获取任务失败' }) }
   })
 
   /** POST /api/tasks (auth) body:{name,date,startTime?,endTime?,notes?,content?,category?} => 200 {task} */
@@ -452,7 +472,7 @@ function createProdServer(options = {}) {
       tasks.unshift(newTask)
       await setUserFootprintTasks(req.userId, tasks)
       res.json({ task: newTask })
-    } catch (e) { console.error('Add task error:', e); res.status(500).json({ error: '添加任务失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "添加任务错误"); res.status(500).json({ error: '添加任务失败' }) }
   })
 
   /** PUT /api/tasks/:id (auth) body:{...task fields} => 200 {task} | 404 */
@@ -475,7 +495,7 @@ function createProdServer(options = {}) {
       if (updates.pinned !== undefined) task.pinned = updates.pinned
       await setUserFootprintTasks(req.userId, tasks)
       res.json({ task })
-    } catch (e) { console.error('Update task error:', e); res.status(500).json({ error: '更新任务失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "更新任务错误"); res.status(500).json({ error: '更新任务失败' }) }
   })
 
   /** DELETE /api/tasks/:id (auth) => 200 {success:true} */
@@ -487,7 +507,7 @@ function createProdServer(options = {}) {
       if (taskIndex !== -1) tasks.splice(taskIndex, 1)
       await setUserFootprintTasks(req.userId, tasks)
       res.json({ success: true })
-    } catch (e) { console.error('Delete task error:', e); res.status(500).json({ error: '删除任务失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "删除任务错误"); res.status(500).json({ error: '删除任务失败' }) }
   })
 
   // ============ Diaries API ============
@@ -495,7 +515,7 @@ function createProdServer(options = {}) {
   /** GET /api/diaries (auth) => 200 {tasks:Task[]} */
   app.get('/api/diaries', authMiddleware, async (req, res) => {
     try { const diaries = await getUserDiaries(req.userId); res.json({ tasks: diaries }) }
-    catch (e) { console.error('Get diaries error:', e); res.status(500).json({ error: '获取日记失败' }) }
+    catch (e) { state.logger.error({ err: e }, "获取日记错误"); res.status(500).json({ error: '获取日记失败' }) }
   })
 
   /** POST /api/diaries (auth) body:{...task fields} => 200 {task} */
@@ -507,7 +527,7 @@ function createProdServer(options = {}) {
       diaries.unshift(newDiary)
       await setUserDiaries(req.userId, diaries)
       res.json({ task: newDiary })
-    } catch (e) { console.error('Add diary error:', e); res.status(500).json({ error: '添加日记失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "添加日记错误"); res.status(500).json({ error: '添加日记失败' }) }
   })
 
   /** PUT /api/diaries/:id (auth) body:{...task fields} => 200 {task} | 404 */
@@ -530,7 +550,7 @@ function createProdServer(options = {}) {
       if (updates.pinned !== undefined) diary.pinned = updates.pinned
       await setUserDiaries(req.userId, diaries)
       res.json({ task: diary })
-    } catch (e) { console.error('Update diary error:', e); res.status(500).json({ error: '更新日记失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "更新日记错误"); res.status(500).json({ error: '更新日记失败' }) }
   })
 
   /** DELETE /api/diaries/:id (auth) => 200 {success:true} */
@@ -542,7 +562,7 @@ function createProdServer(options = {}) {
       if (diaryIndex !== -1) diaries.splice(diaryIndex, 1)
       await setUserDiaries(req.userId, diaries)
       res.json({ success: true })
-    } catch (e) { console.error('Delete diary error:', e); res.status(500).json({ error: '删除日记失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "删除日记错误"); res.status(500).json({ error: '删除日记失败' }) }
   })
 
   // ============ Lists API ============
@@ -553,7 +573,7 @@ function createProdServer(options = {}) {
       let lists = await getUserListChecklists(req.userId)
       lists = lists.map(list => { if (!list.groups || list.groups.length === 0) list.groups = [{ id: `${list.id}-default`, name: '默认分组', color: '#667eea', order: 0 }]; return list }).sort((a, b) => (a.order || 0) - (b.order || 0))
       res.json({ lists })
-    } catch (e) { console.error('Get list lists error:', e); res.status(500).json({ error: '获取清单列表失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "获取清单列表错误"); res.status(500).json({ error: '获取清单列表失败' }) }
   })
 
   /** POST /api/list-lists (auth) body:{name,icon?} => 200 {list} */
@@ -567,7 +587,7 @@ function createProdServer(options = {}) {
       lists.push(newList)
       await setUserListChecklists(req.userId, lists)
       res.json({ list: newList })
-    } catch (e) { console.error('Add list list error:', e); res.status(500).json({ error: '添加清单列表失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "添加清单列表错误"); res.status(500).json({ error: '添加清单列表失败' }) }
   })
 
   /** PUT /api/list-lists/reorder (auth) body:{orders:[{id,order}]} => 200 {lists} */
@@ -579,7 +599,7 @@ function createProdServer(options = {}) {
       lists.sort((a, b) => a.order - b.order)
       await setUserListChecklists(req.userId, lists)
       res.json({ lists })
-    } catch (e) { console.error('Reorder list lists error:', e); res.status(500).json({ error: '更新清单列表顺序失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "重排序清单列表错误"); res.status(500).json({ error: '更新清单列表顺序失败' }) }
   })
 
   /** PUT /api/list-lists/:id (auth) body:{name?,icon?,order?} => 200 {list} */
@@ -594,7 +614,7 @@ function createProdServer(options = {}) {
       if (order !== undefined) lists[listIndex].order = order
       await setUserListChecklists(req.userId, lists)
       res.json({ list: lists[listIndex] })
-    } catch (e) { console.error('Update list list error:', e); res.status(500).json({ error: '更新清单列表失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "更新清单列表错误"); res.status(500).json({ error: '更新清单列表失败' }) }
   })
 
   /** DELETE /api/list-lists/:id (auth) body:{deleteTasks?:boolean,transferToListId?:string} => 200 {success:true} */
@@ -620,7 +640,7 @@ function createProdServer(options = {}) {
       await setUserListChecklists(req.userId, newLists)
       await setUserListTasks(req.userId, newTasks)
       res.json({ success: true })
-    } catch (e) { console.error('Delete list list error:', e); res.status(500).json({ error: '删除清单列表失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "删除清单列表错误"); res.status(500).json({ error: '删除清单列表失败' }) }
   })
 
   /** PUT /api/list-lists/:listId/groups/reorder (auth) body:{orders:[{id,order}]} => 200 {groups} */
@@ -636,7 +656,7 @@ function createProdServer(options = {}) {
       list.groups.sort((a, b) => a.order - b.order)
       await setUserListChecklists(req.userId, lists)
       res.json({ groups: list.groups })
-    } catch (e) { console.error('Reorder groups error:', e); res.status(500).json({ error: '更新分组顺序失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "重排序分组错误"); res.status(500).json({ error: '更新分组顺序失败' }) }
   })
 
   /** POST /api/list-lists/:listId/groups (auth) body:{name?,color?,order?} => 200 {group} */
@@ -651,7 +671,7 @@ function createProdServer(options = {}) {
       list.groups.push(newGroup)
       await setUserListChecklists(req.userId, lists)
       res.json({ group: newGroup })
-    } catch (e) { console.error('Add list group error:', e); res.status(500).json({ error: '添加分组失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "添加分组错误"); res.status(500).json({ error: '添加分组失败' }) }
   })
 
   /** PUT /api/list-lists/:listId/groups/:groupId (auth) body:{name?,color?,order?} => 200 {group} */
@@ -674,7 +694,7 @@ function createProdServer(options = {}) {
       if (order !== undefined) list.groups[groupIndex].order = order
       await setUserListChecklists(req.userId, lists)
       res.json({ group: list.groups[groupIndex] })
-    } catch (e) { console.error('Update list group error:', e); res.status(500).json({ error: '更新分组失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "更新分组错误"); res.status(500).json({ error: '更新分组失败' }) }
   })
 
   /** DELETE /api/list-lists/:listId/groups/:groupId (auth) body:{deleteTasks?:boolean} => 200 {success} (min 1 group enforced) */
@@ -704,7 +724,7 @@ function createProdServer(options = {}) {
       list.groups.splice(groupIndex, 1)
       await setUserListChecklists(req.userId, lists)
       res.json({ success: true })
-    } catch (e) { console.error('Delete list group error:', e); res.status(500).json({ error: '删除分组失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "删除分组错误"); res.status(500).json({ error: '删除分组失败' }) }
   })
 
   // ============ List Tasks API ============
@@ -716,7 +736,7 @@ function createProdServer(options = {}) {
       let listTasks = await getUserListTasks(req.userId)
       if (listId) listTasks = listTasks.filter(m => m.list_id === listId)
       res.json({ listTasks })
-    } catch (e) { console.error('Get list tasks error:', e); res.status(500).json({ error: '获取任务失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "获取任务错误"); res.status(500).json({ error: '获取任务失败' }) }
   })
 
   /** POST /api/list-tasks (auth) body:{listId,name,targetCount?,...} => 200 {listTask} */
@@ -728,7 +748,7 @@ function createProdServer(options = {}) {
       listTasks.push(newTask)
       await setUserListTasks(req.userId, listTasks)
       res.json({ listTask: newTask })
-    } catch (e) { console.error('Add list task error:', e); res.status(500).json({ error: '添加任务失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "添加任务错误"); res.status(500).json({ error: '添加任务失败' }) }
   })
 
   /** PUT /api/list-tasks/:id (auth) body:{...listTask fields} => 200 {listTask} */
@@ -770,7 +790,7 @@ function createProdServer(options = {}) {
       listTask.updated_at = new Date().toISOString()
       await setUserListTasks(req.userId, listTasks)
       res.json({ listTask })
-    } catch (e) { console.error('Update list task error:', e); res.status(500).json({ error: '更新任务失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "更新任务错误"); res.status(500).json({ error: '更新任务失败' }) }
   })
 
   /** DELETE /api/list-tasks/:id (auth) => 200 {success:true} */
@@ -780,7 +800,7 @@ function createProdServer(options = {}) {
       const listTasks = await getUserListTasks(req.userId)
       await setUserListTasks(req.userId, listTasks.filter(m => m.id !== id))
       res.json({ success: true })
-    } catch (e) { console.error('Delete list task error:', e); res.status(500).json({ error: '删除任务失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "删除任务错误"); res.status(500).json({ error: '删除任务失败' }) }
   })
 
   // ============ Stats API ============
@@ -792,7 +812,7 @@ function createProdServer(options = {}) {
       const listTasks = await getUserListTasks(req.userId)
       const footprintTasks = await getUserFootprintTasks(req.userId)
       res.json({ stats: { checklistCount: checklists.length, listTaskCount: listTasks.length, footprintTaskCount: footprintTasks.length } })
-    } catch (e) { console.error('Get stats error:', e); res.status(500).json({ error: '获取统计失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "获取统计错误"); res.status(500).json({ error: '获取统计失败' }) }
   })
 
   // ============ Data API (type/key based) ============
@@ -810,7 +830,7 @@ function createProdServer(options = {}) {
           data.defaultsInitialized = true
           await setUserKV(req.userId, 'system', 'state', data)
           try { fs.unlinkSync(legacyDefaultsPath) } catch {}
-          console.log(`[Data] defaultsInitialized migrated from defaultsInitialized.json to state.json: ${req.userId}`)
+          state.logger.info({ userId: req.userId }, '[数据] defaultsInitialized 从 defaultsInitialized.json 迁移到 state.json')
         }
         if (!data || data.guideCompleted === undefined) {
           const legacyPath = path.join(DATA_DIR, req.userId, 'system', 'guideState.json')
@@ -820,25 +840,25 @@ function createProdServer(options = {}) {
             data.guideCompleted = legacy.guideCompleted
             await setUserKV(req.userId, 'system', 'state', data)
             try { fs.unlinkSync(legacyPath) } catch {}
-            console.log(`[Data] Guide state migrated from guideState.json to state.json: ${req.userId}`)
+            state.logger.info({ userId: req.userId }, '[数据] 引导状态从 guideState.json 迁移到 state.json')
           }
         }
       }
       res.json({ success: true, data: data || null })
     }
-    catch (e) { console.error('Get data error:', e); res.status(500).json({ success: false, error: '获取数据失败' }) }
+    catch (e) { state.logger.error({ err: e }, "Get data error:"); res.status(500).json({ success: false, error: '获取数据失败' }) }
   })
 
   /** POST /api/data/:type/:key (auth) body:{data} => 200 {success:true} */
   app.post('/api/data/:type/:key', authMiddleware, async (req, res) => {
     try { await setUserKV(req.userId, req.params.type, req.params.key, req.body.data); res.json({ success: true }) }
-    catch (e) { console.error('Set data error:', e); res.status(500).json({ success: false, error: '设置数据失败' }) }
+    catch (e) { state.logger.error({ err: e }, "Set data error:"); res.status(500).json({ success: false, error: '设置数据失败' }) }
   })
 
   /** DELETE /api/data/:type/:key (auth) => 200 {success:true} */
   app.delete('/api/data/:type/:key', authMiddleware, async (req, res) => {
     try { await deleteUserKV(req.userId, req.params.type, req.params.key); res.json({ success: true }) }
-    catch (e) { console.error('Delete data error:', e); res.status(500).json({ success: false, error: '删除数据失败' }) }
+    catch (e) { state.logger.error({ err: e }, "Delete data error:"); res.status(500).json({ success: false, error: '删除数据失败' }) }
   })
 
   // ============ Settings API ============
@@ -846,7 +866,7 @@ function createProdServer(options = {}) {
   /** GET /api/settings (auth) => 200 {settings:{...}} */
   app.get('/api/settings', authMiddleware, async (req, res) => {
     try { const settings = await getUserSettings(req.userId); res.json({ settings }) }
-    catch (e) { console.error('Get settings error:', e); res.status(500).json({ error: '获取设置失败' }) }
+    catch (e) { state.logger.error({ err: e }, "Get settings error:"); res.status(500).json({ error: '获取设置失败' }) }
   })
 
 
@@ -857,7 +877,7 @@ function createProdServer(options = {}) {
       const mergedSettings = { ...existingSettings, ...req.body }
       await setUserSettings(req.userId, mergedSettings)
       res.json({ settings: mergedSettings })
-    } catch (e) { console.error('Update settings error:', e); res.status(500).json({ error: '更新设置失败' }) }
+    } catch (e) { state.logger.error({ err: e }, "更新设置错误"); res.status(500).json({ error: '更新设置失败' }) }
   })
 
   // ============ Export/Import API ============
@@ -891,7 +911,7 @@ function createProdServer(options = {}) {
       }
       res.json({ success: true, data })
     } catch (e) {
-      console.error('Export error:', e)
+      state.logger.error({ err: e }, "导出错误")
       res.status(500).json({ error: '导出数据失败' })
     }
   })
@@ -941,10 +961,10 @@ function createProdServer(options = {}) {
       if (settings) await setUserSettings(userId, settings)
       if (system_state !== undefined) await setUserKV(userId, 'system', 'state', system_state)
 
-      console.log(`[Import] Data imported for user ${userId}`)
+      state.logger.info({ userId }, '[导入] 数据已导入')
       res.json({ success: true })
     } catch (e) {
-      console.error('Import error:', e)
+      state.logger.error({ err: e }, "导入错误")
       res.status(500).json({ error: '导入数据失败' })
     }
   })
@@ -973,48 +993,32 @@ function createProdServer(options = {}) {
         else if (key === 'profile') continue
       }
 
-      console.log(`[Clean] Data cleaned for user ${userId}: ${Object.keys(cleanMap).join(', ')}`)
+      state.logger.info({ userId, modules: Object.keys(cleanMap) }, '[清理] 数据已清理')
       res.json({ success: true })
     } catch (e) {
-      console.error('Clean error:', e)
+      state.logger.error({ err: e }, "清理数据错误")
       res.status(500).json({ error: '清理数据失败' })
     }
   })
 
-  const LOG_DIR = path.join(path.dirname(DATA_DIR), 'logs')
-
   /** POST /api/logs body:{logs:LogEntry[]} => 200 {success:true} */
+  // 前端 logger.ts 的远程上传：前端日志并入本进程 Pino（与 Node 端日志写入同一文件）
   app.post('/api/logs', async (req, res) => {
     try {
       const { logs } = req.body
       if (!Array.isArray(logs)) return res.status(400).json({ error: 'logs 必须是数组' })
-      if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true })
-      const today = new Date().toISOString().slice(0, 10)
-      const logFile = path.join(LOG_DIR, `app-${today}.log`)
-      const p = (n, l = 2) => String(n).padStart(l, '0')
-      const lines = logs.map(e => {
-        const d = new Date(e.timestamp || Date.now())
-        const ts = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}:${p(d.getMilliseconds(), 3)}`
-        const level = ['TRACE','DEBUG','INFO','WARN','ERROR'][e.level] || 'INFO'
-        const meta = e.meta ? ' ' + JSON.stringify(e.meta) : ''
-        const stack = e.stack ? '\n' + e.stack : ''
-        return `[${ts}] [${level}] ${e.message}${meta}${stack}`
-      }).join('\n') + '\n'
-      fs.appendFileSync(logFile, lines, 'utf-8')
       res.json({ success: true })
-    } catch (e) { console.error('Write logs error:', e); res.status(500).json({ error: '写入日志失败' }) }
+    } catch (e) { state.logger.error({ err: e }, 'Write logs error'); res.status(500).json({ error: '写入日志失败' }) }
   })
 
   /** GET /api/logs => 200 {logs:string} */
   app.get('/api/logs', (req, res) => {
     try {
-      if (!fs.existsSync(LOG_DIR)) return res.json({ logs: '' })
-      const today = new Date().toISOString().slice(0, 10)
-      const logFile = path.join(LOG_DIR, `app-${today}.log`)
-      if (!fs.existsSync(logFile)) return res.json({ logs: '' })
-      const content = fs.readFileSync(logFile, 'utf-8')
+      const latest = findLatestLogFile(LOG_DIR)
+      if (!latest) return res.json({ logs: '' })
+      const content = fs.readFileSync(latest, 'utf-8')
       res.json({ logs: content })
-    } catch (e) { console.error('Read logs error:', e); res.status(500).json({ error: '读取日志失败' }) }
+    } catch (e) { state.logger.error({ err: e }, 'Read logs error'); res.status(500).json({ error: '读取日志失败' }) }
   })
 
   // ============ Health Check ============
@@ -1053,7 +1057,7 @@ function createProdServer(options = {}) {
         res.setHeader('Content-Type', 'application/javascript')
         res.sendFile(filePath)
       } catch (e) {
-        console.error('Serve plugin file error:', e)
+        state.logger.error({ err: e }, "提供插件文件错误")
         res.status(500).json({ error: 'Failed to serve plugin file' })
       }
     })
