@@ -110,8 +110,8 @@ const formatDurationLabel = (startTime: string, endTime: string): string => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: none;
   background: transparent;
@@ -119,47 +119,45 @@ const formatDurationLabel = (startTime: string, endTime: string): string => {
   border-radius: 6px;
   font-size: 14px;
   transition: all 0.15s;
-  color: var(--chalk-white-50);
+  opacity: 0.7;
 }
 
 .card-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--chalk-white);
+  opacity: 1;
+  transform: scale(1.1);
 }
 
 .card-btn-star {
-  color: rgba(251, 191, 36, 0.5);
+  color: #fbbf24;
 }
 
 .card-btn-star:hover {
-  color: #fbbf24;
-  background: rgba(251, 191, 36, 0.1);
+  background: rgba(251, 191, 36, 0.15);
 }
 
 .card-btn-star.starred {
+  opacity: 1;
   color: #fbbf24;
 }
 
 .card-btn-star.starred:hover {
-  background: rgba(251, 191, 36, 0.15);
+  background: rgba(251, 191, 36, 0.2);
 }
 
 .card-btn-edit {
-  color: rgba(102, 126, 234, 0.5);
+  color: #22d3ee;
 }
 
 .card-btn-edit:hover {
-  color: #667eea;
-  background: rgba(102, 126, 234, 0.12);
+  background: rgba(34, 211, 238, 0.15);
 }
 
 .card-btn-delete {
-  color: rgba(239, 68, 68, 0.5);
+  color: #fb7185;
 }
 
 .card-btn-delete:hover {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.12);
+  background: rgba(251, 113, 133, 0.15);
 }
 
 .task-card-time {

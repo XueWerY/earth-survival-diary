@@ -435,7 +435,8 @@ defineExpose({ submit, cancel })
 .checklist-form-item:hover { background: rgba(255, 255, 255, 0.05); }
 .checklist-form-item.drag-over { background: rgba(102,126,234,0.15); }
 .checklist-form-input { flex: 1; }
-.checklist-form-input :deep(.el-textarea__inner) { font-size: 13px; }
+.checklist-form-input :deep(.el-textarea__inner) { font-size: 13px; scrollbar-width: none; -ms-overflow-style: none; }
+.checklist-form-input :deep(.el-textarea__inner::-webkit-scrollbar) { display: none; }
 .checklist-drag-handle { font-size: 14px; color: var(--chalk-white-30); cursor: grab; flex-shrink: 0; }
 .checklist-drag-handle:active { cursor: grabbing; }
 .checklist-form-delete { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: transparent; color: var(--chalk-muted); cursor: pointer; border-radius: 4px; transition: all 0.15s; flex-shrink: 0; }

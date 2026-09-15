@@ -17,6 +17,32 @@ const net = require('net')
 const fs = require('fs')
 const path = require('path')
 
+// ====== 日志格式化（与主进程 _pretty-stream.cjs 保持一致） ======
+const C = {
+  TIME:  '\x1b[90m',   // 时间：灰
+  INFO:  '\x1b[32m',   // INFO：绿
+  WARN:  '\x1b[33m',   // WARN：黄
+  ERROR: '\x1b[31m',   // ERROR：红
+  NAME:  '\x1b[34m',   // 名称：蓝
+  RESET: '\x1b[0m'
+}
+
+function devLog(level, msg) {
+  const pad2 = (n) => String(n).padStart(2, '0')
+  const d = new Date()
+  const time = `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3, '0')}`
+  const label = level.toUpperCase().padEnd(5, ' ')
+  // 名称段与主进程 _pretty-stream.cjs 保持一致：内部 12 字符居中，总包 [] 后 14 字符
+  const nameText = 'Dev'
+  const pad = 12 - nameText.length, lpad = Math.floor(pad / 2), rpad = pad - lpad
+  const name = '[' + ' '.repeat(lpad) + nameText + ' '.repeat(rpad) + ']'
+  const color = C[level.toUpperCase()] || C.INFO
+  const out = `${C.TIME}[${time}]${C.RESET} ${color}[${label}]${C.RESET} ${C.NAME}${name}${C.RESET} ${msg}\n`
+  process.stdout.write(out)
+}
+const devInfo  = (msg) => devLog('info', msg)
+const devError = (msg) => devLog('error', msg)
+
 // 纯 Node 上下文里 require('electron') 返回 Electron 可执行文件路径（node_modules/electron/dist/electron.exe）
 const electronBin = require('electron')
 
@@ -94,7 +120,7 @@ function spawnElectron() {
     electronChild = null
     // 退出码为约定值时（应用主动请求重启，如注销/清理数据），重新拉起 Electron
     if (!shuttingDown && !restarting && code === DEV_RESTART_EXIT_CODE) {
-      console.log('应用请求重启（退出码 ' + code + '），重新拉起 Electron...')
+      devInfo('应用请求重启（退出码 ' + code + '），重新拉起 Electron...')
       restartElectron('应用请求重启')
     }
   })
@@ -122,20 +148,20 @@ async function startElectronWithRetry() {
     spawnElectron()
     await sleep(400)
     if (lockRejected) {
-      console.log('检测到单实例锁冲突，等待旧实例退出后重试...')
+      devInfo('检测到单实例锁冲突，等待旧实例退出后重试...')
       await killElectronTree()
       await sleep(300)
       continue
     }
     return
   }
-  console.error('多次启动失败（单实例锁持续冲突），请确认无其他实例占用 userData 目录')
+  devError('多次启动失败（单实例锁持续冲突），请确认无其他实例占用 userData 目录')
 }
 
 /** 重启 Electron：杀树 → 释放锁/端口 → 重新启动 */
 async function restartElectron(reason) {
   restarting = true
-  console.log(reason + '，重启主进程...')
+  devInfo(reason + '，重启主进程...')
   await killElectronTree()
   // 等待单实例命名互斥锁与内置服务端口释放，避免新实例被误判为重复启动
   await sleep(250)
@@ -166,7 +192,7 @@ function startVite() {
   viteChild.on('exit', (code) => {
     viteChild = null
     if (!shuttingDown) {
-      console.log('Vite 开发服务器已退出（exit=' + code + '），本开发环境结束')
+      devInfo('Vite 开发服务器已退出（exit=' + code + '），本开发环境结束')
       cleanup()
     }
   })
@@ -194,18 +220,18 @@ function cleanup() {
 
 async function main() {
   if (await probePort(VITE_PORT)) {
-    console.error('端口 ' + VITE_PORT + ' 已被占用，请先关闭占用进程（strictPort 要求固定端口）')
+    devError('端口 ' + VITE_PORT + ' 已被占用，请先关闭占用进程（strictPort 要求固定端口）')
     process.exit(1)
   }
 
   startVite()
   const ready = await waitDevServerReady()
   if (!ready) {
-    console.error('Vite 开发服务器未在 ' + VITE_PORT + ' 端口就绪，请查看上方 Vite 日志')
+    devError('Vite 开发服务器未在 ' + VITE_PORT + ' 端口就绪，请查看上方 Vite 日志')
     cleanup()
     return
   }
-  console.log('Vite 开发服务器就绪：' + RENDERER_URL)
+  devInfo('Vite 开发服务器就绪：' + RENDERER_URL)
 
   // 给可能残留的旧服务/旧实例让出锁与端口
   await sleep(200)
@@ -215,11 +241,12 @@ async function main() {
   setupWatch()
 
   process.on('SIGINT', () => {
-    console.log('\n正在退出...')
+    process.stdout.write('\n')
+    devInfo('正在退出...')
     cleanup()
   })
   process.on('SIGTERM', () => {
-    console.log('正在退出...')
+    devInfo('正在退出...')
     cleanup()
   })
 }

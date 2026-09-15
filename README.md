@@ -1,4 +1,4 @@
-﻿# 🌍 地球 Online 生存日记
+# 🌍 地球 Online 生存日记
 
 > 以「地球 Online 玩家」的身份管理生活，3D 可视化呈现你的生存轨迹。
 
@@ -8,10 +8,10 @@
 
 | 模块 | 说明 |
 |------|------|
-| 👣 足迹记录 | 记录每日活动与日记，按时段分组 |
+| 👣 足迹记录 | 记录每日活动与日记，上午/下午/晚上三列并排展示，星标全宽置顶；卡片按钮始终可见且独立配色 |
 | 📝 笔记 | 自研 Markdown 编辑器，左侧大纲导航，支持幻灯片放映 |
 | ⏱️ 专注计时 | 番茄钟与正计时，完成后自动生成足迹 |
-| 📋 清单 | 智能清单与任务管理，支持分组、优先级、重复任务 |
+| 📋 清单 | 智能清单与任务管理，支持分组、优先级、重复任务；卡片按钮始终可见且独立配色 |
 | 🚀 倒数日 | 重要日期追踪，系统自动生成节日倒数日 |
 | 📚 课程表 | 教学周与节次管理，自动课程提醒 |
 | 📊 统计 | ECharts 图表展示时间分布 |
@@ -238,7 +238,7 @@ flowchart LR
 
 | 组件 | 位置 | 说明 |
 |------|------|------|
-| 持久化存储 | `userData/reminders.json` | JSON 文件，防抖 3 秒落盘 |
+| 持久化存储 | `userData/data/<userId>/system/reminders.json` | JSON 文件，防抖 3 秒落盘 |
 | ticker 扫描器 | main.cjs `scanDueReminders()` | 每 60s 扫存储，捡 5 分钟内到期的注册 setTimeout |
 | 双通道触发 | main.cjs `showNextReminder()` | 主窗口可见 → 应用内弹窗，否则 → `new Notification()` 系统通知 |
 | 循环提醒 | main.cjs `scheduleNextRepeat()` | 触发后写存储让 ticker/setTimeout 自动捡 |
@@ -283,7 +283,7 @@ flowchart LR
 
 ```bash
 pnpm electron:build:win
-# 流程：清理 → vite build → 安装依赖 → 生成图标 → electron-builder → 修复 latest.yml
+# 流程：清理 → vite build → 安装依赖 → 生成图标 → electron-builder → 清理产物
 ```
 
 ### Android
@@ -308,10 +308,21 @@ build/app-icon.png（源文件）
 ### 发布
 
 ```bash
-pnpm publish-release
+# 本地构建（不发布）
+pnpm electron:build:win
+
+# 发布到 GitHub Releases（自动打 tag + 上传产物）
+# 前置：gh auth login（已登录 GitHub CLI）
+pnpm electron:build:win:release
 ```
 
-发布到 GitHub generic provider，通过 electron-updater 实现自动更新。
+**更新链路**：
+
+- **发布侧**：`electron-builder` 自动打包 NSIS 安装包 `.exe`、差分更新 `.blockmap`、元数据 `latest.yml`，以 release tag（如 `v2026.9.15-8`）上传到 GitHub Releases
+- **运行时**：`electron-updater`（provider: github）从 GitHub Releases API 读取 `tag_name` 作为最新版本号和安装包地址，不依赖文件名正则
+- **触发时机**：启动 5s 后自动检查一次 + 每 6 小时静默轮询 + 用户手动触发
+- **完整流程**：检查 → 提示有更新 → 用户点下载（显示进度）→ 下载完成提示重启 → 用户确认后 `quitAndInstall` 自动重启安装
+- **IPC 入口**：`check-for-update` / `download-update` / `quit-and-install`，状态通道 `update-status` 推送 `checking / available / no-update / downloading(percent) / downloaded / error`
 
 ## 🔒 数据管理
 

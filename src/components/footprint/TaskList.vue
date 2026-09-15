@@ -1,5 +1,5 @@
 <template>
-  <div class="footprint-container" ref="containerRef" :class="{ 'is-mobile': !isElectron }">
+  <div class="footprint-container" :class="{ 'is-mobile': !isElectron }">
     <div class="page-header">
       <div class="date-nav-area">
         <button class="header-nav-btn" @click="shiftDate(-1)" title="前一天">
@@ -36,11 +36,12 @@
 
         <template v-else>
             <div class="diary-content">
+              <!-- 星标区：全宽 -->
               <div id="section-starred" v-if="starredCards.length > 0" class="diary-period">
                 <p class="period-title period-starred">
-                  <span class="collapse-arrow">▼</span> ⭐ 星标
+                  ⭐ 星标
                 </p>
-                <div class="period-items" :style="{ gridTemplateColumns: 'repeat(' + cardColumns + ', 1fr)' }">
+                <div class="period-items">
                   <template v-for="card in starredCards" :key="card.id">
                     <div v-if="card.isDiary || card.category === 'diary'" class="period-item">
                       <DiaryCard
@@ -61,81 +62,94 @@
                   </template>
                 </div>
               </div>
-              <div id="section-morning" v-if="morningRecordCards.length > 0" class="diary-period">
-                <p class="period-title period-morning" @click="morningCollapsed = !morningCollapsed">
-                  <span class="collapse-arrow">{{ morningCollapsed ? '▶' : '▼' }}</span> 🌤️ 上午
-                </p>
-                <div v-if="!morningCollapsed" class="period-items" :style="{ gridTemplateColumns: 'repeat(' + cardColumns + ', 1fr)' }">
-                  <template v-for="card in morningRecordCards" :key="card.id">
-                    <div v-if="card.type === 'record' && card.record && (card.record.isDiary || card.record.category === 'diary')" class="period-item">
-                      <DiaryCard
-                        :record="card.record"
-                        @delete="openDeleteConfirm"
-                        @star="handleStarRecord"
-                        @edit="handleEditTask"
-                      />
-                    </div>
-                    <div v-else-if="card.type === 'record' && card.record" class="period-item">
-                      <RecordCard
-                        :record="card.record"
-                        @delete="openDeleteConfirm"
-                        @star="handleStarRecord"
-                        @edit="handleEditTask"
-                      />
-                    </div>
-                  </template>
-                </div>
-              </div>
 
-              <div id="section-afternoon" v-if="afternoonRecordCards.length > 0" class="diary-period">
-                <p class="period-title period-afternoon" @click="afternoonCollapsed = !afternoonCollapsed">
-                  <span class="collapse-arrow">{{ afternoonCollapsed ? '▶' : '▼' }}</span> 🌞 下午
-                </p>
-                <div v-if="!afternoonCollapsed" class="period-items" :style="{ gridTemplateColumns: 'repeat(' + cardColumns + ', 1fr)' }">
-                  <template v-for="card in afternoonRecordCards" :key="card.id">
-                    <div v-if="card.type === 'record' && card.record && (card.record.isDiary || card.record.category === 'diary')" class="period-item">
-                      <DiaryCard
-                        :record="card.record"
-                        @delete="openDeleteConfirm"
-                        @star="handleStarRecord"
-                        @edit="handleEditTask"
-                      />
-                    </div>
-                    <div v-else-if="card.type === 'record' && card.record" class="period-item">
-                      <RecordCard
-                        :record="card.record"
-                        @delete="openDeleteConfirm"
-                        @star="handleStarRecord"
-                        @edit="handleEditTask"
-                      />
-                    </div>
-                  </template>
+              <!-- 三列时段布局 -->
+              <div class="periods-grid">
+                <!-- 上午 -->
+                <div id="section-morning" class="period-column">
+                  <p class="period-title period-morning">
+                    🌤️ 上午
+                    <span class="period-count" v-if="morningRecordCards.length">({{ morningRecordCards.length }})</span>
+                  </p>
+                  <div v-if="morningRecordCards.length > 0" class="period-items">
+                    <template v-for="card in morningRecordCards" :key="card.id">
+                      <div v-if="card.type === 'record' && card.record && (card.record.isDiary || card.record.category === 'diary')" class="period-item">
+                        <DiaryCard
+                          :record="card.record"
+                          @delete="openDeleteConfirm"
+                          @star="handleStarRecord"
+                          @edit="handleEditTask"
+                        />
+                      </div>
+                      <div v-else-if="card.type === 'record' && card.record" class="period-item">
+                        <RecordCard
+                          :record="card.record"
+                          @delete="openDeleteConfirm"
+                          @star="handleStarRecord"
+                          @edit="handleEditTask"
+                        />
+                      </div>
+                    </template>
+                  </div>
+                  <div v-else class="period-empty">暂无记录</div>
                 </div>
-              </div>
 
-              <div id="section-evening" v-if="eveningRecordCards.length > 0" class="diary-period">
-                <p class="period-title period-evening" @click="eveningCollapsed = !eveningCollapsed">
-                  <span class="collapse-arrow">{{ eveningCollapsed ? '▶' : '▼' }}</span> 🌙 晚上
-                </p>
-                <div v-if="!eveningCollapsed" class="period-items" :style="{ gridTemplateColumns: 'repeat(' + cardColumns + ', 1fr)' }">
-                  <template v-for="card in eveningRecordCards" :key="card.id">
-                    <div v-if="card.type === 'record' && card.record && (card.record.isDiary || card.record.category === 'diary')" class="period-item">
-                      <DiaryCard
-                        :record="card.record"
-                        @delete="openDeleteConfirm"
-                        @star="handleStarRecord"
-                        @edit="handleEditTask"
-                      />
-                    </div>
-                    <div v-else-if="card.type === 'record' && card.record" class="period-item">
-                      <RecordCard
-                        :record="card.record"
-                        @delete="openDeleteConfirm"
-                        @star="handleStarRecord"
-                        @edit="handleEditTask"
-                      />
-                    </div>
-                  </template>
+                <!-- 下午 -->
+                <div id="section-afternoon" class="period-column">
+                  <p class="period-title period-afternoon">
+                    🌞 下午
+                    <span class="period-count" v-if="afternoonRecordCards.length">({{ afternoonRecordCards.length }})</span>
+                  </p>
+                  <div v-if="afternoonRecordCards.length > 0" class="period-items">
+                    <template v-for="card in afternoonRecordCards" :key="card.id">
+                      <div v-if="card.type === 'record' && card.record && (card.record.isDiary || card.record.category === 'diary')" class="period-item">
+                        <DiaryCard
+                          :record="card.record"
+                          @delete="openDeleteConfirm"
+                          @star="handleStarRecord"
+                          @edit="handleEditTask"
+                        />
+                      </div>
+                      <div v-else-if="card.type === 'record' && card.record" class="period-item">
+                        <RecordCard
+                          :record="card.record"
+                          @delete="openDeleteConfirm"
+                          @star="handleStarRecord"
+                          @edit="handleEditTask"
+                        />
+                      </div>
+                    </template>
+                  </div>
+                  <div v-else class="period-empty">暂无记录</div>
+                </div>
+
+                <!-- 晚上 -->
+                <div id="section-evening" class="period-column">
+                  <p class="period-title period-evening">
+                    🌙 晚上
+                    <span class="period-count" v-if="eveningRecordCards.length">({{ eveningRecordCards.length }})</span>
+                  </p>
+                  <div v-if="eveningRecordCards.length > 0" class="period-items">
+                    <template v-for="card in eveningRecordCards" :key="card.id">
+                      <div v-if="card.type === 'record' && card.record && (card.record.isDiary || card.record.category === 'diary')" class="period-item">
+                        <DiaryCard
+                          :record="card.record"
+                          @delete="openDeleteConfirm"
+                          @star="handleStarRecord"
+                          @edit="handleEditTask"
+                        />
+                      </div>
+                      <div v-else-if="card.type === 'record' && card.record" class="period-item">
+                        <RecordCard
+                          :record="card.record"
+                          @delete="openDeleteConfirm"
+                          @star="handleStarRecord"
+                          @edit="handleEditTask"
+                        />
+                      </div>
+                    </template>
+                  </div>
+                  <div v-else class="period-empty">暂无记录</div>
                 </div>
               </div>
 
@@ -261,15 +275,9 @@ onMounted(() => {
     logger.debug('[TaskList] onMounted navPath为空，设为[footprint]')
     pageNav.setNavPath(['footprint'])
   }
-  updateCardColumns()
-  if (containerRef.value && typeof ResizeObserver !== 'undefined') {
-    resizeObserver = new ResizeObserver(() => updateCardColumns())
-    resizeObserver.observe(containerRef.value)
-  }
 })
 
 onBeforeUnmount(() => {
-  if (resizeObserver) resizeObserver.disconnect()
 })
 
 const selectedDateValue = ref(dayjs().format('YYYY-MM-DD'))
@@ -329,27 +337,6 @@ const onHeaderDatePicked = (date: string) => {
 const shiftDate = (delta: number) => {
   selectedDateValue.value = dayjs(selectedDateValue.value).add(delta, 'day').format('YYYY-MM-DD')
 }
-
-// 动态卡片列数（足迹页面卡片布局）
-const containerRef = ref<HTMLElement | null>(null)
-const D = 25 // 卡片间距常量 d = 25px
-const cardColumns = ref(1)
-let resizeObserver: ResizeObserver | null = null
-
-const updateCardColumns = () => {
-  if (!containerRef.value) return
-  // 可用区域宽度：电脑端容器已自动扣除全局导航栏宽度，安卓端即窗口宽度
-  const availableWidth = containerRef.value.clientWidth
-  if (availableWidth < 1000 + D) cardColumns.value = 1
-  else if (availableWidth < 1500 + 2 * D) cardColumns.value = 2
-  else if (availableWidth < 2000 + 3 * D) cardColumns.value = 3
-  else cardColumns.value = 3
-}
-
-// 折叠状态
-const morningCollapsed = ref(false)
-const afternoonCollapsed = ref(false)
-const eveningCollapsed = ref(false)
 
 const {
   morningCards,
@@ -682,21 +669,12 @@ const generateTaskDescription = (task: Task) => {
   width: 100%;
 }
 
-.collapse-arrow {
-  font-size: 11px;
-  margin-right: 4px;
-  display: inline-block;
-  transition: transform 0.2s;
-}
-
 .important-title {
   font-weight: 600;
   color: #fbbf24;
   margin: 0 0 12px 0;
   font-size: 15px;
   text-align: left;
-  cursor: pointer;
-  user-select: none;
 }
 
 .diary-content {
@@ -708,14 +686,53 @@ const generateTaskDescription = (task: Task) => {
   margin-top: 20px;
 }
 
+/* 三列时段网格 */
+.periods-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 25px;
+  margin-top: 20px;
+}
+
+.period-column {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 14px 16px;
+  min-height: 100px;
+}
+
+.period-column .period-title {
+  margin-bottom: 10px;
+}
+
+.period-count {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--chalk-muted);
+  margin-left: 4px;
+}
+
+.period-empty {
+  font-size: 12px;
+  color: var(--chalk-muted);
+  text-align: center;
+  padding: 24px 0;
+}
+
+/* 响应式：窄屏回到纵向堆叠 */
+@media (max-width: 1200px) {
+  .periods-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .period-title {
   font-weight: 600;
   color: var(--chalk-white);
   margin: 0 0 12px 0;
   font-size: 15px;
   text-align: left;
-  cursor: pointer;
-  user-select: none;
 }
 
 .period-title.period-morning {
@@ -736,8 +753,20 @@ const generateTaskDescription = (task: Task) => {
 
 .period-items {
   display: grid;
-  gap: 25px;
+  gap: 12px;
   width: 100%;
+}
+
+/* 星标区保持多列卡片 */
+.diary-period .period-items {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 25px;
+}
+
+/* 时段列内卡片单列 */
+.period-column .period-items {
+  grid-template-columns: 1fr;
+  gap: 12px;
 }
 
 .period-item {

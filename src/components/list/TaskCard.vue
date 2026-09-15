@@ -1,13 +1,14 @@
 <template>
   <div class="list-card" :class="['priority-bg-' + list.priority, { completed: list.completed }]">
-    <div class="card-top-actions" @click.stop>
-      <button class="card-icon-btn" title="编辑任务" @click="emitEdit"><el-icon><Edit /></el-icon></button>
-      <button class="card-icon-btn danger" title="删除任务" @click="showDeleteConfirm = true"><el-icon><Delete /></el-icon></button>
-    </div>
-
     <div class="list-header">
-      <el-checkbox v-if="showCheckbox" :model-value="list.completed" @change="handleTaskComplete(list)" :disabled="isGuideActive" />
       <div class="list-name">{{ list.name }}</div>
+      <div class="card-top-actions" @click.stop>
+        <button class="card-icon-btn card-icon-btn-complete" :title="list.completed ? '取消完成' : '标记完成'" :class="{ active: list.completed }" @click="handleTaskComplete(list)">
+          <el-icon><Check v-if="list.completed" /><CircleCheck v-else /></el-icon>
+        </button>
+        <button class="card-icon-btn card-icon-btn-edit" title="编辑任务" @click="emitEdit"><el-icon><Edit /></el-icon></button>
+        <button class="card-icon-btn card-icon-btn-delete" title="删除任务" @click="showDeleteConfirm = true"><el-icon><Delete /></el-icon></button>
+      </div>
     </div>
 
     <div class="list-body">
@@ -85,14 +86,10 @@ import { useNoteStore, getMdPlainText, type Note } from '../../stores/noteStore'
 import { usePageNav, MODULE_ROUTES } from '../../composables/usePageNav'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
 
-const props = withDefaults(defineProps<{
+const props = defineProps<{
   list: Task
   context?: 'default' | 'footprint' | 'today' | 'custom-list'
-  showCheckbox?: boolean
-}>(), {
-  context: 'default',
-  showCheckbox: true
-})
+}>()
 
 const emit = defineEmits<{
   (e: 'complete', list: Task): void
@@ -105,7 +102,6 @@ const noteStore = useNoteStore()
 const router = useRouter()
 const { setNavPath } = usePageNav()
 const refreshReminders = inject<() => void>('refreshReminders', () => {})
-const isGuideActive = inject('guideVisible', ref(false))
 
 // 关联笔记：按 id 取笔记本体，已删除的自动跳过
 const linkedNotes = computed(() => {
@@ -314,11 +310,17 @@ const showDeleteConfirm = ref(false)
 .list-header { display: flex; align-items: center; gap: 10px; }
 .list-header .list-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 500; color: var(--chalk-white); margin-bottom: 0; word-break: break-word; }
 
-.card-top-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 2px; z-index: 2; opacity: 0; transition: opacity 0.15s; }
-.list-card:hover .card-top-actions { opacity: 1; }
-.card-icon-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: transparent; color: var(--chalk-white-60); cursor: pointer; border-radius: 4px; font-size: 12px; transition: all 0.15s; }
-.card-icon-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--chalk-white); }
-.card-icon-btn.danger:hover { color: var(--chalk-danger); }
+.card-top-actions { display: flex; align-items: center; gap: 2px; margin-left: auto; flex-shrink: 0; }
+.card-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: transparent; cursor: pointer; border-radius: 5px; font-size: 13px; transition: all 0.15s; opacity: 0.7; }
+.card-icon-btn:hover { opacity: 1; transform: scale(1.1); }
+.card-icon-btn-complete { color: #34d399; }
+.card-icon-btn-complete:hover { background: rgba(52, 211, 153, 0.15); }
+.card-icon-btn-complete.active { opacity: 1; color: #10b981; }
+.card-icon-btn-complete.active:hover { background: rgba(16, 185, 129, 0.2); }
+.card-icon-btn-edit { color: #22d3ee; }
+.card-icon-btn-edit:hover { background: rgba(34, 211, 238, 0.15); }
+.card-icon-btn-delete { color: #fb7185; }
+.card-icon-btn-delete:hover { background: rgba(251, 113, 133, 0.15); }
 
 .list-body { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
 .list-meta-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -385,6 +387,4 @@ const showDeleteConfirm = ref(false)
   text-overflow: ellipsis;
 }
 .linked-note-tag:hover .linked-note-preview, .linked-note-preview:hover { display: block; }
-
-:deep(.el-checkbox__inner) { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
 </style>

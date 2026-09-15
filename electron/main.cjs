@@ -258,208 +258,107 @@ ipcMain.handle('set-window-title', async (_event, title) => {
   return true
 })
 
-function ensureAutoUpdater() {
-  if (autoUpdater) return autoUpdater
+// ========== 自动更新（electron-updater + GitHub Releases） ==========
+const UPDATE_CHECK_INTERVAL_MS = 6 * 3600_000 // 6 小时
+
+function initUpdater() {
+  if (autoUpdater) return
   autoUpdater = require('electron-updater').autoUpdater
   autoUpdater.autoDownload = false
-  autoUpdater.channel = 'latest'
+  autoUpdater.autoInstallOnAppQuit = true
+
+  // 覆盖 electron-updater 内部日志，转中文
+  autoUpdater.logger = {
+    info(msg) {
+      if (typeof msg === 'string') {
+        if (msg.includes('Skip checkForUpdates because application is not packed')) {
+          debugLog('[Updater] 开发模式下跳过更新检查（仅打包后生效）')
+          return
+        }
+        if (msg.includes('No update protocol handler found')) {
+          debugLog('[Updater] 未找到更新协议处理器')
+          return
+        }
+      }
+      debugLog('[Updater] ' + msg)
+    },
+    warn(msg) { debugLog('[Updater] ' + msg) },
+    error(msg) { debugLog('[Updater] ' + msg) },
+    debug(msg) { debugLog('[Updater] ' + msg) },
+    silly() {},
+    verbose() {}
+  }
+
+  autoUpdater.on('checking-for-update', () => {
+    debugLog('[Updater] 正在检查更新...')
+    sendUpdateStatusToMain({ status: 'checking' })
+  })
 
   autoUpdater.on('update-available', (info) => {
-    debugLog('[Main] autoUpdater: New version detected ' + info.version)
+    debugLog('[Updater] 发现新版本：' + info.version)
     sendUpdateStatusToMain({ status: 'available', version: info.version })
   })
 
-  autoUpdater.on('error', (err) => {
-    debugLog('[Main] autoUpdater error: ' + err.message)
-    sendUpdateStatusToMain({ status: 'error', message: err.message })
+  autoUpdater.on('update-not-available', (info) => {
+    debugLog('[Updater] 已是最新版：' + app.getVersion())
+    sendUpdateStatusToMain({ status: 'no-update', version: info.version })
   })
 
-  return autoUpdater
+  autoUpdater.on('download-progress', (progressObj) => {
+    const percent = Math.floor(progressObj.percent)
+    sendUpdateStatusToMain({ status: 'downloading', percent })
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    debugLog('[Updater] 下载完成：' + info.version)
+    sendUpdateStatusToMain({ status: 'downloaded', version: info.version })
+  })
+
+  autoUpdater.on('error', (err) => {
+    debugLog('[Updater] 更新错误：' + err.message)
+    sendUpdateStatusToMain({ status: 'error', message: err.message })
+  })
 }
 
 function sendUpdateStatusToMain(data) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('update-status', data)
   } else {
-    debugLog('[Main] mainWindow is not available, cannot send update status')
+    debugLog('[Updater] 主窗口不可用，无法推送更新状态')
   }
-}
-
-
-
-// ========== 跨平台版本检测（从发布文件名提取版本号） ==========
-const RELEASES_API = 'https://api.github.com/repos/XueWerY/earth-survival-diary/releases'
-/** 从构建产物文件名中提取版本号，如 Earth-Survival-Diary-Setup-2026.7.18-20.exe */
-function extractVersionFromFilename(filename) {
-  const match = filename.match(/Earth-Survival-Diary(?:-Setup)?-(\d{4}\.\d{1,2}\.\d{1,2}-\d+)/)
-  return match ? match[1] : null
-}
-/** 解析 YYYY.M.DD-X 版本号为可比较对象 */
-function parseVersion(version) {
-  const match = version.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})-(\d+)$/)
-  if (!match) return null
-  return {
-    year: parseInt(match[1], 10),
-    month: parseInt(match[2], 10),
-    day: parseInt(match[3], 10),
-    patch: parseInt(match[4], 10)
-  }
-}
-/** 比较两个版本号：负数=v1<v2, 0=相等, 正数=v1>v2 */
-function compareVersions(v1, v2) {
-  const a = parseVersion(v1), b = parseVersion(v2)
-  if (!a || !b) return v1.localeCompare(v2)
-  if (a.year !== b.year) return a.year - b.year
-  if (a.month !== b.month) return a.month - b.month
-  if (a.day !== b.day) return a.day - b.day
-  return a.patch - b.patch
-}
-/** 通过 GitHub Releases API 检查更新（从资产文件名提取版本号） */
-async function fetchLatestFromReleases() {
-  return new Promise((resolve, reject) => {
-    const url = new URL(RELEASES_API)
-    const opts = { hostname: url.hostname, path: url.pathname, headers: { 'User-Agent': 'earth-survival-diary' } }
-    https.get(opts, (res) => {
-      let body = ''
-      res.on('data', (chunk) => { body += chunk })
-      res.on('end', () => {
-        try {
-          const releases = JSON.parse(body)
-          if (!Array.isArray(releases)) return resolve(null)
-          let bestVersion = null; let bestUrl = null
-          for (const release of releases) {
-            if (release.prerelease) continue
-            for (const asset of (release.assets || [])) {
-              if (!asset.name.endsWith('.exe')) continue
-              const v = extractVersionFromFilename(asset.name)
-              if (!v) continue
-              if (!bestVersion || compareVersions(v, bestVersion) > 0) {
-                bestVersion = v; bestUrl = asset.browser_download_url
-              }
-            }
-          }
-          resolve(bestVersion ? { version: bestVersion, downloadUrl: bestUrl } : null)
-        } catch { resolve(null) }
-      })
-    }).on('error', (e) => reject(e))
-  })
 }
 
 ipcMain.handle('check-for-update', async () => {
-  debugLog('[Main] Received manual update check request')
+  debugLog('[Updater] 手动检查更新')
   try {
-    const latest = await fetchLatestFromReleases()
-    const currentVersion = app.getVersion()
-    if (!latest) {
-      debugLog('[Main] No release assets found')
-      sendUpdateStatusToMain({ status: 'no-update' })
-      return { updateAvailable: false }
-    }
-    if (compareVersions(latest.version, currentVersion) <= 0) {
-      debugLog('[Main] Already up to date: ' + currentVersion)
-      sendUpdateStatusToMain({ status: 'no-update' })
-      return { updateAvailable: false }
-    }
-    debugLog('[Main] New version found: ' + latest.version)
-    sendUpdateStatusToMain({ status: 'available', version: latest.version, downloadUrl: latest.downloadUrl })
-    return { updateAvailable: true, version: latest.version }
+    await autoUpdater.checkForUpdates()
+    return { ok: true }
   } catch (e) {
-    debugLog('[Main] Update check failed: ' + e.message)
-    sendUpdateStatusToMain({ status: 'error', message: e.message })
-    return { error: e.message }
+    debugLog('[Updater] 检查更新失败：' + e.message)
+    return { ok: false, error: e.message }
   }
+})
+
+ipcMain.handle('download-update', async () => {
+  debugLog('[Updater] 开始下载更新')
+  try {
+    await autoUpdater.downloadUpdate()
+    return { ok: true }
+  } catch (e) {
+    debugLog('[Updater] 下载失败：' + e.message)
+    return { ok: false, error: e.message }
+  }
+})
+
+ipcMain.handle('quit-and-install', async () => {
+  debugLog('[Updater] 正在退出并安装更新...')
+  isQuitting = true
+  autoUpdater.quitAndInstall(true, true)
 })
 
 ipcMain.handle('open-external', async (_event, url) => {
-  debugLog('[Main] Opening external link: ' + url)
+  debugLog('[Main] 打开外部链接：' + url)
   await shell.openExternal(url)
-})
-
-// 启动时清理更新安装包：安装包下载到系统临时目录（app.getPath('temp')），
-// 更新安装完成并启动新版本后遗留的安装包在此删除
-function cleanupUpdateInstallers() {
-  try {
-    const tempDir = app.getPath('temp')
-    for (const f of fs.readdirSync(tempDir)) {
-      if (/^Earth-Survival-Diary-Setup.*\.exe$/i.test(f)) {
-        try {
-          fs.unlinkSync(path.join(tempDir, f))
-          debugLog('[Main] 已删除更新安装包: ' + f)
-        } catch (e) {
-          debugLog('[Main] 删除安装包失败: ' + f + ' - ' + e.message)
-        }
-      }
-    }
-  } catch (e) {
-    debugLog('[Main] 清理安装包目录失败: ' + e.message)
-  }
-}
-
-// 下载更新安装包（回传进度并自动打开安装程序；net.request 使用 Chromium 网络栈，自动遵循系统代理，有代理时下载走代理）
-ipcMain.handle('download-update', async (_event, downloadUrl) => {
-  debugLog('[Main] Downloading update from: ' + downloadUrl)
-  // 检测系统代理（仅记录，net.request 自动使用系统代理）
-  try {
-    const proxy = await session.defaultSession.resolveProxy(downloadUrl)
-    debugLog('[Main] System proxy for update download: ' + proxy)
-  } catch (e) {
-    debugLog('[Main] Proxy detection failed: ' + e.message)
-  }
-  return new Promise((resolve) => {
-    const fileName = path.basename(new URL(downloadUrl).pathname) || 'Earth-Survival-Diary-Setup.exe'
-    const filePath = path.join(app.getPath('temp'), fileName)
-    const request = net.request({ url: downloadUrl, useSessionCookies: false, redirect: 'follow', headers: { 'User-Agent': 'earth-survival-diary' } })
-    request.on('response', (res) => {
-      if (res.statusCode !== 200) {
-        const msg = '下载失败，HTTP 状态码 ' + res.statusCode
-        debugLog('[Main] ' + msg)
-        sendUpdateStatusToMain({ status: 'error', message: msg })
-        return resolve({ ok: false, error: msg })
-      }
-      const total = parseInt(res.headers['content-length'] || '0', 10)
-      const fileStream = fs.createWriteStream(filePath)
-      let received = 0
-      let lastPercent = -1
-      res.on('data', (chunk) => {
-        received += chunk.length
-        if (total > 0) {
-          const percent = Math.floor((received / total) * 100)
-          if (percent !== lastPercent) {
-            lastPercent = percent
-            sendUpdateStatusToMain({ status: 'downloading', percent })
-          }
-        }
-      })
-      res.pipe(fileStream)
-      fileStream.on('finish', () => {
-        fileStream.close()
-        debugLog('[Main] Update downloaded to: ' + filePath)
-        sendUpdateStatusToMain({ status: 'downloaded' })
-        // 打开安装程序后退出应用
-        shell.openPath(filePath).then((err) => {
-          if (err) {
-            debugLog('[Main] Failed to open installer: ' + err)
-            sendUpdateStatusToMain({ status: 'error', message: '无法打开安装程序：' + err })
-            return
-          }
-          isQuitting = true
-          app.quit()
-        })
-        resolve({ ok: true })
-      })
-      fileStream.on('error', (e) => {
-        debugLog('[Main] Write installer failed: ' + e.message)
-        sendUpdateStatusToMain({ status: 'error', message: e.message })
-        resolve({ ok: false, error: e.message })
-      })
-    })
-    request.on('error', (e) => {
-      debugLog('[Main] Download request error: ' + e.message)
-      sendUpdateStatusToMain({ status: 'error', message: e.message })
-      resolve({ ok: false, error: e.message })
-    })
-    request.end()
-  })
 })
 
 ipcMain.handle('save-file-dialog', async (_event, options) => {
@@ -2191,7 +2090,7 @@ ipcMain.handle('schedule-reminders', async (_event, a1, a2, a3) => {
   }
   if (userId) currentUserId = userId
   loadReminders()
-  debugLog('[Reminder] 收到调度请求，用户=' + userId + '，共 ' + (reminders ? reminders.length : 0) + ' 条')
+  debugLog('[Reminder] 收到调度请求，用户 = ' + userId + '，共 ' + (reminders ? reminders.length : 0) + ' 条')
   cancelAllReminderTimers()
   if (persistDuration != null) reminderPersistDuration = persistDuration
   if (!reminders || reminders.length === 0) { reminderStore = []; schedulePersist(); return { ok: true, count: 0 } }
@@ -2227,8 +2126,6 @@ app.whenReady().then(async () => {
     debugLog('[Main] Did not obtain single instance lock, skipping launch')
     return
   }
-  // 更新安装完成启动新版本后，删除临时目录中遗留的更新安装包
-  cleanupUpdateInstallers()
   closeAction = getCloseAction()
   initLogger()
   debugLog('[Main] 关闭按钮行为：' + (closeAction === 'exit' ? '直接退出' : '最小化到系统托盘'))
@@ -2255,14 +2152,10 @@ app.whenReady().then(async () => {
     // 插件编译在后台进行，避免阻塞窗口首次显示
     ensurePluginsCompiled().catch((err) => errorLog('[Electron] Plugin compilation failed: ' + err.message))
 
-    setTimeout(() => {
-      fetchLatestFromReleases().then((latest) => {
-        if (latest && compareVersions(latest.version, app.getVersion()) > 0) {
-          debugLog('[Updater] New version found at startup: ' + latest.version)
-          sendUpdateStatusToMain({ status: 'available', version: latest.version, downloadUrl: latest.downloadUrl })
-        }
-      }).catch(e => debugLog('[Updater] Check failed: ' + e.message))
-    }, 5000)
+    // 自动更新：启动 5s 后首次检查 + 每 6 小时轮询一次
+    initUpdater()
+    setTimeout(() => { autoUpdater.checkForUpdates().catch(e => debugLog('[Updater] 启动检查失败：' + e.message)) }, 5000)
+    setInterval(() => { autoUpdater.checkForUpdates().catch(e => debugLog('[Updater] 定时检查失败：' + e.message)) }, UPDATE_CHECK_INTERVAL_MS)
   } catch (err) {
     errorLog('[Electron] Fatal error: ' + err.message)
     errorLog('[Electron] Stack: ' + err.stack)
