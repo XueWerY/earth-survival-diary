@@ -4,8 +4,11 @@
       <button class="breadcrumb-module" @click="pageNav.setNavPath(['list'])" title="回到清单首页">📋</button>
       <div class="breadcrumb-scroll" ref="breadcrumbScrollRef">
         <template v-for="(seg, idx) in localBreadcrumbSegments" :key="idx">
-          <span v-if="seg.dropdownItems" class="breadcrumb-sep clickable" @click.stop="openSegmentDropdown(seg, $event)">{{ (activeDropdown === 'segment' && activeSegment === seg) ? '∨' : '>' }}</span>
-          <span v-else class="breadcrumb-sep">></span>
+          <span v-if="seg.dropdownItems" class="breadcrumb-sep clickable" @click.stop="openSegmentDropdown(seg, $event)">
+            <el-icon v-if="activeDropdown === 'segment' && activeSegment === seg" class="breadcrumb-caret"><ChevronDown /></el-icon>
+            <el-icon v-else class="breadcrumb-caret breadcrumb-caret-simple"><ChevronRight /></el-icon>
+          </span>
+          <span v-else class="breadcrumb-sep"><el-icon class="breadcrumb-caret breadcrumb-caret-simple"><ChevronRight /></el-icon></span>
           <span
             class="breadcrumb-segment"
             :class="{ clickable: seg.clickable }"
@@ -239,7 +242,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch, inject } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Calendar, Clock, Timer, X, TriangleAlert, Pencil, Plus, Trash2, List, Folder, Check, ArrowUpDown, Star, Tags } from '@lucide/vue'
+import { Calendar, Clock, Timer, X, TriangleAlert, Pencil, Plus, Trash2, List, Folder, Check, ArrowUpDown, Star, Tags, ChevronDown, ChevronRight } from '@lucide/vue'
 import ListFormPage from './ListFormPage.vue'
 import GroupFormPage from './GroupFormPage.vue'
 import TaskForm from './TaskForm.vue'
@@ -1111,6 +1114,17 @@ const handleConfirmAction = () => {
   padding: 2px 4px;
   border-radius: 4px;
   transition: all 0.15s;
+}
+
+.breadcrumb-caret {
+  font-size: 12px;
+  transform: translateY(1px);
+  display: inline-flex;
+}
+
+.breadcrumb-caret-simple {
+  transform: translateY(0);
+  opacity: 0.7;
 }
 
 .breadcrumb-sep.clickable:hover {

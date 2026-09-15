@@ -320,7 +320,7 @@ pnpm electron:build:win:release
 
 **更新链路**：
 
-- **发布侧**：`electron-builder` 自动打包 NSIS 安装包 `.exe`、差分更新 `.blockmap`、元数据 `latest.yml`，以 release tag（如 `v2026.9.15-17`）上传到 GitHub Releases
+- **发布侧**：`electron-builder` 自动打包 NSIS 安装包 `.exe`、差分更新 `.blockmap`、元数据 `latest.yml`，以 release tag（如 `v2026.9.15-19`）上传到 GitHub Releases
 - **运行时**：`electron-updater`（provider: github）从 GitHub Releases API 读取 `tag_name` 作为最新版本号和安装包地址，不依赖文件名正则
 - **触发时机**：启动 5s 后自动检查一次 + 每 6 小时静默轮询 + 用户手动触发
 - **完整流程**：检查 → 提示有更新 → 用户点下载（显示进度）→ 下载完成提示重启 → 用户确认后 `quitAndInstall` 自动重启安装
