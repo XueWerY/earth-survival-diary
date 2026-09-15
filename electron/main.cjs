@@ -2170,7 +2170,7 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', () => {
-  debugLog('[Electron] App is about to quit (system shutdown/user exit)')
+  debugLog('[Electron] 应用即将退出（系统关机/用户退出）')
   isQuitting = true
   cancelAllReminderTimers()
   stopTicker()

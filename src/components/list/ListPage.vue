@@ -712,19 +712,6 @@ const currentGroups = computed(() => {
 })
 const currentSortedGroups = computed(() => currentGroups.value)
 
-watch([navPath, sortedFolders, () => listStore.lists], async () => {
-  logger.debug('[ListPage] breadcrumb watch 触发', { navPath: [...navPath.value], foldersCount: sortedFolders.value.length, listsCount: listStore.lists?.length })
-  localBreadcrumbSegments.value = computeBreadcrumbSegments()
-  logger.debug('[ListPage] breadcrumb watch 结果', { segments: localBreadcrumbSegments.value })
-  closeDropdown()
-  scrollBreadcrumbToEnd()
-  await nextTick()
-
-  // 所有视图变化（切入/下钻/返回/数据增删改）统一效果：
-  // 页面先空白，卡片按行序一张张浮现（entrance.play 内部会先同步隐藏卡片并防抖合并）
-  entrance.play()
-}, { immediate: true, deep: true })
-
 const smartListCount = computed(() => 3)
 
 const getFolderListCount = (folderId: string) => listStore.getListsInFolder(folderId).length
@@ -777,6 +764,45 @@ const currentGroupTasks = computed(() => {
   if (!currentGroupIdFromPath.value) return []
   return sortTasks(listStore.lists.filter(m => m.groupId === currentGroupIdFromPath.value && !m.completed))
 })
+
+// 上次触发入场动效时的卡片结构签名：仅包含当前视图可见卡片的标识与完成状态。
+// 卡片上的数据变动（名称、备注、优先级、日期、清单勾选等编辑）不改变该签名，因此不重播动效
+let lastMotionKey = ''
+
+function computeCardMotionKey(): string {
+  const path = navPath.value.join('/')
+  let content = ''
+  if (isCustomOverview.value) {
+    content = 'F:' + sortedFolders.value.map(f => f.id).join(',')
+  } else if (isFolderView.value) {
+    content = 'L:' + sortedFolderLists.value.map(l => `${l.id}:${l.completed ? '1' : '0'}`).join(',')
+  } else if (isListView.value) {
+    content = 'G:' + currentSortedGroups.value.map(g => g.id).join(',')
+  } else if (isSmartDetail.value) {
+    content = 'T:' + smartDetailTasks.value.map(t => `${t.id}:${t.completed ? '1' : '0'}`).join(',')
+  } else if (isGroupTasksView.value) {
+    content = 'T:' + currentGroupTasks.value.map(t => `${t.id}:${t.completed ? '1' : '0'}`).join(',')
+  }
+  return path + '|' + content
+}
+
+watch([navPath, sortedFolders, () => listStore.lists], async () => {
+  logger.debug('[ListPage] breadcrumb watch 触发', { navPath: [...navPath.value], foldersCount: sortedFolders.value.length, listsCount: listStore.lists?.length })
+  localBreadcrumbSegments.value = computeBreadcrumbSegments()
+  logger.debug('[ListPage] breadcrumb watch 结果', { segments: localBreadcrumbSegments.value })
+  closeDropdown()
+  scrollBreadcrumbToEnd()
+  await nextTick()
+
+  // 仅结构性变化（卡片新增/删除/标记完成、切换视图）触发入场动效；
+  // 卡片上的数据变动保持静态。动效效果：页面先空白，卡片按行序一张张浮现
+  // （entrance.play 内部会先同步隐藏卡片并防抖合并）
+  const key = computeCardMotionKey()
+  if (key !== lastMotionKey) {
+    lastMotionKey = key
+    entrance.play()
+  }
+}, { immediate: true, deep: true })
 
 const getListTaskCount = (listId: string) => listStore.lists.filter(m => m.listId === listId && !m.completed).length
 const getListGroupCount = (listId: string) => listStore.taskLists.find(l => l.id === listId)?.groups.length || 0

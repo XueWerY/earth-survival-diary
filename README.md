@@ -253,7 +253,7 @@ flowchart LR
 - **配色**：深色星空背景、蓝紫渐变（`#667eea`）、琥珀强调（`#fbbf24`）
 - **文字**：rgba 白色透明度梯度，深色背景下 clear 可读
 - **图标**：Lucide 线性图标（`@lucide/vue`），`el-icon` 内经 CSS 统一为 `1em` 跟随字体尺寸
-- **动效**：GSAP 卡片逐个出现（行优先顺序、防抖合并收敛，切入/下钻/返回统一为此效果），全程仅使用 `transform/opacity`，全局遵循 `prefers-reduced-motion` 降级
+- **动效**：GSAP 卡片逐个出现（行优先顺序、防抖合并收敛；仅在切换视图、卡片新增/删除/标记完成时触发，卡片内容编辑保持静态），全程仅使用 `transform/opacity`，全局遵循 `prefers-reduced-motion` 降级
 
 ### 布局
 
@@ -271,8 +271,8 @@ flowchart LR
 
 | 组件 | 说明 |
 |------|------|
-| `MainNav` | 全局导航栏。桌面端左侧导航区（`variant="left"`，宽度 120px，底部可收起为窄栏）；移动端底部导航栏（`variant="bottom"`，距页面下边界 25px 透明浮层）；长按左键 ~0.3s 进入滑动模式；导航项末尾提供「拆分」入口（`variant="split"`，flex-start 布局便于溢出滚动） |
-| `BaseDialog`（`components/ui/`） | 通用弹窗。内容区可滚动，`#footer` 插槽固定底部按钮带分隔线；`inline` prop 使其相对最近定位祖先渲染（拆分面板内使用）；`noOverlayClose` 禁止点击遮罩关闭 |
+| `MainNav` | 全局导航栏。桌面端左侧导航区（`variant="left"`，宽度 120px，底部可收起为窄栏）；移动端底部导航栏（`variant="bottom"`，距页面下边界 25px 透明浮层）；长按左键 ~0.3s 进入滑动模式 |
+| `BaseDialog`（`components/ui/`） | 通用弹窗。内容区可滚动，`#footer` 插槽固定底部按钮带分隔线；`noOverlayClose` 禁止点击遮罩关闭 |
 | `ConfirmDialog` | 确认弹窗，v-model:visible 控制；message 下方提供默认插槽放额外内容（如勾选项） |
 | `ReminderCard` | 提醒卡片，每 5 秒弹出 |
 | `FloatingTimerBar`（`components/timer/`） | 计时中跨页面常驻弹窗，窗口右下角，可拖动 |
@@ -320,7 +320,7 @@ pnpm electron:build:win:release
 
 **更新链路**：
 
-- **发布侧**：`electron-builder` 自动打包 NSIS 安装包 `.exe`、差分更新 `.blockmap`、元数据 `latest.yml`，以 release tag（如 `v2026.9.15-19`）上传到 GitHub Releases
+- **发布侧**：`electron-builder` 自动打包 NSIS 安装包 `.exe`、差分更新 `.blockmap`、元数据 `latest.yml`，以 release tag（如 `v2026.9.15-21`）上传到 GitHub Releases
 - **运行时**：`electron-updater`（provider: github）从 GitHub Releases API 读取 `tag_name` 作为最新版本号和安装包地址，不依赖文件名正则
 - **触发时机**：启动 5s 后自动检查一次 + 每 6 小时静默轮询 + 用户手动触发
 - **完整流程**：检查 → 提示有更新 → 用户点下载（显示进度）→ 下载完成提示重启 → 用户确认后 `quitAndInstall` 自动重启安装

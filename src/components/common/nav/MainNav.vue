@@ -2,7 +2,7 @@
   <div
     ref="navBarRef"
     class="main-nav-bar"
-    :class="[`nav-${variant}`, { 'nav-hidden': hidden, 'no-hover': noHover, 'collapsed': collapsed && variant === 'left' }]"
+    :class="[`nav-${variant}`, { 'nav-hidden': hidden, 'collapsed': collapsed && variant === 'left' }]"
     @click.capture="onClickCapture"
   >
     <div class="nav-items-scroll" ref="scrollRef">
@@ -18,17 +18,6 @@
         </span>
         <span class="nav-item-label">{{ MODULE_LABELS[m] }}</span>
       </button>
-      <button
-        class="nav-item nav-split-item"
-        :class="{ active: splitActive }"
-        :title="splitActive ? '退出拆分界面' : '拆分界面'"
-        @click="emit('split')"
-      >
-        <span class="nav-item-icon">
-          <el-icon><SlidersHorizontal /></el-icon>
-        </span>
-        <span class="nav-item-label">{{ splitActive ? '合并' : '拆分' }}</span>
-      </button>
     </div>
     <button
       v-if="variant === 'left'"
@@ -43,27 +32,21 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { SlidersHorizontal, PanelLeftClose, PanelLeftOpen } from '@lucide/vue'
 import { MODULES, MODULE_ICONS, MODULE_LABELS } from '../../../composables/usePageNav'
 
 const props = withDefaults(defineProps<{
   activeModule: string
-  variant?: 'left' | 'bottom' | 'split'
+  variant?: 'left' | 'bottom'
   hidden?: boolean
-  noHover?: boolean
-  splitActive?: boolean
   collapsed?: boolean
 }>(), {
   variant: 'bottom',
   hidden: false,
-  noHover: false,
-  splitActive: false,
   collapsed: false,
 })
 
 const emit = defineEmits<{
   (e: 'navigate', module: string): void
-  (e: 'split'): void
   (e: 'toggle'): void
 }>()
 
@@ -281,8 +264,7 @@ onBeforeUnmount(() => {
 
 /* 所有平台统一样式：上方图标，下方标签（与 Electron 桌面端一致） */
 .desktop-dock .nav-item,
-.nav-bottom .nav-item,
-.nav-split .nav-item {
+.nav-bottom .nav-item {
   flex-direction: column;
   align-items: center;
   gap: 4px;
@@ -291,23 +273,8 @@ onBeforeUnmount(() => {
 }
 
 .desktop-dock .nav-item-label,
-.nav-bottom .nav-item-label,
-.nav-split .nav-item-label {
+.nav-bottom .nav-item-label {
   font-size: 12px;
-}
-
-/* === 拆分面板底部导航区（顶部内容区 + 底部导航区，撑满拆分面板宽度） === */
-.nav-split {
-  position: relative;
-  width: 100%;
-  flex-shrink: 0;
-  margin: 0;
-  border: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 0;
-  background: var(--chalk-white-04);
-  backdrop-filter: none;
-  box-shadow: none;
 }
 
 /* === 桌面端左侧导航栏收起状态 === */
@@ -337,11 +304,6 @@ onBeforeUnmount(() => {
 .nav-left.nav-hidden {
   width: 0;
   min-width: 0;
-}
-
-.nav-split.nav-hidden {
-  height: 0;
-  min-height: 0;
 }
 
 /* === 导航项滚动容器 === */
@@ -374,15 +336,12 @@ onBeforeUnmount(() => {
 }
 
 /* 底部导航栏：溢出时左对齐，否则居中 */
-.nav-bottom .nav-items-scroll,
-.nav-split .nav-items-scroll {
+.nav-bottom .nav-items-scroll {
   justify-content: flex-start;
 }
 
 .nav-bottom .nav-items-scroll::before,
-.nav-bottom .nav-items-scroll::after,
-.nav-split .nav-items-scroll::before,
-.nav-split .nav-items-scroll::after {
+.nav-bottom .nav-items-scroll::after {
   content: '';
   flex: 1;
   min-width: 0;
@@ -410,16 +369,6 @@ onBeforeUnmount(() => {
 .nav-item:not(.active):hover {
   background: rgba(255, 255, 255, 0.08);
   color: var(--chalk-white-85);
-}
-
-/* 桌面端取消鼠标悬停效果（高亮项除外） */
-.no-hover .nav-item:hover {
-  background: transparent;
-  color: var(--chalk-white-60);
-}
-.no-hover .nav-item.active:hover {
-  background: rgba(102, 126, 234, 0.18);
-  color: var(--chalk-white);
 }
 
 .nav-item.active {

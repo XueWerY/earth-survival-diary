@@ -95,7 +95,6 @@
       title="刷新插件市场"
       :width="420"
       noOverlayClose
-      :inline="splitScreen.isSplitActive.value"
       @update:visible="refreshDialogVisible = $event"
     >
       <div class="refresh-dialog-body">
@@ -156,14 +155,12 @@ import { ArrowLeft, ArrowDown, ArrowUp } from '@lucide/vue'
 import { logger } from '../../lib/logger'
 import { getAllTools, getPlugins, loadRuntimePlugins, type ToolInfo } from '../../lib/pluginLoader'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { useSplitScreen } from '../../composables/useSplitScreen'
 import MarketplacePanel from './MarketplacePanel.vue'
 import BaseDialog from '../ui/BaseDialog.vue'
 import { RefreshCw } from '@lucide/vue'
 import { type MarketplacePlugin } from '../../lib/marketplace'
 
 const settingsStore = useSettingsStore()
-const splitScreen = useSplitScreen()
 const tools = ref<ToolInfo[]>([])
 const plugins = ref<ReturnType<typeof getPlugins>>([])
 const activeTool = shallowRef<{ id?: string; name: string; component: any; title?: string; onBack?: () => void } | null>(null)

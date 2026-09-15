@@ -1,5 +1,5 @@
-import { ref, computed, watch, nextTick, inject, provide } from 'vue'
-import type { Ref, InjectionKey } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
+import type { Ref } from 'vue'
 import {
   MapPin, Notebook, Timer, List, Clock, Calendar, BarChart3, LayoutGrid, User
 } from '@lucide/vue'
@@ -73,10 +73,7 @@ export interface NavState {
   goModuleHome: () => void
 }
 
-const navStateKey: InjectionKey<NavState> = Symbol('navState')
-
-// 创建独立的导航状态实例（拆分界面每个面板一个，互不污染）
-function createNavState(persist: boolean): NavState {
+function createNavState(): NavState {
   const navPath: Ref<string[]> = ref([])
   const navContext: Ref<NavContext> = ref({
     segments: [],
@@ -89,7 +86,7 @@ function createNavState(persist: boolean): NavState {
   const moduleLabel = computed(() => MODULE_LABELS[currentModule.value] || '')
 
   function setNavPath(path: string[]) {
-    logger.debug('[PageNav] setNavPath', { prev: navPath.value, next: path, persist })
+    logger.debug('[PageNav] setNavPath', { prev: navPath.value, next: path, persist: true })
     navPath.value = path
   }
 
@@ -105,45 +102,32 @@ function createNavState(persist: boolean): NavState {
     navContext.value = ctx
   }
 
-  // 仅默认实例持久化（拆分面板不持久化，避免覆盖主界面状态）
   let persistTimer: ReturnType<typeof setTimeout> | null = null
-  if (persist) {
-    watch(navPath, async () => {
-        const module = currentModule.value
-        const key = MODULE_PERSIST_KEYS[module]
-        if (persistTimer) clearTimeout(persistTimer)
-        persistTimer = setTimeout(async () => {
-          if (key) {
-            const existing = (await getSystemStateField(key)) as Record<string, any> | undefined
-            await setSystemStateField(key, { ...(existing || {}), navPath: navPath.value } as any)
-          }
-        }, 300)
-      }, { deep: true })
-  }
+  watch(navPath, async () => {
+      const module = currentModule.value
+      const key = MODULE_PERSIST_KEYS[module]
+      if (persistTimer) clearTimeout(persistTimer)
+      persistTimer = setTimeout(async () => {
+        if (key) {
+          const existing = (await getSystemStateField(key)) as Record<string, any> | undefined
+          await setSystemStateField(key, { ...(existing || {}), navPath: navPath.value } as any)
+        }
+      }, 300)
+    }, { deep: true })
 
   return { navPath, navContext, currentModule, moduleIcon, moduleLabel, setNavPath, setNavContext, goModuleHome }
 }
 
-const defaultState = createNavState(true)
+const defaultState = createNavState()
 
 export function usePageNav(): NavState & typeof moduleConstants {
-  // 拆分界面由父级 provide 独立导航状态，否则使用全局默认实例
-  const injected = inject(navStateKey, null)
-  const s = injected ?? defaultState
   return {
-    ...s,
+    ...defaultState,
     MODULES, MODULE_ICONS, MODULE_LABELS, MODULE_ROUTES,
   }
 }
 
 const moduleConstants = { MODULES, MODULE_ICONS, MODULE_LABELS, MODULE_ROUTES }
-
-// 在拆分面板子组件内调用，为面板创建并提供独立的导航状态
-export function provideNavState(): NavState {
-  const state = createNavState(false)
-  provide(navStateKey, state)
-  return state
-}
 
 export async function restoreModuleNavPath(module: string): Promise<string[]> {
   const key = MODULE_PERSIST_KEYS[module]

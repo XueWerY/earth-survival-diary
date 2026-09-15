@@ -25,47 +25,18 @@
     <template v-else>
       <!-- 主导航栏 - 桌面端左侧导航区 -->
       <MainNav
-        v-if="isDesktop && !splitScreen.isSplitActive.value"
+        v-if="isDesktop"
         variant="left"
         :collapsed="navCollapsed"
         :activeModule="pageNav.currentModule.value"
-        :split-active="splitScreen.isSplitActive.value"
         :hidden="isFocusFullscreen"
         @navigate="navigateTo"
-        @split="handleSplitToggle"
         @toggle="toggleNav"
       />
 
       <!-- 主内容区域 -->
       <main class="main-content">
-        <div v-if="splitScreen.isSplitActive.value" class="split-container">
-          <SplitPanel
-            :module="panelModules[0]"
-            :panel-index="0"
-            :module-components="moduleComponents"
-            @navigate="(m: string) => panelNavigate(0, m)"
-            @split="handleSplitToggle"
-            @fullscreen-change="handleFullscreenFromRoute"
-            @logout="handleLogout"
-            @refresh-data="handleRefreshData"
-            @profile-updated="handleProfileUpdated"
-            @close-profile="handleCloseProfile"
-          />
-          <div class="split-divider"></div>
-          <SplitPanel
-            :module="panelModules[1]"
-            :panel-index="1"
-            :module-components="moduleComponents"
-            @navigate="(m: string) => panelNavigate(1, m)"
-            @split="handleSplitToggle"
-            @fullscreen-change="handleFullscreenFromRoute"
-            @logout="handleLogout"
-            @refresh-data="handleRefreshData"
-            @profile-updated="handleProfileUpdated"
-            @close-profile="handleCloseProfile"
-          />
-        </div>
-        <div v-else class="panel-wrapper">
+        <div class="panel-wrapper">
           <ErrorDialog
             :visible="!!capturedError"
             :message="capturedError || ''"
@@ -139,13 +110,11 @@
 
       <!-- 主导航栏 - 移动端透明浮层 -->
       <MainNav
-        v-if="!isDesktop && !splitScreen.isSplitActive.value"
+        v-if="!isDesktop"
         variant="bottom"
         :activeModule="pageNav.currentModule.value"
-        :split-active="splitScreen.isSplitActive.value"
         :hidden="isFocusFullscreen"
         @navigate="navigateTo"
-        @split="handleSplitToggle"
       />
 
     </template>
@@ -153,7 +122,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed, nextTick, provide, onErrorCaptured, defineAsyncComponent } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick, provide, onErrorCaptured } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AuthPage from './components/auth/AuthPage.vue'
 import BaseDialog from './components/ui/BaseDialog.vue'
@@ -169,10 +138,8 @@ import { getData, setData, preloadData, clearCache, getSystemStateField, setSyst
 import { fetchLatestReleaseVersion, RELEASES_PAGE_URL } from './services/versionChecker'
 import { logger } from './lib/logger'
 import { usePageNav, MODULE_ROUTES } from './composables/usePageNav'
-import { useSplitScreen } from './composables/useSplitScreen'
 import ErrorDialog from './components/ui/ErrorDialog.vue'
 import MainNav from './components/common/nav/MainNav.vue'
-import SplitPanel from './components/common/SplitPanel.vue'
 import dayjs from 'dayjs'
 // @ts-expect-error - Vite raw import
 import changelogContent from '../CHANGELOG.md?raw'
@@ -188,46 +155,6 @@ const VALID_ROUTES = ['footprint', 'notes', 'focus', 'list', 'countdown', 'cours
 const MAX_SCHEDULE_DELAY = 20 * 24 * 3600 * 1000
 
 const pageNav = usePageNav()
-const splitScreen = useSplitScreen()
-
-const moduleComponents: Record<string, ReturnType<typeof defineAsyncComponent>> = {
-  footprint: defineAsyncComponent(() => import('./components/footprint/TaskList.vue')),
-  notes: defineAsyncComponent(() => import('./components/notes/NotesPage.vue')),
-  focus: defineAsyncComponent(() => import('./components/focus/FocusTimer.vue')),
-  list: defineAsyncComponent(() => import('./components/list/ListPage.vue')),
-  countdown: defineAsyncComponent(() => import('./components/countdown/CountdownList.vue')),
-  course: defineAsyncComponent(() => import('./components/course/CourseSchedule.vue')),
-  statistics: defineAsyncComponent(() => import('./components/statistics/StatisticsPage.vue')),
-  toolbox: defineAsyncComponent(() => import('./components/toolbox/ToolboxPage.vue')),
-  profile: defineAsyncComponent(() => import('./components/profile/ProfilePage.vue')),
-}
-
-const panelModules = ref<string[]>(['footprint', 'footprint'])
-const prevPanelModules = ref<string[]>(['footprint', 'footprint'])
-
-function handleSplitToggle() {
-  if (splitScreen.isSplitActive.value) {
-    splitScreen.exitSplit()
-  } else {
-    const current = pageNav.currentModule.value
-    panelModules.value = [current, current]
-    prevPanelModules.value = [current, current]
-    splitScreen.enterSplit(current)
-  }
-}
-
-function panelNavigate(panelIndex: number, module: string) {
-  prevPanelModules.value[panelIndex] = panelModules.value[panelIndex]
-  panelModules.value[panelIndex] = module
-}
-
-// 拆分界面中关闭"我的"：把该面板切到上一个模块，保持拆分界面不退出
-function handleCloseProfile(panelIndex: number) {
-  if (panelModules.value[panelIndex] === 'profile') {
-    const prev = prevPanelModules.value[panelIndex] || 'footprint'
-    panelNavigate(panelIndex, prev)
-  }
-}
 
 const isElectron = computed(() => typeof window !== 'undefined' && !!(window as any).electronAPI)
 const isMobile = computed(() => {
@@ -1909,34 +1836,5 @@ onUnmounted(() => {
 :deep(.cl-list) { margin: 0 0 4px 16px; padding: 0; list-style: none; color: var(--chalk-white-75); }
 :deep(.cl-list li) { font-size: 12px; line-height: 1.7; padding: 2px 0; position: relative; padding-left: 14px; }
 :deep(.cl-list li)::before { content: '•'; position: absolute; left: 0; color: rgba(255,255,255,0.25); font-size: 10px; top: 5px; }
-
-.split-container {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-}
-
-.split-panel {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
-
-.split-panel-content {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.split-divider {
-  width: 4px;
-  cursor: col-resize;
-  background: rgba(255, 255, 255, 0.06);
-  flex-shrink: 0;
-}
 
 </style>
