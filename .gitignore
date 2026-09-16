@@ -43,11 +43,18 @@ __screenshots__/
 *.timestamp-*-*.mjs
 /public/avatars/
 /pnpm-lock.yaml
+/pnpm-workspace.yaml
 
 /release/win-unpacked/
+/release/builder-debug.yml
+/release/builder-effective-config.yaml
+/release/latest.yml
 /data/
 /release/*.exe
 /release/*.blockmap
+
+# TRAE
+.trae/
 
 # CodeBuddy
 .codebuddy/
