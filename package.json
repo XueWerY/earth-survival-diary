@@ -1,14 +1,16 @@
 {
   "name": "earth-survival-diary",
   "private": true,
-  "version": "2026.9.15-21",
+  "version": "2026.9.16-1",
   "author": "XueWerY <3073820063@qq.com>",
   "type": "module",
   "main": "electron/main.cjs",
+  "repository": "XueWerY/earth-survival-diary",
   "scripts": {
     "dev": "node scripts/dev.cjs",
     "build": "vite build && node electron/build-plugin.cjs && node scripts/generate-icons.js && node scripts/build-tools.cjs make-ico",
-    "electron:build:win": "node scripts/build-tools.cjs pre-clean-release && npm run build && node scripts/build-tools.cjs install-deps && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --win && node scripts/build-tools.cjs fix-latest-yml && node scripts/build-tools.cjs cleanup-release",
+    "electron:build:win": "node scripts/build-tools.cjs pre-clean-release && npm run build && node scripts/build-tools.cjs install-deps && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --win && node scripts/build-tools.cjs cleanup-release",
+    "electron:build:win:release": "node scripts/build-tools.cjs pre-clean-release && npm run build && node scripts/build-tools.cjs install-deps && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --win && node scripts/build-tools.cjs publish-release && node scripts/build-tools.cjs cleanup-release",
     "publish-release": "node scripts/build-tools.cjs publish-release"
   },
   "dependencies": {
@@ -81,11 +83,11 @@
     ],
     "win": {
       "icon": "build/icon.ico",
-      "target": "portable"
+      "target": "nsis"
     },
     "publish": {
-      "provider": "generic",
-      "url": "https://raw.githubusercontent.com/XueWerY/earth-survival-diary/main/release"
+      "provider": "github",
+      "channel": "latest"
     }
   }
 }

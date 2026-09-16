@@ -25,11 +25,30 @@ let logDir = null               // 日志目录（userData/logs）
 // （CommonJS 解构 getter 会立即求值绑定到常量，丢失 getter 动态特性）
 const state = { logger: null }
 
+/**
+ * 解析 pino / pino-roll。
+ * 开发模式：electron/node_modules 在模块目录树内，require() 正常命中；
+ * 打包后：electron/node_modules 经 extraResources 复制到 <app>/resources/node_modules，
+ * 而 app.asar 内不含这些依赖，因此 require() 失败时回退到资源目录绝对路径加载。
+ */
+function resolvePkg(name) {
+  try { return require(name) } catch (e) {
+    const resPath = path.join(process.resourcesPath, 'node_modules', name)
+    try { return require(resPath) } catch (e2) { throw e }
+  }
+}
+
+function resolvePkgTarget(name) {
+  try { return require.resolve(name) } catch (e) {
+    const resPath = path.join(process.resourcesPath, 'node_modules', name)
+    try { return require.resolve(resPath) } catch (e2) { throw e }
+  }
+}
+
 function resolveTargets() {
   if (pinoRollTarget) return
-  try { pino = require('pino') } catch (e) { throw new Error('[logger] 缺少 pino 依赖：' + e.message) }
-  try { pinoRollTarget = require.resolve('pino-roll') } catch (e) { throw new Error('[logger] 缺少 pino-roll 依赖：' + e.message) }
-
+  try { pino = resolvePkg('pino') } catch (e) { throw new Error('[logger] 缺少 pino 依赖：' + e.message) }
+  try { pinoRollTarget = resolvePkgTarget('pino-roll') } catch (e) { throw new Error('[logger] 缺少 pino-roll 依赖：' + e.message) }
 }
 
 /**

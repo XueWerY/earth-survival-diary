@@ -19,8 +19,8 @@ extraResources:
     to: node_modules
 win:
   icon: build/icon.ico
-  target: portable
+  target: nsis
 publish:
-  provider: generic
-  url: https://raw.githubusercontent.com/XueWerY/earth-survival-diary/main/release
+  provider: github
+  channel: latest
 electronVersion: 41.10.3

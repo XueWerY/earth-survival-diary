@@ -53,7 +53,7 @@
 pnpm install
 ```
 
-Electron 端依赖在 `electron/` 目录通过 `electron/package.json` 管理，由构建脚本 `install-deps` 步骤自动安装。
+Electron 端依赖在 `electron/` 目录通过 `electron/package.json` 管理，由构建脚本 `install-deps` 步骤自动安装；打包时该目录的 `node_modules` 作为 `extraResources` 复制到应用 `resources/node_modules`，`logger.cjs` 在 asar 内 `require('pino')` 失败时回退从该目录加载。
 
 ### 浏览器端开发（最快）
 
@@ -314,13 +314,13 @@ build/app-icon.png（源文件）
 pnpm electron:build:win
 
 # 发布到 GitHub Releases（自动打 tag + 上传产物）
-# 前置：gh auth login（已登录 GitHub CLI）
+# 前置：设置环境变量 GH_TOKEN（GitHub Personal Access Token，需要 repo 权限）
 pnpm electron:build:win:release
 ```
 
 **更新链路**：
 
-- **发布侧**：`electron-builder` 自动打包 NSIS 安装包 `.exe`、差分更新 `.blockmap`、元数据 `latest.yml`，以 release tag（如 `v2026.9.15-21`）上传到 GitHub Releases
+- **发布侧**：`electron-builder` 自动打包 NSIS 安装包 `.exe`、差分更新 `.blockmap`、元数据 `latest.yml`，以 release tag（如 `v2026.9.16-1`）上传到 GitHub Releases
 - **运行时**：`electron-updater`（provider: github）从 GitHub Releases API 读取 `tag_name` 作为最新版本号和安装包地址，不依赖文件名正则
 - **触发时机**：启动 5s 后自动检查一次 + 每 6 小时静默轮询 + 用户手动触发
 - **完整流程**：检查 → 提示有更新 → 用户点下载（显示进度）→ 下载完成提示重启 → 用户确认后 `quitAndInstall` 自动重启安装
