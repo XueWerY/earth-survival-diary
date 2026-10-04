@@ -1,7 +1,7 @@
 /**
- * 跨平台版本检测工具
+ * Windows 桌面端版本检测工具
  *
- * 统一 Windows、Android 两端的版本号提取与比对逻辑：
+ * 从 Windows 桌面端发布资源提取版本号并比对：
  * 1. 从远程仓库 Releases 资源文件名中提取版本号
  * 2. 与本地版本号进行比对，判断是否需要更新
  */
@@ -9,7 +9,7 @@
 /** 版本号格式：YYYY.M.DD-X，如 2026.7.18-20 */
 const VERSION_REGEX = /(\d{4})\.(\d{1,2})\.(\d{1,2})-(\d+)/
 
-/** 各平台构建产物文件名中提取版本号的正则（后缀区分平台） */
+/** Windows 桌面端构建产物文件名中提取版本号的正则 */
 const ASSET_FILENAME_REGEX = /Earth-Survival-Diary(?:-Setup)?-(\d{4}\.\d{1,2}\.\d{1,2}-\d+)/
 
 /** GitHub Releases API 和发布页地址 */
@@ -54,19 +54,8 @@ export interface VersionCheckResult {
   currentVersion: string
 }
 
-/** 当前平台对应的资产文件扩展名 */
+/** Windows 桌面端更新包扩展名 */
 function getPlatformAssetExt(): string {
-  // 在浏览器/Capacitor 环境中判断
-  if (typeof window !== 'undefined') {
-    if ((window as any).electronAPI) {
-      // Electron 端（Windows）：返回 .exe
-      return '.exe'
-    } else {
-      // Capacitor/移动端
-      return '.apk'
-    }
-  }
-  // 默认 Windows（.exe）
   return '.exe'
 }
 
@@ -89,7 +78,7 @@ export function parseVersion(version: string): ParsedVersion | null {
 
 /**
  * 从构建产物文件名中提取版本号
- * @param filename 如 "Earth-Survival-Diary-Setup-2026.7.18-20.exe" 或 "Earth-Survival-Diary-2026.7.18-20.apk"
+ * @param filename 如 "Earth-Survival-Diary-Setup-2026.7.18-20.exe"
  * @returns 版本号字符串，解析失败返回 null
  */
 export function extractVersionFromFilename(filename: string): string | null {
@@ -131,7 +120,7 @@ export function isNewerVersion(latest: string, current: string): boolean {
  *
  * @param assets Release 中的 assets 数组
  * @param currentVersion 当前本地版本号，只返回比它更新的版本
- * @param platformExt 目标平台的文件扩展名（如 .exe、.apk）
+ * @param platformExt 目标资源文件的扩展名（默认 .exe）
  * @returns 最高版本号，无可用更新时返回 null
  */
 export function findLatestVersionFromAssets(

@@ -33,33 +33,11 @@
           >
             <el-form-item prop="email">
               <el-input
-                  v-if="mode === 'register'"
                   v-model="form.email"
                   placeholder="请输入邮箱"
                   size="large"
-                  :prefix-icon="Message"
+                  :prefix-icon="MessageSquare"
               />
-              <el-select
-                  v-else
-                  v-model="form.email"
-                  placeholder="请输入邮箱"
-                  size="large"
-                  filterable
-                  allow-create
-                  class="email-select"
-              >
-                <el-option
-                    v-for="item in allEmailOptions"
-                    :key="item.email"
-                    :label="item.email"
-                    :value="item.email"
-                >
-                  <div class="history-option">
-                    <el-icon><MessageSquare /></el-icon>
-                    <span>{{ item.email }}</span>
-                  </div>
-                </el-option>
-              </el-select>
             </el-form-item>
 
             <el-form-item prop="password">
@@ -116,18 +94,19 @@
           </div>
         </div>
       </Transition>
+
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, inject } from 'vue'
+import { ref, reactive, inject, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { MessageSquare, Lock, User } from '@lucide/vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useAuthStore } from '../../stores/authStore'
 import { logger } from '../../lib/logger'
-import * as api from '../../lib/api'
+import { hydrateApiConfig } from '../../lib/apiBase'
 
 const emit = defineEmits<{
   success: []
@@ -140,7 +119,10 @@ const isElectron = inject<boolean>('isElectron', false)
 const mode = ref<'login' | 'register'>('login')
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
-const allUsers = ref<Array<{ email: string, nickname: string }>>([])
+
+onMounted(async () => {
+  await hydrateApiConfig()
+})
 
 const switchMode = (newMode: 'login' | 'register') => {
   mode.value = newMode
@@ -149,17 +131,6 @@ const switchMode = (newMode: 'login' | 'register') => {
   form.confirmPassword = ''
   form.nickname = ''
 }
-
-onMounted(async () => {
-  try {
-    const res = await api.getUsers()
-    allUsers.value = res.users || []
-  } catch (e) { /* ignore */ }
-})
-
-const allEmailOptions = computed(() => {
-  return allUsers.value.map(u => ({ email: u.email }))
-})
 
 const form = reactive({
   email: '',
@@ -321,50 +292,6 @@ const handleSubmit = async () => {
 
 .auth-form :deep(.el-input__inner) {
   color: #fff;
-}
-
-.email-select :deep(.el-select__wrapper) {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: none;
-}
-
-.email-select :deep(.el-select__wrapper:hover) {
-  border-color: rgba(102, 126, 234, 0.5);
-}
-
-.email-select :deep(.el-select__wrapper.is-focus) {
-  border-color: #667eea;
-}
-
-.email-select :deep(.el-select__input) {
-  color: #fff;
-}
-
-.history-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.history-option span {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.history-option .delete-icon {
-  color: #f56c6c;
-  cursor: pointer;
-}
-
-.history-option .delete-icon:hover {
-  color: #f89898;
-}
-
-.el-select-dropdown__item:hover {
-  background: rgba(255, 255, 255, 0.1);
 }
 
 .auth-form :deep(.el-input__inner::placeholder) {

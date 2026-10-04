@@ -2,11 +2,10 @@
  * 开发模式运行器（npm run dev）
  *
  * 职责：
- *  - 启动 Vite dev server（127.0.0.1:5173，HMR），/api 请求经 vite.config.ts 的 proxy 转发给 Electron 内置服务
+ *  - 启动 Vite dev server（127.0.0.1:5173，HMR），客户端 API 由用户配置的独立服务端提供
  *  - Vite 就绪后启动 Electron，注入环境变量：
  *      ESD_DEV_URL     → http://127.0.0.1:5173（主窗口改加载 Vite dev server）
- *      ESD_SERVER_PORT → 5000（内置 Express 固定端口，保证 proxy 目标确定）
- *  - 监听 electron/**\/*.cjs（主进程/preload/内置服务）变化，自动重启 Electron：
+ *  - 监听 electron 目录下所有 .cjs 文件（主进程/preload）变化，自动重启 Electron：
  *      先 taskkill /T /F 杀整棵进程树 → 等单实例锁与端口释放 → 重新启动（带锁冲突重试）
  *  - 退出时清理 Vite 与 Electron 子进程
  *
@@ -48,7 +47,6 @@ const electronBin = require('electron')
 
 const ROOT = path.resolve(__dirname, '..')
 const VITE_PORT = 5173
-const SERVER_PORT = 5000
 const RENDERER_URL = 'http://127.0.0.1:' + VITE_PORT
 // 与 electron/main.cjs 的 DEV_RESTART_EXIT_CODE 保持一致：应用请求重启（如注销/清理数据）时的约定退出码
 const DEV_RESTART_EXIT_CODE = 58
@@ -90,23 +88,12 @@ async function waitDevServerReady(timeout = 30000) {
   return false
 }
 
-/** 等待端口释放（返回时端口已无人监听） */
-async function waitPortFree(port, timeout = 8000) {
-  const start = Date.now()
-  while (Date.now() - start < timeout) {
-    if (!(await probePort(port))) return true
-    await sleep(300)
-  }
-  return false
-}
-
 // ====== Electron 管理 ======
 
 function spawnElectron() {
   const env = {
     ...process.env,
-    ESD_DEV_URL: RENDERER_URL,
-    ESD_SERVER_PORT: String(SERVER_PORT)
+    ESD_DEV_URL: RENDERER_URL
   }
   electronChild = spawn(electronBin, ['.'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] })
   electronChild.stdout.on('data', (data) => {
@@ -126,7 +113,7 @@ function spawnElectron() {
   })
 }
 
-/** 杀 Electron 整棵进程树（含内置 Express 服务），等待其完全退出 */
+/** 杀 Electron 整棵进程树，等待其完全退出 */
 function killElectronTree() {
   const child = electronChild
   if (!child) return Promise.resolve()
@@ -158,30 +145,31 @@ async function startElectronWithRetry() {
   devError('多次启动失败（单实例锁持续冲突），请确认无其他实例占用 userData 目录')
 }
 
-/** 重启 Electron：杀树 → 释放锁/端口 → 重新启动 */
+/** 重启 Electron：杀树 → 释放单实例锁 → 重新启动 */
 async function restartElectron(reason) {
   restarting = true
   devInfo(reason + '，重启主进程...')
   await killElectronTree()
-  // 等待单实例命名互斥锁与内置服务端口释放，避免新实例被误判为重复启动
+  // 等待单实例命名互斥锁释放，避免新实例被误判为重复启动
   await sleep(250)
-  await waitPortFree(SERVER_PORT)
   await startElectronWithRetry()
   restarting = false
 }
 
-/** 监听 electron 目录，主进程/preload/内置服务改动即触发重启（200ms debounce） */
+/** 监听 Electron 主进程代码，改动时重启 Electron（200ms debounce） */
 function setupWatch() {
-  const dir = path.join(ROOT, 'electron')
-  fs.watch(dir, { recursive: true }, (_event, filename) => {
-    if (!filename) return
-    if (restarting || shuttingDown || !electronChild) return
-    if (filename.includes('node_modules')) return
-    if (!filename.endsWith('.cjs')) return
-    changedFile = filename
-    clearTimeout(watchTimer)
-    watchTimer = setTimeout(() => { restartElectron(filename + ' 发生变化') }, 200)
-  })
+  for (const dirName of ['electron']) {
+    const dir = path.join(ROOT, dirName)
+    fs.watch(dir, { recursive: true }, (_event, filename) => {
+      if (!filename) return
+      if (restarting || shuttingDown || !electronChild) return
+      if (filename.includes('node_modules')) return
+      if (!filename.endsWith('.cjs')) return
+      changedFile = path.join(dirName, filename)
+      clearTimeout(watchTimer)
+      watchTimer = setTimeout(() => { restartElectron(changedFile + ' 发生变化') }, 200)
+    })
+  }
 }
 
 // ====== Vite 管理 ======
@@ -233,9 +221,8 @@ async function main() {
   }
   devInfo('Vite 开发服务器就绪：' + RENDERER_URL)
 
-  // 给可能残留的旧服务/旧实例让出锁与端口
+  // 给可能残留的旧 Electron 实例让出单实例锁
   await sleep(200)
-  await waitPortFree(SERVER_PORT, 3000)
   await startElectronWithRetry()
 
   setupWatch()

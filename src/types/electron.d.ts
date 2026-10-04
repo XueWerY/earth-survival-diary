@@ -3,6 +3,14 @@ export {}
 declare global {
   interface Window {
     electronAPI: {
+      quickCapture: {
+        hide: () => void
+        getShortcut: () => Promise<string>
+        setShortcut: (accelerator: string) => Promise<{ success: boolean; error?: string }>
+        getApiConfig: () => Promise<{ baseUrl: string; token: string }>
+        requestApi: (pathname: string, options?: { method?: 'GET' | 'POST' | 'PATCH'; body?: string }) => Promise<any>
+        onShown: (callback: () => void) => void
+      }
       resizeWindow: (width: number, height: number) => void
       onUpdateStatus: (callback: (data: UpdateStatus) => void) => void
       setWindowSize: (userId: string, width: number, height: number) => Promise<boolean>
@@ -31,6 +39,9 @@ declare global {
       cancelCleanData: () => void
       checkVersionUpdate: (userId: string) => Promise<{ isUpdated: boolean; oldVersion: string | null; newVersion: string | null }>
       openChangelogWindow: (content: string) => Promise<void>
+      getRemoteApiConfig: () => Promise<{ baseUrl: string; token: string }>
+      setRemoteApiConfig: (token: string) => Promise<boolean>
+      writeRendererLogs: (entries: Array<{ level: string; message: string; meta?: Record<string, any>; timestamp?: string }>) => Promise<boolean>
       scheduleReminders: (reminders: ReminderItem[], persistDuration: number | null) => Promise<{ ok: boolean; count: number }>
       cancelAllReminders: () => Promise<{ ok: boolean }>
       getReminderPersistDuration: () => Promise<{ persistDuration: number }>
@@ -52,10 +63,6 @@ declare global {
       readClipboardText: () => Promise<string>
       readClipboardHTML: () => Promise<string>
 
-      // 局域网传输
-      startLanServer: (data: any) => Promise<{ ip: string; port: number }>
-      stopLanServer: () => Promise<boolean>
-      fetchLanData: (url: string) => Promise<any>
       setWindowTitle: (title: string) => Promise<boolean>
 
       // 终端命令执行（PowerShell，输出经 powershell-output 事件流式回推）
@@ -84,6 +91,8 @@ declare global {
       isSnowbabyRunning: (payload: { pidPath: string; pluginDir: string }) => Promise<{ running: boolean; pid?: number | null; error?: string }>
       createDirectory: (dirPath: string) => Promise<boolean>
       removeDirectory: (dirPath: string) => Promise<boolean>
+      getRuntimePluginManifests: () => Promise<any[]>
+      getRuntimePluginSource: (pluginId: string, toolId: string) => Promise<string>
       recompilePlugins: () => Promise<boolean>
     }
 

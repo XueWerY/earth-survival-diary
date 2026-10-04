@@ -63,11 +63,6 @@ const spotlight = ref({ x: 0, y: 0, w: 0, h: 0 })
 const foundTarget = ref(false)
 const tooltipRef = ref<HTMLElement | null>(null)
 const dragPos = ref<{ left: number; top: number } | null>(null)
-const isDesktop = computed(() => {
-  if (typeof window === 'undefined') return false
-  const cap = (window as any).Capacitor
-  return !(cap && cap.isNativePlatform && cap.isNativePlatform())
-})
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 let retryCount = 0
 const MAX_RETRIES = 15
@@ -177,7 +172,7 @@ const tooltipStyle = computed(() => {
     }
   }
   // 桌面端 right-center：在高亮区域右侧垂直居中
-  if (pos === 'right-center' && isDesktop.value) {
+  if (pos === 'right-center') {
     return {
       left: (spotlight.value.x + spotlight.value.w + gap) + 'px',
       top: (spotlight.value.y + spotlight.value.h / 2) + 'px',

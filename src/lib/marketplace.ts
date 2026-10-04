@@ -24,7 +24,7 @@ function getInstalledPluginIds(): Set<string> {
 }
 
 // 优先走主进程 HTTPS 通道（不受同源策略/渲染进程网络波动影响），
-// 无 electronAPI 环境（浏览器 / Android）回退到渲染进程 fetch（带超时，避免挂起）。
+// 无 electronAPI 的界面调试环境回退到渲染进程 fetch（带超时，避免挂起）。
 async function httpGet(url: string, ms = 20000): Promise<{ status: number; text: string }> {
   const api = (window as any).electronAPI
   if (api?.httpGetText) {

@@ -24,15 +24,15 @@ function fixVueuseCore(): Plugin {
 
 export default defineConfig({
   base: './',
-  // 开发模式配置：dev server 提供前端 HMR，/api 转发到 Electron 内置 Express 服务。
-  // 仅 `vite` dev 生效，`vite build` 忽略该键，不影响生产构建。
+  // 主窗口与速记窗口分别作为 HTML 入口；Electron 正式版直接从 dist 加载。
+  input: {
+    main: path.resolve(__dirname, 'index.html'),
+    quickCapture: path.resolve(__dirname, 'quick-capture.html')
+  },
   server: {
     host: '127.0.0.1',
     port: 5173,
-    strictPort: true,
-    proxy: {
-      '/api': 'http://127.0.0.1:5000'
-    }
+    strictPort: true
   },
   plugins: [vue(), fixVueuseCore(), {
     name: 'version-inline',

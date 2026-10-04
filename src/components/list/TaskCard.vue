@@ -56,7 +56,7 @@
       <div v-if="list.notes" class="list-notes-content">{{ list.notes }}</div>
 
       <div class="linked-notes-line" v-if="linkedNotes.length" @click.stop>
-        <span v-for="n in linkedNotes" :key="n.id" class="linked-note-tag" :style="{ borderColor: n.color, color: n.color }"
+        <span v-for="n in linkedNotes" :key="n.id" class="linked-note-tag" :style="{ borderColor: linkedNoteColor(n), color: linkedNoteColor(n) }"
           @click="openLinkedNote(n)" @mouseenter="fitNotePreview">
           <span class="linked-note-label"><el-icon><BookOpen /></el-icon>{{ n.title || '无标题笔记' }}</span>
           <span class="linked-note-preview">
@@ -111,8 +111,15 @@ const linkedNotes = computed(() => {
 })
 
 const openLinkedNote = (note: Note) => {
-  setNavPath(['notes', note.categoryId, note.id])
+  // 三栏笔记页的路径：['notes', 视图, 笔记id]；从清单跳转统一落到「全部笔记」视图
+  setNavPath(['notes', 'all', note.id])
   router.push(MODULE_ROUTES.notes)
+}
+
+// 关联笔记标签的点缀色：取第一个标签的颜色，无标签时用主题蓝
+const linkedNoteColor = (note: Note) => {
+  const tag = note.tagIds.map(id => noteStore.tags.find(t => t.id === id)).find(Boolean)
+  return tag?.color || '#667eea'
 }
 
 // 预览浮层最大高度：上边界距面包屑地址栏保持与卡片-地址栏一致的 16px 间距

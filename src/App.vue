@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container" :class="{ 'desktop-layout': isDesktop }">
+  <div class="app-container desktop-layout">
     <!-- Canvas 2D 流星背景 -->
     <canvas ref="starCanvas" class="star-canvas" :class="{ 'canvas-hidden': !showStarCanvas }"></canvas>
 
@@ -25,8 +25,6 @@
     <template v-else>
       <!-- 主导航栏 - 桌面端左侧导航区 -->
       <MainNav
-        v-if="isDesktop"
-        variant="left"
         :collapsed="navCollapsed"
         :activeModule="pageNav.currentModule.value"
         :hidden="isFocusFullscreen"
@@ -108,15 +106,6 @@
         <ReminderCard v-for="(r, i) in activeReminders" :key="r.id" :reminder="r" @dismiss="dismissReminder(i)" />
       </div>
 
-      <!-- 主导航栏 - 移动端透明浮层 -->
-      <MainNav
-        v-if="!isDesktop"
-        variant="bottom"
-        :activeModule="pageNav.currentModule.value"
-        :hidden="isFocusFullscreen"
-        @navigate="navigateTo"
-      />
-
     </template>
   </div>
 </template>
@@ -157,12 +146,6 @@ const MAX_SCHEDULE_DELAY = 20 * 24 * 3600 * 1000
 const pageNav = usePageNav()
 
 const isElectron = computed(() => typeof window !== 'undefined' && !!(window as any).electronAPI)
-const isMobile = computed(() => {
-  if (typeof window === 'undefined') return false
-  const cap = (window as any).Capacitor
-  return !!(cap && cap.isNativePlatform && cap.isNativePlatform())
-})
-const isDesktop = computed(() => !isMobile.value)
 
 const navigateTo = (module: string) => {
   if (module === pageNav.currentModule.value) {
@@ -213,9 +196,6 @@ const handleLogout = async () => {
   if (window.electronAPI?.cancelAllReminders) {
     window.electronAPI.cancelAllReminders()
   }
-  // 清理所有 JS 定时器
-  reminderTimers.forEach(t => clearTimeout(t))
-  reminderTimers.length = 0
   // 重置所有 store 状态
   taskStore.reset()
   listStore.reset()
@@ -263,8 +243,6 @@ const cleanUpCourseAutoRecordedTasks = async () => {
 const showAppChangelogDialog = ref(false)
 
 const activeReminders = ref<ReminderItem[]>([])
-const reminderTimers: ReturnType<typeof setTimeout>[] = []
-const MAX_REMINDER_DELAY = 7 * 24 * 60 * 60 * 1000 // JS 定时器最多调度 7 天内的提醒
 
 function playReminderSound() {
   try {
@@ -364,7 +342,7 @@ const startVersionChecks = async () => {
         console.error('[App] Version update check failed:', e)
       }
     } else {
-      // 非 Electron 端（Android/Capacitor）：检查持久化的版本号
+      // 浏览器调试模式：检查持久化版本号并查询发布信息
       try {
         const storedVersion = await getSystemStateField('version')
         if (storedVersion !== appVersion) {
@@ -459,16 +437,6 @@ const handleDownloadUpdate = async () => {
   }
 }
 
-/** 将字符串 ID 哈希为非负整数，用于 Android 通知 ID */
-const hashStringId = (id: string): number => {
-  let hash = 0
-  for (let i = 0; i < id.length; i++) {
-    hash = ((hash << 5) - hash) + id.charCodeAt(i)
-    hash |= 0
-  }
-  return Math.abs(hash) % 2147483647
-}
-
 const getNextOccurrence = (baseDate: string, strategy: string, customDays: number, from: dayjs.Dayjs): dayjs.Dayjs | null => {
   const base = dayjs(baseDate)
   let next = base
@@ -509,8 +477,7 @@ const getNextOccurrence = (baseDate: string, strategy: string, customDays: numbe
 }
 
 const scheduleListReminders = async () => {
-  const isAndroidCapacitor = typeof window !== 'undefined' && !(window as any).electronAPI && typeof (window as any).Capacitor !== 'undefined'
-  if (!window.electronAPI?.scheduleReminders && !isAndroidCapacitor) return
+  if (!window.electronAPI?.scheduleReminders) return
   try {
     const now = dayjs()
     const today = now.startOf('day')
@@ -757,31 +724,7 @@ const scheduleListReminders = async () => {
     }
 
     logger.info('[提醒] 调度提醒任务', { count: reminders.length, persistDuration })
-    if (window.electronAPI?.scheduleReminders) {
-      window.electronAPI.scheduleReminders(reminders, persistDuration)
-    } else if (isAndroidCapacitor) {
-      // Android 端：使用 JS 定时器调度提醒（替代系统通知）
-      reminderTimers.forEach(t => clearTimeout(t))
-      reminderTimers.length = 0
-      const nowMs = Date.now()
-      // 按触发时间排序，相同触发时间的提醒间隔 5 秒依次弹出
-      const sortedReminders = [...reminders].sort((a, b) => new Date(a.triggerTime).getTime() - new Date(b.triggerTime).getTime())
-      let lastScheduledMs = 0
-      for (const r of sortedReminders) {
-        const triggerMs = new Date(r.triggerTime).getTime()
-        let delay = triggerMs - nowMs
-        if (delay > 0 && delay < MAX_REMINDER_DELAY) {
-          // 与前一个提醒至少保持 5 秒间隔，避免同时弹出一堆卡片
-          delay = Math.max(delay, lastScheduledMs + 5000)
-          lastScheduledMs = delay
-          const timer = setTimeout(() => {
-            activeReminders.value.push(r)
-            playReminderSound()
-          }, delay)
-          reminderTimers.push(timer)
-        }
-      }
-    }
+    window.electronAPI.scheduleReminders(reminders, persistDuration)
   } catch (e) {
     logger.error('[提醒] 调度失败', { error: e instanceof Error ? e.message : String(e) })
   }
@@ -1363,7 +1306,7 @@ const preloadCourseData = async () => {
   if (courses) preloadData('course', 'courses', courses)
 }
 
-// 从 Redis 恢复页面状态 - 已由路由接管
+// 页面状态恢复已由路由接管
 
 // 监听路由变化，保存到系统状态
 watch(
@@ -1409,12 +1352,20 @@ const toggleNav = () => {
 const isStatsFullscreen = ref(false)
 
 const handleFullscreenFromRoute = (fullscreen: boolean) => {
+  // 笔记页：常规模式显示全局导航，全屏编辑模式下隐藏（fullscreen=true）
   if (route.name === 'focus' || route.name === 'notes') {
     isFocusFullscreen.value = fullscreen
   } else if (route.name === 'footprint') {
     isStatsFullscreen.value = fullscreen
   }
 }
+
+// 离开全屏模块（专注/笔记）时复位导航显隐，避免其他模块停留在导航被隐藏的状态
+watch(() => route.name, (name) => {
+  if (name !== 'focus' && name !== 'notes') {
+    isFocusFullscreen.value = false
+  }
+})
 
 const starCanvas = ref<HTMLCanvasElement>()
 let animationId: number
@@ -1835,6 +1786,4 @@ onUnmounted(() => {
 :deep(.cl-version) { color: var(--chalk-amber); font-size: 14px; font-weight: 600; margin: 14px 0 6px; padding: 5px 0 5px 10px; border-left: 3px solid #f0c040; background: linear-gradient(90deg, rgba(240,192,64,0.06) 0%, transparent 100%); border-radius: 0 4px 4px 0; }
 :deep(.cl-list) { margin: 0 0 4px 16px; padding: 0; list-style: none; color: var(--chalk-white-75); }
 :deep(.cl-list li) { font-size: 12px; line-height: 1.7; padding: 2px 0; position: relative; padding-left: 14px; }
-:deep(.cl-list li)::before { content: '•'; position: absolute; left: 0; color: rgba(255,255,255,0.25); font-size: 10px; top: 5px; }
-
-</style>
+:deep(.cl-list li)::before { content: '•'; position: absolute; left: 0; color: rgba(255,255,255,0.25); font-size: 10px; top: 5px; }</style>

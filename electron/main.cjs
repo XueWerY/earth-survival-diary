@@ -12,7 +12,7 @@ if (fs.existsSync(esbuildBinaryPath)) {
 const { spawn, execSync } = require('child_process')
 let autoUpdater = null
 
-// Pino 日志（与 prod-server.cjs 共享同一实例）
+// 桌面端独立 Pino 日志
 // 委托给 logger.cjs 的兼容函数：动态检查 state.logger（未初始化时降级 console），
 // 避免 "_logger 捕获一次后永久为 null" 导致主进程日志静默丢失。
 const loggerMod = require('./lib/logger.cjs')
@@ -22,6 +22,21 @@ function initLogger() {
 }
 function debugLog(msg, meta) { loggerMod.debugLog(msg, meta) }
 function errorLog(msg, meta) { loggerMod.errorLog(msg, meta) }
+
+ipcMain.handle('write-renderer-logs', async (_event, entries) => {
+  if (!Array.isArray(entries)) return false
+  const levelMethods = { TRACE: 'trace', DEBUG: 'debug', INFO: 'info', WARN: 'warn', ERROR: 'error' }
+  for (const entry of entries.slice(0, 500)) {
+    if (!entry || typeof entry.message !== 'string') continue
+    const method = levelMethods[String(entry.level || '').toUpperCase()]
+    if (!method) continue
+    const meta = entry.meta && typeof entry.meta === 'object' && !Array.isArray(entry.meta) ? entry.meta : {}
+    const logger = loggerMod.state.logger
+    if (logger) logger[method]({ ...meta, rendererTimestamp: entry.timestamp || null }, entry.message.slice(0, 10000))
+    else console[method === 'trace' || method === 'debug' ? 'log' : method]('[Renderer] ' + entry.message.slice(0, 10000))
+  }
+  return true
+})
 
 // 调试态（npx electron 直接跑主进程）下 app.name 为 "Electron"，userData 会落到
 // %APPDATA%/Electron，与正式安装的 earth-survival-diary 数据隔离。这里在读取 userData
@@ -52,8 +67,126 @@ function getCloseAction() {
 }
 
 function saveCloseAction(action) {
+  writeAppLocalSettings({ closeAction: action })
+}
+
+// ====== 应用本地设置（close-settings.json：关闭行为 + 速记窗状态） ======
+// 统一读改写合并，避免多个设置字段互相覆写
+function readAppLocalSettings() {
   const settingsPath = path.join(app.getPath('userData'), 'close-settings.json')
-  fs.writeFileSync(settingsPath, JSON.stringify({ closeAction: action }, null, 2), 'utf-8')
+  try {
+    if (fs.existsSync(settingsPath)) return JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) || {}
+  } catch {}
+  return {}
+}
+
+function writeAppLocalSettings(patch) {
+  const settingsPath = path.join(app.getPath('userData'), 'close-settings.json')
+  const merged = { ...readAppLocalSettings(), ...patch }
+  fs.writeFileSync(settingsPath, JSON.stringify(merged, null, 2), 'utf-8')
+}
+
+// ====== 全局速记捕获窗口（阶段 7） ======
+let quickCaptureWindow = null
+const QUICK_CAPTURE_DEFAULT_SHORTCUT = 'Ctrl+Shift+Q'
+const QUICK_CAPTURE_SHORTCUTS = ['Ctrl+Shift+Q', 'Ctrl+Shift+K', 'Ctrl+Alt+Q', 'Alt+Q']
+const QUICK_CAPTURE_W = 480
+const QUICK_CAPTURE_H = 190
+
+function getQuickCaptureShortcut() {
+  const saved = readAppLocalSettings().quickCaptureShortcut
+  return QUICK_CAPTURE_SHORTCUTS.includes(saved) ? saved : QUICK_CAPTURE_DEFAULT_SHORTCUT
+}
+
+function quickCaptureUrl() {
+  return DEV_SERVER_URL
+    ? { type: 'url', value: DEV_SERVER_URL.replace(/\/$/, '') + '/quick-capture.html' }
+    : { type: 'file', value: path.join(__dirname, '..', 'dist', 'quick-capture.html') }
+}
+
+function ensureQuickCaptureWindow() {
+  if (quickCaptureWindow && !quickCaptureWindow.isDestroyed()) return quickCaptureWindow
+  quickCaptureWindow = new BrowserWindow({
+    width: QUICK_CAPTURE_W,
+    height: QUICK_CAPTURE_H,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    skipTaskbar: true,
+    show: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.cjs')
+    }
+  })
+  // normal 层级置顶：浮在普通窗口之上，但不遮挡全屏应用（游戏/视频）
+  quickCaptureWindow.setAlwaysOnTop(true, 'normal')
+  // 位置记忆恢复：校验坐标落在可见显示器工作区内，避免拔掉外接屏后窗口跑到屏幕外
+  try {
+    const saved = readAppLocalSettings().quickCaptureBounds
+    let restored = false
+    if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+      const visible = screen.getAllDisplays().some(d =>
+        saved.x >= d.workArea.x - 40 && saved.y >= d.workArea.y - 10 &&
+        saved.x < d.workArea.x + d.workArea.width && saved.y < d.workArea.y + d.workArea.height
+      )
+      if (visible) {
+        quickCaptureWindow.setPosition(Math.round(saved.x), Math.round(saved.y))
+        restored = true
+      }
+    }
+    if (!restored) {
+      const workArea = screen.getPrimaryDisplay().workArea
+      quickCaptureWindow.setPosition(workArea.x + workArea.width - QUICK_CAPTURE_W - 24, workArea.y + 24)
+    }
+  } catch (e) {
+    errorLog('[Electron] 速记窗位置恢复失败：' + e.message)
+  }
+  const quickCaptureTarget = quickCaptureUrl()
+  if (quickCaptureTarget.type === 'url') quickCaptureWindow.loadURL(quickCaptureTarget.value)
+  else quickCaptureWindow.loadFile(quickCaptureTarget.value)
+  quickCaptureWindow.on('closed', () => { quickCaptureWindow = null })
+  const savePos = () => {
+    if (!quickCaptureWindow || quickCaptureWindow.isDestroyed()) return
+    const [x, y] = quickCaptureWindow.getPosition()
+    writeAppLocalSettings({ quickCaptureBounds: { x, y } })
+  }
+  quickCaptureWindow.on('moved', savePos)
+  return quickCaptureWindow
+}
+
+function toggleQuickCaptureWindow() {
+  const win = ensureQuickCaptureWindow()
+  if (win.isVisible()) {
+    win.hide()
+    return
+  }
+  win.show()
+  win.focus()
+  win.webContents.send('quick-capture:shown')
+}
+
+function registerQuickCaptureShortcut() {
+  const accelerator = getQuickCaptureShortcut()
+  const ok = globalShortcut.register(accelerator, toggleQuickCaptureWindow)
+  if (!ok) {
+    // 注册失败不阻断启动：记日志 + 托盘气泡提示，可在「我的 → 系统设置」更换键位
+    errorLog('[Electron] 全局快捷键注册失败（可能被其他应用占用）：' + accelerator)
+    if (appTray) {
+      try {
+        appTray.displayBalloon({ title: '速记快捷键注册失败', content: accelerator + ' 已被其他应用占用，可在「我的 → 系统设置」中更换。' })
+      } catch {}
+    }
+  } else {
+    debugLog('[Electron] 全局速记快捷键已注册：' + accelerator)
+  }
+}
+
+function setupQuickCapture() {
+  const win = ensureQuickCaptureWindow()
+  win.show()
+  registerQuickCaptureShortcut()
 }
 
 const gotTheLock = app.requestSingleInstanceLock()
@@ -74,16 +207,72 @@ if (!gotTheLock) {
 
 let mainWindow
 let retryCount = 0
-let serverInstance = null
-let serverPort = 5000
+const REMOTE_API_BASE_URL = 'https://www.earth-survival-diary.icu'
+let remoteApiBaseUrl = REMOTE_API_BASE_URL
+let remoteApiToken = ''
+const remoteApiConfigPath = path.join(app.getPath('userData'), 'remote-api-config.json')
+
+function loadRemoteApiConfig() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(remoteApiConfigPath, 'utf-8'))
+    remoteApiBaseUrl = REMOTE_API_BASE_URL
+    remoteApiToken = typeof saved.token === 'string' ? saved.token.slice(0, 4096) : ''
+    return { baseUrl: remoteApiBaseUrl, token: remoteApiToken }
+  } catch {
+    remoteApiBaseUrl = REMOTE_API_BASE_URL
+    remoteApiToken = ''
+    return { baseUrl: remoteApiBaseUrl, token: '' }
+  }
+}
+
+ipcMain.handle('get-remote-api-config', async () => loadRemoteApiConfig())
+
+ipcMain.handle('set-remote-api-config', async (_event, token) => {
+  try {
+    const normalizedToken = typeof token === 'string' ? token.slice(0, 4096) : ''
+    fs.mkdirSync(path.dirname(remoteApiConfigPath), { recursive: true })
+    const temporaryPath = remoteApiConfigPath + '.tmp'
+    fs.writeFileSync(temporaryPath, JSON.stringify({ baseUrl: REMOTE_API_BASE_URL, token: normalizedToken }), { mode: 0o600 })
+    fs.renameSync(temporaryPath, remoteApiConfigPath)
+    remoteApiBaseUrl = REMOTE_API_BASE_URL
+    remoteApiToken = normalizedToken
+    return true
+  } catch {
+    return false
+  }
+})
+
+async function requestRemoteApi(pathname, options = {}) {
+  if (!remoteApiBaseUrl || !remoteApiToken) loadRemoteApiConfig()
+  if (!remoteApiToken) throw new Error('请先登录')
+  const response = await fetch(`${remoteApiBaseUrl}${pathname}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${remoteApiToken}`,
+      ...(options.headers || {})
+    },
+    signal: AbortSignal.timeout(10000)
+  })
+  const result = await response.json()
+  if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`)
+  return result
+}
+
+ipcMain.handle('quick-capture:request-api', async (event, pathname, options = {}) => {
+  if (!quickCaptureWindow || event.sender !== quickCaptureWindow.webContents) {
+    throw new Error('无权使用速记 API')
+  }
+  const target = new URL(String(pathname || ''), 'https://local.invalid')
+  if (target.origin !== 'https://local.invalid' || !target.pathname.startsWith('/api/') || target.pathname.includes('..')) {
+    throw new Error('无效的 API 路径')
+  }
+  return requestRemoteApi(target.pathname + target.search, options)
+})
 
 // ====== 开发模式支持 ======
-// `npm run dev`（scripts/dev.cjs）会注入 ESD_DEV_URL（Vite dev server 地址）与 ESD_SERVER_PORT（固定后端端口）。
-// 存在 ESD_DEV_URL 时窗口加载 Vite dev server 获得 HMR，否则（生产/普通调试）维持加载内置服务地址。
+// `npm run dev`（scripts/dev.cjs）注入 Vite dev server 地址；生产版直接加载 dist 页面。
 const DEV_SERVER_URL = process.env.ESD_DEV_URL || null
-function entryUrl(port) {
-  return DEV_SERVER_URL || ('http://127.0.0.1:' + port)
-}
 
 // ====== 窗口分辨率设置 ======
 function getUserSettingsPath(userId) {
@@ -862,6 +1051,32 @@ ipcMain.handle('get-runtime-plugin-manifests', async () => {
   return manifests
 })
 
+ipcMain.handle('get-runtime-plugin-source', async (event, pluginId, toolId) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) throw new Error('无权读取插件文件')
+  const safeSegment = (value) => typeof value === 'string' && value !== '.' && value !== '..' && /^[a-zA-Z0-9_.-]+$/.test(value)
+  if (!safeSegment(pluginId) || !safeSegment(toolId)) throw new Error('无效的插件标识')
+
+  const searchDirs = app.isPackaged ? [PLUGINS_DIR] : [LOCAL_PLUGINS_DIR, PLUGINS_DIR]
+  for (const dir of searchDirs) {
+    const pluginDir = path.resolve(dir, pluginId)
+    const root = path.resolve(dir) + path.sep
+    if (!pluginDir.startsWith(root)) continue
+    const manifestPath = path.join(pluginDir, 'plugin.json')
+    if (!fs.existsSync(manifestPath)) continue
+
+    try {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+      if (manifest.id !== pluginId || !Object.prototype.hasOwnProperty.call(manifest.tools || {}, toolId)) continue
+      const sourcePath = path.resolve(pluginDir, 'dist', `${toolId}.js`)
+      if (!sourcePath.startsWith(path.join(pluginDir, 'dist') + path.sep) || !fs.existsSync(sourcePath)) continue
+      return fs.readFileSync(sourcePath, 'utf-8')
+    } catch (e) {
+      errorLog(`[Plugins] Failed to read ${pluginId}/${toolId}: ${e.message}`)
+    }
+  }
+  throw new Error('插件组件不存在')
+})
+
 ipcMain.handle('create-directory', async (_event, dirPath) => {
   try {
     if (!isPathAllowed(dirPath)) throw new Error('Access denied: directory not allowed')
@@ -918,104 +1133,7 @@ ipcMain.handle('read-clipboard-html', async () => {
   }
 })
 
-// ====== 局域网传输 IPC ======
 const http = require('http')
-const os = require('os')
-
-let lanTransferServer = null
-let lanTransferData = null
-
-ipcMain.handle('start-lan-server', async (_event, data) => {
-  try {
-    // 关闭已有的服务器
-    if (lanTransferServer) {
-      lanTransferServer.close()
-      lanTransferServer = null
-    }
-    lanTransferData = data
-
-    return new Promise((resolve, reject) => {
-      const server = http.createServer((req, res) => {
-        if (req.url === '/api/lan-export') {
-          res.writeHead(200, {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-          })
-          res.end(JSON.stringify(lanTransferData))
-        } else {
-          res.writeHead(404)
-          res.end('Not Found')
-        }
-      })
-
-      server.listen(5789, '0.0.0.0', () => {
-        lanTransferServer = server
-        // 获取本地局域网 IP
-        const interfaces = os.networkInterfaces()
-        let localIP = '127.0.0.1'
-        for (const name of Object.keys(interfaces)) {
-          for (const iface of interfaces[name]) {
-            if (iface.family === 'IPv4' && !iface.internal) {
-              localIP = iface.address
-              break
-            }
-          }
-          if (localIP !== '127.0.0.1') break
-        }
-        debugLog('[LAN] LAN transfer server started: ' + localIP + ':5789')
-        resolve({ ip: localIP, port: 5789 })
-      })
-
-      server.on('error', (err) => {
-        errorLog('[LAN] Failed to start LAN server: ' + err.message)
-        reject(err)
-      })
-    })
-  } catch (e) {
-    errorLog('[LAN] start-lan-server failed: ' + e.message)
-    throw e
-  }
-})
-
-ipcMain.handle('stop-lan-server', async () => {
-  try {
-    if (lanTransferServer) {
-      lanTransferServer.close()
-      lanTransferServer = null
-      lanTransferData = null
-      debugLog('[LAN] LAN transfer server stopped')
-    }
-    return true
-  } catch (e) {
-    errorLog('[LAN] stop-lan-server failed: ' + e.message)
-    return false
-  }
-})
-
-ipcMain.handle('fetch-lan-data', async (_event, url) => {
-  try {
-    return new Promise((resolve, reject) => {
-      http.get(url, (res) => {
-        let data = ''
-        res.on('data', (chunk) => { data += chunk })
-        res.on('end', () => {
-          try {
-            resolve(JSON.parse(data))
-          } catch {
-            reject(new Error('Invalid data format received from LAN'))
-          }
-        })
-      }).on('error', (err) => {
-        reject(new Error('Failed to connect to LAN server: ' + err.message))
-      })
-    })
-  } catch (e) {
-    errorLog('[LAN] fetch-lan-data failed: ' + e.message)
-    throw e
-  }
-})
-// ====== 局域网传输 IPC 结束 ======
-
 // ====== 终端命令执行 / 主进程 HTTPS 请求 IPC 开始 ======
 // 执行 PowerShell 命令，stdout/stderr 通过 powershell-output 事件流式回推渲染进程
 // 当前正在执行的 PowerShell 子进程引用，供 kill-powershell 终止使用
@@ -1182,73 +1300,7 @@ ipcMain.handle('http-get-text', async (_event, url) => {
 })
 // ====== 终端命令执行 / 主进程 HTTPS 请求 IPC 结束 ======
 
-async function startServer() {
-  debugLog('[Electron] Express 服务启动中...')
-  // 调试用：确认当前运行态下 userData 真实路径（npx electron 直接跑时可能与预期不同）
-  debugLog('[Electron] 用户数据目录 = ' + app.getPath('userData'))
-  debugLog('[Electron] 数据目录     = ' + path.join(app.getPath('userData'), 'data'))
-  debugLog('[Electron] 应用名称     = ' + app.name)
-
-  const serverModulePath = path.join(__dirname, 'prod-server.cjs')
-  if (!fs.existsSync(serverModulePath)) {
-    throw new Error('Server module not found at: ' + serverModulePath)
-  }
-
-  const isPackaged = app.isPackaged
-  const resourcesPath = isPackaged ? process.resourcesPath : __dirname
-  const distPath = isPackaged
-    ? path.join(process.resourcesPath, 'app.asar', 'dist')
-    : path.join(__dirname, '..', 'dist')
-
-  const nodeModulesPath = isPackaged
-    ? path.join(process.resourcesPath, 'node_modules')
-    : path.join(__dirname, '..', 'node_modules')
-
-  const { createProdServer } = require(serverModulePath)
-  // 开发模式（dev.cjs 注入 ESD_SERVER_PORT）固定端口，便于 Vite proxy 转发；否则依次尝试 5000-5003
-  const specifiedPort = process.env.ESD_SERVER_PORT ? Number(process.env.ESD_SERVER_PORT) : null
-  const portsToTry = specifiedPort ? [specifiedPort] : [5000, 5001, 5002, 5003]
-
-  for (const port of portsToTry) {
-    try {
-      const { server } = createProdServer({
-        port: port,
-        dataDir: path.join(app.getPath('userData'), 'data'),
-        distPath: distPath,
-        resourcesPath: resourcesPath,
-        nodeModulesPath: nodeModulesPath,
-        pluginsDir: PLUGINS_DIR,
-        // 本地插件（src/plugins）仅在调试态注入，打包态不暴露
-        localPluginsDir: app.isPackaged ? undefined : LOCAL_PLUGINS_DIR
-      })
-
-      await new Promise((resolve, reject) => {
-        server.listen(port, '127.0.0.1', () => {
-          debugLog('[Electron] 服务器已启动，端口 = ' + port)
-          serverInstance = server
-          serverPort = port
-          resolve(port)
-        })
-        server.on('error', (err) => {
-          reject(err)
-        })
-      })
-
-      return port
-    } catch (err) {
-      if (err.code === 'EADDRINUSE') {
-        debugLog('[Electron] Port ' + port + ' is in use, trying next...')
-        continue
-      }
-      errorLog('[Electron] Server listen error: ' + err.message)
-      throw err
-    }
-  }
-
-  throw new Error('Failed to start server: all ports (5000-5003) are in use')
-}
-
-function createWindow(url) {
+function createWindow() {
   const primaryDisplay = screen.getPrimaryDisplay()
   const { width: screenW, height: screenH } = primaryDisplay.size
   const iconPath = app.isPackaged
@@ -1276,7 +1328,8 @@ function createWindow(url) {
     }
   })
 
-  mainWindow.loadURL(url)
+  if (DEV_SERVER_URL) mainWindow.loadURL(DEV_SERVER_URL)
+  else mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
 
   // Center window on screen
   mainWindow.setPosition(
@@ -1358,12 +1411,34 @@ function setupTray() {
   })
   const contextMenu = Menu.buildFromTemplate([
     { label: '打开', click: () => { if (mainWindow) { mainWindow.show(); mainWindow.setSkipTaskbar(false); mainWindow.focus() } } },
+    { label: '速记窗口', click: () => toggleQuickCaptureWindow() },
     { type: 'separator' },
-    { label: '退出', click: () => { closeAction = 'exit'; cancelAllReminderTimers(); if (serverInstance) { try { serverInstance.close() } catch (e) {} }; app.quit() } }
+    { label: '退出', click: () => { closeAction = 'exit'; cancelAllReminderTimers(); app.quit() } }
   ])
   appTray.setContextMenu(contextMenu)
   debugLog('[Main] 系统托盘已创建')
 }
+
+// ====== 速记捕获窗口 IPC ======
+ipcMain.on('quick-capture:hide', () => {
+  if (quickCaptureWindow && !quickCaptureWindow.isDestroyed()) quickCaptureWindow.hide()
+})
+ipcMain.handle('quick-capture:get-shortcut', () => getQuickCaptureShortcut())
+ipcMain.handle('quick-capture:set-shortcut', (_event, accelerator) => {
+  if (!QUICK_CAPTURE_SHORTCUTS.includes(accelerator)) {
+    return { success: false, error: '不支持的快捷键' }
+  }
+  try { globalShortcut.unregister(getQuickCaptureShortcut()) } catch {}
+  const ok = globalShortcut.register(accelerator, toggleQuickCaptureWindow)
+  if (!ok) {
+    // 新键被占用：回滚旧键并告知失败
+    globalShortcut.register(getQuickCaptureShortcut(), toggleQuickCaptureWindow)
+    return { success: false, error: '快捷键已被其他应用占用' }
+  }
+  writeAppLocalSettings({ quickCaptureShortcut: accelerator })
+  debugLog('[Electron] 速记快捷键已更换为：' + accelerator)
+  return { success: true }
+})
 
 ipcMain.on('resize-window', (event, width, height) => {
   if (mainWindow) {
@@ -1917,7 +1992,6 @@ ipcMain.handle('open-changelog-window', async (_event, content) => {
 
 // ====== 提醒系统 v2 ======
 let currentUserId = null
-const getRemindersFile = () => currentUserId ? path.join(DATA_DIR, currentUserId, 'system', 'reminders.json') : null
 
 const SCAN_INTERVAL_MS = 60_000
 const SCAN_AHEAD_MS = 5 * 60_000
@@ -1933,21 +2007,22 @@ let scanIntervalId = null
 let storeDirty = false
 let persistDebounceTimer = null
 
-function loadReminders() {
+async function loadReminders() {
   try {
-    if (!currentUserId) return
-    const REMINDERS_FILE = getRemindersFile()
-    if (!fs.existsSync(REMINDERS_FILE)) { reminderStore = []; return }
-    reminderStore = JSON.parse(fs.readFileSync(REMINDERS_FILE, 'utf8')).reminders || []
+    if (!currentUserId) { reminderStore = []; return }
+    const response = await requestRemoteApi('/api/data/system/reminders')
+    const data = response.data
+    reminderStore = (data && data.reminders) || []
   } catch (e) { errorLog('[Reminder] 加载提醒失败：' + e.message); reminderStore = [] }
 }
 
-function persistReminders() {
+async function persistReminders() {
   if (!storeDirty || !currentUserId) return
   try {
-    const REMINDERS_FILE = getRemindersFile()
-    fs.mkdirSync(path.dirname(REMINDERS_FILE), { recursive: true })
-    fs.writeFileSync(REMINDERS_FILE, JSON.stringify({ version: 1, reminders: reminderStore }, null, 2), 'utf8')
+    await requestRemoteApi('/api/data/system/reminders', {
+      method: 'POST',
+      body: JSON.stringify({ data: { version: 1, reminders: reminderStore } })
+    })
     storeDirty = false
   } catch (e) { errorLog('[Reminder] 持久化提醒失败：' + e.message) }
 }
@@ -2089,7 +2164,7 @@ ipcMain.handle('schedule-reminders', async (_event, a1, a2, a3) => {
     persistDuration = a3
   }
   if (userId) currentUserId = userId
-  loadReminders()
+  await loadReminders()
   debugLog('[Reminder] 收到调度请求，用户 = ' + userId + '，共 ' + (reminders ? reminders.length : 0) + ' 条')
   cancelAllReminderTimers()
   if (persistDuration != null) reminderPersistDuration = persistDuration
@@ -2129,7 +2204,6 @@ app.whenReady().then(async () => {
   closeAction = getCloseAction()
   initLogger()
   debugLog('[Main] 关闭按钮行为：' + (closeAction === 'exit' ? '直接退出' : '最小化到系统托盘'))
-  debugLog('[Electron] 应用就绪')
 
   try {
     const oldDataDir = path.join(process.resourcesPath, 'data')
@@ -2143,11 +2217,11 @@ app.whenReady().then(async () => {
         errorLog('[Electron] Data migration failed: ' + e.message)
       }
     }
-    const port = await startServer()
-    const url = entryUrl(port)
-    debugLog('[Electron] 正在加载页面：' + url)
-    createWindow(url)
+    const target = DEV_SERVER_URL || path.join(__dirname, '..', 'dist', 'index.html')
+    debugLog('[Electron] 正在加载客户端页面：' + target)
+    createWindow()
     setupTray()
+    setupQuickCapture()
     initReminderSystem()
     // 插件编译在后台进行，避免阻塞窗口首次显示
     ensurePluginsCompiled().catch((err) => errorLog('[Electron] Plugin compilation failed: ' + err.message))
@@ -2159,12 +2233,16 @@ app.whenReady().then(async () => {
   } catch (err) {
     errorLog('[Electron] Fatal error: ' + err.message)
     errorLog('[Electron] Stack: ' + err.stack)
+    dialog.showErrorBox(
+      '启动失败',
+      '应用启动失败：' + err.message
+    )
     app.quit()
   }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow(entryUrl(serverPort))
+      createWindow()
     }
   })
 })
@@ -2174,7 +2252,7 @@ app.on('before-quit', () => {
   isQuitting = true
   cancelAllReminderTimers()
   stopTicker()
-  if (storeDirty && currentUserId) persistReminders()
+  if (storeDirty && currentUserId) persistReminders().catch(() => {})
   globalShortcut.unregisterAll()
   // 终止 snowbaby 子进程：防止其残留运行占用安装目录文件，导致安装新版本时提示"无法停止运行应用"
   if (snowbabyProcess) {
@@ -2184,9 +2262,6 @@ app.on('before-quit', () => {
       try { execSync(`taskkill /F /T /PID ${child.pid}`, { windowsHide: true }) } catch {}
     }
     try { child.kill('SIGKILL') } catch {}
-  }
-  if (serverInstance) {
-    try { serverInstance.close() } catch (e) {}
   }
 })
 

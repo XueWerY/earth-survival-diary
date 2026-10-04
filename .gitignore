@@ -52,12 +52,22 @@ __screenshots__/
 /data/
 /release/*.exe
 /release/*.blockmap
+/release/server-*/
+/release/server-*.zip
 
 # TRAE
 .trae/
+
+# 旧 MySQL 导入工具的临时本地配置（含密码，勿提交）
+electron/mysql.config.json
+server/mysql.config.json
 
 # CodeBuddy
 .codebuddy/
 
 # plugins
 src/plugins/*
+
+.pnpm-store/
+
+earth-survival-diary.icu_nginx/

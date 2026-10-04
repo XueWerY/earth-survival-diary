@@ -1,229 +1,40 @@
-// API 客户端 - 所有请求通过后端代理
-// 在 Capacitor (无 Electron) 环境下使用本地文件存储
+// API client - all requests go through the remote service
 
-import * as fs from './fileStore'
+import { getApiBaseUrl, hydrateApiConfig, syncElectronApiConfig } from './apiBase'
 
-const API_BASE = '/api'
-
-// 非 Electron 环境统一使用本地文件存储（Capacitor 安卓端）
-const isCapacitor = typeof window !== 'undefined' && !(window as any).electronAPI
-
-// 获取存储的 token
 export function getToken(): string | null {
-    return localStorage.getItem('auth_token')
+    const token = localStorage.getItem('auth_token')
+    syncElectronApiConfig()
+    return token
 }
 
-// 保存 token
 export function setToken(token: string | null) {
     if (token) {
         localStorage.setItem('auth_token', token)
     } else {
         localStorage.removeItem('auth_token')
     }
+    syncElectronApiConfig()
 }
 
-function getUserId(): string | null {
-    const token = getToken()
-    if (!token) return null
-    if (isCapacitor) return fs.fsGetUserIdFromToken(token)
-    return null
-}
-
-// 通用请求函数
-async function request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-): Promise<T> {
-    if (isCapacitor) {
-        return capacitorRequest<T>(endpoint, options)
-    }
+async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    await hydrateApiConfig()
 
     const token = getToken()
-
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         ...(options.headers as Record<string, string> || {})
     }
+    if (token) headers['Authorization'] = 'Bearer ' + token
 
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-    }
-
-    const response = await fetch(`${API_BASE}${endpoint}`, {
-        ...options,
-        headers
-    })
-
+    const response = await fetch(getApiBaseUrl() + endpoint, { ...options, headers })
     const data = await response.json()
-
     if (!response.ok) {
-        const error = new Error(data.error || `HTTP ${response.status}`) as any
+        const error = new Error(data.error || 'HTTP ' + response.status) as any
         error.response = { data }
         throw error
     }
-
     return data
-}
-
-// Capacitor 环境下的本地请求处理
-async function capacitorRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const token = getToken()
-    const parts = endpoint.split('/').filter(Boolean)
-    let body: any = {}
-    try { if (options.body) body = JSON.parse(options.body as string) } catch {}
-
-    // 提取 user ID
-    const userId = getUserId()
-
-    // ====== Auth APIs (无需认证) ======
-    if (endpoint === '/auth/signup' && options.method === 'POST') {
-        const result = await fs.fsSignUp(body.email, body.password, body.nickname)
-        if (result.session?.access_token) setToken(result.session.access_token)
-        return result as unknown as T
-    }
-    if (endpoint === '/auth/signin' && options.method === 'POST') {
-        const result = await fs.fsSignIn(body.email, body.password)
-        if (result.session?.access_token) setToken(result.session.access_token)
-        return result as unknown as T
-    }
-    if (endpoint === '/auth/signout' && options.method === 'POST') {
-        await fs.fsSignOut(token)
-        return { success: true } as unknown as T
-    }
-    if (endpoint === '/auth/account' && options.method === 'DELETE') {
-        await fs.fsDeleteAccount(token)
-        return { success: true } as unknown as T
-    }
-
-    // ====== Auth APIs ======
-    if (endpoint === '/auth/user' && !options.method) {
-        if (!token) throw Object.assign(new Error('未登录'), { response: { data: { error: '未登录' } } })
-        const result = await fs.fsGetUser(token)
-        return result as unknown as T
-    }
-    if (endpoint === '/auth/users') {
-        return await fs.fsGetUsers() as unknown as T
-    }
-    if (endpoint === '/auth/settings' && !options.method) {
-        return await fs.fsGetAppSettings() as unknown as T
-    }
-    if (endpoint === '/auth/settings' && options.method === 'POST') {
-        return await fs.fsUpdateAppSetting(body.key, body.value) as unknown as T
-    }
-
-    // ====== 需要认证的 APIs ======
-    if (!userId) throw Object.assign(new Error('未登录'), { response: { data: { error: '未登录' } } })
-
-    // Profile
-    if (endpoint === '/profile' && !options.method) {
-        return await fs.fsGetProfile(userId) as unknown as T
-    }
-    if (endpoint === '/profile' && options.method === 'PUT') {
-        return await fs.fsUpdateProfile(userId, body) as unknown as T
-    }
-
-    // Tasks
-    if (endpoint === '/tasks' && !options.method) {
-        return await fs.fsGetTasks(userId) as unknown as T
-    }
-    if (endpoint === '/tasks' && options.method === 'POST') {
-        return await fs.fsAddTask(userId, body) as unknown as T
-    }
-    const taskMatch = endpoint.match(/^\/tasks\/([^/]+)$/)
-    if (taskMatch) {
-        if (options.method === 'PUT') return await fs.fsUpdateTask(userId, taskMatch[1], body) as unknown as T
-        if (options.method === 'DELETE') return await fs.fsDeleteTask(userId, taskMatch[1]) as unknown as T
-    }
-
-    // Diaries
-    if (endpoint === '/diaries' && !options.method) {
-        return await fs.fsGetDiaries(userId) as unknown as T
-    }
-    if (endpoint === '/diaries' && options.method === 'POST') {
-        return await fs.fsAddDiary(userId, body) as unknown as T
-    }
-    const diaryMatch = endpoint.match(/^\/diaries\/([^/]+)$/)
-    if (diaryMatch) {
-        if (options.method === 'PUT') return await fs.fsUpdateDiary(userId, diaryMatch[1], body) as unknown as T
-        if (options.method === 'DELETE') return await fs.fsDeleteDiary(userId, diaryMatch[1]) as unknown as T
-    }
-
-    // Lists
-    if (endpoint === '/list-lists' && !options.method) {
-        return await fs.fsGetLists(userId) as unknown as T
-    }
-    if (endpoint === '/list-lists' && options.method === 'POST') {
-        return await fs.fsAddList(userId, body) as unknown as T
-    }
-    if (endpoint === '/list-lists/reorder' && options.method === 'PUT') {
-        return await fs.fsReorderLists(userId, body.orders) as unknown as T
-    }
-    const listMatch = endpoint.match(/^\/list-lists\/([^/]+)$/)
-    if (listMatch) {
-        if (options.method === 'PUT') return await fs.fsUpdateList(userId, listMatch[1], body) as unknown as T
-        if (options.method === 'DELETE') return await fs.fsDeleteList(userId, listMatch[1], body) as unknown as T
-    }
-    const groupMatch = endpoint.match(/^\/list-lists\/([^/]+)\/groups\/([^/]+)$/)
-    if (groupMatch) {
-        if (options.method === 'PUT') return await fs.fsUpdateGroup(userId, groupMatch[1], groupMatch[2], body) as unknown as T
-        if (options.method === 'DELETE') return await fs.fsDeleteGroup(userId, groupMatch[1], groupMatch[2], body) as unknown as T
-    }
-    const groupAddMatch = endpoint.match(/^\/list-lists\/([^/]+)\/groups$/)
-    if (groupAddMatch && options.method === 'POST') {
-        return await fs.fsAddGroup(userId, groupAddMatch[1], body) as unknown as T
-    }
-    const groupReorderMatch = endpoint.match(/^\/list-lists\/([^/]+)\/groups\/reorder$/)
-    if (groupReorderMatch && options.method === 'PUT') {
-        return await fs.fsReorderGroups(userId, groupReorderMatch[1], body.orders) as unknown as T
-    }
-
-    // List Tasks
-    const listTaskQuery = endpoint.startsWith('/list-tasks?')
-    if (listTaskQuery) {
-        const params = new URLSearchParams(endpoint.substring(endpoint.indexOf('?')))
-        return await fs.fsGetListTasks(userId, params.get('listId') || undefined) as unknown as T
-    }
-    if (endpoint === '/list-tasks' && !options.method) {
-        return await fs.fsGetListTasks(userId) as unknown as T
-    }
-    if (endpoint === '/list-tasks' && options.method === 'POST') {
-        return await fs.fsAddListTask(userId, body) as unknown as T
-    }
-    const listTaskMatch = endpoint.match(/^\/list-tasks\/([^/]+)$/)
-    if (listTaskMatch) {
-        if (options.method === 'PUT') return await fs.fsUpdateListTask(userId, listTaskMatch[1], body) as unknown as T
-        if (options.method === 'DELETE') return await fs.fsDeleteListTask(userId, listTaskMatch[1]) as unknown as T
-    }
-
-    // Stats
-    if (endpoint === '/stats') {
-        return await fs.fsGetStats(userId) as unknown as T
-    }
-
-    // Settings
-    if (endpoint === '/settings' && !options.method) {
-        return await fs.fsGetSettings(userId) as unknown as T
-    }
-    if (endpoint === '/settings' && options.method === 'PUT') {
-        return await fs.fsUpdateSettings(userId, body) as unknown as T
-    }
-
-    // Data API
-    const dataGetMatch = endpoint.match(/^\/data\/([^/]+)\/(.+)$/)
-    if (dataGetMatch) {
-        if (!options.method) {
-            const data = await fs.fsGetData(userId, dataGetMatch[1], dataGetMatch[2])
-            return { success: true, data } as unknown as T
-        }
-        if (options.method === 'POST') {
-            return await fs.fsSetData(userId, dataGetMatch[1], dataGetMatch[2], body.data) as unknown as T
-        }
-        if (options.method === 'DELETE') {
-            return await fs.fsDeleteData(userId, dataGetMatch[1], dataGetMatch[2]) as unknown as T
-        }
-    }
-
-    throw new Error(`Capacitor: 未实现的 API 端点: ${options.method || 'GET'} ${endpoint}`)
 }
 
 // ============ 认证 API ============
@@ -688,6 +499,7 @@ export interface ExportData {
     lists?: any[]
     tasks?: any[]
     settings?: any
+    system_reminders?: any
     notes?: any[]
     notebooks?: any[]
     exportTime?: string

@@ -113,6 +113,28 @@
 
         <div class="setting-item">
           <div class="setting-info">
+            <span class="setting-label">速记快捷键</span>
+            <span class="setting-desc">全局呼出 / 隐藏速记小窗；若被其他软件占用会提示更换</span>
+          </div>
+          <div class="setting-control">
+            <el-select
+                v-model="quickCaptureShortcut"
+                size="default"
+                style="width: 140px;"
+                :disabled="!isElectron"
+                popper-class="system-select-popper"
+                @change="handleQuickCaptureShortcutChange"
+            >
+              <el-option label="Ctrl+Shift+Q" value="Ctrl+Shift+Q" />
+              <el-option label="Ctrl+Shift+K" value="Ctrl+Shift+K" />
+              <el-option label="Ctrl+Alt+Q" value="Ctrl+Alt+Q" />
+              <el-option label="Alt+Q" value="Alt+Q" />
+            </el-select>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
             <span class="setting-label">窗口分辨率</span>
             <span class="setting-desc">设置电脑端窗口显示尺寸</span>
           </div>
@@ -432,7 +454,23 @@ const loadSystemSettings = async () => {
   if (window.electronAPI) {
     autoLaunch.value = await window.electronAPI.getAutoLaunch()
     closeAction.value = await window.electronAPI.getCloseAction() || 'minimize'
+    if (window.electronAPI.quickCapture?.getShortcut) {
+      quickCaptureShortcut.value = await window.electronAPI.quickCapture.getShortcut()
+    }
   }
+}
+
+const quickCaptureShortcut = ref('Ctrl+Shift+Q')
+
+const handleQuickCaptureShortcutChange = async (val: string) => {
+  if (!window.electronAPI?.quickCapture?.setShortcut) return
+  const res = await window.electronAPI.quickCapture.setShortcut(val)
+  if (!res?.success) {
+    ElMessage.error(res?.error || '快捷键设置失败')
+    quickCaptureShortcut.value = await window.electronAPI.quickCapture.getShortcut()
+    return
+  }
+  logger.info('[设置] 修改速记快捷键', { shortcut: val })
 }
 
 const handleAutoLaunchChange = async (val: boolean) => {
@@ -612,8 +650,6 @@ const confirmLogout = async () => {
     await authStore.signOut()
     if (window.electronAPI) {
       await window.electronAPI.restartApp()
-    } else if (typeof (window as any).Capacitor !== 'undefined') {
-      window.location.reload()
     } else {
       emit('logout')
     }

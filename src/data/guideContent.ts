@@ -246,7 +246,7 @@ Windows 桌面端支持自动更新，通过 GitHub Releases 比对版本实现�
 
 **前端**：Vue 3 + TypeScript + Pinia + Vue Router + Element Plus + 自研 Markdown 编辑器 + ECharts + Lucide Icons + GSAP 动效 + lunar-javascript
 
-**跨平台**：Electron（Windows 桌面端）、Capacitor（Android）
+**客户端**：Electron（Windows 桌面端）
 
 **构建工具**：Vite + electron-builder
 
@@ -254,8 +254,7 @@ Windows 桌面端支持自动更新，通过 GitHub Releases 比对版本实现�
 
 ## 数据存储
 
-- Windows 桌面端：本地文件系统，通过 Express HTTP 服务器读写
-- Android：本地 localStorage 存储
+- Windows 桌面端：通过独立运行的云端 API 存取账号和数据
 - 浏览器：通过 API 请求存储到服务端
 
 每个用户的数据存储在独立目录 \`data/<用户ID>/\`，包含足迹记录、笔记、专注记录、清单、倒数日、课程表、系统设置等。

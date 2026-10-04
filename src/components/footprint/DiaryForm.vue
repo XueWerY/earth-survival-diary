@@ -19,7 +19,7 @@
         <IconPicker v-model="form.icon" />
       </el-form-item>
       <el-form-item label="内容" class="content-editor-form-item">
-        <MarkdownEditor
+        <MilkdownEditor
             v-model="form.content"
             placeholder="记录今天的心情和故事"
         />
@@ -57,7 +57,7 @@ import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import dayjs from 'dayjs'
 import { useTaskStore, type Task } from '../../stores/taskStore'
-import MarkdownEditor from '../editor/MarkdownEditor.vue'
+import MilkdownEditor from '../editor/MilkdownEditor.vue'
 import IconPicker from '../common/picker/IconPicker.vue'
 import BaseDialog from '../ui/BaseDialog.vue'
 
@@ -169,8 +169,7 @@ const handleSubmit = async () => {
 <style scoped>
 .content-editor-form-item :deep(.el-form-item__content) { display: block; }
 .content-editor-form-item :deep(.md-editor) { height: 260px; }
-.content-editor-form-item :deep(.md-block) { padding-left: 0; }
-.content-editor-form-item :deep(.md-block-preview) { padding-left: 11px; padding-right: 11px; }
+.content-editor-form-item :deep(.md-blocks) { padding-left: 11px; padding-right: 11px; }
 
 .capsule-btn {
   height: 32px;

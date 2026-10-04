@@ -1,0 +1,195 @@
+<!-- Electron 桌面端快捷记录窗口页面。 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>速记</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: #0f0c29;
+    border: 1px solid rgba(20, 184, 166, 0.35);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+    color: #dbe7e5;
+    -webkit-app-region: drag;
+  }
+  .qc-head {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 10px 6px;
+  }
+  .qc-mode {
+    -webkit-app-region: no-drag;
+    border: 1px solid transparent; border-radius: 999px;
+    background: transparent; color: rgba(219,231,229,.55);
+    font-size: 12px; padding: 3px 10px; cursor: pointer; font-family: inherit;
+    transition: all .15s;
+  }
+  .qc-mode.on { background: rgba(20,184,166,.14); border-color: rgba(20,184,166,.4); color: #5eead4; }
+  .qc-spacer { flex: 1; }
+  .qc-hint { font-size: 10px; color: rgba(143,168,165,.6); margin-right: 6px; }
+  .qc-hide {
+    -webkit-app-region: no-drag;
+    width: 22px; height: 22px; border: none; border-radius: 6px;
+    background: transparent; color: rgba(143,168,165,.8);
+    font-size: 12px; cursor: pointer; font-family: inherit;
+  }
+  .qc-hide:hover { background: rgba(255,255,255,.08); color: #dbe7e5; }
+  .qc-input {
+    -webkit-app-region: no-drag;
+    flex: 1; margin: 0 10px; padding: 10px 12px;
+    border: 1px solid rgba(20,184,166,.22); border-radius: 8px;
+    background: rgba(255,255,255,.03); outline: none; resize: none;
+    color: #dbe7e5; font-family: inherit; font-size: 14px; line-height: 1.7;
+    caret-color: #5eead4;
+  }
+  .qc-input::placeholder { color: rgba(143,168,165,.55); }
+  .qc-input:focus { border-color: rgba(20,184,166,.5); }
+  .qc-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 12px 8px; font-size: 10px; color: rgba(143,168,165,.6);
+  }
+  .qc-status.error { color: #f87171; }
+  .qc-status.ok { color: #5eead4; }
+</style>
+</head>
+<body>
+  <div class="qc-head">
+    <button class="qc-mode on" data-mode="new">新建速记</button>
+    <button class="qc-mode" data-mode="append">追加到今日</button>
+    <span class="qc-spacer"></span>
+    <span class="qc-hint">Enter 保存 · Shift+Enter 换行 · Esc 隐藏</span>
+    <button class="qc-hide" title="隐藏（Ctrl+Shift+Q 呼出）">✕</button>
+  </div>
+  <textarea class="qc-input" id="qc-text" placeholder="记点什么…（自动保存到笔记）"></textarea>
+  <div class="qc-foot">
+    <span class="qc-status" id="qc-status"></span>
+    <span class="qc-brand">地球 Online 生存日记 · 速记</span>
+  </div>
+<script>
+(function () {
+  var ta = document.getElementById('qc-text')
+  var statusEl = document.getElementById('qc-status')
+  var DRAFT_KEY = 'quick-capture-draft'
+  var QUICK_TAG = '速记'
+  var DAILY_TAG = '每日'
+  var mode = 'new'
+  var statusTimer = null
+
+  function todayStr() {
+    var d = new Date()
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+  }
+  function nowHm() {
+    var d = new Date()
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')
+  }
+  function setStatus(text, cls) {
+    clearTimeout(statusTimer)
+    statusEl.textContent = text
+    statusEl.className = 'qc-status' + (cls ? ' ' + cls : '')
+    if (cls === 'ok') statusTimer = setTimeout(function () { statusEl.textContent = ''; statusEl.className = 'qc-status' }, 2600)
+  }
+
+  function api(path, opts) {
+    opts = opts || {}
+    var quickCapture = window.electronAPI && window.electronAPI.quickCapture
+    if (!quickCapture || !quickCapture.requestApi) return Promise.reject(new Error('速记窗仅支持桌面客户端'))
+    return quickCapture.requestApi(path, opts)
+  }
+
+  // 「速记」「每日」标签不存在时创建（标签为 KV 整份存储，此操作低频，写回前先读最新）
+  function ensureTag(name) {
+    return api('/api/data/notes/tags').then(function (res) {
+      var tags = Array.isArray(res && res.data) ? res.data : []
+      var found = tags.find(function (t) { return t.name === name })
+      if (found) return found.id
+      var tag = { id: 'tag_' + Date.now() + Math.random().toString(36).slice(2, 6), name: name, color: '#14b8a6', order: tags.length }
+      tags.push(tag)
+      return api('/api/data/notes/tags', { method: 'POST', body: JSON.stringify({ data: tags }) }).then(function (r) {
+        if (!r || r.success === false) throw new Error('创建标签失败')
+        return tag.id
+      })
+    })
+  }
+
+  function save() {
+    var text = ta.value.trim()
+    if (!text) return
+    var quickCapture = window.electronAPI && window.electronAPI.quickCapture
+    if (!quickCapture || !quickCapture.getApiConfig) { setStatus('速记窗仅支持桌面客户端', 'error'); return }
+    setStatus('保存中…')
+    var job = quickCapture.getApiConfig().then(function (config) {
+      if (!config || !config.baseUrl || !config.token) throw new Error('请先在主窗口登录')
+      if (mode === 'new') {
+        return ensureTag(QUICK_TAG).then(function (quickId) {
+          var firstLine = text.split('\n')[0].trim().slice(0, 20) || ('速记 ' + nowHm())
+          return api('/api/notes', { method: 'POST', body: JSON.stringify({ title: firstLine, content: text, tagIds: [quickId], pinned: false }) })
+        }).then(function (r) {
+          if (!r || r.success === false) throw new Error((r && r.error) || '保存失败')
+        })
+      }
+      return api('/api/notes').then(function (res0) {
+        var notes = ((res0 && res0.notes) || []).filter(function (n) { return !n.trashedAt })
+        var daily = notes.filter(function (n) { return n.title === todayStr() })
+          .sort(function (a, b) { return String(b.updatedAt).localeCompare(String(a.updatedAt)) })[0]
+        var entry = '- **' + nowHm() + '** ' + text
+        if (daily) {
+          return api('/api/notes/' + encodeURIComponent(daily.id), {
+            method: 'PATCH', body: JSON.stringify({ content: String(daily.content || '') + '\n\n' + entry })
+          })
+        }
+        return ensureTag(DAILY_TAG).then(function (dailyId) {
+          return api('/api/notes', { method: 'POST', body: JSON.stringify({ title: todayStr(), content: entry, tagIds: [dailyId], pinned: false }) })
+        })
+      }).then(function (r) {
+        if (!r || r.success === false) throw new Error((r && r.error) || '追加失败')
+      })
+    })
+    job.then(function () {
+      ta.value = ''
+      localStorage.removeItem(DRAFT_KEY)
+      setStatus('已保存 ' + nowHm(), 'ok')
+    }).catch(function (e) {
+      setStatus((e && e.message) || '保存失败', 'error')
+    })
+  }
+
+  // 模式切换
+  Array.prototype.forEach.call(document.querySelectorAll('.qc-mode'), function (btn) {
+    btn.addEventListener('click', function () {
+      mode = btn.dataset.mode
+      Array.prototype.forEach.call(document.querySelectorAll('.qc-mode'), function (b) { b.classList.toggle('on', b === btn) })
+      ta.placeholder = mode === 'new' ? '记点什么…（自动保存到笔记）' : '追加到今日笔记…'
+      ta.focus()
+    })
+  })
+  document.querySelector('.qc-hide').addEventListener('click', function () {
+    if (window.electronAPI && window.electronAPI.quickCapture) window.electronAPI.quickCapture.hide()
+  })
+
+  ta.addEventListener('input', function () { localStorage.setItem(DRAFT_KEY, ta.value) })
+  ta.addEventListener('keydown', function (e) {
+    if (e.isComposing) return
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save() }
+    else if (e.key === 'Escape') {
+      if (window.electronAPI && window.electronAPI.quickCapture) window.electronAPI.quickCapture.hide()
+    }
+  })
+  window.addEventListener('focus', function () { ta.focus() })
+  if (window.electronAPI && window.electronAPI.quickCapture && window.electronAPI.quickCapture.onShown) {
+    window.electronAPI.quickCapture.onShown(function () { ta.focus() })
+  }
+
+  // 草稿恢复
+  var draft = localStorage.getItem(DRAFT_KEY)
+  if (draft) ta.value = draft
+  ta.focus()
+})()
+</script>
+</body>
+</html>

@@ -19,7 +19,6 @@ const sfc = require('@vue/compiler-sfc')
 const BARE_BRIDGE = new Set([
   'vue', 'pinia', 'element-plus', '@element-plus/icons-vue',
   'dayjs', 'qrcode', 'jsqr',
-  '@capacitor/core', '@capacitor/filesystem',
 ])
 const SRC_BRIDGE = new Set([
   'lib/logger', 'lib/api', 'services/storageService',

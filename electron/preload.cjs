@@ -1,6 +1,14 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  quickCapture: {
+    hide: () => ipcRenderer.send('quick-capture:hide'),
+    getShortcut: () => ipcRenderer.invoke('quick-capture:get-shortcut'),
+    setShortcut: (accelerator) => ipcRenderer.invoke('quick-capture:set-shortcut', accelerator),
+    getApiConfig: () => ipcRenderer.invoke('get-remote-api-config'),
+    requestApi: (pathname, options) => ipcRenderer.invoke('quick-capture:request-api', pathname, options),
+    onShown: (callback) => ipcRenderer.on('quick-capture:shown', () => callback())
+  },
   resizeWindow: (width, height) => ipcRenderer.send('resize-window', width, height),
   getScreenInfo: () => ipcRenderer.invoke('get-screen-info'),
   setWindowSize: (userId, width, height) => ipcRenderer.invoke('set-window-size', userId, width, height),
@@ -28,6 +36,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cancelCleanData: () => ipcRenderer.send('clean-data-cancel'),
   checkVersionUpdate: (userId) => ipcRenderer.invoke('check-version-update', userId),
   openChangelogWindow: (content) => ipcRenderer.invoke('open-changelog-window', content),
+  getRemoteApiConfig: () => ipcRenderer.invoke('get-remote-api-config'),
+  setRemoteApiConfig: (token) => ipcRenderer.invoke('set-remote-api-config', token),
+  writeRendererLogs: (entries) => ipcRenderer.invoke('write-renderer-logs', entries),
   scheduleReminders: (reminders, persistDuration) => ipcRenderer.invoke('schedule-reminders', reminders, persistDuration),
   cancelAllReminders: () => ipcRenderer.invoke('cancel-all-reminders'),
   getReminderPersistDuration: () => ipcRenderer.invoke('get-reminder-persist-duration'),
@@ -53,11 +64,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 剪贴板（用于 Electron 端粘贴系统剪贴板内容）
   readClipboardText: () => ipcRenderer.invoke('read-clipboard-text'),
   readClipboardHTML: () => ipcRenderer.invoke('read-clipboard-html'),
-
-  // 局域网传输
-  startLanServer: (data) => ipcRenderer.invoke('start-lan-server', data),
-  stopLanServer: () => ipcRenderer.invoke('stop-lan-server'),
-  fetchLanData: (url) => ipcRenderer.invoke('fetch-lan-data', url),
 
   // 终端命令执行（PowerShell，输出经 powershell-output 事件流式回推）
   execPowerShell: (command) => ipcRenderer.invoke('exec-powershell', command),
@@ -86,5 +92,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createDirectory: (dirPath) => ipcRenderer.invoke('create-directory', dirPath),
   removeDirectory: (dirPath) => ipcRenderer.invoke('remove-directory', dirPath),
   getRuntimePluginManifests: () => ipcRenderer.invoke('get-runtime-plugin-manifests'),
+  getRuntimePluginSource: (pluginId, toolId) => ipcRenderer.invoke('get-runtime-plugin-source', pluginId, toolId),
   recompilePlugins: () => ipcRenderer.invoke('recompile-plugins'),
 })

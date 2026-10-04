@@ -9,8 +9,11 @@ const RELEASE_DIR = path.join(ROOT, 'release')
 function installDeps() {
   const ELECTRON_DIR = path.join(ROOT, 'electron')
   const ELECTRON_DEPS_OK = path.join(ELECTRON_DIR, '.deps-ok')
-  const REQUIRED = ['express', '@vue/compiler-sfc', 'esbuild']
-  const depsReady = fs.existsSync(ELECTRON_DEPS_OK) && REQUIRED.every(d => fs.existsSync(path.join(ELECTRON_DIR, 'node_modules', d)))
+  const REQUIRED = ['electron-updater', '@vue/compiler-sfc', 'esbuild', 'pino', 'pino-roll']
+  const SERVER_ONLY = ['express', 'cors', 'mysql2', 'yaml']
+  const depsReady = fs.existsSync(ELECTRON_DEPS_OK) &&
+    REQUIRED.every(d => fs.existsSync(path.join(ELECTRON_DIR, 'node_modules', d))) &&
+    SERVER_ONLY.every(d => !fs.existsSync(path.join(ELECTRON_DIR, 'node_modules', d)))
   if (depsReady) { console.log('Electron deps already installed.'); return }
   console.log('Installing electron main process dependencies...')
   execSync('npm install --no-package-lock --no-audit --no-fund', { cwd: ELECTRON_DIR, stdio: 'inherit' })
@@ -43,6 +46,7 @@ async function makeIco() {
 function cleanupRelease() {
   if (!fs.existsSync(RELEASE_DIR)) return
   for (const f of fs.readdirSync(RELEASE_DIR)) {
+    if (f.startsWith('server-')) continue // 保留独立生成的云端服务包
     const p = path.join(RELEASE_DIR, f), s = fs.statSync(p)
     if (s.isFile()) {
       // 保留 .exe / .blockmap / .yml（electron-updater 所需），删其他
@@ -56,6 +60,7 @@ function cleanupRelease() {
 function preCleanRelease() {
   if (!fs.existsSync(RELEASE_DIR)) return
   for (const f of fs.readdirSync(RELEASE_DIR)) {
+    if (f.startsWith('server-')) continue // 桌面端构建不清理云端服务包
     const p = path.join(RELEASE_DIR, f), s = fs.statSync(p)
     if (s.isDirectory()) fs.rmSync(p, { recursive: true })
     else fs.rmSync(p)

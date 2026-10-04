@@ -846,7 +846,7 @@ body {
 .hljs-number, .hljs-symbol, .hljs-bullet, .hljs-meta { color: #fbbf24; }
 .hljs-title, .hljs-name, .hljs-type, .hljs-attribute { color: #93c5fd; }
 .hljs-variable, .hljs-template-variable, .hljs-property { color: #f9a8d4; }
-.hljs-built_in, .hljs-builtin-name { color: #67e8f9; }
+.hljs-built_in, .hljs-builtin-name { color: #c4b5fd; }
 .hljs-deletion { color: #f87171; }
 .hljs-regexp { color: #fbbf24; }
 .hljs-emphasis { font-style: italic; }

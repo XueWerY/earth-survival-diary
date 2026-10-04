@@ -64,14 +64,21 @@ export async function loadRuntimePlugins(): Promise<void> {
       const toolsMeta = (m as any).tools || {}
 
       for (const [toolId, meta] of Object.entries(toolsMeta) as [string, any][]) {
-        const modulePath = `/api/plugins/${m.id}/dist/${toolId}.js`
         plugin.tools!.push({
           id: `${m.id}/${toolId}`,
           pluginId: m.id,
           name: meta.name || toolId,
           description: meta.description || '',
           icon: meta.icon || '🔧',
-          component: () => import(/* @vite-ignore */ modulePath),
+          component: async () => {
+            const source = await electronAPI.getRuntimePluginSource(m.id, toolId)
+            const moduleUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }))
+            try {
+              return await import(/* @vite-ignore */ moduleUrl)
+            } finally {
+              URL.revokeObjectURL(moduleUrl)
+            }
+          },
         })
       }
 

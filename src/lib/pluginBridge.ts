@@ -15,8 +15,6 @@ import * as IconsVue from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import QRCode from 'qrcode'
 import jsQR from 'jsqr'
-import * as CapacitorCore from '@capacitor/core'
-import * as CapacitorFilesystem from '@capacitor/filesystem'
 import { logger } from './logger'
 import * as api from './api'
 import * as storageService from '../services/storageService'
@@ -36,8 +34,6 @@ import ErrorDialog from '../components/ui/ErrorDialog.vue'
   dayjs,
   qrcode: QRCode,
   jsqr: jsQR,
-  '@capacitor/core': CapacitorCore,
-  '@capacitor/filesystem': CapacitorFilesystem,
   // 应用内部模块（键 = 相对 src/ 的路径）
   'lib/logger': { logger },
   'lib/api': api,

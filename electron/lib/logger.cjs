@@ -8,7 +8,6 @@
  * 使用方式（CommonJS）：
  *   const { initLogger, logger } = require('./lib/logger')
  *   initLogger(logDir)         // main.cjs: logDir = app.getPath('userData') + '/logs'
- *                              // prod-server.cjs: logDir = path.dirname(DATA_DIR) + '/logs'
  *   state.logger.info({ pid }, 'app ready')
  *   // 或兼容旧调用点的快捷方法：
  *   debugLog('some msg')
@@ -52,7 +51,7 @@ function resolveTargets() {
 }
 
 /**
- * 初始化 Pino 单例。主进程与 Express 服务在各自入口调用一次即可。
+ * 初始化 Electron 主进程的 Pino 单例。
  * 二次调用为 no-op（logger 单例只创建一次）。
  *
  * @param {string} dir 日志文件目录（绝对路径），如 path.join(app.getPath('userData'), 'logs')
@@ -129,7 +128,7 @@ function errorLog(msg, metaOrErr) {
   else state.logger.error(msg)
 }
 
-// ---- 查找当天 / 最新日志文件的辅助（给 main.cjs / prod-server.cjs 的读取逻辑用） ----
+// ---- 查找当天 / 最新日志文件的辅助（给 main.cjs 的读取逻辑用） ----
 /**
  * 从日志目录中按日期取最新文件。pino-roll 输出 app.YYYY-MM-DD.N.log，
  * 同一天可滚动成 app.YYYY-MM-DD.2.log / .3.log，取 mtime 最大的。
