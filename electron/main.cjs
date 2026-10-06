@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, shell, dialog, Tray, screen, clipboard, globalShortcut, net, session } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, shell, dialog, Tray, screen, clipboard, net, session } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const https = require('https')
@@ -32,7 +32,12 @@ ipcMain.handle('write-renderer-logs', async (_event, entries) => {
     if (!method) continue
     const meta = entry.meta && typeof entry.meta === 'object' && !Array.isArray(entry.meta) ? entry.meta : {}
     const logger = loggerMod.state.logger
-    if (logger) logger[method]({ ...meta, rendererTimestamp: entry.timestamp || null }, entry.message.slice(0, 10000))
+    delete meta.rendererTimestamp
+    if (logger) {
+      const message = entry.message.slice(0, 10000)
+      if (Object.keys(meta).length) logger[method](meta, message)
+      else logger[method](message)
+    }
     else console[method === 'trace' || method === 'debug' ? 'log' : method]('[Renderer] ' + entry.message.slice(0, 10000))
   }
   return true
@@ -56,137 +61,34 @@ let closeAction = 'minimize'
 let isQuitting = false
 
 function getCloseAction() {
-  const settingsPath = path.join(app.getPath('userData'), 'close-settings.json')
-  if (fs.existsSync(settingsPath)) {
-    try {
-      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'))
-      return settings.closeAction || 'minimize'
-    } catch {}
-  }
-  return 'minimize'
+  return readAppLocalSettings().closeAction || 'minimize'
 }
 
 function saveCloseAction(action) {
   writeAppLocalSettings({ closeAction: action })
 }
 
-// ====== 应用本地设置（close-settings.json：关闭行为 + 速记窗状态） ======
+// ====== 应用本地设置（close-settings.json：关闭行为） ======
 // 统一读改写合并，避免多个设置字段互相覆写
 function readAppLocalSettings() {
   const settingsPath = path.join(app.getPath('userData'), 'close-settings.json')
+  let settings = {}
   try {
-    if (fs.existsSync(settingsPath)) return JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) || {}
+    if (fs.existsSync(settingsPath)) settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) || {}
   } catch {}
-  return {}
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) settings = {}
+  if ('quickCaptureShortcut' in settings || 'quickCaptureBounds' in settings) {
+    delete settings.quickCaptureShortcut
+    delete settings.quickCaptureBounds
+    try { fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8') } catch {}
+  }
+  return settings
 }
 
 function writeAppLocalSettings(patch) {
   const settingsPath = path.join(app.getPath('userData'), 'close-settings.json')
   const merged = { ...readAppLocalSettings(), ...patch }
   fs.writeFileSync(settingsPath, JSON.stringify(merged, null, 2), 'utf-8')
-}
-
-// ====== 全局速记捕获窗口（阶段 7） ======
-let quickCaptureWindow = null
-const QUICK_CAPTURE_DEFAULT_SHORTCUT = 'Ctrl+Shift+Q'
-const QUICK_CAPTURE_SHORTCUTS = ['Ctrl+Shift+Q', 'Ctrl+Shift+K', 'Ctrl+Alt+Q', 'Alt+Q']
-const QUICK_CAPTURE_W = 480
-const QUICK_CAPTURE_H = 190
-
-function getQuickCaptureShortcut() {
-  const saved = readAppLocalSettings().quickCaptureShortcut
-  return QUICK_CAPTURE_SHORTCUTS.includes(saved) ? saved : QUICK_CAPTURE_DEFAULT_SHORTCUT
-}
-
-function quickCaptureUrl() {
-  return DEV_SERVER_URL
-    ? { type: 'url', value: DEV_SERVER_URL.replace(/\/$/, '') + '/quick-capture.html' }
-    : { type: 'file', value: path.join(__dirname, '..', 'dist', 'quick-capture.html') }
-}
-
-function ensureQuickCaptureWindow() {
-  if (quickCaptureWindow && !quickCaptureWindow.isDestroyed()) return quickCaptureWindow
-  quickCaptureWindow = new BrowserWindow({
-    width: QUICK_CAPTURE_W,
-    height: QUICK_CAPTURE_H,
-    frame: false,
-    transparent: true,
-    resizable: false,
-    skipTaskbar: true,
-    show: false,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'preload.cjs')
-    }
-  })
-  // normal 层级置顶：浮在普通窗口之上，但不遮挡全屏应用（游戏/视频）
-  quickCaptureWindow.setAlwaysOnTop(true, 'normal')
-  // 位置记忆恢复：校验坐标落在可见显示器工作区内，避免拔掉外接屏后窗口跑到屏幕外
-  try {
-    const saved = readAppLocalSettings().quickCaptureBounds
-    let restored = false
-    if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
-      const visible = screen.getAllDisplays().some(d =>
-        saved.x >= d.workArea.x - 40 && saved.y >= d.workArea.y - 10 &&
-        saved.x < d.workArea.x + d.workArea.width && saved.y < d.workArea.y + d.workArea.height
-      )
-      if (visible) {
-        quickCaptureWindow.setPosition(Math.round(saved.x), Math.round(saved.y))
-        restored = true
-      }
-    }
-    if (!restored) {
-      const workArea = screen.getPrimaryDisplay().workArea
-      quickCaptureWindow.setPosition(workArea.x + workArea.width - QUICK_CAPTURE_W - 24, workArea.y + 24)
-    }
-  } catch (e) {
-    errorLog('[Electron] 速记窗位置恢复失败：' + e.message)
-  }
-  const quickCaptureTarget = quickCaptureUrl()
-  if (quickCaptureTarget.type === 'url') quickCaptureWindow.loadURL(quickCaptureTarget.value)
-  else quickCaptureWindow.loadFile(quickCaptureTarget.value)
-  quickCaptureWindow.on('closed', () => { quickCaptureWindow = null })
-  const savePos = () => {
-    if (!quickCaptureWindow || quickCaptureWindow.isDestroyed()) return
-    const [x, y] = quickCaptureWindow.getPosition()
-    writeAppLocalSettings({ quickCaptureBounds: { x, y } })
-  }
-  quickCaptureWindow.on('moved', savePos)
-  return quickCaptureWindow
-}
-
-function toggleQuickCaptureWindow() {
-  const win = ensureQuickCaptureWindow()
-  if (win.isVisible()) {
-    win.hide()
-    return
-  }
-  win.show()
-  win.focus()
-  win.webContents.send('quick-capture:shown')
-}
-
-function registerQuickCaptureShortcut() {
-  const accelerator = getQuickCaptureShortcut()
-  const ok = globalShortcut.register(accelerator, toggleQuickCaptureWindow)
-  if (!ok) {
-    // 注册失败不阻断启动：记日志 + 托盘气泡提示，可在「我的 → 系统设置」更换键位
-    errorLog('[Electron] 全局快捷键注册失败（可能被其他应用占用）：' + accelerator)
-    if (appTray) {
-      try {
-        appTray.displayBalloon({ title: '速记快捷键注册失败', content: accelerator + ' 已被其他应用占用，可在「我的 → 系统设置」中更换。' })
-      } catch {}
-    }
-  } else {
-    debugLog('[Electron] 全局速记快捷键已注册：' + accelerator)
-  }
-}
-
-function setupQuickCapture() {
-  const win = ensureQuickCaptureWindow()
-  win.show()
-  registerQuickCaptureShortcut()
 }
 
 const gotTheLock = app.requestSingleInstanceLock()
@@ -259,37 +161,25 @@ async function requestRemoteApi(pathname, options = {}) {
   return result
 }
 
-ipcMain.handle('quick-capture:request-api', async (event, pathname, options = {}) => {
-  if (!quickCaptureWindow || event.sender !== quickCaptureWindow.webContents) {
-    throw new Error('无权使用速记 API')
-  }
-  const target = new URL(String(pathname || ''), 'https://local.invalid')
-  if (target.origin !== 'https://local.invalid' || !target.pathname.startsWith('/api/') || target.pathname.includes('..')) {
-    throw new Error('无效的 API 路径')
-  }
-  return requestRemoteApi(target.pathname + target.search, options)
-})
-
 // ====== 开发模式支持 ======
 // `npm run dev`（scripts/dev.cjs）注入 Vite dev server 地址；生产版直接加载 dist 页面。
 const DEV_SERVER_URL = process.env.ESD_DEV_URL || null
 
-// ====== 窗口分辨率设置 ======
-function getUserSettingsPath(userId) {
-  return path.join(DATA_DIR, userId, 'settings', 'settings.json')
-}
+// Window dimensions are device preferences, stored apart from account data.
+const WINDOW_SETTINGS_PATH = path.join(app.getPath('userData'), 'window-settings.json')
 
 function readUserSettings(userId) {
-  const p = getUserSettingsPath(userId)
-  if (!fs.existsSync(p)) return {}
-  try { return JSON.parse(fs.readFileSync(p, 'utf-8')) } catch { return {} }
+  if (!userId) return {}
+  if (!fs.existsSync(WINDOW_SETTINGS_PATH)) return {}
+  try { return JSON.parse(fs.readFileSync(WINDOW_SETTINGS_PATH, 'utf-8'))[userId] || {} } catch { return {} }
 }
 
 function writeUserSettings(userId, settings) {
-  const p = getUserSettingsPath(userId)
-  const dir = path.dirname(p)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(p, JSON.stringify(settings, null, 2), 'utf-8')
+  if (!userId) return
+  let allSettings = {}
+  try { allSettings = JSON.parse(fs.readFileSync(WINDOW_SETTINGS_PATH, 'utf-8')) } catch {}
+  allSettings[userId] = settings
+  fs.writeFileSync(WINDOW_SETTINGS_PATH, JSON.stringify(allSettings, null, 2), 'utf-8')
 }
 
 ipcMain.handle('get-screen-info', async () => {
@@ -447,8 +337,18 @@ ipcMain.handle('set-window-title', async (_event, title) => {
   return true
 })
 
-// ========== 自动更新（electron-updater + GitHub Releases） ==========
+// ========== 自动更新（electron-updater + 云服务器静态更新目录） ==========
 const UPDATE_CHECK_INTERVAL_MS = 6 * 3600_000 // 6 小时
+
+function formatUpdaterError(error) {
+  const rawMessage = error instanceof Error ? error.message : String(error || '')
+  if (/latest\.yml/i.test(rawMessage) && (/\b404\b|not found/i.test(rawMessage))) {
+    return '云端更新清单返回 HTTP 404，暂时无法检查更新。请将 latest.yml、对应安装包和 .blockmap 放入服务端 config.yaml 的 updatesDir，并确认 Nginx 已转发 /updates/。'
+  }
+
+  const conciseMessage = rawMessage.split(/\r?\n\s*at\s+/)[0].trim()
+  return conciseMessage.slice(0, 500) || '更新服务暂时不可用，请稍后重试。'
+}
 
 function initUpdater() {
   if (autoUpdater) return
@@ -504,8 +404,9 @@ function initUpdater() {
   })
 
   autoUpdater.on('error', (err) => {
-    debugLog('[Updater] 更新错误：' + err.message)
-    sendUpdateStatusToMain({ status: 'error', message: err.message })
+    const message = formatUpdaterError(err)
+    debugLog('[Updater] 更新错误：' + (err instanceof Error ? err.message : String(err)))
+    sendUpdateStatusToMain({ status: 'error', message })
   })
 }
 
@@ -523,19 +424,23 @@ ipcMain.handle('check-for-update', async () => {
     await autoUpdater.checkForUpdates()
     return { ok: true }
   } catch (e) {
-    debugLog('[Updater] 检查更新失败：' + e.message)
-    return { ok: false, error: e.message }
+    const message = formatUpdaterError(e)
+    debugLog('[Updater] 检查更新失败：' + (e instanceof Error ? e.message : String(e)))
+    return { ok: false, error: message }
   }
 })
 
 ipcMain.handle('download-update', async () => {
   debugLog('[Updater] 开始下载更新')
   try {
+    const check = await autoUpdater.checkForUpdates()
+    if (!check?.isUpdateAvailable) return { ok: false, error: '云服务器上没有可用更新' }
     await autoUpdater.downloadUpdate()
     return { ok: true }
   } catch (e) {
-    debugLog('[Updater] 下载失败：' + e.message)
-    return { ok: false, error: e.message }
+    const message = formatUpdaterError(e)
+    debugLog('[Updater] 下载失败：' + (e instanceof Error ? e.message : String(e)))
+    return { ok: false, error: message }
   }
 })
 
@@ -596,6 +501,8 @@ ipcMain.handle('write-file', async (_event, filePath, content) => {
 const PLUGINS_DIR = app.isPackaged
   ? path.join(app.getPath('userData'), 'plugins')
   : path.join(__dirname, '..', 'src', 'plugins')
+const BUNDLED_PLUGINS_DIR = path.join(process.resourcesPath, 'default-plugins')
+const COMPILED_TAG = 'esbuild-v3'
 
 // 本地插件目录（始终为项目仓库自带的 src/plugins），用于「本地优先于远程」的合并逻辑
 const LOCAL_PLUGINS_DIR = path.join(__dirname, '..', 'src', 'plugins')
@@ -604,7 +511,6 @@ const LOCAL_PLUGINS_DIR = path.join(__dirname, '..', 'src', 'plugins')
 const SNOWBABY_DIR = path.join(app.getPath('userData'), 'snowbaby')
 
 const ALLOWED_DIRS = [
-  path.join(app.getPath('userData'), 'data'),
   path.join(app.getPath('userData'), 'logs'),
   PLUGINS_DIR
 ]
@@ -614,9 +520,72 @@ function isPathAllowed(targetPath) {
   return ALLOWED_DIRS.some(dir => resolved.startsWith(dir + path.sep) || resolved === dir)
 }
 
-ipcMain.handle('get-data-dir-path', async () => {
-  return path.join(app.getPath('userData'), 'data')
-})
+function parsePluginVersion(version) {
+  if (typeof version !== 'string' || !/^\d+(?:\.\d+)*$/.test(version)) return null
+  return version.split('.').map(Number)
+}
+
+function isPluginVersionAtLeast(currentVersion, requiredVersion) {
+  const current = parsePluginVersion(currentVersion)
+  const required = parsePluginVersion(requiredVersion)
+  if (!current || !required) return currentVersion === requiredVersion
+  const count = Math.max(current.length, required.length)
+  for (let index = 0; index < count; index++) {
+    const left = current[index] || 0
+    const right = required[index] || 0
+    if (left !== right) return left > right
+  }
+  return true
+}
+
+/** 将随安装包提供的官方插件升级到 userData，保留用户安装的更新版本。 */
+function syncBundledPlugins() {
+  if (!app.isPackaged || !fs.existsSync(BUNDLED_PLUGINS_DIR)) return
+  fs.mkdirSync(PLUGINS_DIR, { recursive: true })
+
+  for (const entry of fs.readdirSync(BUNDLED_PLUGINS_DIR, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !/^[a-zA-Z0-9_.-]+$/.test(entry.name)) continue
+    const sourceDir = path.join(BUNDLED_PLUGINS_DIR, entry.name)
+    const sourceManifestPath = path.join(sourceDir, 'plugin.json')
+    if (!fs.existsSync(sourceManifestPath)) continue
+
+    try {
+      const sourceManifest = JSON.parse(fs.readFileSync(sourceManifestPath, 'utf-8'))
+      if (sourceManifest.id !== entry.name || typeof sourceManifest.version !== 'string') continue
+
+      const targetDir = path.join(PLUGINS_DIR, entry.name)
+      const targetManifestPath = path.join(targetDir, 'plugin.json')
+      let targetManifest = null
+      try {
+        if (fs.existsSync(targetManifestPath)) targetManifest = JSON.parse(fs.readFileSync(targetManifestPath, 'utf-8'))
+      } catch {}
+      if (targetManifest?.id === entry.name && isPluginVersionAtLeast(targetManifest.version, sourceManifest.version)) continue
+
+      const stagingDir = path.join(PLUGINS_DIR, `.${entry.name}.staging-${process.pid}`)
+      const backupDir = path.join(PLUGINS_DIR, `.${entry.name}.backup-${process.pid}`)
+      fs.rmSync(stagingDir, { recursive: true, force: true })
+      fs.rmSync(backupDir, { recursive: true, force: true })
+      fs.cpSync(sourceDir, stagingDir, { recursive: true })
+
+      let movedExisting = false
+      try {
+        if (fs.existsSync(targetDir)) {
+          fs.renameSync(targetDir, backupDir)
+          movedExisting = true
+        }
+        fs.renameSync(stagingDir, targetDir)
+        if (movedExisting) fs.rmSync(backupDir, { recursive: true, force: true })
+        debugLog(`[Plugins] Updated bundled plugin ${entry.name} to v${sourceManifest.version}`)
+      } catch (error) {
+        fs.rmSync(stagingDir, { recursive: true, force: true })
+        if (movedExisting && !fs.existsSync(targetDir) && fs.existsSync(backupDir)) fs.renameSync(backupDir, targetDir)
+        throw error
+      }
+    } catch (error) {
+      errorLog(`[Plugins] Failed to sync bundled plugin ${entry.name}: ${error.message}`)
+    }
+  }
+}
 
 ipcMain.handle('get-log-dir-path', async () => {
   return path.join(app.getPath('userData'), 'logs')
@@ -933,8 +902,6 @@ ipcMain.handle('snowbaby-is-running', async (_event, { pidPath, pluginDir }) => 
 
 // ====== 运行时插件编译 IPC ======
 // 编译标记内容：打包器变更或产物异常时递增，强制已安装插件重新编译
-const COMPILED_TAG = 'esbuild-v3'
-
 async function ensurePluginsCompiled() {
   const buildScript = path.join(__dirname, 'build-plugin.cjs')
   if (!fs.existsSync(buildScript)) {
@@ -1411,34 +1378,12 @@ function setupTray() {
   })
   const contextMenu = Menu.buildFromTemplate([
     { label: '打开', click: () => { if (mainWindow) { mainWindow.show(); mainWindow.setSkipTaskbar(false); mainWindow.focus() } } },
-    { label: '速记窗口', click: () => toggleQuickCaptureWindow() },
     { type: 'separator' },
     { label: '退出', click: () => { closeAction = 'exit'; cancelAllReminderTimers(); app.quit() } }
   ])
   appTray.setContextMenu(contextMenu)
   debugLog('[Main] 系统托盘已创建')
 }
-
-// ====== 速记捕获窗口 IPC ======
-ipcMain.on('quick-capture:hide', () => {
-  if (quickCaptureWindow && !quickCaptureWindow.isDestroyed()) quickCaptureWindow.hide()
-})
-ipcMain.handle('quick-capture:get-shortcut', () => getQuickCaptureShortcut())
-ipcMain.handle('quick-capture:set-shortcut', (_event, accelerator) => {
-  if (!QUICK_CAPTURE_SHORTCUTS.includes(accelerator)) {
-    return { success: false, error: '不支持的快捷键' }
-  }
-  try { globalShortcut.unregister(getQuickCaptureShortcut()) } catch {}
-  const ok = globalShortcut.register(accelerator, toggleQuickCaptureWindow)
-  if (!ok) {
-    // 新键被占用：回滚旧键并告知失败
-    globalShortcut.register(getQuickCaptureShortcut(), toggleQuickCaptureWindow)
-    return { success: false, error: '快捷键已被其他应用占用' }
-  }
-  writeAppLocalSettings({ quickCaptureShortcut: accelerator })
-  debugLog('[Electron] 速记快捷键已更换为：' + accelerator)
-  return { success: true }
-})
 
 ipcMain.on('resize-window', (event, width, height) => {
   if (mainWindow) {
@@ -1447,21 +1392,6 @@ ipcMain.on('resize-window', (event, width, height) => {
 })
 
 const LOG_DIR = path.join(app.getPath('userData'), 'logs')
-const DATA_DIR = path.join(app.getPath('userData'), 'data')
-
-function getAllUserEmails() {
-  const dir = path.join(DATA_DIR, 'users')
-  if (!fs.existsSync(dir)) return []
-  return fs.readdirSync(dir)
-    .filter(f => f.endsWith('.json'))
-    .map(f => f.replace('.json', ''))
-}
-
-function getUserIndexByEmail(email) {
-  const p = path.join(DATA_DIR, 'users', email + '.json')
-  if (!fs.existsSync(p)) return null
-  try { return JSON.parse(fs.readFileSync(p, 'utf-8')) } catch { return null }
-}
 
 function getDirSize(dirPath) {
   let size = 0
@@ -1479,12 +1409,6 @@ function getDirSize(dirPath) {
   return size
 }
 
-function formatSize(bytes) {
-  if (bytes < 1024) return bytes + ' B'
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
-}
-
 ipcMain.handle('get-log-file-size', async () => {
   const logFilePath = findLatestLogFile(LOG_DIR)
   if (!logFilePath || !fs.existsSync(logFilePath)) return { size: 0, exists: false }
@@ -1493,10 +1417,6 @@ ipcMain.handle('get-log-file-size', async () => {
 
 ipcMain.handle('get-log-dir-size', async () => {
   return { size: getDirSize(LOG_DIR) }
-})
-
-ipcMain.handle('get-data-dir-size', async () => {
-  return { size: getDirSize(DATA_DIR) }
 })
 
 ipcMain.handle('get-log-content', async () => {
@@ -1511,415 +1431,6 @@ ipcMain.handle('clear-logs', async () => {
     fs.mkdirSync(LOG_DIR, { recursive: true })
   }
   return true
-})
-
-const MODULE_FILE_MAP = {
-  tasks: ['footprint/footprint.json'],
-  diaries: ['footprint/diary.json'],
-  focus_favorites: ['focus/favorites.json'],
-  focus_records: ['focus/records.json'],
-  lists: ['list/lists.json', 'list/tasks.json'],
-  countdown: ['countdown/categories.json', 'countdown/countdowns.json'],
-  courses: ['course/courses.json']
-}
-
-const MODULE_GROUP_DEF = [
-  { key: 'footprint', label: '足迹', children: [{ key: 'tasks', label: '足迹记录', serverKeys: ['tasks'] }, { key: 'diaries', label: '日记', serverKeys: ['diaries'] }] },
-  { key: 'focus', label: '专注', children: [{ key: 'focus_favorites', label: '常用专注', serverKeys: ['focus_favorites'] }, { key: 'focus_records', label: '专注记录', serverKeys: ['focus_records'] }] },
-  { key: 'lists', label: '清单', children: [{ key: 'lists', label: '清单列表及其任务', serverKeys: ['lists', 'lists'] }] },
-  { key: 'countdown', label: '倒数日', children: [{ key: 'countdown', label: '倒数日分类及其倒数日', serverKeys: ['countdown_categories', 'countdowns'] }] },
-  { key: 'courses', label: '课程表', children: [{ key: 'courses', label: '课程', serverKeys: ['courses', 'course_recorded_courses'] }] }
-]
-
-ipcMain.handle('get-module-sizes', async () => {
-  try {
-    const emails = getAllUserEmails()
-    const users = []
-
-    for (const email of emails) {
-      const userIndex = getUserIndexByEmail(email)
-      if (!userIndex || !userIndex.id) continue
-      const userId = userIndex.id
-      const userDir = path.join(DATA_DIR, userId)
-      if (!fs.existsSync(userDir)) continue
-
-      const modules = []
-      let userTotal = 0
-
-      for (const group of MODULE_GROUP_DEF) {
-        let groupSize = 0
-        const children = group.children.map(child => {
-          let childSize = 0
-          const files = MODULE_FILE_MAP[child.key] || []
-          for (const f of files) {
-            const fp = path.join(userDir, f)
-            if (fs.existsSync(fp)) childSize += fs.statSync(fp).size
-          }
-          groupSize += childSize
-          return { key: child.key, label: child.label, serverKeys: child.serverKeys, size: childSize }
-        })
-        userTotal += groupSize
-        modules.push({ groupKey: group.key, groupLabel: group.label, groupSize, children })
-      }
-
-      users.push({
-        email,
-        nickname: userIndex.nickname || email.split('@')[0],
-        userId,
-        totalSize: userTotal,
-        modules
-      })
-    }
-
-    const totalDataSize = getDirSize(DATA_DIR)
-
-    // Also add sizes for account info files (not deletable but part of total)
-    for (const user of users) {
-      const userDir = path.join(DATA_DIR, user.userId)
-      for (const sub of ['profile', 'system']) {
-        const subDir = path.join(userDir, sub)
-        if (fs.existsSync(subDir)) {
-          const sz = getDirSize(subDir)
-          user.totalSize += sz
-        }
-      }
-    }
-
-    return { users, totalDataSize, moduleGroups: MODULE_GROUP_DEF }
-  } catch (e) {
-    errorLog('[Main] get-module-sizes failed: ' + e.message)
-    return { users: [], totalDataSize: 0, moduleGroups: MODULE_GROUP_DEF }
-  }
-})
-
-let cleanDataWindow = null
-
-ipcMain.handle('open-clean-data-window', async (_event, windowData) => {
-  if (cleanDataWindow) {
-    cleanDataWindow.focus()
-    return null
-  }
-
-  return new Promise((resolve) => {
-    const dataJson = JSON.stringify(windowData)
-
-    cleanDataWindow = new BrowserWindow({
-      width: 480,
-      height: 620,
-      title: '清理数据',
-      resizable: false,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        devTools: false,
-        preload: path.join(__dirname, 'preload.cjs')
-      }
-    })
-
-    cleanDataWindow.setMenuBarVisibility(false)
-
-    cleanDataWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>清理数据</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { background: #1a1a2e; color: #eee; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; height: 100vh; display: flex; flex-direction: column; }
-          .header { padding: 16px 20px 8px; font-size: 16px; font-weight: 600; color: #fff; }
-          .desc { padding: 0 20px 12px; font-size: 12px; color: #e6a23c; border-bottom: 1px solid rgba(255,255,255,0.08); }
-          .tree-wrap { flex: 1; overflow-y: auto; padding: 12px 20px; }
-          .tree-wrap::-webkit-scrollbar { width: 6px; }
-          .tree-wrap::-webkit-scrollbar-track { background: transparent; }
-          .tree-wrap::-webkit-scrollbar-thumb { background: #3a3a5a; border-radius: 3px; }
-          .all-row { display: flex; align-items: center; gap: 8px; padding: 6px 0 10px; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 8px; }
-          .all-row label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: 500; color: #fff; }
-          .all-row .size-badge { font-size: 11px; color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 4px; margin-left: auto; }
-          .account-row { display: flex; align-items: center; gap: 8px; padding: 6px 0 4px; }
-          .account-row label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 500; color: #8ab4f8; }
-          .account-row .size-badge { font-size: 11px; color: rgba(255,255,255,0.4); margin-left: auto; }
-          .module-group { margin-left: 20px; }
-          .group-header { display: flex; align-items: center; gap: 4px; padding: 5px 8px; cursor: pointer; border-radius: 4px; user-select: none; }
-          .group-header:hover { background: rgba(255,255,255,0.05); }
-          .expand-icon { width: 16px; text-align: center; font-size: 14px; color: rgba(255,255,255,0.6); flex-shrink: 0; }
-          .group-label { font-size: 13px; color: rgba(255,255,255,0.85); }
-          .group-size { font-size: 11px; color: rgba(255,255,255,0.35); margin-left: auto; }
-          .group-children { padding: 2px 0 4px 20px; }
-          .child-item { display: flex; align-items: center; gap: 8px; padding: 4px 8px; }
-          .child-item label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: rgba(255,255,255,0.75); }
-          .child-item .child-size { font-size: 11px; color: rgba(255,255,255,0.3); margin-left: auto; }
-          input[type="checkbox"] { accent-color: #667eea; width: 15px; height: 15px; cursor: pointer; }
-          .footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px; border-top: 1px solid rgba(255,255,255,0.08); }
-          .footer button { padding: 8px 20px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; }
-          .btn-cancel { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); }
-          .btn-cancel:hover { background: rgba(255,255,255,0.12); }
-          .btn-confirm { background: rgba(239,68,68,0.2); color: #ef4444; border: 1px solid rgba(239,68,68,0.4) !important; }
-          .btn-confirm:hover { background: rgba(239,68,68,0.3); }
-          .btn-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
-          .empty-hint { text-align: center; color: #555; padding: 40px 0; font-size: 14px; }
-        </style>
-      </head>
-      <body>
-        <div class="header">清理数据</div>
-        <div class="desc">按账号选择要清理的数据模块，清理后将立即重启应用。</div>
-        <div class="tree-wrap" id="treeWrap"></div>
-        <div class="footer">
-          <button class="btn-cancel" onclick="cancelClean()">取消</button>
-          <button class="btn-confirm" id="confirmBtn" onclick="confirmClean()" disabled>清理</button>
-        </div>
-        <script>
-          var data = JSON.parse(decodeURIComponent(\`${encodeURIComponent(dataJson)}\`));
-          var users = data.users || [];
-          var totalDataSize = data.totalDataSize || 0;
-          var moduleGroups = data.moduleGroups || [];
-          var expandedGroups = {};
-          var selectedLeafKeys = {};
-          var allChecked = false;
-          var accountChecked = {};
-
-          function formatSize(b) {
-            if (!b || b <= 0) return '0 B';
-            if (b < 1024) return b + ' B';
-            if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
-            return (b / 1048576).toFixed(1) + ' MB';
-          }
-
-          function getAllLeafServerKeys(userIdx) {
-            var keys = [];
-            var user = users[userIdx];
-            if (!user) return keys;
-            user.modules.forEach(function(g) {
-              g.children.forEach(function(c) {
-                c.serverKeys.forEach(function(sk) { keys.push(sk); });
-              });
-            });
-            return keys;
-          }
-
-          function getAccountLeafKeys(userIdx) {
-            var keys = [];
-            var user = users[userIdx];
-            if (!user) return keys;
-            user.modules.forEach(function(g) {
-              g.children.forEach(function(c) {
-                keys.push(userIdx + ':' + g.groupKey + ':' + c.key);
-              });
-            });
-            return keys;
-          }
-
-          function updateAllChecked() {
-            var total = 0;
-            var checked = 0;
-            for (var u = 0; u < users.length; u++) {
-              var user = users[u];
-              user.modules.forEach(function(g) {
-                g.children.forEach(function(c) {
-                  total++;
-                  var k = u + ':' + g.groupKey + ':' + c.key;
-                  if (selectedLeafKeys[k]) checked++;
-                });
-              });
-            }
-            allChecked = total > 0 && checked === total;
-            document.getElementById('confirmBtn').disabled = checked === 0;
-          }
-
-          function toggleAll(e) {
-            var checked = e.target.checked;
-            allChecked = checked;
-            for (var u = 0; u < users.length; u++) {
-              var user = users[u];
-              user.modules.forEach(function(g) {
-                g.children.forEach(function(c) {
-                  var k = u + ':' + g.groupKey + ':' + c.key;
-                  selectedLeafKeys[k] = checked;
-                });
-              });
-            }
-            renderTree();
-          }
-
-          function toggleAccount(userIdx, checked) {
-            var user = users[userIdx];
-            user.modules.forEach(function(g) {
-              g.children.forEach(function(c) {
-                var k = userIdx + ':' + g.groupKey + ':' + c.key;
-                selectedLeafKeys[k] = checked;
-              });
-            });
-            renderTree();
-          }
-
-          function toggleGroup(userIdx, groupKey) {
-            var key = userIdx + ':' + groupKey;
-            expandedGroups[key] = !expandedGroups[key];
-            renderTree();
-          }
-
-          function toggleLeaf(userIdx, groupKey, childKey, checked) {
-            var k = userIdx + ':' + groupKey + ':' + childKey;
-            selectedLeafKeys[k] = checked;
-            renderTree();
-          }
-
-          function renderTree() {
-            var html = '';
-            // All data row
-            var allSz = formatSize(totalDataSize);
-            html += '<div class="all-row"><label><input type="checkbox" ' + (allChecked ? 'checked' : '') + ' onchange="toggleAll(event)">全部应用数据</label><span class="size-badge">' + allSz + '</span></div>';
-
-            if (users.length === 0) {
-              html += '<div class="empty-hint">暂无用户数据</div>';
-              document.getElementById('treeWrap').innerHTML = html;
-              return;
-            }
-
-            for (var u = 0; u < users.length; u++) {
-              var user = users[u];
-              var displayName = user.nickname || user.email;
-              // Check if all items for this account are checked
-              var accountKeys = getAccountLeafKeys(u);
-              var allAccountChecked = accountKeys.every(function(k) { return selectedLeafKeys[k]; });
-              var anyAccountChecked = accountKeys.some(function(k) { return selectedLeafKeys[k]; });
-              html += '<div class="account-row"><label><input type="checkbox" ' + (allAccountChecked ? 'checked' : '') + ' onchange="toggleAccount(' + u + ', this.checked)">' + escapeHtml(displayName) + '</label><span class="size-badge">' + formatSize(user.totalSize) + '</span></div>';
-
-              user.modules.forEach(function(g) {
-                var groupKey = u + ':' + g.groupKey;
-                var isExpanded = expandedGroups[groupKey] !== false;
-                html += '<div class="module-group">';
-                html += '<div class="group-header" onclick="toggleGroup(' + u + ',\\'' + g.groupKey + '\\')">';
-                html += '<span class="expand-icon">' + (isExpanded ? '−' : '+') + '</span>';
-                html += '<span class="group-label">' + escapeHtml(g.groupLabel) + '</span>';
-                html += '<span class="group-size">' + formatSize(g.groupSize) + '</span>';
-                html += '</div>';
-                if (isExpanded) {
-                  html += '<div class="group-children">';
-                  g.children.forEach(function(c) {
-                    var k = u + ':' + g.groupKey + ':' + c.key;
-                    var isChecked = selectedLeafKeys[k] || false;
-                    html += '<div class="child-item"><label><input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onchange="toggleLeaf(' + u + ',\\'' + g.groupKey + '\\',\\'' + c.key + '\\', this.checked)">' + escapeHtml(c.label) + '</label><span class="child-size">' + formatSize(c.size) + '</span></div>';
-                  });
-                  html += '</div>';
-                }
-                html += '</div>';
-              });
-            }
-
-            document.getElementById('treeWrap').innerHTML = html;
-            updateAllChecked();
-          }
-
-          function escapeHtml(str) {
-            if (!str) return '';
-            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          }
-
-          function getSelectedServerKeys() {
-            var keys = [];
-            for (var u = 0; u < users.length; u++) {
-              var user = users[u];
-              user.modules.forEach(function(g) {
-                g.children.forEach(function(c) {
-                  var k = u + ':' + g.groupKey + ':' + c.key;
-                  if (selectedLeafKeys[k]) {
-                    c.serverKeys.forEach(function(sk) { if (keys.indexOf(sk) < 0) keys.push(sk); });
-                  }
-                });
-              });
-            }
-            return keys;
-          }
-
-          function confirmClean() {
-            var selectedKeys = getSelectedServerKeys();
-            if (selectedKeys.length === 0) return;
-            window.electronAPI.confirmCleanData({ deleteAll: allChecked, modules: allChecked ? [] : selectedKeys });
-          }
-
-          function cancelClean() {
-            window.electronAPI.cancelCleanData();
-          }
-
-          renderTree();
-        </script>
-      </body>
-      </html>
-    `)}`)
-
-    const onConfirm = (_e, result) => {
-      resolve(result)
-      if (cleanDataWindow && !cleanDataWindow.isDestroyed()) {
-        cleanDataWindow.close()
-      }
-    }
-
-    const onCancel = () => {
-      resolve(null)
-      if (cleanDataWindow && !cleanDataWindow.isDestroyed()) {
-        cleanDataWindow.close()
-      }
-    }
-
-    ipcMain.once('clean-data-confirm', onConfirm)
-    ipcMain.once('clean-data-cancel', onCancel)
-
-    cleanDataWindow.on('closed', () => {
-      cleanDataWindow = null
-      resolve(null)
-    })
-  })
-})
-
-let _versionUpdateNotified = false
-
-ipcMain.handle('check-version-update', async (_event, userId) => {
-  if (userId) currentUserId = userId   // 顺便设 userId，供提醒系统使用
-  try {
-    if (_versionUpdateNotified) {
-      debugLog('[Main] 版本检查已通知过，跳过')
-      return { isUpdated: false, oldVersion: null, newVersion: null }
-    }
-
-    const currentVersion = app.getVersion()
-    const versionDir = path.join(DATA_DIR, userId, 'system')
-    const statePath = path.join(versionDir, 'state.json')
-    const legacyVersionPath = path.join(versionDir, 'version.json')
-
-    if (!fs.existsSync(versionDir)) fs.mkdirSync(versionDir, { recursive: true })
-
-    let storedVersion = null
-    try {
-      const stateData = JSON.parse(fs.readFileSync(statePath, 'utf-8'))
-      storedVersion = stateData.version || null
-    } catch {}
-
-    if (!storedVersion && fs.existsSync(legacyVersionPath)) {
-      try {
-        const ver = JSON.parse(fs.readFileSync(legacyVersionPath, 'utf-8'))
-        storedVersion = ver.version || null
-        try { fs.unlinkSync(legacyVersionPath) } catch {}
-      } catch {}
-    }
-
-    const isUpdated = storedVersion !== currentVersion
-
-    let stateData = {}
-    try { stateData = JSON.parse(fs.readFileSync(statePath, 'utf-8')) } catch {}
-    stateData.version = currentVersion
-    fs.writeFileSync(statePath, JSON.stringify(stateData, null, 2), 'utf-8')
-
-    if (isUpdated) {
-      _versionUpdateNotified = true
-    }
-
-    debugLog(`[Main] 版本检查：存储版本 = ${storedVersion}, 当前版本 = ${currentVersion}，${isUpdated ? '版本已更新' : '已是最新版'}`)
-    return { isUpdated, oldVersion: storedVersion, newVersion: currentVersion }
-  } catch (e) {
-    errorLog('[Main] 版本检查失败：' + e.message)
-    return { isUpdated: false, oldVersion: null, newVersion: null }
-  }
 })
 
 let changelogWindow = null
@@ -2149,21 +1660,16 @@ function formatDelay(ms) {
   return seconds + ' 秒'
 }
 
-ipcMain.handle('schedule-reminders', async (_event, a1, a2, a3) => {
-  // 兼容两种签名：
-  //   新签名：(userId, reminders, persistDuration)
-  //   旧签名：(reminders, persistDuration) — 从其他 IPC 已知 currentUserId
-  let userId, reminders, persistDuration
-  if (Array.isArray(a1)) {
-    userId = currentUserId   // 旧签名：用已设置的
-    reminders = a1
-    persistDuration = a2
-  } else {
-    userId = a1
-    reminders = a2
-    persistDuration = a3
+ipcMain.handle('schedule-reminders', async (_event, userId, reminders, persistDuration) => {
+  if (typeof userId !== 'string' || !userId.trim()) {
+    debugLog('[Reminder] 拒绝调度请求：缺少用户 ID')
+    return { ok: false, count: 0, error: '缺少用户 ID' }
   }
-  if (userId) currentUserId = userId
+  if (!Array.isArray(reminders)) {
+    debugLog('[Reminder] 拒绝调度请求：提醒列表格式无效', { userId })
+    return { ok: false, count: 0, error: '提醒列表格式无效' }
+  }
+  currentUserId = userId
   await loadReminders()
   debugLog('[Reminder] 收到调度请求，用户 = ' + userId + '，共 ' + (reminders ? reminders.length : 0) + ' 条')
   cancelAllReminderTimers()
@@ -2206,22 +1712,15 @@ app.whenReady().then(async () => {
   debugLog('[Main] 关闭按钮行为：' + (closeAction === 'exit' ? '直接退出' : '最小化到系统托盘'))
 
   try {
-    const oldDataDir = path.join(process.resourcesPath, 'data')
-    const newDataDir = path.join(app.getPath('userData'), 'data')
-    if (fs.existsSync(oldDataDir) && !fs.existsSync(newDataDir)) {
-      try {
-        fs.mkdirSync(app.getPath('userData'), { recursive: true })
-        fs.renameSync(oldDataDir, newDataDir)
-        debugLog('[Electron] 数据已迁移至用户目录：' + newDataDir)
-      } catch (e) {
-        errorLog('[Electron] Data migration failed: ' + e.message)
-      }
+    try {
+      syncBundledPlugins()
+    } catch (error) {
+      errorLog('[Plugins] Failed to sync bundled plugins: ' + error.message)
     }
     const target = DEV_SERVER_URL || path.join(__dirname, '..', 'dist', 'index.html')
     debugLog('[Electron] 正在加载客户端页面：' + target)
     createWindow()
     setupTray()
-    setupQuickCapture()
     initReminderSystem()
     // 插件编译在后台进行，避免阻塞窗口首次显示
     ensurePluginsCompiled().catch((err) => errorLog('[Electron] Plugin compilation failed: ' + err.message))
@@ -2253,7 +1752,6 @@ app.on('before-quit', () => {
   cancelAllReminderTimers()
   stopTicker()
   if (storeDirty && currentUserId) persistReminders().catch(() => {})
-  globalShortcut.unregisterAll()
   // 终止 snowbaby 子进程：防止其残留运行占用安装目录文件，导致安装新版本时提示"无法停止运行应用"
   if (snowbabyProcess) {
     const child = snowbabyProcess

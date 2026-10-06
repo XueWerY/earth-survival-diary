@@ -10,12 +10,12 @@ export const devPlugins: PluginExport[] = []
 for (const [path, module] of Object.entries(pluginModules)) {
   const plugin = module.default
   if (!plugin.manifest) {
-    logger.warn(`[插件] ${path} 缺少 manifest，跳过`)
+    logger.warn(`[Plugin] ${path} 缺少 manifest，跳过`)
     continue
   }
   devPlugins.push(plugin)
   const pageCount = plugin.pages ? Object.keys(plugin.pages).length : 0
   const storeCount = plugin.stores ? Object.keys(plugin.stores).length : 0
   const toolCount = plugin.tools ? plugin.tools.length : 0
-  logger.info(`[插件] 已加载: ${plugin.manifest.name} v${plugin.manifest.version} (页面${pageCount} 存储${storeCount} 工具${toolCount})`)
+  logger.info(`[Plugin] 已加载: ${plugin.manifest.name} v${plugin.manifest.version} (页面${pageCount} 存储${storeCount} 工具${toolCount})`)
 }

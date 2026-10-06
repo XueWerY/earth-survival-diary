@@ -1,0 +1,19 @@
+{
+  "name": "earth-survival-diary-server",
+  "private": true,
+  "version": "2026.10.6-4",
+  "type": "commonjs",
+  "engines": {
+    "node": "^20.19 || ^22.12 || >=24"
+  },
+  "scripts": {
+    "start": "node server/index.cjs"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "pino": "^10.3.1",
+    "pino-roll": "^4.0.0",
+    "yaml": "^2.9.1"
+  }
+}

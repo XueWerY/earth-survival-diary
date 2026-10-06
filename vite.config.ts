@@ -24,11 +24,6 @@ function fixVueuseCore(): Plugin {
 
 export default defineConfig({
   base: './',
-  // 主窗口与速记窗口分别作为 HTML 入口；Electron 正式版直接从 dist 加载。
-  input: {
-    main: path.resolve(__dirname, 'index.html'),
-    quickCapture: path.resolve(__dirname, 'quick-capture.html')
-  },
   server: {
     host: '127.0.0.1',
     port: 5173,

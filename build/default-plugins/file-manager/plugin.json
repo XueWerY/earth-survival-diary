@@ -1,0 +1,14 @@
+{
+  "id": "file-manager",
+  "name": "文件资源管理器",
+  "version": "1.8.12",
+  "description": "浏览本机日志与云端账号数据，支持编辑并保存云端数据",
+  "author": "官方",
+  "tools": {
+    "file-manager": {
+      "name": "文件管理",
+      "description": "浏览本机日志与云端账号数据，支持编辑并保存云端数据",
+      "icon": "📁"
+    }
+  }
+}

@@ -10,6 +10,7 @@ const outputRoot = path.join(releaseRoot, `server-${projectPackage.version}`)
 const files = [
   ['server/index.cjs', 'server/index.cjs'],
   ['server/README.md', 'README.md'],
+  ['server/config.example.yaml', 'server/config.example.yaml'],
   ['server/prod-server.cjs', 'server/prod-server.cjs'],
   ['server/lib/logger.cjs', 'server/lib/logger.cjs'],
   ['server/lib/_pretty-stream.cjs', 'server/lib/_pretty-stream.cjs'],

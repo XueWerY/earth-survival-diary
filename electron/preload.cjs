@@ -1,14 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  quickCapture: {
-    hide: () => ipcRenderer.send('quick-capture:hide'),
-    getShortcut: () => ipcRenderer.invoke('quick-capture:get-shortcut'),
-    setShortcut: (accelerator) => ipcRenderer.invoke('quick-capture:set-shortcut', accelerator),
-    getApiConfig: () => ipcRenderer.invoke('get-remote-api-config'),
-    requestApi: (pathname, options) => ipcRenderer.invoke('quick-capture:request-api', pathname, options),
-    onShown: (callback) => ipcRenderer.on('quick-capture:shown', () => callback())
-  },
   resizeWindow: (width, height) => ipcRenderer.send('resize-window', width, height),
   getScreenInfo: () => ipcRenderer.invoke('get-screen-info'),
   setWindowSize: (userId, width, height) => ipcRenderer.invoke('set-window-size', userId, width, height),
@@ -17,7 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateStatus: (callback) => ipcRenderer.on('update-status', (_event, data) => callback(data)),
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
-  downloadUpdate: (url) => ipcRenderer.invoke('download-update', url),
+  downloadUpdate: () => ipcRenderer.invoke('download-update'),
   saveFileDialog: (options) => ipcRenderer.invoke('save-file-dialog', options),
   openFileDialog: (options) => ipcRenderer.invoke('open-file-dialog', options),
   openDirectory: () => ipcRenderer.invoke('open-directory'),
@@ -26,20 +18,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   restartApp: () => ipcRenderer.send('restart-app'),
   getLogFileSize: () => ipcRenderer.invoke('get-log-file-size'),
   getLogDirSize: () => ipcRenderer.invoke('get-log-dir-size'),
-  getDataDirSize: () => ipcRenderer.invoke('get-data-dir-size'),
   getLogContent: () => ipcRenderer.invoke('get-log-content'),
   clearLogs: () => ipcRenderer.invoke('clear-logs'),
   openLogViewer: (content) => ipcRenderer.invoke('open-log-viewer', content),
-  getModuleSizes: () => ipcRenderer.invoke('get-module-sizes'),
-  openCleanDataWindow: (data) => ipcRenderer.invoke('open-clean-data-window', data),
-  confirmCleanData: (result) => ipcRenderer.send('clean-data-confirm', result),
-  cancelCleanData: () => ipcRenderer.send('clean-data-cancel'),
-  checkVersionUpdate: (userId) => ipcRenderer.invoke('check-version-update', userId),
   openChangelogWindow: (content) => ipcRenderer.invoke('open-changelog-window', content),
   getRemoteApiConfig: () => ipcRenderer.invoke('get-remote-api-config'),
   setRemoteApiConfig: (token) => ipcRenderer.invoke('set-remote-api-config', token),
   writeRendererLogs: (entries) => ipcRenderer.invoke('write-renderer-logs', entries),
-  scheduleReminders: (reminders, persistDuration) => ipcRenderer.invoke('schedule-reminders', reminders, persistDuration),
+  scheduleReminders: (userId, reminders, persistDuration) => ipcRenderer.invoke('schedule-reminders', userId, reminders, persistDuration),
   cancelAllReminders: () => ipcRenderer.invoke('cancel-all-reminders'),
   getReminderPersistDuration: () => ipcRenderer.invoke('get-reminder-persist-duration'),
       getAllReminders: () => ipcRenderer.invoke('get-all-reminders'),
@@ -51,7 +37,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setWindowTitle: (title) => ipcRenderer.invoke('set-window-title', title),
 
   // 文件管理器
-  getDataDirPath: () => ipcRenderer.invoke('get-data-dir-path'),
   getLogDirPath: () => ipcRenderer.invoke('get-log-dir-path'),
   readDirectory: (dirPath) => ipcRenderer.invoke('read-directory', dirPath),
   deleteFilePath: (filePath) => ipcRenderer.invoke('delete-file-path', filePath),

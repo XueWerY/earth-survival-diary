@@ -200,8 +200,8 @@
     </template>
   </BaseDialog>
 
-  <BaseDialog :visible="showEditTaskDialog" :title="'编辑任务'" :width="500" teleport @update:visible="closeEditTaskDialog">
-    <TaskForm v-if="editingTask" ref="editTaskFormRef" :key="editingTask.id" :task="editingTask" @submit="onEditTaskSubmit" @cancel="closeEditTaskDialog" />
+  <BaseDialog :visible="showEditTaskDialog" :title="'编辑任务'" :width="860" teleport @update:visible="closeEditTaskDialog">
+    <TaskForm v-if="editingTask" ref="editTaskFormRef" :key="editingTask.id" :task="editingTask" multi-column @submit="onEditTaskSubmit" @cancel="closeEditTaskDialog" />
     <template #footer>
       <el-button @click="closeEditTaskDialog">取消</el-button>
       <el-button type="primary" @click="editTaskFormRef?.submit()">保存</el-button>

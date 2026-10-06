@@ -892,7 +892,7 @@ onMounted(async () => {
   emit('fullscreen-change', fullscreenEdit.value)
   await noteStore.loadData()
   await initNavPath()
-  // 速记捕获窗可能在主窗口后台写入：进入笔记页与窗口聚焦时同步服务端变更
+  // 进入笔记页与窗口重新聚焦时同步云端变更，接收其他客户端的笔记更新
   noteStore.syncFromRemote()
   window.addEventListener('focus', onWindowFocus)
   document.addEventListener('click', onDocClick)

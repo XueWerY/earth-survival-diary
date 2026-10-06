@@ -1,6 +1,6 @@
 <template>
-  <div class="list-form">
-    <div class="form-row">
+  <div class="list-form" :class="{ 'list-form--multi-column': props.multiColumn }">
+    <div class="form-row form-row-wide">
       <span class="form-label">名称</span>
       <el-input
         ref="nameInputRef"
@@ -118,12 +118,12 @@
       </div>
     </template>
 
-    <div class="form-row">
+    <div class="form-row form-row-wide">
       <span class="form-label">备注</span>
       <el-input v-model="formNote" type="textarea" :autosize="{ minRows: 1, maxRows: 5 }" placeholder="添加备注..." />
     </div>
 
-    <div class="form-row">
+    <div class="form-row form-row-wide">
       <span class="form-label">关联笔记</span>
       <el-select v-model="formLinkedNoteIds" multiple filterable clearable collapse-tags collapse-tags-tooltip
         placeholder="选择要关联的笔记" class="linked-note-select" popper-class="dark-select-popper">
@@ -133,7 +133,7 @@
       </el-select>
     </div>
 
-    <div class="form-row">
+    <div class="form-row form-row-wide">
       <span class="form-label">检查事项</span>
       <div class="checklist-form-items" ref="checklistContainerRef">
         <div v-for="(item, idx) in formChecklist" :key="item.id" class="checklist-form-item" :class="{ 'drag-over': formDragOverIdx === idx }"
@@ -171,6 +171,7 @@ const props = defineProps<{
   listId?: string
   groupId?: string
   task?: Task
+  multiColumn?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -377,6 +378,9 @@ defineExpose({ submit, cancel })
 
 <style scoped>
 .list-form { display: flex; flex-direction: column; gap: 14px; }
+.list-form--multi-column { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 22px; align-items: start; }
+.list-form--multi-column .form-row { min-width: 0; }
+.list-form--multi-column .form-row-wide { grid-column: 1 / -1; }
 .list-form :deep(.el-input__wrapper) { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
 .list-form :deep(.el-input__inner) { color: #fff; }
 .list-form :deep(.el-input__inner::placeholder) { color: rgba(255, 255, 255, 0.4); }
@@ -443,4 +447,9 @@ defineExpose({ submit, cancel })
 .checklist-form-delete:hover { background: rgba(255,255,255,0.1); color: var(--chalk-danger); }
 .checklist-form-add { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--chalk-subtle); padding: 4px 8px; border-radius: 6px; cursor: pointer; transition: all 0.15s; }
 .checklist-form-add:hover { color: var(--chalk-white-70); background: rgba(255,255,255,0.05); }
+
+@media (max-width: 720px) {
+  .list-form--multi-column { grid-template-columns: minmax(0, 1fr); }
+  .list-form--multi-column .form-row-wide { grid-column: auto; }
+}
 </style>

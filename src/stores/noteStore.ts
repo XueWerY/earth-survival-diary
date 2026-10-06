@@ -204,7 +204,7 @@ export const useNoteStore = defineStore('note', () => {
     isLoaded.value = false
   }
 
-  // 从服务端全量同步（速记捕获窗等其他写入方的变更感知）：
+  // 从服务端全量同步，以感知其他客户端写入的变更：
   // 主窗口失焦期间内容已强制落库，focus 回来时全量替换是安全的
   const syncFromRemote = async () => {
     if (!isLoaded.value) return

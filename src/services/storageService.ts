@@ -3,6 +3,7 @@ import { getApiBaseUrl, getApiServerUrl, hydrateApiConfig } from '../lib/apiBase
 
 const cache = new Map<string, any>()
 const pendingRequests = new Map<string, Promise<any>>()
+let cacheGeneration = 0
 
 function getAuthToken(): string | null {
   return localStorage.getItem('auth_token')
@@ -31,6 +32,7 @@ export async function getData<T>(type: string, key: string): Promise<T | null> {
   }
 
   const token = getAuthToken()
+  const requestGeneration = cacheGeneration
   const headers: Record<string, string> = {
     'Content-Type': 'application/json'
   }
@@ -38,10 +40,12 @@ export async function getData<T>(type: string, key: string): Promise<T | null> {
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const promise = fetch(`${getApiBaseUrl()}/data/${type}/${key}`, { headers })
+  let promise: Promise<T | null>
+  promise = fetch(`${getApiBaseUrl()}/data/${type}/${key}`, { headers })
       .then(res => res.json())
       .then(result => {
-        pendingRequests.delete(ck)
+        if (pendingRequests.get(ck) === promise) pendingRequests.delete(ck)
+        if (requestGeneration !== cacheGeneration || token !== getAuthToken()) return null
         if (result.success) {
           cache.set(ck, result.data)
           return result.data as T | null
@@ -49,7 +53,7 @@ export async function getData<T>(type: string, key: string): Promise<T | null> {
         return null
       })
       .catch(err => {
-        pendingRequests.delete(ck)
+        if (pendingRequests.get(ck) === promise) pendingRequests.delete(ck)
         console.error(`Failed to get data for ${type}/${key}:`, err)
         return null
       })
@@ -61,7 +65,7 @@ export async function getData<T>(type: string, key: string): Promise<T | null> {
 export async function setData<T>(type: string, key: string, data: T): Promise<boolean> {
   await hydrateApiConfig()
   const ck = cacheKey(type, key)
-  cache.set(ck, data)
+  const requestGeneration = cacheGeneration
 
   const token = getAuthToken()
   const headers: Record<string, string> = {
@@ -78,8 +82,12 @@ export async function setData<T>(type: string, key: string, data: T): Promise<bo
       body: JSON.stringify({ data })
     })
     const result = await res.json()
+    if (result.success && requestGeneration === cacheGeneration && token === getAuthToken()) {
+      cache.set(ck, data)
+    }
     return result.success
   } catch (err) {
+    cache.delete(ck)
     console.error(`Failed to set data for ${type}/${key}:`, err)
     return false
   }
@@ -112,7 +120,9 @@ export async function deleteData(type: string, key: string): Promise<boolean> {
 }
 
 export function clearCache() {
+  cacheGeneration++
   cache.clear()
+  pendingRequests.clear()
 }
 
 // ============ 笔记：单条记录级读写 ============

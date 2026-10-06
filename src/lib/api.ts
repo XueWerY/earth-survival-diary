@@ -17,6 +17,26 @@ export function setToken(token: string | null) {
     syncElectronApiConfig()
 }
 
+export async function checkServerHealth(timeoutMs = 2000): Promise<boolean> {
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
+    try {
+        const response = await fetch(getApiBaseUrl() + '/health', {
+            method: 'GET',
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+            signal: controller.signal
+        })
+        if (!response.ok) return false
+        const result = await response.json()
+        return result?.status === 'ok'
+    } catch {
+        return false
+    } finally {
+        window.clearTimeout(timeout)
+    }
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     await hydrateApiConfig()
 

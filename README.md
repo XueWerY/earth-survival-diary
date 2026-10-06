@@ -86,15 +86,19 @@ pnpm dev
 
 客户端和服务端现在分别发布：桌面安装包仍由根目录 `electron:build:win` 构建；云服务器只部署精简 API 包，不需要完整客户端源码。服务端包只包含 API 入口、API 路由、本地 YAML 文件存储、笔记迁移和运行所需依赖清单，不包含 Vue 前端、Electron 主进程或用户数据目录。
 
-在 Windows Server 2025 上部署时，先在开发机的完整项目根目录运行 `npm run server:package`。它会按当前版本号生成 `release/server-<版本号>/`；将这个目录上传到服务器即可，避免把整个项目传上去。服务端包内有独立的 `package.json` 和部署说明；在服务器包目录运行 `npm install --omit=dev` 安装 API 所需的精简生产依赖。
+在 Windows Server 2025 上部署时，先在开发机的完整项目根目录运行 `npm run server:package`。它会按当前版本号生成 `release/server-<版本号>/`；将这个目录上传到服务器即可，避免把整个项目传上去。服务端包内有独立的 `package.json`、YAML 配置模板和部署说明。在服务包目录运行 `npm install --omit=dev` 安装依赖，再运行 `npm start` 启动服务。
 
-服务端不依赖数据库。业务数据以 YAML 文件保存在 `ESD_DATA_DIR`，建议设置为部署目录之外的 `C:\ProgramData\EarthSurvivalDiary\data`，并限制为服务账号可读写。重新部署服务端包时保留此目录并定期备份。
+服务端不依赖数据库。首次启动会在服务包根目录创建 `config.yaml`，其中配置监听地址、端口、数据目录、安装包目录和 JWT 密钥；密钥会自动生成。默认数据目录为 `C:\Earth-Survival-Diary\data`，更新文件目录为 `C:\Earth-Survival-Diary\updates`，可在 `config.yaml` 中修改，并限制为服务账号可读写。首次生成配置时也会迁移当前启动环境中已有的 `HOST`、`PORT`、`ESD_DATA_DIR` 和 `ESD_JWT_SECRET`；之后服务只读取 YAML。重新部署服务端包时保留数据目录与更新文件目录并定期备份；不要公开包含 JWT 密钥的 `config.yaml`。
 
-API 需要配置 `PORT=5000`、`HOST=127.0.0.1`、`ESD_DATA_DIR` 和至少 32 字符的随机 `ESD_JWT_SECRET`。首次可在 PowerShell 中设置这些变量并运行 `npm start`；长期运行时再把它配置成自动启动的 Windows 服务。JWT 密钥不要写入客户端、服务端包或 Git。
+Nginx 与 API 在同一台服务器时，在 `config.yaml` 中将 `host` 设为 `127.0.0.1`、`port` 设为 `5000`，并确认反向代理转发到 `http://127.0.0.1:5000`。首次启动会生成至少 32 个字符的随机 JWT 密钥并保存在该配置文件中；限制文件访问权限，不要将其提交到 Git 或放进客户端。
+
+桌面端更新文件也由云端服务托管。Nginx 除 `/api/` 外还需把 `/updates/` 转发至 `http://127.0.0.1:5000/updates/`。客户端从 `https://www.earth-survival-diary.icu/updates/latest.yml` 检查新版本；构建后将 `release/` 中对应版本的安装包 `.exe`、`.blockmap` 和 `latest.yml` 复制到 `config.yaml` 的 `updatesDir`。详细步骤见 `server/README.md`。
 
 给 API 准备 HTTPS 域名，并把该域名的 DNS A 记录指向云服务器 `101.43.31.173`。在服务器配置 HTTPS 证书和反向代理，把外部 HTTPS 请求转发至 `http://127.0.0.1:5000`；公网只开放反向代理所需的端口，不直接开放 API 5000。确认 `https://你的域名/api/health` 返回 `{"status":"ok","storage":"yaml"}`。
 
 桌面端登录和注册会直接访问内置的 HTTPS API 地址 `https://www.earth-survival-diary.icu`。若要沿用旧数据，先备份，再按 `server/README.md` 所述迁移；新服务器不会自动读取客户端本机数据。
+
+客户端不再创建或读取 `%APPDATA%\earth-survival-diary\data`；账号和业务数据均通过云端 API 存取。Electron 主程序仍会在用户目录保存登录配置、设备窗口设置和运行日志；部分独立工具按各自说明保存本地文件。
 
 云端服务会拒绝无签名的旧登录令牌；迁移账号后，首次登录需要重新输入密码。旧版 SHA-256 密码会在首次成功登录时自动升级为带盐 scrypt 哈希。桌面端不启动或捆绑 API 服务及服务端数据目录。
 
@@ -147,8 +151,7 @@ earth-survival-diary/
 │   ├── index.cjs               #   云端服务启动入口
 │   ├── prod-server.cjs         #   Express API 路由
 │   └── lib/                    #   YAML 文件存储、服务端日志与笔记迁移模块
-├── scripts/                    # 构建工具脚本（dev.cjs、build-tools.cjs、generate-icons.js）
-├── quick-capture.html          # Electron 全局速记窗口页面
+├── scripts/                    # 构建工具脚本（dev.cjs、build-tools.cjs、package-default-plugins.cjs、generate-icons.js）
 ├── build/                      # 图标资源（app-icon.png 源文件）
 ├── public/                     # 静态资源
 └── package.json                # 项目配置
@@ -173,7 +176,7 @@ earth-survival-diary/
 
 ### 插件系统架构
 
-- 仅支持 Electron 端，以源码形式分发（插件市场从 GitHub 下载源码），**不打包进 exe**
+- 社区插件通过插件市场从 GitHub 下载源码；官方文件管理器随安装包分发，并在启动时同步较新版本到用户插件目录
 - **开发模式**：`src/lib/pluginLoader.dev.ts` 通过 Vite glob 加载 `src/plugins/<插件ID>/`
 - **生产模式**：插件安装到 `userData/plugins/<插件ID>/`；应用启动时主进程用 esbuild 打包为单文件 ESM（`dist/<工具ID>.js`），Electron 通过受限 IPC 读取插件模块并动态导入，不依赖服务端静态路由
 - **运行时桥**：共享依赖（vue / pinia / element-plus / 应用内部模块等）**不打包进插件产物**，由 `src/lib/pluginBridge.ts` 暴露到 `window.__ESD_BRIDGE__`，保证插件与主应用共用同一实例
@@ -192,7 +195,7 @@ earth-survival-diary/
 
 ## 📝 日志系统
 
-桌面端与云端 API 使用各自独立的 Pino 日志实例。桌面渲染进程 `src/lib/logger.ts` 通过 IPC 把日志写入 Electron 主进程的本机滚动日志；API 服务端只记录自己的服务日志。
+桌面端与云端 API 使用各自独立的 Pino 日志实例。桌面渲染进程 `src/lib/logger.ts` 通过 IPC 把日志写入 Electron 主进程的本机滚动日志；API 服务端日志同时输出到服务端终端并写入数据目录上级的 `logs` 文件夹。
 
 ### 架构
 
@@ -249,12 +252,12 @@ flowchart LR
 
 | 组件 | 位置 | 说明 |
 |------|------|------|
-| 持久化存储 | `userData/data/<userId>/system/reminders.json` | JSON 文件，防抖 3 秒落盘 |
-| ticker 扫描器 | main.cjs `scanDueReminders()` | 每 60s 扫存储，捡 5 分钟内到期的注册 setTimeout |
+| 持久化存储 | 服务端 API `/api/data/system/reminders` | 通过云端 YAML 数据目录保存，防抖 3 秒写入 |
+| ticker 扫描器 | main.cjs `scanDueReminders()` | 每 60s 扫描内存中的提醒，捡 5 分钟内到期的注册 setTimeout |
 | 双通道触发 | main.cjs `showNextReminder()` | 主窗口可见 → 应用内弹窗，否则 → `new Notification()` 系统通知 |
 | 循环提醒 | main.cjs `scheduleNextRepeat()` | 触发后写存储让 ticker/setTimeout 自动捡 |
-| 启动恢复 | main.cjs `initReminderSystem()` | 读 JSON + 补触发期间过期提醒 |
-| 退出保险 | `before-quit` | `cancelAllReminderTimers()` + `stopTicker()` + `persistReminders()` |
+| 启动恢复 | main.cjs `initReminderSystem()` | 从云端 API 读取提醒 + 补触发期间过期提醒 |
+| 退出保险 | `before-quit` | `cancelAllReminderTimers()` + `stopTicker()` + 尝试写入云端 |
 
 ## 🎨 UI/UX 规范
 
@@ -321,15 +324,15 @@ build/app-icon.png（源文件）
 # 本地构建（不发布）
 pnpm electron:build:win
 
-# 发布到 GitHub Releases（自动打 tag + 上传产物）
-# 前置：设置环境变量 GH_TOKEN（GitHub Personal Access Token，需要 repo 权限）
+# 构建供云服务器托管的安装包和更新清单
 pnpm electron:build:win:release
 ```
 
 **更新链路**：
 
-- **发布侧**：`electron-builder` 自动打包 NSIS 安装包 `.exe`、差分更新 `.blockmap`、元数据 `latest.yml`，以 release tag（如 `v2026.9.16-1`）上传到 GitHub Releases
-- **运行时**：`electron-updater`（provider: github）从 GitHub Releases API 读取 `tag_name` 作为最新版本号和安装包地址，不依赖文件名正则
+- **构建侧**：`electron-builder` 生成 NSIS 安装包 `.exe`、差分更新 `.blockmap` 和元数据 `latest.yml`；安装向导允许用户选择安装目录，卸载时默认展开操作详情并显示进度和完成页面
+- **部署侧**：把同一版本的 `.exe`、`.blockmap` 和 `latest.yml` 上传到云服务器 `updatesDir`；Node 服务通过 `/updates/` 提供下载，Nginx 反向代理该路径
+- **运行时**：客户端通过云服务器 `latest.yml` 检查版本，Electron `electron-updater` 从同一云端目录校验并下载安装包，不再从 GitHub Releases 获取更新
 - **触发时机**：启动 5s 后自动检查一次 + 每 6 小时静默轮询 + 用户手动触发
 - **完整流程**：检查 → 提示有更新 → 用户点下载（显示进度）→ 下载完成提示重启 → 用户确认后 `quitAndInstall` 自动重启安装
 - **IPC 入口**：`check-for-update` / `download-update` / `quit-and-install`，状态通道 `update-status` 推送 `checking / available / no-update / downloading(percent) / downloaded / error`
@@ -356,9 +359,9 @@ pnpm electron:build:win:release
 
 ### 关键数据路径
 
-| 数据 | YAML 路径 |
+| 数据 | 存储位置 |
 |------|------|
-| 窗口分辨率 / 设置 | `<用户ID>/settings/settings.yaml` |
+| 窗口分辨率 | Electron 客户端 `userData/window-settings.json`（设备偏好） |
 | 笔记 / 标签 | `<用户ID>/notes/notes.yaml` / `<用户ID>/notes/tags.yaml` |
 | 足迹任务 / 日记 | `<用户ID>/footprint/footprint.yaml` / `<用户ID>/footprint/diary.yaml` |
 | 清单 / 清单任务 | `<用户ID>/list/lists.yaml` / `<用户ID>/list/tasks.yaml` |
@@ -392,9 +395,8 @@ Tag  { id, name, color, order }        // name 支持 "项目/子项目" 嵌套
 - **双向链接**：自建 `[[ ]]` wiki-link 插件（`src/components/editor/wikiLink.ts`，基于 `@milkdown/kit` 的 `$remark`/`$nodeSchema`/`$inputRule` 原语）——存储为纯 `[[目标|别名]]` 语法（直接兼容 Obsidian / Logseq）；输入 `[[` 弹出笔记标题联想（↑↓/Enter/Esc 键盘导航），chip 点击跳转，未解析链接（虚线样式）点击即以目标为标题创建新笔记；反链面板列出引用当前笔记的来源（标题 + 所在行摘录），通过状态栏按钮展开或收起。
 - **导出**：状态栏「导出」下拉——① Markdown（`.md`）：YAML frontmatter 携带 title/tags/created/updated，正文原样保留 `[[ ]]` 语法，可直接迁入 Obsidian / Logseq；② 长图（`.png`）：编辑器渲染产物克隆到离屏容器 + 自包含蓝紫暗色排版样式 + html2canvas（720px 宽 @2x）。应用级「设置 → 数据导出/导入」自本版本起包含笔记与标签（`/api/export` / `/api/import`）。
 - **每日笔记**：标题为当天日期（`YYYY-MM-DD`）的普通笔记 + 自动创建的「每日」标签；「今日」视图空态提供「新建今日笔记」入口（当日已有则直接打开）；`Ctrl+N` 新建普通笔记。
-- **全局速记捕获窗**：无边框置顶小窗（480×190，`normal` 层级不遮挡全屏应用），应用启动即常驻，可拖动、位置记忆（多显示器可见性校验）；默认快捷键 `Ctrl+Shift+Q` 全局呼出/隐藏（「我的 → 系统设置」可换键，被占用时托盘气泡提示）；页面为独立桌面 HTML（`quick-capture.html`），开发和打包均由 Vite 构建；请求由 Electron 主进程通过受限 IPC 发往云端 API，不依赖本机 Express 或共享 localStorage 登录令牌；支持新建速记和追加到今日笔记；Enter 保存 / Shift+Enter 换行 / Esc 隐藏；草稿保存在 localStorage；写入走记录级笔记 API，与主窗口无并发覆盖；主窗口聚焦与进入笔记页时自动同步云端变更（`noteStore.syncFromRemote`）。
 - **置顶**：由 `notes:favorites` 键改为笔记自身的 `pinned` 字段。该键此前被「置顶 id」与「导航收藏对象」两种语义复用、互相覆盖，迁移后仅保留导航收藏用途。
-- **写入方式**：笔记改用记录级读写 `GET/POST /api/notes`、`PATCH/DELETE /api/notes/:id`，不再「整份数组读-改-写」——全局捕获窗口与主窗口同时写时，整份写回会抹掉对方的新增/修改。
+- **写入方式**：笔记改用记录级读写 `GET/POST /api/notes`、`PATCH/DELETE /api/notes/:id`，不再「整份数组读-改-写」，避免多个客户端同时写入时覆盖彼此的新增或修改；主窗口聚焦或重新进入笔记页时会同步云端变更。
 - **过渡期兼容**：桌面端 `noteStore` 额外派生出 `categoryId`（等于 `tagIds[0]`）与 `categories` 视图，供尚未重写的旧笔记界面读取。
 
 ### 迁移旧 MySQL 数据

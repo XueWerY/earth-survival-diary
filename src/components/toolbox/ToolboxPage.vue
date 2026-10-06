@@ -14,7 +14,7 @@
         </div>
       </div>
     </div>
-    <div v-else class="toolbox-content">
+    <div v-show="!activeTool" class="toolbox-content">
       <el-scrollbar>
         <div class="section" v-if="tagGroups.length > 0">
           <div class="section-title-row">
@@ -264,6 +264,20 @@ async function handleRefreshClick() {
   }
 }
 
+async function refreshMarketplaceOnEntry() {
+  if (!marketplaceRef.value || marketLoading.value) return
+  marketLoading.value = true
+  try {
+    const list = await marketplaceRef.value.refresh()
+    updatablePlugins.value = list.filter(p => p.hasUpdate)
+    logger.info('[工具箱] 进入页面时已刷新插件市场', { pluginCount: list.length })
+  } catch (e) {
+    logger.warn('[工具箱] 进入页面时刷新插件市场失败', { error: e instanceof Error ? e.message : String(e) })
+  } finally {
+    marketLoading.value = false
+  }
+}
+
 async function updateOne(p: MarketplacePlugin) {
   if (!marketplaceRef.value || updating.value) return
   updating.value = true
@@ -325,6 +339,7 @@ onMounted(async () => {
 
   measureNavHeight()
   window.addEventListener('resize', onResize)
+  void refreshMarketplaceOnEntry()
 })
 
 onUnmounted(() => {

@@ -1,0 +1,9 @@
+# Nginx 与 API 在同一台服务器时保持 127.0.0.1。
+# 只有需要从其他机器直连 API 时，才改成 0.0.0.0 并配置防火墙。
+host: 127.0.0.1
+port: 5000
+dataDir: "C:/Earth-Survival-Diary/data"
+updatesDir: "C:/Earth-Survival-Diary/updates"
+
+# 首次启动会自动生成至少 32 个字符的随机密钥并写入 config.yaml。
+jwtSecret: ""

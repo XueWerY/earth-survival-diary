@@ -149,12 +149,12 @@ export const DEFAULT_FOLDER_COLORS = [
 ]
 
 export const useListStore = defineStore('list', () => {
+  try { localStorage.removeItem('esd_groups_backup') } catch { /* 忽略受限浏览器存储 */ }
+
   const taskLists = ref<List[]>([])
   const lists = ref<Task[]>([])
   const folders = ref<Folder[]>([])
   const isLoaded = ref(false)
-
-  const LS_GROUPS_KEY = 'esd_groups_backup'
 
   const saveCompletedRecord = async (task: Task) => {
     try {
@@ -170,21 +170,6 @@ export const useListStore = defineStore('list', () => {
       })
       await setData('list', 'completed', records)
     } catch {}
-  }
-
-  const saveGroupsLocal = () => {
-    try {
-      const data = taskLists.value.map(l => ({ id: l.id, groups: l.groups.map(g => ({ id: g.id, name: g.name, color: g.color, order: g.order })) }))
-      localStorage.setItem(LS_GROUPS_KEY, JSON.stringify(data))
-    } catch { /* 静默失败 */ }
-  }
-
-  const loadGroupsLocal = () => {
-    try {
-      const raw = localStorage.getItem(LS_GROUPS_KEY)
-      if (!raw) return null
-      return JSON.parse(raw)
-    } catch { return null }
   }
 
   const saveFolders = async () => {
@@ -232,7 +217,6 @@ export const useListStore = defineStore('list', () => {
       // 加载清单
       const { lists: dbLists } = await api.getLists()
       logger.debug('[ListStore] loadData 获取清单', { count: dbLists?.length })
-      const localBackup = loadGroupsLocal()
       taskLists.value = dbLists.map(db => {
         const rawGroups = (db.groups && db.groups.length > 0) ? db.groups : [{
           id: `${db.id}-default`,
@@ -240,16 +224,6 @@ export const useListStore = defineStore('list', () => {
           color: DEFAULT_GROUP_COLORS[0],
           order: 0
         }]
-        // 从本地备份恢复 order（当 API 数据缺失 order 时）
-        const localList = localBackup?.find((l: any) => l.id === db.id)
-        if (localList) {
-          rawGroups.forEach((g: any) => {
-            if (g.order == null) {
-              const local = localList.groups.find((lg: any) => lg.id === g.id)
-              if (local != null && local.order != null) g.order = local.order
-            }
-          })
-        }
         rawGroups.sort((a: { order?: number }, b: { order?: number }) => (a.order ?? 0) - (b.order ?? 0))
         rawGroups.forEach((g: any, i: number) => { if (g.order == null) g.order = i })
         return {
@@ -261,8 +235,6 @@ export const useListStore = defineStore('list', () => {
           createdAt: db.created_at
         }
       })
-
-      saveGroupsLocal()
 
       // 加载任务 - 保留所有原始字段
       const { listTasks: dbTasks } = await api.getListTasks()
@@ -526,7 +498,6 @@ export const useListStore = defineStore('list', () => {
       }
 
       list.groups.push(newGroup)
-      saveGroupsLocal()
       return newGroup
     } catch (error) {
       console.error('Failed to add group:', error)
@@ -560,7 +531,6 @@ export const useListStore = defineStore('list', () => {
     const item = list.groups.splice(index, 1)[0]
     list.groups.splice(index - 1, 0, item)
     list.groups.forEach((g, i) => { g.order = i })
-    saveGroupsLocal()
 
     try {
       const orders = list.groups.map(g => ({ id: g.id, order: g.order }))
@@ -580,7 +550,6 @@ export const useListStore = defineStore('list', () => {
     const item = list.groups.splice(index, 1)[0]
     list.groups.splice(index + 1, 0, item)
     list.groups.forEach((g, i) => { g.order = i })
-    saveGroupsLocal()
 
     try {
       const orders = list.groups.map(g => ({ id: g.id, order: g.order }))
@@ -608,7 +577,6 @@ export const useListStore = defineStore('list', () => {
 
     list.groups = list.groups.filter(g => g.id !== groupId)
     list.groups.forEach((g, i) => { g.order = i })
-    saveGroupsLocal()
 
     if (deleteTasks) {
       // 删除该分组下的所有任务

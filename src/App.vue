@@ -76,9 +76,10 @@
           <template v-if="updateStatus === 'available'">
             <p>发现新版本 v{{ updateVersion }}</p>
             <p class="update-hint">
-              或前往
-              <a class="update-link" href="#" @click.prevent="openReleasesUrl">GitHub Releases</a>
-              手动下载
+              <template v-if="updateDownloadUrl">
+                或直接下载
+                <a class="update-link" :href="updateDownloadUrl" @click.prevent="openUpdateUrl">云端安装包</a>
+              </template>
             </p>
           </template>
           <template v-else-if="updateStatus === 'downloading'">
@@ -91,7 +92,8 @@
         </div>
         <template #footer>
           <el-button v-if="updateStatus === 'available'" type="primary" @click="handleDownloadUpdate">下载更新</el-button>
-          <el-button type="primary" @click="updateDialogVisible = false">确认</el-button>
+          <el-button v-if="updateStatus === 'downloaded' && canInstallUpdate" type="primary" @click="handleInstallUpdate">立即安装并重启</el-button>
+          <el-button v-else type="primary" @click="updateDialogVisible = false">确认</el-button>
         </template>
       </BaseDialog>
 
@@ -124,8 +126,9 @@ import { useAuthStore } from './stores/authStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useFocusStore } from './stores/focusStore'
 import { getData, setData, preloadData, clearCache, getSystemStateField, setSystemStateField } from './services/storageService'
-import { fetchLatestReleaseVersion, RELEASES_PAGE_URL } from './services/versionChecker'
+import { fetchLatestReleaseVersion, UPDATE_BASE_URL } from './services/versionChecker'
 import { logger } from './lib/logger'
+import { checkServerHealth } from './lib/api'
 import { usePageNav, MODULE_ROUTES } from './composables/usePageNav'
 import ErrorDialog from './components/ui/ErrorDialog.vue'
 import MainNav from './components/common/nav/MainNav.vue'
@@ -175,6 +178,10 @@ const isInitializing = ref(false)
 const userKey = ref(0)
 
 const capturedError = ref<string | null>(null)
+const SERVER_HEALTH_CHECK_INTERVAL_MS = 2000
+let serverHealthTimer: number | null = null
+let serverHealthCheckInFlight = false
+let serverUnavailableHandled = false
 
 onErrorCaptured((err, instance, info) => {
   const errMsg = err instanceof Error ? `${err.message}\n${err.stack || ''}` : String(err)
@@ -190,9 +197,7 @@ const handleAuthSuccess = () => {
   window.location.reload()
 }
 
-// 登出处理
-const handleLogout = async () => {
-  logger.info('[App] 用户退出登录')
+const resetAuthenticatedState = () => {
   if (window.electronAPI?.cancelAllReminders) {
     window.electronAPI.cancelAllReminders()
   }
@@ -208,6 +213,49 @@ const handleLogout = async () => {
   isInitializing.value = false
   // 更新用户标识，强制 keep-alive 组件重新渲染
   userKey.value++
+}
+
+const handleLogout = async () => {
+  logger.info('[App] 用户退出登录')
+  resetAuthenticatedState()
+}
+
+const stopServerHealthChecks = () => {
+  if (serverHealthTimer !== null) {
+    window.clearInterval(serverHealthTimer)
+    serverHealthTimer = null
+  }
+}
+
+const forceLogoutForServerUnavailable = () => {
+  if (serverUnavailableHandled || !authStore.isAuthenticated) return
+  serverUnavailableHandled = true
+  stopServerHealthChecks()
+  logger.warn('[App] 云端服务不可用，清除本地登录状态')
+  authStore.clearUser()
+  resetAuthenticatedState()
+  ElMessage.error({ message: '云端服务连接中断，已退出登录', duration: 5000 })
+}
+
+const startServerHealthChecks = () => {
+  if (serverHealthTimer !== null) return
+  serverUnavailableHandled = false
+
+  const check = async () => {
+    if (!authStore.isAuthenticated || serverHealthCheckInFlight || serverUnavailableHandled) return
+    serverHealthCheckInFlight = true
+    try {
+      const healthy = await checkServerHealth()
+      if (!healthy) forceLogoutForServerUnavailable()
+    } catch {
+      forceLogoutForServerUnavailable()
+    } finally {
+      serverHealthCheckInFlight = false
+    }
+  }
+
+  void check()
+  serverHealthTimer = window.setInterval(() => { void check() }, SERVER_HEALTH_CHECK_INTERVAL_MS)
 }
 
 const handleRefreshData = async () => {
@@ -297,6 +345,7 @@ const updateVersion = ref('')
 const updateMessage = ref('')
 const updateDownloadUrl = ref('')
 const updatePercent = ref(0)
+const canInstallUpdate = typeof window !== 'undefined' && !!window.electronAPI?.quitAndInstall
 
 const updateStatusText = computed(() => {
   switch (updateStatus.value) {
@@ -304,17 +353,18 @@ const updateStatusText = computed(() => {
     case 'error': return '更新检查失败'
     case 'no-update': return '已是最新版本'
     case 'downloading': return `正在下载更新... ${updatePercent.value}%`
-    case 'downloaded': return '下载完成，正在启动安装程序'
+    case 'downloaded': return '下载完成，点击下方按钮安装更新'
     default: return ''
   }
 })
 
-const openReleasesUrl = () => {
-  logger.info('[App] 用户点击更新链接')
+const openUpdateUrl = () => {
+  const url = updateDownloadUrl.value || UPDATE_BASE_URL
+  logger.info('[App] 用户打开云端安装包')
   if (window.electronAPI?.openExternal) {
-    window.electronAPI.openExternal(RELEASES_PAGE_URL)
+    window.electronAPI.openExternal(url)
   } else {
-    window.open(RELEASES_PAGE_URL, '_blank')
+    window.open(url, '_blank')
   }
 }
 
@@ -324,50 +374,31 @@ const startVersionChecks = async () => {
   if (versionChecksStarted.value) return
   versionChecksStarted.value = true
   logger.info('[更新] 开始版本检测')
+  setupUpdateStatusListener()
 
   if (authStore.user?.id) {
-    if (window.electronAPI?.checkVersionUpdate) {
-      try {
-        const result = await window.electronAPI.checkVersionUpdate(authStore.user.id)
-        if (result.isUpdated) {
-          try {
-            await setSystemStateField('version', result.newVersion)
-            logger.info('[App] 检测到版本更新，已同步版本到前端', { oldVersion: result.oldVersion, newVersion: result.newVersion })
-          } catch (e) {
-            logger.warn('[App] 同步版本到前端失败', { error: e instanceof Error ? e.message : String(e) })
-          }
-          showAppChangelogDialog.value = true
-        }
-      } catch (e) {
-        console.error('[App] Version update check failed:', e)
+    try {
+      const storedVersion = await getSystemStateField('version')
+      if (storedVersion !== appVersion) {
+        await setSystemStateField('version', appVersion)
+        logger.info('[App] 检测到版本更新', { oldVersion: storedVersion, newVersion: appVersion })
+        showAppChangelogDialog.value = true
       }
-    } else {
-      // 浏览器调试模式：检查持久化版本号并查询发布信息
-      try {
-        const storedVersion = await getSystemStateField('version')
-        if (storedVersion !== appVersion) {
-          await setSystemStateField('version', appVersion)
-          logger.info('[App] 检测到版本更新', { oldVersion: storedVersion, newVersion: appVersion })
-          showAppChangelogDialog.value = true
-        }
-      } catch (e) {
-        logger.warn('[App] 非 Electron 版本检测失败', { error: e instanceof Error ? e.message : String(e) })
-      }
-      // 检查远程仓库是否有新版本（从发布资产文件名提取版本号）
-      checkRemoteUpdate(appVersion)
+    } catch (e) {
+      logger.warn('[App] 云端版本状态读取失败', { error: e instanceof Error ? e.message : String(e) })
     }
+    void checkRemoteUpdate(appVersion)
   }
-
-  setupUpdateStatusListener()
 }
 
-/** 从远程仓库 Releases 资产文件名中提取版本号并比对 */
+/** 从云服务器自动更新清单中读取版本和安装包地址。 */
 const checkRemoteUpdate = async (currentVersion: string) => {
   try {
     const result = await fetchLatestReleaseVersion(currentVersion)
     if (result.hasUpdate && result.latestVersion) {
       updateStatus.value = 'available'
       updateVersion.value = result.latestVersion
+      updateDownloadUrl.value = result.downloadUrl || ''
       updateDialogVisible.value = true
       logger.info('[更新] 检测到远程新版本', { current: currentVersion, latest: result.latestVersion })
     }
@@ -381,7 +412,7 @@ const setupUpdateStatusListener = () => {
     if (data.status === 'available') {
       updateStatus.value = 'available'
       updateVersion.value = data.version || ''
-      updateDownloadUrl.value = data.downloadUrl || ''
+      updateDownloadUrl.value = data.downloadUrl || updateDownloadUrl.value
       updateDialogVisible.value = true
     } else if (data.status === 'downloading') {
       updateStatus.value = 'downloading'
@@ -401,22 +432,28 @@ const setupUpdateStatusListener = () => {
 
 /** 点击「下载更新」：自动下载安装包并打开安装程序 */
 const handleDownloadUpdate = async () => {
-  if (!updateDownloadUrl.value) {
-    openReleasesUrl()
+  if (window.electronAPI?.downloadUpdate) {
+    updateStatus.value = 'downloading'
+    updatePercent.value = 0
+    try {
+      const result = await window.electronAPI.downloadUpdate()
+      if (result?.ok === false) throw new Error(result.error || '下载失败')
+    } catch (e) {
+      updateStatus.value = 'error'
+      updateMessage.value = e instanceof Error ? e.message : '下载失败'
+    }
     return
   }
-  if (!window.electronAPI?.downloadUpdate) {
-    openReleasesUrl()
-    return
-  }
-  updateStatus.value = 'downloading'
-  updatePercent.value = 0
-  try {
-    await window.electronAPI.downloadUpdate(updateDownloadUrl.value)
-  } catch (e) {
+
+  if (updateDownloadUrl.value) openUpdateUrl()
+  else {
     updateStatus.value = 'error'
-    updateMessage.value = e instanceof Error ? e.message : '下载失败'
+    updateMessage.value = '云端安装包暂不可用，请稍后重试'
   }
+}
+
+const handleInstallUpdate = () => {
+  window.electronAPI?.quitAndInstall()
 }
 
 // 暴露全局函数供 ProfilePage 调用（非 Electron 端使用）
@@ -428,6 +465,7 @@ const handleDownloadUpdate = async () => {
     if (result.hasUpdate && result.latestVersion) {
       updateStatus.value = 'available'
       updateVersion.value = result.latestVersion
+      updateDownloadUrl.value = result.downloadUrl || ''
     } else {
       updateStatus.value = 'no-update'
     }
@@ -478,6 +516,8 @@ const getNextOccurrence = (baseDate: string, strategy: string, customDays: numbe
 
 const scheduleListReminders = async () => {
   if (!window.electronAPI?.scheduleReminders) return
+  const userId = authStore.user?.id
+  if (!userId) return
   try {
     const now = dayjs()
     const today = now.startOf('day')
@@ -723,8 +763,12 @@ const scheduleListReminders = async () => {
       logger.warn('[提醒] 获取课程数据失败', { error: e instanceof Error ? e.message : String(e) })
     }
 
-    logger.info('[提醒] 调度提醒任务', { count: reminders.length, persistDuration })
-    window.electronAPI.scheduleReminders(reminders, persistDuration)
+    if (authStore.user?.id !== userId) {
+      logger.debug('[提醒] 生成提醒期间用户已切换，丢弃旧调度请求', { userId })
+      return
+    }
+    logger.info('[提醒] 调度提醒任务', { userId, count: reminders.length, persistDuration })
+    await window.electronAPI.scheduleReminders(userId, reminders, persistDuration)
   } catch (e) {
     logger.error('[提醒] 调度失败', { error: e instanceof Error ? e.message : String(e) })
   }
@@ -1331,6 +1375,8 @@ watch(
     () => authStore.isAuthenticated,
     async (isAuthenticated, wasAuthenticated) => {
       logger.debug('[App] isAuthenticated 变化:', { wasAuthenticated, isAuthenticated, dataInitialized: dataInitialized.value })
+      if (isAuthenticated) startServerHealthChecks()
+      else stopServerHealthChecks()
       if (isAuthenticated && !wasAuthenticated && !dataInitialized.value) {
         logger.info('[App] 检测到用户登录，开始初始化数据')
         await initializeData()
@@ -1341,7 +1387,7 @@ watch(
 // 专注模块全屏状态
 const isFocusFullscreen = ref(false)
 
-// 桌面端左侧导航栏收起状态（持久化到 data/<用户ID>/system/state.json）
+// 桌面端左侧导航栏收起状态（保存到云端账户配置）
 const navCollapsed = ref(false)
 const toggleNav = () => {
   navCollapsed.value = !navCollapsed.value
@@ -1400,6 +1446,7 @@ onMounted(async () => {
 
   // 已登录时加载数据并调度提醒
   if (authStore.isAuthenticated) {
+    startServerHealthChecks()
     await initializeData()
     scheduleListReminders()
     startVersionChecks()
@@ -1596,6 +1643,7 @@ onMounted(async () => {
   })
 
 onUnmounted(() => {
+  stopServerHealthChecks()
   if (resizeHandler) {
     window.removeEventListener('resize', resizeHandler)
   }
