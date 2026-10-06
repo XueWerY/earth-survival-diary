@@ -378,7 +378,6 @@ async function saveCloudFile() {
 }
 
 onMounted(async () => {
-  logger.info('[文件管理器] 已打开')
   await showRoots()
 })
 

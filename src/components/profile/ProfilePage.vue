@@ -455,7 +455,7 @@ const checkForUpdate = async () => {
   if (window.electronAPI?.checkForUpdate) {
     try {
       const result = await window.electronAPI.checkForUpdate()
-      logger.info('[关于] 检查更新结果', result)
+      logger.info(`[About] 检查更新结果：${result.ok ? '检查成功' : '检查失败'}`)
     } catch (e) {
       logger.error('[关于] 检查更新失败', { error: e instanceof Error ? e.message : String(e) })
     }

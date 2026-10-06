@@ -1,7 +1,7 @@
 {
   "name": "earth-survival-diary-server",
   "private": true,
-  "version": "2026.10.6-4",
+  "version": "2026.10.7-1",
   "type": "commonjs",
   "engines": {
     "node": "^20.19 || ^22.12 || >=24"

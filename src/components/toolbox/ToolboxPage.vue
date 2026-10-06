@@ -270,7 +270,7 @@ async function refreshMarketplaceOnEntry() {
   try {
     const list = await marketplaceRef.value.refresh()
     updatablePlugins.value = list.filter(p => p.hasUpdate)
-    logger.info('[工具箱] 进入页面时已刷新插件市场', { pluginCount: list.length })
+    logger.info(`[工具箱] 进入页面时已刷新插件市场，共 ${list.length} 个插件`)
   } catch (e) {
     logger.warn('[工具箱] 进入页面时刷新插件市场失败', { error: e instanceof Error ? e.message : String(e) })
   } finally {
@@ -368,7 +368,7 @@ async function toggleMarketCollapse() {
 }
 
 async function openTool(tool: ToolInfo) {
-  logger.info('[工具箱] 打开工具', { toolId: tool.id, toolName: tool.name })
+  logger.info(`[Toolbox] 打开工具：${tool.name}`)
   const comp = defineAsyncComponent(tool.component)
   activeTool.value = { id: tool.id, name: tool.name, component: comp, title: tool.name, onBack: undefined }
   // 持久化当前小工具页面：重新进入工具箱时自动恢复

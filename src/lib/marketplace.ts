@@ -93,7 +93,7 @@ async function loadMarketplaceData(force = false) {
       return cached ?? []
     }
     cached = parseMarketplaceSection(text)
-    logger.info(`[市场] 从 remote README 解析到 ${cached.length} 个插件`)
+    logger.info(`[Market] 已从远程 README 解析出 ${cached.length} 个插件`)
   } catch (e) {
     logger.warn('[市场] 拉取插件列表异常', { error: e instanceof Error ? e.message : String(e) })
     return cached ?? []
