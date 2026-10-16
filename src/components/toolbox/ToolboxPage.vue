@@ -1,7 +1,7 @@
 <template>
   <div class="toolbox-page" ref="contentRef" :style="{ '--card-cols': cardCols, '--nav-h': navH + 'px' }">
     <div v-if="activeTool" class="tool-page-overlay">
-      <div class="tool-page-container" :class="{ 'no-h-padding': activeTool?.id === 'snowbaby-tool' }">
+      <div class="tool-page-container">
         <div class="tool-page-header">
           <button class="back-btn" @click="handleToolBack">
             <el-icon><ArrowLeft /></el-icon>
@@ -15,7 +15,7 @@
       </div>
     </div>
     <div v-show="!activeTool" class="toolbox-content">
-      <el-scrollbar>
+      <AppScrollbar class="toolbox-scroll-area">
         <div class="section" v-if="tagGroups.length > 0">
           <div class="section-title-row">
             <button class="collapse-btn" @click="toggleToolsCollapse">
@@ -86,7 +86,7 @@
             <MarketplacePanel ref="marketplaceRef" :loading="marketLoading" />
           </div>
         </div>
-      </el-scrollbar>
+      </AppScrollbar>
     </div>
 
     <!-- 刷新进度弹窗 -->
@@ -150,17 +150,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, shallowRef, onMounted, onUnmounted, computed, defineAsyncComponent, provide } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, computed, defineAsyncComponent, provide, inject, watch } from 'vue'
 import { ArrowLeft, ArrowDown, ArrowUp } from '@lucide/vue'
 import { logger } from '../../lib/logger'
 import { getAllTools, getPlugins, loadRuntimePlugins, type ToolInfo } from '../../lib/pluginLoader'
 import { useSettingsStore } from '../../stores/settingsStore'
 import MarketplacePanel from './MarketplacePanel.vue'
 import BaseDialog from '../ui/BaseDialog.vue'
+import AppScrollbar from '../common/scrollbar/AppScrollbar.vue'
 import { RefreshCw } from '@lucide/vue'
 import { type MarketplacePlugin } from '../../lib/marketplace'
 
 const settingsStore = useSettingsStore()
+const guideRunning = inject('guideRunning', ref(false))
 const tools = ref<ToolInfo[]>([])
 const plugins = ref<ReturnType<typeof getPlugins>>([])
 const activeTool = shallowRef<{ id?: string; name: string; component: any; title?: string; onBack?: () => void } | null>(null)
@@ -172,6 +174,12 @@ provide('toolHeader', (title?: string, onBack?: () => void) => {
 const toolsCollapsed = ref(false)
 const pluginsCollapsed = ref(false)
 const marketCollapsed = ref(false)
+watch(guideRunning, (running) => {
+  if (running) return
+  const saved = settingsStore.settings.toolbox
+  toolsCollapsed.value = !!saved?.toolsCollapsed
+  pluginsCollapsed.value = !!saved?.pluginsCollapsed
+})
 // 当前打开的小工具 ID（持久化：重新进入工具箱页面时自动恢复）
 const activeToolId = ref('')
 
@@ -310,21 +318,20 @@ async function updateAllInDialog() {
 }
 
 onMounted(async () => {
-  logger.info('[工具箱] 页面挂载')
   await loadRuntimePlugins()
   tools.value = getAllTools()
   plugins.value = getPlugins()
   logger.info('[工具箱] 已加载工具', { toolCount: tools.value.length, pluginCount: plugins.value.length })
 
   if (settingsStore.settings.toolbox) {
-    toolsCollapsed.value = !!settingsStore.settings.toolbox.toolsCollapsed
-    pluginsCollapsed.value = !!settingsStore.settings.toolbox.pluginsCollapsed
+    toolsCollapsed.value = guideRunning.value ? false : !!settingsStore.settings.toolbox.toolsCollapsed
+    pluginsCollapsed.value = guideRunning.value ? false : !!settingsStore.settings.toolbox.pluginsCollapsed
     marketCollapsed.value = !!settingsStore.settings.toolbox.marketCollapsed
   }
 
   // 恢复上次打开的小工具页面（持久化保存，重新进入工具箱时自动打开）
   const savedActiveTool = settingsStore.settings.toolbox?.activeTool
-  if (savedActiveTool) {
+  if (savedActiveTool && !guideRunning.value) {
     const tool = tools.value.find(t => t.id === savedActiveTool)
     if (tool) openTool(tool)
   }
@@ -406,11 +413,8 @@ function handleToolBack() {
   min-height: 0;
 }
 
-.toolbox-content :deep(.el-scrollbar) {
+.toolbox-content :deep(.toolbox-scroll-area) {
   height: 100%;
-}
-
-.toolbox-content :deep(.el-scrollbar__view) {
   padding: 24px 0;
 }
 

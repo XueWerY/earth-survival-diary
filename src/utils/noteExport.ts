@@ -73,7 +73,8 @@ const EXPORT_CSS = `
 .note-export-body h2 { font-size: 22px; color: #93c5fd; }
 .note-export-body h3, .note-export-body h4 { font-size: 19px; color: #67e8f9; }
 .note-export-body h5, .note-export-body h6 { font-size: 16px; color: #a7c4c0; }
-.note-export-body p { margin: 0.3em 0; }
+.note-export-body p { margin: 0.3em 0; text-indent: 2em; }
+.note-export-body li p { text-indent: 0; }
 .note-export-body blockquote {
   border-left: 4px solid rgba(102,126,234,.5); background: rgba(102,126,234,.06);
   color: #8fa8a5; margin: 8px 0; padding: 8px 16px; border-radius: 0 8px 8px 0;
@@ -91,7 +92,28 @@ const EXPORT_CSS = `
 .note-export-body strong { color: #ecfdf5; }
 .note-export-body del { color: #6b8280; }
 .note-export-body hr { border: none; border-top: 1px solid rgba(102,126,234,.18); margin: 1em 0; }
-.note-export-body ul, .note-export-body ol { padding-left: 24px; margin: 0.3em 0; }
+.note-export-body ul, .note-export-body ol { padding-left: 24px; margin: 0.3em 0; list-style: none; }
+.note-export-body .milkdown-list-item-block { display: block; padding: 0; list-style: none; }
+.note-export-body .milkdown-list-item-block > .list-item {
+  display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: start; column-gap: 4px;
+}
+.note-export-body .milkdown-list-item-block > .list-item > .children { min-width: 0; flex: 1; }
+.note-export-body .milkdown-list-item-block li {
+  display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: start; column-gap: 4px; list-style: none;
+}
+.note-export-body .milkdown-list-item-block .label-wrapper {
+  display: flex; align-items: center; justify-content: center; align-self: flex-start;
+  width: 16px; min-width: 16px; height: 1.9em; margin-top: 0.3em;
+  color: #e9d5ff; transform: none;
+}
+.note-export-body .milkdown-list-item-block .label-wrapper .label {
+  display: flex; align-items: center; justify-content: center;
+  width: 16px; height: 100%; padding: 0;
+}
+.note-export-body .milkdown-list-item-block .label-wrapper svg {
+  display: block; flex: 0 0 auto; width: 16px; height: 16px; color: #e9d5ff;
+  fill: #e9d5ff; stroke: currentColor;
+}
 .note-export-body img { max-width: 100%; border-radius: 8px; }
 .note-export-body table { border-collapse: collapse; margin: 0.5em 0; }
 .note-export-body th, .note-export-body td { border: 1px solid rgba(255,255,255,.14); padding: 6px 12px; }
@@ -111,6 +133,7 @@ export async function exportNoteImage(contentEl: HTMLElement, title: string): Pr
   const wrap = document.createElement('div')
   wrap.className = 'note-export-body'
   wrap.innerHTML = contentEl.innerHTML
+  // Milkdown 已在列表节点内绘制项目符号；导出时关闭浏览器默认标记，避免序号和圆点重复。
   const style = document.createElement('style')
   style.textContent = EXPORT_CSS
   host.appendChild(style)

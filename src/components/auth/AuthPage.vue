@@ -100,13 +100,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, inject, onMounted } from 'vue'
+import { ref, reactive, inject } from 'vue'
 import { ElMessage } from 'element-plus'
 import { MessageSquare, Lock, User } from '@lucide/vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useAuthStore } from '../../stores/authStore'
 import { logger } from '../../lib/logger'
-import { hydrateApiConfig } from '../../lib/apiBase'
 
 const emit = defineEmits<{
   success: []
@@ -119,10 +118,6 @@ const isElectron = inject<boolean>('isElectron', false)
 const mode = ref<'login' | 'register'>('login')
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
-
-onMounted(async () => {
-  await hydrateApiConfig()
-})
 
 const switchMode = (newMode: 'login' | 'register') => {
   mode.value = newMode
@@ -187,7 +182,7 @@ const handleSubmit = async () => {
     }
     emit('success')
   } catch (error: any) {
-    console.error('Authentication failed:', error)
+    logger.error('[Auth] 登录或注册失败', { error: error instanceof Error ? error.message : String(error) })
     ElMessage.error(error.message || (mode.value === 'login' ? '登录失败' : '注册失败'))
   } finally {
     submitting.value = false

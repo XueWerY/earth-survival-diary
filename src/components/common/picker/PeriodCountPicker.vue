@@ -19,7 +19,7 @@
             <span class="pc-col-label">晚上</span>
           </div>
           <div class="pc-scrolls">
-            <div class="pc-scroll-col" ref="morningRef" @scroll="onMorningScroll">
+            <div class="pc-scroll-col" data-app-scrollbar-off ref="morningRef" @scroll="onMorningScroll">
               <div class="pc-scroll-spacer"></div>
               <div
                 v-for="v in morningOptions"
@@ -30,7 +30,7 @@
               >{{ v }}</div>
               <div class="pc-scroll-spacer"></div>
             </div>
-            <div class="pc-scroll-col" ref="afternoonRef" @scroll="onAfternoonScroll">
+            <div class="pc-scroll-col" data-app-scrollbar-off ref="afternoonRef" @scroll="onAfternoonScroll">
               <div class="pc-scroll-spacer"></div>
               <div
                 v-for="v in afternoonOptions"
@@ -41,7 +41,7 @@
               >{{ v }}</div>
               <div class="pc-scroll-spacer"></div>
             </div>
-            <div class="pc-scroll-col" ref="eveningRef" @scroll="onEveningScroll">
+            <div class="pc-scroll-col" data-app-scrollbar-off ref="eveningRef" @scroll="onEveningScroll">
               <div class="pc-scroll-spacer"></div>
               <div
                 v-for="v in eveningOptions"

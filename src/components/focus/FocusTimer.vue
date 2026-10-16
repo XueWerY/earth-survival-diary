@@ -1,69 +1,21 @@
 <template>
-  <div class="focus-container">
+  <div class="focus-container" :class="{ 'focus-container-embedded': props.embedded }">
     <!-- 主内容区 -->
     <div class="focus-content">
-      <el-scrollbar>
-
-        <!-- 计时器风格选择 -->
-        <div v-if="timerState === 'idle'" class="mode-row focus-style-row">
-          <span class="mode-label">计时器风格</span>
-          <div class="type-toggle style-2-seg" :class="styleToggleClass">
-            <div class="toggle-slider" />
-            <button class="type-btn" :class="{ active: timerStyle === 'ring' }" @click="setTimerStyle('ring')">⭕ 圆环</button>
-            <button class="type-btn" :class="{ active: timerStyle === 'plain' }" @click="setTimerStyle('plain')">🔢 数字</button>
-          </div>
-        </div>
-
-        <!-- 进度圆环（仅 idle 时显示在 el-scrollbar 顶部；running 时由 timing-view 内的计时器展示） -->
-        <template v-if="timerState === 'idle'">
-          <div v-if="timerStyle === 'ring'" class="timer-ring">
-            <svg class="ring-svg" viewBox="0 0 120 120">
-              <defs>
-                <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#667eea" />
-                  <stop offset="100%" stop-color="#a78bfa" />
-                </linearGradient>
-                <filter id="ringGlow" x="-50%" y="-50%" width="200%" height="200%">
-                  <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
-                  <feMerge>
-                    <feMergeNode in="blur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
-              </defs>
-              <circle class="ring-track" cx="60" cy="60" r="54" />
-              <!-- 正计时预览：初始态整圈为底色，小球停在 12 点 -->
-              <template v-if="focusType === 'stopwatch'">
-                <circle class="ring-sweep" cx="60" cy="60" r="54"
-                  :stroke="sweepBaseColor" filter="url(#ringGlow)" />
-              </template>
-              <circle v-else class="ring-progress" cx="60" cy="60" r="54"
-                stroke="url(#ringGradient)"
-                filter="url(#ringGlow)"
-                :stroke-dasharray="ringCircumference"
-                :stroke-dashoffset="ringCircumference * (1 - ringProgress)" />
-              <!-- 进度末端小球（预览态位于 12 点初始位置） -->
-              <circle class="ring-ball" :class="{ 'ball-smooth': focusType === 'pomodoro' }"
-                cx="114" cy="60" r="5"
-                :fill="ballColor"
-                filter="url(#ringGlow)"
-                :style="{ transform: `rotate(${ballAngle}deg)` }" />
-            </svg>
-            <span class="ring-time" :style="{ color: ringTextColor }">
-              <span v-for="(g, i) in displayTime.split(' ')" :key="i" class="time-group">{{ g }}</span>
-            </span>
-          </div>
-
-          <!-- 数字 -->
-          <div v-else class="timer-time">{{ displayTime }}</div>
-
-          <div class="focus-start-wrapper">
-            <button class="focus-ctrl-btn focus-start-btn" @click="startFocus">▶️ 开始专注</button>
-          </div>
-        </template>
+      <AppScrollbar class="focus-scroll-area">
 
         <!-- 非计时状态 -->
         <div v-if="timerState === 'idle'" class="idle-view">
+          <!-- 计时器风格选择 -->
+          <div class="mode-row focus-style-row">
+            <span class="mode-label">计时器风格</span>
+            <div class="type-toggle style-2-seg" :class="styleToggleClass">
+              <div class="toggle-slider" />
+              <button class="type-btn" :class="{ active: timerStyle === 'ring' }" @click="setTimerStyle('ring')">⭕ 圆环</button>
+              <button class="type-btn" :class="{ active: timerStyle === 'plain' }" @click="setTimerStyle('plain')">🔢 数字</button>
+            </div>
+          </div>
+
           <!-- 模式切换 -->
           <div class="mode-row focus-mode-row">
             <span class="mode-label">模式</span>
@@ -75,39 +27,43 @@
           </div>
 
           <div class="focus-input-section">
-            <div class="input-label">事项名称</div>
-            <el-input
-                v-model="focusName"
-                placeholder="输入专注事项（必填）"
-                size="large"
-                type="textarea"
-                :autosize="{ minRows: 1, maxRows: 3 }"
-                :disabled="isGuideActive"
-            />
-            <div class="input-label" style="margin-top: 16px">图标</div>
-            <IconPicker v-model="focusIcon" />
-            <div v-if="focusType === 'pomodoro'" class="input-label" style="margin-top: 16px">番茄时长（分钟）</div>
-            <el-input-number
-                v-if="focusType === 'pomodoro'"
-                v-model="localPomodoroDuration"
-                :min="1"
-                :max="120"
-                :step="5"
-                size="large"
-                :disabled="isGuideActive"
-                style="margin-top: 0; width: 100%"
-            />
-            <div class="input-label" style="margin-top: 16px">备注</div>
-            <el-input
-                v-model="focusNotes"
-                placeholder="添加备注（可选）"
-                size="large"
-                clearable
-                type="textarea"
-                :autosize="{ minRows: 1, maxRows: 3 }"
-                :disabled="isGuideActive"
-                style="margin-top: 0"
-            />
+            <div class="focus-input-grid">
+              <div class="focus-input-field focus-name-field">
+                <div class="input-label">事项名称</div>
+                <el-input
+                  v-model="focusName"
+                  placeholder="输入专注事项（必填）"
+                  size="large"
+                  type="textarea"
+                  :autosize="{ minRows: 1, maxRows: 3 }"
+                  :disabled="isGuideActive"
+                />
+              </div>
+              <div v-if="focusType === 'pomodoro'" class="focus-input-field focus-duration-field">
+                <div class="input-label">番茄时长（分钟）</div>
+                <el-input-number
+                  v-model="localPomodoroDuration"
+                  :min="1"
+                  :max="120"
+                  :step="5"
+                  size="large"
+                  :disabled="isGuideActive"
+                  style="width: 100%"
+                />
+              </div>
+              <div class="focus-input-field focus-notes-field">
+                <div class="input-label">备注</div>
+                <el-input
+                  v-model="focusNotes"
+                  placeholder="添加备注（可选）"
+                  size="large"
+                  clearable
+                  type="textarea"
+                  :autosize="{ minRows: 1, maxRows: 3 }"
+                  :disabled="isGuideActive"
+                />
+              </div>
+            </div>
           </div>
 
           <!-- 常用专注 -->
@@ -125,7 +81,6 @@
                   @click="selectFavorite(fav)"
               >
                 <div class="fav-name">
-                  <span class="fav-icon">{{ fav.icon || '📝' }}</span>
                   {{ fav.name }}
                 </div>
                 <div class="fav-info">
@@ -146,7 +101,7 @@
         </div>
 
         <!-- 计时中状态（计时器+信息+按钮整体居中） -->
-        <div v-else class="timing-view">
+        <div v-if="timerState === 'running'" class="timing-view">
           <!-- 进度圆环 -->
           <div v-if="timerStyle === 'ring'" class="timer-ring">
             <svg class="ring-svg" viewBox="0 0 120 120">
@@ -207,7 +162,11 @@
             <button class="focus-ctrl-btn focus-complete-btn" @click="completeFocus">✓ 完成</button>
           </div>
         </div>
-      </el-scrollbar>
+      </AppScrollbar>
+
+      <div v-if="timerState === 'idle'" class="focus-start-wrapper focus-start-footer">
+        <button class="focus-ctrl-btn focus-start-btn" @click="startFocus">▶️ 开始专注</button>
+      </div>
     </div>
 
     <!-- 完成后保存常用对话框 -->
@@ -242,10 +201,13 @@ import { useFocusStore, type FavoriteFocus, type TimerState as StoredTimerState 
 import { useTaskStore } from '../../stores/taskStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { usePageNav } from '../../composables/usePageNav'
+import { useCardEntrance } from '../../composables/useMotion'
 import { logger } from '../../lib/logger'
 import BaseDialog from '../ui/BaseDialog.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
-import IconPicker from '../common/picker/IconPicker.vue'
+import AppScrollbar from '../common/scrollbar/AppScrollbar.vue'
+
+const props = defineProps<{ embedded?: boolean }>()
 
 const emit = defineEmits<{
   (e: 'fullscreen-change', fullscreen: boolean): void
@@ -283,7 +245,7 @@ const localPomodoroDuration = ref(settingsStore.settings.focus?.pomodoroDuration
 
 // 保存常用
 const showSaveFavorite = ref(false)
-const lastCompletedFocus = ref<{ name: string; notes: string; type: FocusType; targetDuration: number; icon?: string } | null>(null)
+const lastCompletedFocus = ref<{ name: string; notes: string; type: FocusType; targetDuration: number } | null>(null)
 
 const timerStyle = ref<'ring' | 'plain'>('ring')
 const styleToggleClass = computed(() => {
@@ -296,9 +258,9 @@ const setTimerStyle = async (s: 'ring' | 'plain') => {
 
 // 常用专注
 const favorites = computed(() => focusStore.favorites)
-const favoritesGridRef = ref<HTMLDivElement>()
+const favoritesGridRef = ref<HTMLElement | null>(null)
 const favoritesCols = ref(1)
-const focusIcon = ref('🎯')
+const favoritesEntrance = useCardEntrance(favoritesGridRef, '.favorite-card')
 const d = 25 // 卡片间距常量 d = 25px
 const updateFavoritesCols = () => {
   if (!favoritesGridRef.value) return
@@ -395,7 +357,6 @@ const selectFavorite = (fav: FavoriteFocus) => {
   }
   focusName.value = fav.name
   focusNotes.value = fav.notes
-  focusIcon.value = fav.icon || ''
   focusType.value = fav.type
   if (fav.type === 'pomodoro') {
     localPomodoroDuration.value = fav.targetDuration
@@ -404,12 +365,11 @@ const selectFavorite = (fav: FavoriteFocus) => {
 }
 
 // 编辑态下输入区改动实时同步到对应卡片
-watch([focusName, focusNotes, focusIcon, focusType, localPomodoroDuration], () => {
+watch([focusName, focusNotes, focusType, localPomodoroDuration], () => {
   if (!editingFavoriteId.value) return
   focusStore.updateFavorite(editingFavoriteId.value, {
     name: focusName.value,
     notes: focusNotes.value,
-    icon: focusIcon.value,
     type: focusType.value,
     targetDuration: focusType.value === 'pomodoro' ? localPomodoroDuration.value : 0
   })
@@ -584,21 +544,6 @@ const completeFocus = async () => {
       currentDate = nextDayStart
     }
 
-    // 保存分割的专注记录
-    for (const record of splitRecords) {
-      await focusStore.addRecord({
-        name: focusName.value,
-        notes: focusNotes.value,
-        type: focusType.value,
-        duration: record.duration,
-        targetDuration: focusType.value === 'pomodoro' ? localPomodoroDuration.value : 0,
-        startTime: record.startTime,
-        endTime: record.endTime,
-        date: record.date,
-        completed: focusType.value === 'pomodoro' ? remainingSeconds.value === 0 : true
-      })
-    }
-
     // 保存分割的足迹任务
     const splitTasks = splitRecords.map((record) => ({
       name: focusName.value,
@@ -611,18 +556,6 @@ const completeFocus = async () => {
     await taskStore.addSplitTasks(splitTasks)
   } else {
     // 同一天内，正常保存
-    await focusStore.addRecord({
-      name: focusName.value,
-      notes: focusNotes.value,
-      type: focusType.value,
-      duration: totalDuration,
-      targetDuration: focusType.value === 'pomodoro' ? localPomodoroDuration.value : 0,
-      startTime: startTimeStr,
-      endTime: endTimeStr,
-      date: startDate,
-      completed: focusType.value === 'pomodoro' ? remainingSeconds.value === 0 : true
-    })
-
     // 调用记录足迹功能
     await taskStore.addCompletedTask({
       id: `focus-${Date.now()}`,
@@ -641,8 +574,7 @@ const completeFocus = async () => {
     name: focusName.value,
     notes: focusNotes.value,
     type: focusType.value,
-    targetDuration: localPomodoroDuration.value,
-    icon: focusIcon.value || undefined
+    targetDuration: localPomodoroDuration.value
   }
 
   // 重置状态
@@ -661,7 +593,7 @@ const completeFocus = async () => {
 
   refreshReminders()
 
-  logger.info('[专注] 完成专注', { name: focusName.value, duration: totalDuration })
+  logger.info(`[Focus] 完成专注，时长 ${totalDuration} 分钟`)
   ElMessage.success('专注完成！')
 
   // 检查是否已存在相同名称和类型的常用专注
@@ -683,8 +615,7 @@ const saveAsFavorite = async () => {
     name: lastCompletedFocus.value.name,
     notes: lastCompletedFocus.value.notes,
     type: lastCompletedFocus.value.type,
-    targetDuration: lastCompletedFocus.value.targetDuration,
-    icon: lastCompletedFocus.value.icon
+    targetDuration: lastCompletedFocus.value.targetDuration
   })
 
   showSaveFavorite.value = false
@@ -701,7 +632,7 @@ const saveAsFavorite = async () => {
 
 // 初始化
 onMounted(async () => {
-  if (pageNav.navPath.value.length === 0) {
+  if (!props.embedded && pageNav.navPath.value.length === 0) {
     pageNav.setNavPath(['focus'])
   }
 
@@ -753,6 +684,8 @@ onMounted(async () => {
 
   // 响应式卡片列数（常用专注卡片布局）
   ensureFavGridObserver()
+  await nextTick()
+  favoritesEntrance.play()
 })
 
 // 常用专注网格在 favorites 从无到有时才渲染，需在其出现后补挂 ResizeObserver 并重算列数
@@ -766,6 +699,7 @@ const ensureFavGridObserver = () => {
 watch(() => favorites.value.length, async () => {
   await nextTick()
   ensureFavGridObserver()
+  favoritesEntrance.play()
 })
 
 // 页面可见性变化处理
@@ -844,25 +778,123 @@ onUnmounted(async () => {
 }
 
 .focus-content {
+  width: 100%;
+  max-width: 540px;
   height: 100%;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-.focus-content :deep(.el-scrollbar) {
+.focus-content :deep(.focus-scroll-area) {
   flex: 1;
+  display: block;
   min-height: 0;
 }
 
-.focus-content :deep(.el-scrollbar__view) {
-  display: block;
-  min-height: 100%;
+.focus-container-embedded .focus-content {
+  max-width: 1040px;
 }
-/* 禁用浏览器滚动锚定，防止内容高度变化时顶部元素意外下移 */
-.focus-content :deep(.el-scrollbar__wrap) {
-  height: 100%;
+
+.focus-container-embedded .focus-content :deep(.focus-scroll-area) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  align-items: start;
+  row-gap: 12px;
+  padding: 6px 8px 18px;
+}
+
+.focus-container-embedded .focus-content :deep(.idle-view) {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  column-gap: 32px;
+  row-gap: 20px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 0 4px;
+}
+
+.focus-container-embedded .focus-content :deep(.focus-style-row) {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.focus-container-embedded .focus-content :deep(.focus-mode-row) {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.focus-container-embedded .focus-content :deep(.focus-input-section) {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+}
+
+.focus-container-embedded .focus-input-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.focus-container-embedded .focus-input-field {
+  min-width: 0;
+}
+
+.focus-container-embedded .focus-input-grid .input-label {
+  margin: 0 0 6px;
+}
+
+.focus-container-embedded .focus-notes-field {
+  grid-column: 1 / -1;
+}
+
+.focus-container-embedded .focus-content :deep(.favorites-section) {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.focus-container-embedded .focus-start-footer {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  margin: 4px 8px 0;
+  padding: 16px 8px 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.focus-container-embedded .focus-content :deep(.timing-view) {
   position: relative;
+  inset: auto;
+  transform: none;
+  grid-column: 1 / -1;
+  width: 100%;
+  padding: 24px 0;
+}
+
+@media (max-width: 700px) {
+  .focus-container-embedded .focus-content :deep(.idle-view) {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 14px;
+  }
+
+  .focus-container-embedded .focus-content :deep(.focus-style-row),
+  .focus-container-embedded .focus-content :deep(.focus-mode-row),
+  .focus-container-embedded .focus-content :deep(.focus-input-section),
+  .focus-container-embedded .focus-content :deep(.favorites-section) {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+}
+
+/* 禁用浏览器滚动锚定，防止内容高度变化时顶部元素意外下移 */
+.focus-content :deep(.focus-scroll-area) {
   overflow-anchor: none;
 }
 
@@ -1205,10 +1237,6 @@ onUnmounted(async () => {
   white-space: nowrap;
 }
 
-.fav-icon {
-  margin-right: 6px;
-}
-
 .fav-info {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.5);
@@ -1231,12 +1259,8 @@ onUnmounted(async () => {
   position: absolute;
   top: 8px;
   right: 8px;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.favorite-card:hover .fav-delete {
   opacity: 1;
+  transition: opacity 0.2s;
 }
 
 /* ========== 计时中视图 ========== */
@@ -1283,6 +1307,12 @@ onUnmounted(async () => {
   display: flex;
   gap: 12px;
   margin-top: 24px;
+}
+
+.action-buttons .focus-ctrl-btn {
+  min-width: 104px;
+  padding: 10px 22px;
+  border-radius: 10px;
 }
 
 .focus-cancel-btn:hover {
@@ -1344,5 +1374,52 @@ onUnmounted(async () => {
   background: rgba(239, 68, 68, 0.25);
   border-color: rgba(239, 68, 68, 0.5);
   color: #fca5a5;
+}
+.focus-container-embedded .focus-content :deep(.favorites-grid) {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+@media (max-width: 700px) {
+  .focus-container-embedded .focus-input-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .focus-container-embedded .focus-notes-field {
+    grid-column: auto;
+  }
+
+  .focus-container-embedded .focus-content :deep(.favorites-grid) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+</style>
+
+<style scoped>
+.focus-container-embedded .focus-content .focus-input-section {
+  grid-column: 1 / -1 !important;
+  grid-row: 2;
+  width: 100%;
+}
+
+.focus-container-embedded .focus-content .focus-input-grid {
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: end;
+}
+
+.focus-container-embedded .focus-content .focus-input-grid :deep(.el-textarea__inner) {
+  height: 60px !important;
+  min-height: 60px !important;
+  resize: none;
+}
+
+.focus-container-embedded .focus-content .focus-input-grid :deep(.el-input-number),
+.focus-container-embedded .focus-content .focus-input-grid :deep(.el-input-number .el-input__wrapper) {
+  height: 60px;
+}
+
+.focus-container-embedded .focus-content .focus-notes-field {
+  grid-column: 1 / -1;
+  width: 100%;
 }
 </style>

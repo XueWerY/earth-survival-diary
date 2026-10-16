@@ -2,25 +2,29 @@
   <BaseDialog
     :visible="dialogVisible"
     :title="reminderOnly ? '编辑提醒策略' : (isEdit ? '编辑倒数日' : '添加倒数日')"
-    :width="500"
+    :width="980"
     teleport
     @update:visible="dialogVisible = $event"
   >
-    <el-form :model="form" :rules="rules" ref="formRef" label-position="top">
+    <el-form :model="form" :rules="rules" ref="formRef" label-position="top" :class="['countdown-form-grid', { 'reminder-only-form': reminderOnly }]">
       <template v-if="!reminderOnly">
-        <el-form-item label="名称" prop="name">
+        <el-form-item label="名称" prop="name" class="grid-field countdown-name-item">
           <el-input v-model="form.name" placeholder="这个倒数日叫什么？" maxlength="50" />
         </el-form-item>
-        <el-form-item label="类型" prop="countMode">
+        <el-form-item label="类型" prop="countMode" class="grid-field countdown-type-item">
           <el-radio-group v-model="form.countMode" class="count-mode-group">
             <el-radio value="countdown">倒数日</el-radio>
             <el-radio value="countup">正数日</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item :label="form.countMode === 'countup' ? '起始日期' : '目标日期'" prop="targetDate">
-          <DateScrollPicker v-model="form.targetDate" />
+        <el-form-item :label="form.countMode === 'countup' ? '起始日期' : '目标日期'" prop="targetDate" class="grid-field countdown-date-item">
+          <DateScrollPicker
+            v-model="form.targetDate"
+            :initial-lunar-mode="form.repeatCalendar === 'lunar'"
+            @update:calendar-mode="onCalendarModeChanged"
+          />
         </el-form-item>
-        <el-form-item label="分类" prop="category">
+        <el-form-item label="分类" prop="category" class="grid-field countdown-category-item">
           <el-select v-model="form.category" placeholder="选择分类">
             <el-option
                 v-for="cat in categories"
@@ -35,7 +39,7 @@
             </el-option>
           </el-select>
         </el-form-item>
-        <el-form-item label="描述">
+        <el-form-item label="描述" class="grid-field countdown-description-item">
           <el-input
               v-model="form.description"
               type="textarea"
@@ -44,9 +48,9 @@
           />
         </el-form-item>
       </template>
-      <el-form-item label="提醒" v-if="form.countMode !== 'countup'">
+      <el-form-item label="提醒" v-if="form.countMode !== 'countup'" class="grid-field countdown-reminder-item">
         <div class="reminder-area">
-          <el-radio-group v-model="reminderEnabled">
+          <el-radio-group v-model="reminderEnabled" class="reminder-toggle-group">
             <el-radio :value="true">提醒</el-radio>
             <el-radio :value="false">不提醒</el-radio>
           </el-radio-group>
@@ -55,7 +59,7 @@
           </div>
         </div>
       </el-form-item>
-      <el-form-item label="重复" v-if="form.countMode !== 'countup' && !reminderOnly">
+      <el-form-item label="重复" v-if="form.countMode !== 'countup' && !reminderOnly" class="grid-field countdown-repeat-item">
         <el-radio-group v-model="form.repeatStrategy">
           <el-radio value="none">不重复</el-radio>
           <el-radio value="yearly">重复</el-radio>
@@ -82,6 +86,7 @@ import dayjs from 'dayjs'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import ReminderTimePicker from '../common/picker/ReminderTimePicker.vue'
 import BaseDialog from '../ui/BaseDialog.vue'
+import { solarDateToLunarParts } from '../../utils/annualDate'
 
 interface Milestone {
   id: string
@@ -98,6 +103,9 @@ interface Milestone {
   reminderHours?: number
   reminderMinutes?: number
   repeatStrategy?: string
+  repeatCalendar?: 'solar' | 'lunar'
+  lunarMonth?: number
+  lunarDay?: number
 }
 
 interface Category {
@@ -141,7 +149,10 @@ const form = ref({
   reminderDays: 0,
   reminderHours: 0,
   reminderMinutes: 0,
-  repeatStrategy: 'none' as string
+  repeatStrategy: 'none' as string,
+  repeatCalendar: 'solar' as 'solar' | 'lunar',
+  lunarMonth: 1,
+  lunarDay: 1
 })
 
 const reminderTime = computed({
@@ -174,13 +185,19 @@ watch(() => props.milestone, (newVal) => {
       reminderDays: newVal.reminderDays || 0,
       reminderHours: newVal.reminderHours || 0,
       reminderMinutes: newVal.reminderMinutes || 0,
-      repeatStrategy: newVal.repeatStrategy || 'none'
+      repeatStrategy: newVal.repeatStrategy || 'none',
+      repeatCalendar: newVal.repeatCalendar === 'lunar' ? 'lunar' : 'solar',
+      lunarMonth: newVal.lunarMonth || 1,
+      lunarDay: newVal.lunarDay || 1
     }
     reminderEnabled.value = newVal.reminderStrategy === 'on_time' || newVal.reminderStrategy === 'advance'
   } else {
     form.value.targetDate = dayjs().format('YYYY-MM-DD')
     form.value.countMode = 'countdown'
     form.value.repeatStrategy = 'none'
+    form.value.repeatCalendar = 'solar'
+    form.value.lunarMonth = 1
+    form.value.lunarDay = 1
     form.value.reminderStrategy = 'none'
     reminderEnabled.value = false
   }
@@ -204,10 +221,29 @@ const resetForm = () => {
     reminderDays: 0,
     reminderHours: 0,
     reminderMinutes: 0,
-    repeatStrategy: 'none'
+    repeatStrategy: 'none',
+    repeatCalendar: 'solar',
+    lunarMonth: 1,
+    lunarDay: 1
   }
   reminderEnabled.value = false
 }
+
+const syncLunarDateParts = (date: string) => {
+  const lunarDate = solarDateToLunarParts(date)
+  if (!lunarDate) return
+  form.value.lunarMonth = lunarDate.month
+  form.value.lunarDay = lunarDate.day
+}
+
+const onCalendarModeChanged = (calendar: 'solar' | 'lunar') => {
+  form.value.repeatCalendar = calendar
+  if (calendar === 'lunar') syncLunarDateParts(form.value.targetDate)
+}
+
+watch(() => [form.value.targetDate, form.value.repeatCalendar] as const, ([date, calendar]) => {
+  if (calendar === 'lunar') syncLunarDateParts(date)
+})
 
 const handleSubmit = async () => {
   if (!formRef.value) return
@@ -253,17 +289,57 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
+.countdown-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 20px;
+  row-gap: 4px;
+}
+
+.grid-field { min-width: 0; }
+.countdown-name-item { grid-column: 1; grid-row: 1; }
+.countdown-description-item { grid-column: 2; grid-row: 1; }
+.countdown-type-item { grid-column: 1; grid-row: 2; }
+.countdown-category-item { grid-column: 2; grid-row: 2; }
+.countdown-date-item { grid-column: 1; grid-row: 3; }
+.countdown-reminder-item { grid-column: 2; grid-row: 3; }
+.countdown-repeat-item { grid-column: 1; grid-row: 4; }
+.countdown-form-grid :deep(.el-form-item) { min-width: 0; margin-bottom: 12px; }
+.countdown-form-grid :deep(.el-form-item__content) { min-width: 0; }
+
+@media (max-width: 740px) {
+  .countdown-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .countdown-name-item,
+  .countdown-description-item,
+  .countdown-type-item,
+  .countdown-category-item,
+  .countdown-date-item,
+  .countdown-reminder-item,
+  .countdown-repeat-item { grid-column: 1; grid-row: auto; }
+  .reminder-area { flex-wrap: wrap; }
+}
+
+.reminder-only-form .countdown-reminder-item { grid-column: 1 / -1; grid-row: auto; }
+
 .count-mode-group {
   width: 100%;
 }
 
 .reminder-area {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   width: 100%;
+  min-width: 0;
 }
 
 .reminder-picker-row {
-  margin-top: 8px;
+  margin-top: 0;
+  min-width: 0;
+  flex: 1 1 auto;
 }
+
+.reminder-toggle-group { display: flex; flex: 0 0 auto; gap: 12px; white-space: nowrap; }
 
 .category-option {
   display: flex;

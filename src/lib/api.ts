@@ -1,11 +1,9 @@
-// API client - all requests go through the remote service
-
-import { getApiBaseUrl, hydrateApiConfig, syncElectronApiConfig } from './apiBase'
+// 本地 API 适配层：业务数据只读写应用本地存储。
+import { routeLocalApiRequest } from '../services/localApi'
+import { hydrateMediaPayload, localizeMediaPayload } from '../services/localDataStore'
 
 export function getToken(): string | null {
-    const token = localStorage.getItem('auth_token')
-    syncElectronApiConfig()
-    return token
+    return localStorage.getItem('auth_token')
 }
 
 export function setToken(token: string | null) {
@@ -14,47 +12,21 @@ export function setToken(token: string | null) {
     } else {
         localStorage.removeItem('auth_token')
     }
-    syncElectronApiConfig()
-}
-
-export async function checkServerHealth(timeoutMs = 2000): Promise<boolean> {
-    const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
-    try {
-        const response = await fetch(getApiBaseUrl() + '/health', {
-            method: 'GET',
-            headers: { Accept: 'application/json' },
-            cache: 'no-store',
-            signal: controller.signal
-        })
-        if (!response.ok) return false
-        const result = await response.json()
-        return result?.status === 'ok'
-    } catch {
-        return false
-    } finally {
-        window.clearTimeout(timeout)
-    }
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    await hydrateApiConfig()
-
     const token = getToken()
-    const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        ...(options.headers as Record<string, string> || {})
+    const localOptions: RequestInit = { ...options }
+    if (typeof localOptions.body === 'string' && endpoint !== '/profile/avatar') {
+        try {
+            localOptions.body = JSON.stringify(await localizeMediaPayload(JSON.parse(localOptions.body)))
+        } catch {
+            // 保留非 JSON 请求体。
+        }
     }
-    if (token) headers['Authorization'] = 'Bearer ' + token
-
-    const response = await fetch(getApiBaseUrl() + endpoint, { ...options, headers })
-    const data = await response.json()
-    if (!response.ok) {
-        const error = new Error(data.error || 'HTTP ' + response.status) as any
-        error.response = { data }
-        throw error
-    }
-    return data
+    const localResult = await routeLocalApiRequest(endpoint, localOptions, token)
+    if (!localResult.handled) throw new Error(`不支持的本地数据操作：${endpoint}`)
+    return await hydrateMediaPayload(localResult.data) as T
 }
 
 // ============ 认证 API ============
@@ -88,7 +60,7 @@ export interface AuthResponse {
 export async function signUp(params: SignUpParams): Promise<AuthResponse> {
     const result = await request<AuthResponse>('/auth/signup', {
         method: 'POST',
-        body: JSON.stringify(params)
+        body: JSON.stringify({ email: params.email, password: params.password, nickname: params.nickname })
     })
 
     if (result.session?.access_token) {
@@ -135,7 +107,7 @@ export async function updateAppSetting(key: string, value: any): Promise<{ succe
     return request('/auth/settings', { method: 'POST', body: JSON.stringify({ key, value }) })
 }
 
-// 检查会话状态（用于单点登录检测）
+// 检查本地会话状态
 export async function checkSession(): Promise<{ valid: boolean; kicked: boolean }> {
     return request('/auth/check-session', { method: 'POST' })
 }
@@ -146,19 +118,29 @@ export interface Profile {
     id: string
     nickname: string
     birthday?: string
+    birthdayCalendar?: 'solar' | 'lunar'
     phone?: string
+    createdAt?: string
     created_at?: string
     updated_at?: string
+    avatarDataUrl?: string
 }
 
 export async function getProfile(): Promise<{ profile: Profile }> {
     return request('/profile')
 }
 
-export async function updateProfile(data: { nickname?: string; birthday?: string; phone?: string }): Promise<{ profile: Profile }> {
+export async function updateProfile(data: { nickname?: string; birthday?: string; birthdayCalendar?: 'solar' | 'lunar'; phone?: string }): Promise<{ profile: Profile }> {
     return request('/profile', {
         method: 'PUT',
         body: JSON.stringify(data)
+    })
+}
+
+export async function uploadProfileAvatar(avatarDataUrl: string): Promise<{ avatarDataUrl: string }> {
+    return request('/profile/avatar', {
+        method: 'POST',
+        body: JSON.stringify({ avatarDataUrl })
     })
 }
 
@@ -439,6 +421,22 @@ export async function deleteListTask(id: string): Promise<{ success: boolean }> 
     return request(`/list-tasks/${id}`, { method: 'DELETE' })
 }
 
+export async function fetchNotes(): Promise<{ success: boolean; notes: any[] }> {
+    return request('/notes')
+}
+
+export async function createRemoteNote(note: any): Promise<{ success: boolean; note: any }> {
+    return request('/notes', { method: 'POST', body: JSON.stringify(note) })
+}
+
+export async function updateRemoteNote(id: string, patch: any): Promise<{ success: boolean; note: any }> {
+    return request(`/notes/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(patch) })
+}
+
+export async function deleteRemoteNote(id: string): Promise<{ success: boolean }> {
+    return request(`/notes/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
 // ============ 统计 API ============
 
 export interface Stats {
@@ -509,31 +507,6 @@ export async function deleteAccount(): Promise<{ success: boolean }> {
 
 export async function clearAllData(): Promise<{ success: boolean }> {
     return request('/data/all', { method: 'DELETE' })
-}
-
-// ============ 导出/导入 API ============
-
-export interface ExportData {
-    profile?: any
-    tasks?: any[]
-    lists?: any[]
-    tasks?: any[]
-    settings?: any
-    system_reminders?: any
-    notes?: any[]
-    notebooks?: any[]
-    exportTime?: string
-}
-
-export async function exportData(): Promise<{ success: boolean; data: ExportData }> {
-    return request('/export')
-}
-
-export async function importData(data: ExportData): Promise<{ success: boolean }> {
-    return request('/import', {
-        method: 'POST',
-        body: JSON.stringify(data)
-    })
 }
 
 export async function cleanData(data: Record<string, null>): Promise<{ success: boolean }> {

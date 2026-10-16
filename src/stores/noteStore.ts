@@ -10,9 +10,6 @@ import {
   setData,
   type NoteRecord
 } from '../services/storageService'
-import { guideContent } from '../data/guideContent'
-
-const GUIDE_NOTE_ID = 'guide-note'
 
 // ============ 数据模型 ============
 // 笔记以「标签」组织（tagIds 多标签），不再有单一 categoryId。
@@ -47,7 +44,7 @@ export interface NoteCategory {
   isCustom: boolean
 }
 
-// 旧默认分类（含图标）。迁移后作为默认标签播种，图标仅在兼容层用于展示。
+// 默认标签集合；图标仅供旧笔记界面的兼容视图使用。
 export const DEFAULT_NOTE_CATEGORIES: NoteCategory[] = [
   { id: 'personal', name: '个人', icon: '📝', color: '#667eea', isCustom: false },
   { id: 'work', name: '工作', icon: '💼', color: '#3b82f6', isCustom: false },
@@ -147,7 +144,7 @@ export const useNoteStore = defineStore('note', () => {
         getData<Tag[]>('notes', 'tags')
       ])
 
-      // 标签为空时播种默认标签（兼容旧默认分类，兼容层会还原其图标）
+      // 首次使用且没有标签时初始化默认标签。
       if (!savedTags || savedTags.length === 0) {
         tags.value = DEFAULT_NOTE_CATEGORIES.map((c, i) => ({
           id: c.id, name: c.name, color: c.color, order: i
@@ -184,14 +181,7 @@ export const useNoteStore = defineStore('note', () => {
       notes.value = activeList.filter(n => !expiredIds.has(n.id))
       trashedNotes.value = trashList.filter(n => !expiredIds.has(n.id))
 
-      await ensureGuideNote()
-
       isLoaded.value = true
-      logger.info('[笔记] 数据加载完成', {
-        notes: notes.value.length,
-        trashed: trashedNotes.value.length,
-        tags: tags.value.length,
-      })
     } catch (e) {
       logger.error('[笔记] 数据加载失败', { error: e instanceof Error ? e.message : String(e) })
     }
@@ -204,7 +194,7 @@ export const useNoteStore = defineStore('note', () => {
     isLoaded.value = false
   }
 
-  // 从服务端全量同步，以感知其他客户端写入的变更：
+  // 窗口重新聚焦时重载本地数据文件，保持当前状态与磁盘数据一致：
   // 主窗口失焦期间内容已强制落库，focus 回来时全量替换是安全的
   const syncFromRemote = async () => {
     if (!isLoaded.value) return
@@ -274,7 +264,8 @@ export const useNoteStore = defineStore('note', () => {
 
       const idx = notes.value.findIndex(n => n.id === id)
       if (idx !== -1) notes.value[idx] = withDerived(saved)
-      logger.info('[笔记] 更新笔记', { id })
+      const updatedTitle = [...notes.value, ...trashedNotes.value].find(note => note.id === id)?.title || '无标题'
+      logger.info(`[笔记] 更新笔记，笔记名称: ${updatedTitle}，编号: ${id}`)
       return true
     } catch (e) {
       logger.error('[笔记] 更新笔记失败', { error: e instanceof Error ? e.message : String(e) })
@@ -434,21 +425,6 @@ export const useNoteStore = defineStore('note', () => {
     } catch (e) {
       logger.error('[笔记] 删除标签失败', { error: e instanceof Error ? e.message : String(e) })
       return false
-    }
-  }
-
-  const ensureGuideNote = async () => {
-    if (notes.value.some(n => n.id === GUIDE_NOTE_ID)) return
-    const created = await createNote({
-      id: GUIDE_NOTE_ID,
-      title: '使用指南',
-      content: guideContent,
-      tagIds: ['guide'],
-      pinned: false
-    })
-    if (created) {
-      notes.value.unshift(withDerived(created))
-      logger.info('[笔记] 初始化使用指南笔记')
     }
   }
 

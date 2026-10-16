@@ -1,55 +1,59 @@
 <template>
   <div class="profile-page">
-    <div
-        class="profile-content"
-        :style="{
-        gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
-        gridTemplateRows: `repeat(${gridRows}, minmax(0, 1fr))`
-      }"
-    >
+    <div class="profile-content">
       <div class="profile-section" id="section-profile">
         <h3 class="section-title">个人信息</h3>
 
-        <el-form
-            ref="formRef"
-            :model="form"
-            :rules="rules"
-            label-position="left"
-            label-suffix="："
-            class="profile-form"
-            hide-required-asterisk
-        >
-          <el-form-item label="昵称" prop="nickname">
-            <el-input
-                v-model="form.nickname"
-                placeholder="请输入昵称"
-                maxlength="20"
-                show-word-limit
-            />
-          </el-form-item>
+        <div class="security-item security-item-static profile-avatar-row">
+          <span class="security-label">头像：</span>
+          <div class="profile-avatar profile-avatar-preview" aria-label="当前头像">
+            <img :src="profileAvatar" alt="头像">
+          </div>
+          <input ref="avatarInput" class="profile-avatar-input" type="file" accept="image/png,image/jpeg,image/webp" @change="handleAvatarFileChange">
+        </div>
 
-          <el-form-item label="生日">
-            <DateScrollPicker
-                v-model="form.birthday"
-            />
-          </el-form-item>
-        </el-form>
+        <div class="security-item security-item-static">
+          <span class="security-label">昵称：</span>
+          <span class="security-value">{{ form.nickname || '未设置' }}</span>
+        </div>
+
+        <div class="security-item security-item-static">
+          <span class="security-label">生日：</span>
+          <span class="security-value">{{ birthdayDisplay }}</span>
+        </div>
+
+        <div class="profile-edit-actions">
+          <button class="capsule-btn" :disabled="avatarUploading" @click="avatarInput?.click()">
+            {{ avatarUploading ? '正在上传…' : '更换头像' }}
+          </button>
+          <button class="capsule-btn" @click="openNicknameDialog">修改昵称</button>
+          <button class="capsule-btn" @click="showBirthdayPicker = true">修改生日</button>
+          <DateScrollPicker
+            v-model="form.birthday"
+            :visible="showBirthdayPicker"
+            dialog-title="修改生日"
+            :initial-lunar-mode="form.birthdayCalendar === 'lunar'"
+            class="profile-birthday-picker"
+            @update:visible="showBirthdayPicker = $event"
+            @update:calendar-mode="form.birthdayCalendar = $event"
+          />
+        </div>
       </div>
 
       <div class="profile-section" id="section-security">
         <h3 class="section-title">账号安全</h3>
 
-        <div class="security-item" @click="showEmailDialog = true">
+        <div class="security-item security-item-static">
           <span class="security-label">账号：</span>
           <span class="security-value">{{ maskEmail(authStore.user?.email) }}</span>
         </div>
 
-        <div class="security-item" @click="showPasswordDialog = true">
+        <div class="security-item security-item-static">
           <span class="security-label">密码：</span>
           <span class="security-value">••••••••</span>
         </div>
 
-        <div class="security-item" @click="showPhoneDialog = true">
+        <div class="security-item security-item-static">
           <span class="security-label">手机号：</span>
           <span class="security-value">{{ form.phone || '未绑定' }}</span>
         </div>
@@ -60,14 +64,11 @@
         </div>
 
         <div class="security-actions">
-          <button class="capsule-btn capsule-btn-danger" @click="handleLogout" :disabled="loggingOut">
-            <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            <span>退出登录</span>
-          </button>
-          <button class="capsule-btn capsule-btn-danger" @click="handleDeleteAccount" :disabled="deletingAccount">
-            <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-            <span>注销账号</span>
-          </button>
+          <button class="capsule-btn" @click="showEmailDialog = true">修改账号</button>
+          <button class="capsule-btn" @click="showPasswordDialog = true">修改密码</button>
+          <button class="capsule-btn" @click="showPhoneDialog = true">绑定手机号</button>
+          <button class="capsule-btn capsule-btn-danger" @click="handleLogout" :disabled="loggingOut">退出登录</button>
+          <button class="capsule-btn capsule-btn-danger" @click="handleDeleteAccount" :disabled="deletingAccount">注销账号</button>
         </div>
       </div>
 
@@ -107,30 +108,6 @@
             >
               <el-option label="隐藏到托盘" value="minimize" />
               <el-option label="直接退出" value="exit" />
-            </el-select>
-          </div>
-        </div>
-
-        <div class="setting-item">
-          <div class="setting-info">
-            <span class="setting-label">窗口分辨率</span>
-            <span class="setting-desc">设置电脑端窗口显示尺寸</span>
-          </div>
-          <div class="setting-control">
-            <el-select
-                v-model="windowResolution"
-                size="default"
-                style="width: 140px;"
-                :disabled="!isElectron"
-                popper-class="system-select-popper"
-                @change="handleResolutionChange"
-            >
-              <el-option
-                v-for="opt in resolutionOptions"
-                :key="opt.value"
-                :label="opt.label"
-                :value="opt.value"
-              />
             </el-select>
           </div>
         </div>
@@ -271,13 +248,28 @@
 
   </div>
 
+  <BaseDialog
+    :visible="showNicknameDialog"
+    title="修改昵称"
+    :width="400"
+    teleport
+    @update:visible="showNicknameDialog = $event"
+  >
+    <div class="dialog-centered-content">
+      <el-input v-model="nicknameDraft" maxlength="20" show-word-limit placeholder="请输入昵称" />
+    </div>
+    <template #footer>
+      <el-button @click="showNicknameDialog = false">取消</el-button>
+      <el-button type="primary" @click="saveNickname">确定</el-button>
+    </template>
+  </BaseDialog>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch, inject } from 'vue'
 import { ElMessage } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
 import dayjs from 'dayjs'
+import { Solar } from 'lunar-javascript'
 import { useAuthStore } from '../../stores/authStore'
 import { usePageNav } from '../../composables/usePageNav'
 import * as api from '../../lib/api'
@@ -298,31 +290,16 @@ const isGuideActive = inject('guideVisible', ref(false))
 const isElectron = inject<boolean>('isElectron', false)
 
 const authStore = useAuthStore()
+const avatarInput = ref<HTMLInputElement | null>(null)
+const avatarUploading = ref(false)
+const profileAvatar = computed(() => authStore.profile?.avatarDataUrl || './default-avatar.svg')
 const pageNav = usePageNav()
 
-const GAP = 25
-const windowWidth = ref(window.innerWidth)
-function maxColsPerRow(w: number) {
-  const d = GAP
-  if (w < 1000 + d) return 1
-  if (w < 1500 + 2 * d) return 2
-  return 2
-}
-const gridCols = ref(maxColsPerRow(windowWidth.value))
-const gridRows = computed(() => Math.ceil(4 / gridCols.value))
-
-function onResize() {
-  windowWidth.value = window.innerWidth
-  gridCols.value = maxColsPerRow(windowWidth.value)
-}
-
-onMounted(() => {
-  window.addEventListener('resize', onResize)
-})
-
-const formRef = ref<FormInstance>()
 const loggingOut = ref(false)
 const deletingAccount = ref(false)
+const showNicknameDialog = ref(false)
+const showBirthdayPicker = ref(false)
+const nicknameDraft = ref('')
 const showPhoneDialog = ref(false)
 const showEmailDialog = ref(false)
 const showPasswordDialog = ref(false)
@@ -332,8 +309,43 @@ const changingPassword = ref(false)
 const form = reactive({
   nickname: authStore.profile?.nickname || '',
   birthday: authStore.profile?.birthday || '',
+  birthdayCalendar: (authStore.profile?.birthdayCalendar || 'solar') as 'solar' | 'lunar',
   phone: authStore.profile?.phone || ''
 })
+
+const birthdayDisplay = computed(() => {
+  if (!form.birthday) return '未设置'
+  const date = dayjs(form.birthday)
+  if (!date.isValid()) return form.birthday
+  if (form.birthdayCalendar === 'lunar') {
+    try {
+    const lunar = Solar.fromYmd(date.year(), date.month() + 1, date.date()).getLunar()
+      return `农历${lunar.getYear()}年${lunar.getMonthInChinese()}月${lunar.getDayInChinese()}`
+    } catch {
+      return '农历生日'
+    }
+  }
+  return `公历${date.format('YYYY年MM月DD日')}`
+})
+
+const openNicknameDialog = () => {
+  nicknameDraft.value = form.nickname
+  showNicknameDialog.value = true
+}
+
+const saveNickname = () => {
+  const nickname = nicknameDraft.value.trim()
+  if (!nickname) {
+    ElMessage.warning('请输入昵称')
+    return
+  }
+  if (nickname.length > 20) {
+    ElMessage.warning('昵称最多20个字符')
+    return
+  }
+  form.nickname = nickname
+  showNicknameDialog.value = false
+}
 
 const phoneForm = reactive({
   phone: ''
@@ -438,7 +450,7 @@ const loadSystemSettings = async () => {
 const handleAutoLaunchChange = async (val: boolean) => {
   if (window.electronAPI) {
     await window.electronAPI.setAutoLaunch(val)
-    logger.info('[设置] 修改开机自启动', { enabled: val })
+    ElMessage.info(val ? '地球 Online 生存日记试图开机自启动' : '已关闭开机自启动')
   }
 }
 
@@ -452,16 +464,13 @@ const handleCloseActionChange = async (val: string) => {
 const version = ref(appVersion.replace('-', '.'))
 
 const checkForUpdate = async () => {
-  if (window.electronAPI?.checkForUpdate) {
-    try {
-      const result = await window.electronAPI.checkForUpdate()
-      logger.info(`[About] 检查更新结果：${result.ok ? '检查成功' : '检查失败'}`)
-    } catch (e) {
-      logger.error('[关于] 检查更新失败', { error: e instanceof Error ? e.message : String(e) })
-    }
-  } else if ((window as any).__checkForUpdate) {
+  if ((window as any).__checkForUpdate) {
     await (window as any).__checkForUpdate()
+    return
   }
+  const url = 'https://github.com/XueWerY/earth-survival-diary/releases/latest'
+  if (window.electronAPI?.openExternal) window.electronAPI.openExternal(url)
+  else window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 const showChangelogDialog = ref(false)
@@ -491,16 +500,9 @@ const openProjectUrl = () => {
   window.electronAPI?.openExternal('https://github.com/XueWerY/earth-survival-diary')
 }
 
-const rules: FormRules = {
-  nickname: [
-    { required: true, message: '请输入昵称', trigger: 'blur' },
-    { max: 20, message: '昵称最多20个字符', trigger: 'blur' }
-  ]
-}
-
 // 格式化创建时间
 const formatCreatedAt = () => {
-  const createdAt = authStore.profile?.created_at || (authStore.user as any)?.createdAt || (authStore.user as any)?.created_at
+  const createdAt = authStore.profile?.createdAt || authStore.profile?.created_at || (authStore.user as any)?.createdAt || (authStore.user as any)?.created_at
   if (!createdAt) return '未知'
   return dayjs(createdAt).format('YYYY-MM-DD HH:mm')
 }
@@ -529,7 +531,7 @@ const savePhone = async () => {
     logger.info('[我的] 修改手机号')
     ElMessage.success('手机号已保存')
   } catch (error) {
-    console.error('Failed to save phone number:', error)
+    logger.error('[Profile] 保存手机号失败', { error: error instanceof Error ? error.message : String(error) })
     ElMessage.error('保存失败')
   }
 }
@@ -557,7 +559,7 @@ const changeEmail = async () => {
     emailForm.password = ''
     ElMessage.success('账号修改成功')
   } catch (error: any) {
-    console.error('Failed to change account:', error)
+    logger.error('[Profile] 修改账号失败', { error: error instanceof Error ? error.message : String(error) })
     ElMessage.error(error?.response?.data?.error || '修改账号失败')
   } finally {
     changingEmail.value = false
@@ -593,7 +595,7 @@ const changePassword = async () => {
     passwordForm.confirmPassword = ''
     ElMessage.success('密码修改成功')
   } catch (error: any) {
-    console.error('Failed to change password:', error)
+    logger.error('[Profile] 修改密码失败', { error: error instanceof Error ? error.message : String(error) })
     ElMessage.error(error?.response?.data?.error || '修改密码失败')
   } finally {
     changingPassword.value = false
@@ -639,7 +641,7 @@ const confirmDeleteAccount = async () => {
       window.location.reload()
     }
   } catch (err: any) {
-    console.error('Failed to delete account:', err)
+    logger.error('[Profile] 注销账号失败', { error: err instanceof Error ? err.message : String(err) })
     ElMessage.error(err?.response?.data?.error || '注销账号失败')
   } finally {
     deletingAccount.value = false
@@ -659,6 +661,7 @@ onMounted(async () => {
 
   if (authStore.profile) {
     form.birthday = authStore.profile.birthday || ''
+    form.birthdayCalendar = authStore.profile.birthdayCalendar || 'solar'
     form.phone = authStore.profile.phone || ''
     phoneForm.phone = authStore.profile.phone || ''
   }
@@ -679,14 +682,13 @@ const autoSaveProfile = async () => {
     try {
       const nickname = form.nickname || ''
       const birthday = form.birthday || ''
-      await api.updateProfile({ nickname, birthday })
-      ;(authStore.profile as any) = { ...authStore.profile, nickname, birthday }
-      if (form.birthday) {
-        emit('profileUpdated')
-      }
+      const birthdayCalendar = form.birthdayCalendar || 'solar'
+      await api.updateProfile({ nickname, birthday, birthdayCalendar })
+      ;(authStore.profile as any) = { ...authStore.profile, nickname, birthday, birthdayCalendar }
+      emit('profileUpdated')
       logger.info('[我的] 个人资料自动保存')
     } catch (error) {
-      console.error('Auto-save failed:', error)
+      logger.error('[Profile] 自动保存资料失败', { error: error instanceof Error ? error.message : String(error) })
     }
   }, 800)
 }
@@ -698,6 +700,46 @@ watch(() => form.nickname, () => {
 watch(() => form.birthday, () => {
   autoSaveProfile()
 })
+
+watch(() => form.birthdayCalendar, () => {
+  autoSaveProfile()
+})
+const handleAvatarFileChange = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+    ElMessage.error('请选择 PNG、JPG 或 WebP 图片')
+    input.value = ''
+    return
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    ElMessage.error('头像文件不能超过 2 MB')
+    input.value = ''
+    return
+  }
+
+  avatarUploading.value = true
+  try {
+    const avatarDataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result || ''))
+      reader.onerror = () => reject(reader.error || new Error('读取头像失败'))
+      reader.readAsDataURL(file)
+    })
+    const result = await api.uploadProfileAvatar(avatarDataUrl)
+    authStore.profile = {
+      ...(authStore.profile || { id: authStore.user?.id || '', nickname: form.nickname || '旅人' }),
+      avatarDataUrl: result.avatarDataUrl
+    }
+    ElMessage.success('头像已保存到本地')
+  } catch (error: any) {
+    ElMessage.error(error?.message || '头像上传失败，请重试')
+  } finally {
+    avatarUploading.value = false
+    input.value = ''
+  }
+}
 </script>
 
 <style scoped>
@@ -1123,127 +1165,354 @@ watch(() => form.birthday, () => {
   margin-bottom: 0;
 }
 
-/* 导出对话框样式 */
-.export-tree {
-  max-height: 400px;
-  overflow-y: auto;
-  padding: 8px;
+</style>
+
+<style scoped>
+.profile-page #section-profile .profile-avatar-preview > img {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
 }
 
-.select-all-row {
-  padding: 4px 0 8px 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  margin-bottom: 8px;
+.profile-page {
+  width: min(920px, calc(100% - 64px));
+  height: 100%;
+  min-height: 0;
+  margin: 0 auto;
+  padding: 34px 0 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: auto;
+  box-sizing: border-box;
 }
 
-.select-all-row :deep(.el-checkbox__label) {
-  color: rgba(255, 255, 255, 0.9);
-  font-weight: 500;
-}
-
-.export-group {
-  margin-bottom: 8px;
-}
-
-.group-header {
+.profile-avatar-setting {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 6px;
+  gap: 18px;
+  margin: 0 0 24px 70px;
+}
+
+.profile-avatar {
+  display: block;
+  flex: 0 0 72px;
+  width: 72px;
+  height: 72px;
+  border: 1px solid rgba(196, 181, 253, 0.34);
+  border-radius: 50%;
+  background: transparent;
+}
+
+.profile-avatar-button {
+  overflow: hidden;
+  padding: 0;
   cursor: pointer;
-  user-select: none;
+  transition: border-color 0.18s ease, transform 0.18s ease;
 }
 
-.group-header:hover {
-  background: rgba(255, 255, 255, 0.08);
+.profile-avatar-button img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
 }
 
-.expand-icon {
-  width: 20px;
-  height: 20px;
+.profile-avatar-button:hover:not(:disabled) {
+  border-color: #c4b5fd;
+  transform: scale(1.03);
+}
+
+.profile-avatar-button:disabled,
+.profile-avatar-upload:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.profile-avatar-input {
+  display: none;
+}
+
+.profile-avatar-copy {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.profile-avatar-copy strong {
+  color: #f1f5f9;
   font-size: 14px;
-  font-weight: bold;
-  color: rgba(255, 255, 255, 0.85);
-  margin-right: 8px;
+  font-weight: 600;
 }
 
-.group-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.group-children {
-  padding: 8px 0 8px 28px;
-}
-
-.child-item {
-  padding: 4px 0;
-}
-
-.child-item :deep(.el-checkbox__label) {
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 13px;
-}
-
-.child-item :deep(.el-checkbox.is-checked .el-checkbox__label) {
-  color: #8ab4f8;
-}
-
-/* 导入对话框样式 */
-.import-description {
-  margin-bottom: 16px;
-}
-
-.import-desc-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.import-desc-icon {
-  color: #e6a23c;
-  font-size: 16px;
-}
-
-.import-desc-title {
-  color: #e6a23c;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.import-desc-text {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 13px;
-  margin: 8px 0 0 0;
+.profile-avatar-copy span {
+  color: rgba(203, 213, 225, 0.62);
+  font-size: 12px;
   line-height: 1.5;
 }
 
-.import-file-info p {
-  margin: 4px 0;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
+.profile-avatar-upload {
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  color: #c4b5fd;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
 }
 
-.import-select-prompt {
-  text-align: center;
-  color: rgba(255, 255, 255, 0.4);
-  padding: 20px 0;
-  font-size: 14px;
+.profile-avatar-upload:hover {
+  color: #ddd6fe;
+  text-decoration: underline;
 }
 
-.import-tree {
-  max-height: 300px;
-  overflow-y: auto;
-  padding: 8px;
+.profile-content {
+  display: grid;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: none;
+  grid-auto-rows: auto;
+  grid-template-areas: "profile" "security" "system" "about";
+  align-content: start;
+  align-items: stretch;
+  gap: 18px;
 }
 
-.import-group {
-  margin-bottom: 8px;
+.profile-content > #section-profile { grid-area: profile; }
+.profile-content > #section-security { grid-area: security; }
+.profile-content > #section-system { grid-area: system; }
+.profile-content > #section-about { grid-area: about; }
+
+.profile-content > #section-system,
+.profile-content > #section-about {
+  border-bottom: 0;
 }
 
+.profile-content > #section-about {
+  padding-bottom: 0;
+}
+
+.profile-content > .profile-section {
+  min-width: 0;
+  height: auto;
+  align-self: start;
+  padding: 0 0 26px;
+  border: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.profile-content :deep(.section-title) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 20px;
+  color: #f1f5f9;
+  font-size: 17px;
+  font-weight: 650;
+  text-align: left;
+}
+
+.profile-content :deep(.section-title)::before {
+  width: 4px;
+  height: 17px;
+  border-radius: 999px;
+  background: linear-gradient(#a78bfa, #60a5fa);
+  content: "";
+}
+
+.profile-content :deep(.section-desc) {
+  margin: -8px 0 16px;
+  color: rgba(203, 213, 225, 0.62);
+  font-size: 12px;
+}
+
+.profile-content :deep(.security-item),
+.profile-content :deep(.setting-item),
+.profile-content :deep(.about-item) {
+  border-color: rgba(148, 163, 184, 0.12);
+  background: transparent;
+  box-shadow: none;
+}
+
+.profile-content :deep(.security-item) {
+  min-height: 42px;
+  border-radius: 10px;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.profile-content :deep(.security-item:not(.security-item-static):hover) {
+  border-color: rgba(167, 139, 250, 0.22);
+  background: rgba(139, 92, 246, 0.08);
+}
+
+.profile-content :deep(.security-label),
+.profile-content :deep(.setting-label),
+.profile-content :deep(.about-label) {
+  color: rgba(203, 213, 225, 0.72);
+}
+
+.profile-content :deep(.security-value),
+.profile-content :deep(.setting-desc),
+.profile-content :deep(.about-value) {
+  color: #e2e8f0;
+}
+
+.profile-content :deep(.setting-item) {
+  min-height: 58px;
+  padding: 12px 0;
+  border-radius: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  margin-bottom: 0;
+}
+
+.profile-content > #section-system :deep(.setting-item) {
+  border-bottom: 0;
+}
+
+.profile-content :deep(.about-item) {
+  border: 0;
+  padding: 8px 0;
+}
+
+.profile-form {
+  width: 100%;
+  max-width: 640px;
+}
+
+.profile-form :deep(.el-form-item__content) {
+  flex: 0 1 460px;
+  max-width: 460px;
+}
+
+.profile-form :deep(.el-input),
+.profile-form :deep(.date-scroll-picker) {
+  width: 100%;
+  max-width: 460px;
+}
+
+.profile-content :deep(.about-link) {
+  overflow-wrap: anywhere;
+  color: #c4b5fd;
+}
+
+.profile-content :deep(.about-tools-row) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+@media (max-width: 820px) {
+  .profile-page {
+    width: min(calc(100% - 32px), 620px);
+    padding: 24px 0 36px;
+  }
+
+  .profile-avatar-setting { margin-left: 0; }
+
+  .profile-content {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "profile" "security" "system" "about";
+    gap: 22px;
+  }
+
+  .profile-content > .profile-section {
+    padding-bottom: 22px;
+  }
+
+  .profile-form :deep(.el-form-item__content) {
+    max-width: min(460px, 100%);
+  }
+
+  .profile-avatar-copy span {
+    max-width: 240px;
+  }
+}
+</style>
+<style scoped>
+.profile-avatar-row {
+  margin: 0;
+  padding: 12px 0;
+}
+
+.profile-avatar-row .profile-avatar-preview {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  overflow: hidden;
+  box-sizing: border-box;
+  position: relative;
+  border-radius: 50%;
+  border: 2px solid rgba(226, 232, 240, 0.3);
+  isolation: isolate;
+}
+
+.profile-avatar-row .profile-avatar-preview > img {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.profile-edit-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin: 8px 0 18px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.profile-edit-actions .capsule-btn,
+.security-actions .capsule-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 7px 13px;
+}
+
+.profile-birthday-picker {
+  display: none;
+}
+
+.security-item {
+  cursor: default !important;
+}
+
+.security-item:hover {
+  background: transparent !important;
+}
+
+.security-actions {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+@media (max-width: 640px) {
+  .profile-edit-actions {
+    margin-left: 0;
+  }
+}
 </style>

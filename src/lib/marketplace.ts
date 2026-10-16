@@ -93,7 +93,7 @@ async function loadMarketplaceData(force = false) {
       return cached ?? []
     }
     cached = parseMarketplaceSection(text)
-    logger.info(`[Market] 已从远程 README 解析出 ${cached.length} 个插件`)
+    logger.info(`[Market] 已从远程说明文档解析出 ${cached.length} 个插件`)
   } catch (e) {
     logger.warn('[市场] 拉取插件列表异常', { error: e instanceof Error ? e.message : String(e) })
     return cached ?? []
@@ -238,7 +238,7 @@ async function fetchRemotePluginManifest(repoUrl: string): Promise<RemotePluginM
       toolsCount: tools && typeof tools === 'object' ? Object.keys(tools).length : 0,
     }
   } catch (e) {
-    logger.warn(`[市场] 读取远端 manifest 失败 ${repoUrl}`, { error: e instanceof Error ? e.message : String(e) })
+      logger.warn(`[市场] 读取远端插件清单失败 ${repoUrl}`, { error: e instanceof Error ? e.message : String(e) })
     return null
   }
 }

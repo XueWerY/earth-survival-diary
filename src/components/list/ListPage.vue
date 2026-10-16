@@ -61,7 +61,7 @@
     </div>
 
     <div class="main-content" ref="mainContentRef" :style="{ '--card-cols': cardCols }" @click="closeDropdown">
-      <el-scrollbar>
+      <AppScrollbar class="list-main-scroll">
 
         <div v-if="isTaskRoot" class="card-grid card-grid-root">
           <div class="folder-card has-actions" @click="pageNav.setNavPath(['list', 'smart'])">
@@ -167,7 +167,7 @@
           <el-empty description="请选择一个清单" :image-size="120" />
         </div>
 
-      </el-scrollbar>
+      </AppScrollbar>
     </div>
   </div>
 
@@ -192,8 +192,8 @@
     <GroupFormPage :group="dialogGroup" :list-id="currentListIdForDialog" @submit="onGroupSubmit" @cancel="closeGroupDialog" />
   </BaseDialog>
 
-  <BaseDialog :visible="showTaskDialog" :title="'添加任务'" :width="500" teleport @update:visible="closeTaskDialog">
-    <TaskForm ref="addTaskFormRef" :list-id="listDialogListId" :group-id="listDialogGroupId" @submit="onTaskSubmit" @cancel="closeTaskDialog" />
+  <BaseDialog :visible="showTaskDialog" :title="'添加任务'" :width="860" teleport @update:visible="closeTaskDialog">
+    <TaskForm ref="addTaskFormRef" :list-id="listDialogListId" :group-id="listDialogGroupId" multi-column @submit="onTaskSubmit" @cancel="closeTaskDialog" />
     <template #footer>
       <el-button @click="closeTaskDialog">取消</el-button>
       <el-button type="primary" @click="addTaskFormRef?.submit()">保存</el-button>
@@ -250,6 +250,7 @@ import TaskCard from './TaskCard.vue'
 import MoveTaskPage from './MoveTaskPage.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
 import BaseDialog from '../ui/BaseDialog.vue'
+import AppScrollbar from '../common/scrollbar/AppScrollbar.vue'
 import ColorGrid from '../ui/ColorGrid.vue'
 import dayjs from 'dayjs'
 import { useListStore, DEFAULT_FOLDER_COLORS, EXTENDED_FOLDER_COLORS, type Task, type ListPage, type TaskGroup, type TaskFolder } from '../../stores/listStore'
@@ -264,6 +265,7 @@ const listStore = useListStore()
 
 const refreshReminders = inject<() => void>('refreshReminders', () => {})
 const isGuideActive = inject('guideVisible', ref(false))
+const guideRunning = inject('guideRunning', ref(false))
 
 const isElectron = computed(() => typeof window !== 'undefined' && !!(window as any).electronAPI)
 
@@ -296,7 +298,6 @@ const scrollBreadcrumbToEnd = () => {
 
 const isTaskRoot = computed(() => {
   const result = navPath.value.length === 1 && navPath.value[0] === 'list'
-  logger.debug('[ListPage] isTaskRoot 计算', { navPath: [...navPath.value], result })
   return result
 })
 const isSmartOverview = computed(() => navPath.value.length === 2 && navPath.value[0] === 'list' && navPath.value[1] === 'smart')
@@ -511,7 +512,6 @@ const localBreadcrumbSegments = ref<BreadcrumbSegment[]>([])
 const showBreadcrumb = computed(() => {
   const path = navPath.value
   const result = path.length >= 1 && path[0] === 'list'
-  logger.debug('[ListPage] showBreadcrumb 计算', { path: [...path], result })
   return result
 })
 
@@ -787,9 +787,7 @@ function computeCardMotionKey(): string {
 }
 
 watch([navPath, sortedFolders, () => listStore.lists], async () => {
-  logger.debug('[ListPage] breadcrumb watch 触发', { navPath: [...navPath.value], foldersCount: sortedFolders.value.length, listsCount: listStore.lists?.length })
   localBreadcrumbSegments.value = computeBreadcrumbSegments()
-  logger.debug('[ListPage] breadcrumb watch 结果', { segments: localBreadcrumbSegments.value })
   closeDropdown()
   scrollBreadcrumbToEnd()
   await nextTick()
@@ -815,34 +813,22 @@ const isDefaultGroup = (groupId: string) => {
 }
 
 const initTaskState = async () => {
-  logger.debug('[ListPage] initTaskState 开始', { navPath: pageNav.navPath.value })
+  if (guideRunning.value) return
   const currentPath = pageNav.navPath.value
   if (currentPath.length > 1) {
-    logger.debug('[ListPage] initTaskState 已有深层路径，跳过恢复', { currentPath })
     return
   }
   const restoredPath = await restoreModuleNavPath('list')
-  logger.debug('[ListPage] initTaskState 恢复的路径', { restoredPath, currentNavPath: currentPath })
   if (restoredPath.length > 1) {
     pageNav.setNavPath(restoredPath)
-    logger.debug('[ListPage] initTaskState 已恢复深度路径', { navPath: pageNav.navPath.value })
-  } else {
-    logger.debug('[ListPage] initTaskState 无需恢复', { navPath: pageNav.navPath.value })
   }
 }
 
 onMounted(async () => {
-  logger.debug('[ListPage] onMounted 开始', { navPath: pageNav.navPath.value, isLoaded: listStore.isLoaded })
   if (pageNav.navPath.value.length === 0 || pageNav.navPath.value[0] !== 'list') {
-    logger.debug('[ListPage] onMounted guard触发：navPath为空或非list，设为[list]', { prev: pageNav.navPath.value })
     pageNav.setNavPath(['list'])
-    logger.debug('[ListPage] onMounted guard后 navPath', { navPath: pageNav.navPath.value })
-  } else {
-    logger.debug('[ListPage] onMounted guard未触发：navPath已是list', { navPath: pageNav.navPath.value })
   }
-  logger.debug('[ListPage] onMounted 调用 loadData 前', { isLoaded: listStore.isLoaded })
   await listStore.loadData()
-  logger.debug('[ListPage] onMounted loadData 完成', { isLoaded: listStore.isLoaded, listsCount: listStore.lists?.length })
   await loadFavorites()
   await initTaskState()
   if (mainContentRef.value) {
@@ -852,7 +838,6 @@ onMounted(async () => {
     contentResizeObserver.observe(mainContentRef.value)
     contentWidth.value = mainContentRef.value.clientWidth
   }
-  logger.debug('[ListPage] onMounted 结束', { navPath: pageNav.navPath.value, showBreadcrumb: showBreadcrumb.value, isTaskRoot: isTaskRoot.value })
 })
 
 onUnmounted(() => { contentResizeObserver?.disconnect() })
@@ -1018,8 +1003,9 @@ const onTaskSubmit = async (data: Record<string, unknown>) => {
 
 const onEditTaskSubmit = async (data: Record<string, unknown>) => {
   if (!editingTask.value) return
+  const taskId = editingTask.value.id
   const hadReminder = editingTask.value.reminderStrategy !== 'none' && !!editingTask.value.date
-  await listStore.updateTask(editingTask.value.id, {
+  await listStore.updateTask(taskId, {
     name: data.name,
     date: data.date,
     endTime: data.time || '',
@@ -1043,6 +1029,7 @@ const onEditTaskSubmit = async (data: Record<string, unknown>) => {
     checklist: data.checklist,
     linkedNoteIds: data.linkedNoteIds,
   } as any)
+  logger.info(`[List] 更新任务，名称: ${String(data.name || editingTask.value?.name || '')}，编号: ${taskId}`)
   ElMessage.success('任务已更新')
   closeEditTaskDialog()
   const hasReminder = (data.reminderStrategy as string) !== 'none' && !!data.date
@@ -1324,9 +1311,8 @@ const handleConfirmAction = () => {
 }
 
 .main-content { flex: 1; min-height: 0; }
-.main-content :deep(.el-scrollbar) { height: 100%; }
-.main-content :deep(.el-scrollbar__view) { min-height: 100%; padding: 24px 0; }
-.main-content :deep(.el-scrollbar__bar) { display: none; }
+.main-content :deep(.list-main-scroll) { height: 100%; min-height: 0; }
+.list-main-scroll { min-height: 100%; padding: 24px 0; }
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 0; }
 
 .card-grid, .list-list, .today-lists, .smart-lists {

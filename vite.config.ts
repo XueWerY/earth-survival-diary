@@ -22,25 +22,38 @@ function fixVueuseCore(): Plugin {
   }
 }
 
-export default defineConfig({
-  base: './',
-  server: {
-    host: '127.0.0.1',
-    port: 5173,
-    strictPort: true
-  },
-  plugins: [vue(), fixVueuseCore(), {
-    name: 'version-inline',
-    resolveId(id) {
-      if (id === 'virtual:version') return id
-      return null
+export default defineConfig(({ mode }) => {
+  if (mode === 'web') throw new Error('网页端已移除；生产构建仅用于桌面客户端。')
+
+  return {
+    base: './',
+    server: {
+      host: '127.0.0.1',
+      port: 5173,
+      strictPort: true
     },
-    load(id) {
-      if (id === 'virtual:version') {
-        const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'))
-        return `export default ${JSON.stringify(pkg.version)}`
+    build: {
+      outDir: 'dist',
+      emptyOutDir: true,
+      rolldownOptions: {
+        input: {
+          index: path.resolve(__dirname, 'index.html')
+        }
       }
-      return null
-    }
-  } as Plugin]
+    },
+    plugins: [vue(), fixVueuseCore(), {
+      name: 'version-inline',
+      resolveId(id) {
+        if (id === 'virtual:version') return id
+        return null
+      },
+      load(id) {
+        if (id === 'virtual:version') {
+          const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'))
+          return `export default ${JSON.stringify(pkg.version)}`
+        }
+        return null
+      }
+    } as Plugin]
+  }
 })

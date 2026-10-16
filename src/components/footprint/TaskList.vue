@@ -12,11 +12,15 @@
         <button class="header-nav-btn" @click="shiftDate(1)" title="后一天">
           <el-icon><ArrowRight /></el-icon>
         </button>
-      </div>
-      <div class="header-actions">
-        <button class="header-action-btn add-btn" @click="handleAddTask" title="记录足迹">
-          <el-icon><FilePlus /></el-icon>
-          <span class="btn-text">记录足迹</span>
+        </div>
+        <div class="header-actions">
+          <button class="header-action-btn focus-btn" @click="focusDialogVisible = true" title="专注">
+            <el-icon><Timer /></el-icon>
+            <span class="btn-text">专注</span>
+          </button>
+          <button class="header-action-btn add-btn" @click="handleAddTask" title="记录足迹">
+            <el-icon><FilePlus /></el-icon>
+            <span class="btn-text">记录足迹</span>
         </button>
         <button class="header-action-btn diary-btn" @click="handleAddDiary" title="写日记">
           <el-icon><PenLine /></el-icon>
@@ -26,7 +30,7 @@
     </div>
 
     <div class="footprint-content">
-      <el-scrollbar>
+      <AppScrollbar class="footprint-scroll-area">
         <div v-if="filteredTasks.length === 0" class="empty-state">
           <el-empty
               :description="emptyText"
@@ -155,21 +159,21 @@
 
               </div>
         </template>
-      </el-scrollbar>
+      </AppScrollbar>
     </div>
 
     <DiaryForm
         v-model:visible="diaryFormVisible"
         :task="editingTask"
         :defaultDate="selectedDate"
-        @submit="handleFormSubmit"
+        @submit="handleFormSubmit('diary', $event)"
     />
 
     <RecordForm
         v-model:visible="recordFormVisible"
         :task="editingTask"
         :defaultDate="selectedDate"
-        @submit="handleFormSubmit"
+        @submit="handleFormSubmit('footprint', $event)"
     />
 
     <ConfirmDialog
@@ -184,13 +188,25 @@
       v-model:visible="headerDatePickerVisible"
       @update:model-value="onHeaderDatePicked"
     />
+
+    <BaseDialog
+      :visible="focusDialogVisible"
+      title="专注"
+      :width="900"
+      teleport
+      @update:visible="focusDialogVisible = $event"
+    >
+      <div class="focus-dialog-content">
+        <FocusTimer embedded />
+      </div>
+    </BaseDialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, inject, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, ArrowRight, FilePlus, PenLine } from '@lucide/vue'
+import { ArrowLeft, ArrowRight, FilePlus, PenLine, Timer } from '@lucide/vue'
 import { Solar } from 'lunar-javascript'
 import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
@@ -200,6 +216,9 @@ import { usePageNav } from '../../composables/usePageNav'
 import { useCardEntrance } from '../../composables/useMotion'
 import RecordCard from './RecordCard.vue'
 import DiaryCard from './DiaryCard.vue'
+import FocusTimer from '../focus/FocusTimer.vue'
+import BaseDialog from '../ui/BaseDialog.vue'
+import AppScrollbar from '../common/scrollbar/AppScrollbar.vue'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
 import DiaryForm from './DiaryForm.vue'
@@ -219,7 +238,7 @@ const taskStore = useTaskStore()
 const pageNav = usePageNav()
 
 const containerRef = ref<HTMLElement | null>(null)
-const entrance = useCardEntrance(containerRef, '.period-column .period-item')
+const entrance = useCardEntrance(containerRef, '.period-item')
 
 const handleAddTask = () => {
   editingTask.value = null
@@ -243,7 +262,11 @@ const handleEditTask = (task: Task) => {
 const handleStarRecord = async (record: Task) => {
   const newPinned = !record.pinned
   await taskStore.updateTask(record.id, { pinned: newPinned })
-  logger.info('[足迹] 星标记录', { taskId: record.id, pinned: newPinned })
+  const isDiary = record.isDiary || record.category === 'diary'
+  logger.info(isDiary ? '[Diary] 更新日记星标' : '[Footprint] 更新足迹星标', {
+    taskId: record.id,
+    pinned: newPinned,
+  })
   ElMessage.success(newPinned ? '已设为星标' : '已取消星标')
 }
 
@@ -251,7 +274,9 @@ const handleDeleteTask = (id: string) => {
   const task = taskStore.tasks.find(t => t.id === id)
   const isDiary = task?.isDiary || task?.category === 'diary'
   taskStore.deleteTask(id)
-  logger.info('[足迹] 删除足迹', { taskId: id })
+  logger.info(isDiary
+    ? `[Diary] 删除日记，日记名称 = ${task?.name || '无标题'}，记录编号 = ${id}`
+    : `[Footprint] 删除足迹，足迹名称 = ${task?.name || '无标题'}，记录编号 = ${id}`)
   ElMessage.success(isDiary ? '日记删除成功' : '记录删除成功')
 }
 
@@ -264,19 +289,27 @@ const onDeleteConfirmed = () => {
   handleDeleteTask(deleteTargetId.value)
 }
 
-const handleFormSubmit = () => {
+const handleFormSubmit = (kind: 'diary' | 'footprint', createdTask?: Task) => {
   if (editingTask.value) {
-    logger.info('[足迹] 编辑足迹', { taskId: editingTask.value.id, name: editingTask.value.name })
+    const channel = kind === 'diary' ? 'Diary' : 'Footprint'
+    const itemName = kind === 'diary' ? '日记' : '足迹'
+    logger.info(`[${channel}] 编辑${itemName}`, {
+      taskId: editingTask.value.id,
+      name: editingTask.value.name,
+    })
   } else {
-    logger.info('[足迹] 添加足迹')
+    if (kind === 'diary') {
+      logger.info(`[Diary] 新增日记，日记名称 = ${createdTask?.name || '无标题'}，记录编号 = ${createdTask?.id || '未知'}`)
+    } else {
+      logger.info(`[Footprint] 新增足迹，足迹名称 = ${createdTask?.name || '无标题'}，记录编号 = ${createdTask?.id || '未知'}`)
+    }
   }
   editingTask.value = null
 }
 
 onMounted(async () => {
-  logger.debug('[TaskList] onMounted', { navPath: pageNav.navPath.value })
   if (pageNav.navPath.value.length === 0) {
-    logger.debug('[TaskList] onMounted navPath为空，设为[footprint]')
+    logger.debug('[TaskList] 导航路径为空，切换到足迹页')
     pageNav.setNavPath(['footprint'])
   }
   await nextTick()
@@ -367,6 +400,7 @@ const todayTasks = computed(() => {
 
 const diaryFormVisible = ref(false)
 const recordFormVisible = ref(false)
+const focusDialogVisible = ref(false)
 const editingTask = ref<Task | null>(null)
 const showDeleteConfirm = ref(false)
 const deleteTargetId = ref('')
@@ -448,7 +482,7 @@ const generateTaskDescription = (task: Task) => {
   padding-bottom: 16px;
 }
 
-.footprint-container.is-mobile .footprint-content :deep(.el-scrollbar__view) {
+.footprint-container.is-mobile .footprint-content :deep(.footprint-scroll-area) {
   padding-bottom: 16px;
 }
 
@@ -456,7 +490,7 @@ const generateTaskDescription = (task: Task) => {
   padding-bottom: 16px;
 }
 
-.footprint-container:not(.is-mobile) .footprint-content :deep(.el-scrollbar__view) {
+.footprint-container:not(.is-mobile) .footprint-content :deep(.footprint-scroll-area) {
   padding-bottom: 16px;
 }
 
@@ -499,7 +533,7 @@ const generateTaskDescription = (task: Task) => {
 }
 
 .header-title {
-  width: 150px;
+  width: 210px;
   flex: none;
   text-align: center;
   cursor: pointer;
@@ -526,6 +560,7 @@ const generateTaskDescription = (task: Task) => {
   color: var(--chalk-muted);
   margin-top: 2px;
   line-height: 1.2;
+  white-space: nowrap;
 }
 
 .header-actions {
@@ -558,6 +593,16 @@ const generateTaskDescription = (task: Task) => {
   font-size: 13px;
 }
 
+.header-action-btn.focus-btn {
+  background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%);
+  box-shadow: 0 2px 8px rgba(20, 184, 166, 0.28);
+}
+
+.header-action-btn.focus-btn:hover {
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.42);
+  transform: translateY(-1px);
+}
+
 .header-action-btn.add-btn {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
@@ -579,6 +624,9 @@ const generateTaskDescription = (task: Task) => {
 }
 
 @media (max-width: 500px) {
+  .header-title {
+    width: 180px;
+  }
   .header-action-btn .btn-text {
     display: none;
   }
@@ -655,20 +703,8 @@ const generateTaskDescription = (task: Task) => {
   min-height: 0;
 }
 
-.footprint-content :deep(.el-scrollbar__wrap) {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.footprint-content :deep(.el-scrollbar__wrap::-webkit-scrollbar) {
-  display: none;
-}
-.footprint-content :deep(.el-scrollbar__bar) {
-  display: none !important;
-}
-.footprint-content :deep(.el-scrollbar) {
+.footprint-content :deep(.footprint-scroll-area) {
   height: 100%;
-}
-.footprint-content :deep(.el-scrollbar__view) {
   min-height: 100%;
 }
 
@@ -1262,5 +1298,14 @@ const generateTaskDescription = (task: Task) => {
   flex: 1;
   overflow-y: auto;
   padding: 8px 20px 20px;
+}
+
+.focus-dialog-content {
+  height: min(70vh, 680px);
+  min-height: min(380px, 58vh);
+}
+
+.focus-dialog-content :deep(.focus-container) {
+  min-height: 0;
 }
 </style>

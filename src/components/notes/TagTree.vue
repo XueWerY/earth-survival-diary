@@ -211,17 +211,9 @@ const editTag = (tagId: string) => {
 }
 
 .tt-ops {
-  display: none;
+  display: inline-flex;
   align-items: center;
   flex-shrink: 0;
-}
-
-.tt-row:hover .tt-ops {
-  display: inline-flex;
-}
-
-.tt-row:hover .tt-count {
-  display: none;
 }
 
 .tt-edit {

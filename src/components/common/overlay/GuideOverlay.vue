@@ -9,20 +9,24 @@
     <div class="guide-tooltip" ref="tooltipRef" :style="tooltipStyle" v-if="visible" @mousedown="onTooltipDragStart">
       <div class="guide-tooltip-header">
         <div class="guide-step-badge">{{ currentIndex + 1 }} / {{ steps.length }}</div>
-        <button class="guide-exit-btn" @click="emit('exit')" title="退出引导">
+        <button class="guide-exit-btn" :disabled="navigating" @click="emit('exit')" title="退出引导">
           <el-icon><X /></el-icon>
         </button>
       </div>
       <h3 class="guide-step-title">{{ currentStep.title }}</h3>
       <p class="guide-step-desc" v-html="currentStep.description"></p>
+      <p v-if="targetMissing" class="guide-target-missing">
+        当前区域暂未显示或无法定位，可以重新定位，或继续浏览后续步骤。
+        <button type="button" :disabled="navigating" @click="retryTarget">重新定位</button>
+      </p>
       <div class="guide-actions">
-        <el-button size="small" plain @click="skip">
+        <el-button size="small" plain :disabled="navigating" @click="skip">
           <el-icon><X /></el-icon> 跳过引导
         </el-button>
-        <el-button v-if="currentIndex > 0" size="small" @click="prev">
+        <el-button v-if="currentIndex > 0" size="small" :disabled="navigating" @click="prev">
           <el-icon><ArrowLeft /></el-icon> 上一步
         </el-button>
-        <el-button size="small" type="primary" @click="next">
+        <el-button size="small" type="primary" :disabled="navigating" @click="next">
           <template v-if="currentIndex < steps.length - 1">下一步 <el-icon><ArrowRight /></el-icon></template>
           <template v-else>完成<el-icon><Check /></el-icon></template>
         </el-button>
@@ -34,6 +38,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { X, ArrowLeft, ArrowRight, Check } from '@lucide/vue'
+import { logger } from '../../../lib/logger'
 
 export interface GuideStep {
   route: string
@@ -43,13 +48,17 @@ export interface GuideStep {
   padding?: number
   tooltipPosition?: 'bottom-right' | 'bottom-center' | 'bottom-left' | 'top-center' | 'right-center' | 'fixed-bottom-right' | 'left-top' | 'center'
   tooltipGap?: number
-  onActivate?: () => void
+  fallbackSelector?: string
+  fallbackTitle?: string
+  fallbackDescription?: string
+  onActivate?: () => void | Promise<void>
 }
 
 const props = defineProps<{
   steps: GuideStep[]
   visible: boolean
   currentIndex: number
+  navigating?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -61,15 +70,27 @@ const emit = defineEmits<{
 
 const spotlight = ref({ x: 0, y: 0, w: 0, h: 0 })
 const foundTarget = ref(false)
+const targetMissing = ref(false)
+const usingFallback = ref(false)
 const tooltipRef = ref<HTMLElement | null>(null)
 const dragPos = ref<{ left: number; top: number } | null>(null)
 let retryTimer: ReturnType<typeof setTimeout> | null = null
+let activationTimer: ReturnType<typeof setTimeout> | null = null
 let retryCount = 0
+let activationSerial = 0
 const MAX_RETRIES = 15
 
 const currentStep = computed(() => {
   if (props.currentIndex >= 0 && props.currentIndex < props.steps.length) {
-    return props.steps[props.currentIndex]
+    const step = props.steps[props.currentIndex]
+    if (usingFallback.value) {
+      return {
+        ...step,
+        title: step.fallbackTitle || step.title,
+        description: step.fallbackDescription || step.description
+      }
+    }
+    return step
   }
   return { route: '', selector: '', title: '', description: '' }
 })
@@ -110,6 +131,15 @@ const spotlightBlockerStyle = computed(() => ({
 }))
 
 const tooltipStyle = computed(() => {
+  if (targetMissing.value) {
+    return {
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      right: 'auto',
+      bottom: 'auto'
+    }
+  }
   if (dragPos.value) {
     return {
       left: dragPos.value.left + 'px',
@@ -206,75 +236,140 @@ const tooltipStyle = computed(() => {
   return {}
 })
 
+const findVisibleTarget = (selector: string): HTMLElement | null => {
+  try {
+    const elements = document.querySelectorAll<HTMLElement>(selector)
+    for (const element of elements) {
+      const rect = element.getBoundingClientRect()
+      const style = window.getComputedStyle(element)
+      if (
+        rect.width > 0 &&
+        rect.height > 0 &&
+        style.display !== 'none' &&
+        style.visibility !== 'hidden' &&
+        Number(style.opacity) !== 0 &&
+        element.getAttribute('aria-hidden') !== 'true'
+      ) return element
+    }
+  } catch {
+    // An invalid selector is treated as a missing target so the guide can still be continued.
+  }
+  return null
+}
+
+const clampTooltipToViewport = () => {
+  nextTick(() => {
+    const element = tooltipRef.value
+    if (!element) return
+    const rect = element.getBoundingClientRect()
+    const margin = 12
+    const maxLeft = Math.max(margin, window.innerWidth - rect.width - margin)
+    const maxTop = Math.max(margin, window.innerHeight - rect.height - margin)
+    const left = Math.min(Math.max(rect.left, margin), maxLeft)
+    const top = Math.min(Math.max(rect.top, margin), maxTop)
+    if (Math.abs(left - rect.left) > 1 || Math.abs(top - rect.top) > 1) {
+      dragPos.value = { left, top }
+    }
+  })
+}
+
 const locateTarget = () => {
   if (retryTimer) {
     clearTimeout(retryTimer)
     retryTimer = null
   }
 
-  const step = currentStep.value
-  if (!step.selector) {
+  const step = props.steps[props.currentIndex]
+  if (!step || !step.selector) {
     foundTarget.value = false
+    targetMissing.value = true
     return
   }
 
-  const el = document.querySelector(step.selector) as HTMLElement | null
+  const primaryTarget = findVisibleTarget(step.selector)
+  const fallbackTarget = primaryTarget ? null : (step.fallbackSelector ? findVisibleTarget(step.fallbackSelector) : null)
+  const el = primaryTarget || fallbackTarget
   if (!el) {
     foundTarget.value = false
-    retryCount++
     if (retryCount >= MAX_RETRIES) {
       retryCount = 0
-      emit('next')
+      targetMissing.value = true
       return
     }
+    retryCount++
     retryTimer = setTimeout(locateTarget, 200)
     return
   }
 
   retryCount = 0
+  targetMissing.value = false
+  usingFallback.value = !primaryTarget && !!fallbackTarget
 
-  const rect = el.getBoundingClientRect()
   const vw = window.innerWidth
   const vh = window.innerHeight
   const pad = step.padding ?? 8
 
-  if (rect.bottom > vh || rect.top < 0) {
+  let rect = el.getBoundingClientRect()
+  if (rect.bottom > vh || rect.top < 0 || rect.right > vw || rect.left < 0) {
     el.scrollIntoView({ behavior: 'instant', block: 'center' })
+    rect = el.getBoundingClientRect()
   }
 
-  const r2 = el.getBoundingClientRect()
-  const sx = Math.max(0, r2.x - pad)
-  const sy = Math.max(0, r2.y - pad)
-  const sw = Math.min(vw - sx, r2.width + pad * 2)
-  const sh = Math.min(vh - sy, r2.height + pad * 2)
+  const sx = Math.max(0, rect.left - pad)
+  const sy = Math.max(0, rect.top - pad)
+  const right = Math.min(vw, rect.right + pad)
+  const bottom = Math.min(vh, rect.bottom + pad)
+  const sw = Math.max(0, right - sx)
+  const sh = Math.max(0, bottom - sy)
 
+  if (sw === 0 || sh === 0) {
+    foundTarget.value = false
+    targetMissing.value = true
+    return
+  }
   spotlight.value = { x: sx, y: sy, w: sw, h: sh }
   foundTarget.value = true
+  clampTooltipToViewport()
 }
 
-watch(() => props.currentIndex, () => {
+watch([() => props.visible, () => props.currentIndex], async ([visible]) => {
+  const serial = ++activationSerial
+  if (retryTimer) clearTimeout(retryTimer)
+  if (activationTimer) clearTimeout(activationTimer)
+  retryTimer = null
+  activationTimer = null
   retryCount = 0
   dragPos.value = null
-  nextTick(() => {
-    currentStep.value.onActivate?.()
-    setTimeout(locateTarget, 500)
-  })
-})
+  foundTarget.value = false
+  targetMissing.value = false
+  usingFallback.value = false
+  spotlight.value = { x: 0, y: 0, w: 0, h: 0 }
+  if (!visible) return
 
-watch(() => props.visible, (v) => {
-  if (v) {
-    dragPos.value = null
-    nextTick(() => {
-      currentStep.value.onActivate?.()
-      setTimeout(locateTarget, 500)
-    })
-  } else {
-    if (retryTimer) {
-      clearTimeout(retryTimer)
-      retryTimer = null
-    }
+  await nextTick()
+  if (serial !== activationSerial || !props.visible) return
+  try {
+    await props.steps[props.currentIndex]?.onActivate?.()
+  } catch (error) {
+    logger.warn('[Guide] 步骤初始化失败', { error: error instanceof Error ? error.message : String(error) })
+    targetMissing.value = true
+    return
   }
-})
+  await nextTick()
+  if (serial !== activationSerial || !props.visible) return
+  activationTimer = setTimeout(() => {
+    if (serial === activationSerial && props.visible) locateTarget()
+  }, 100)
+}, { immediate: true })
+
+const retryTarget = () => {
+  if (retryTimer) clearTimeout(retryTimer)
+  retryTimer = null
+  retryCount = 0
+  targetMissing.value = false
+  usingFallback.value = false
+  locateTarget()
+}
 
 const skip = () => emit('skip')
 const prev = () => emit('prev')
@@ -322,6 +417,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (retryTimer) clearTimeout(retryTimer)
+  if (activationTimer) clearTimeout(activationTimer)
   if (resizeHandler) window.removeEventListener('resize', resizeHandler)
 })
 </script>
@@ -391,8 +487,26 @@ onUnmounted(() => {
   border: 1px solid rgba(102, 126, 234, 0.3);
   border-radius: 14px;
   padding: 24px 20px 20px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
   pointer-events: auto;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.guide-target-missing {
+  margin: -8px 0 16px;
+  color: #fbbf24;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.guide-target-missing button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #a5b4fc;
+  cursor: pointer;
+  text-decoration: underline;
 }
 
 .guide-tooltip-header {

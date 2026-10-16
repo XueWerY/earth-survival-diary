@@ -7,14 +7,14 @@
       <div v-if="dialogVisible" class="date-dialog-overlay" @click.self="onCancel">
         <div class="date-dialog-container" @click.stop>
           <div class="date-dialog-header">
-            <span class="date-dialog-title">跳转日期</span>
+            <span class="date-dialog-title">{{ props.dialogTitle }}</span>
           </div>
           <div class="date-dialog-body">
             <div class="jump-toggle">
               <button
                 class="capsule-btn"
                 :class="{ 'capsule-btn-primary': !isLunarMode }"
-                @click="isLunarMode = false"
+                @click="switchToSolar"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="capsule-svg">
                   <circle cx="12" cy="12" r="5"></circle>
@@ -41,7 +41,7 @@
               </button>
             </div>
             <div class="jump-scrolls">
-              <div class="jump-scroll-col" ref="yearScrollRef" @scroll="onYearScroll">
+              <div class="jump-scroll-col" data-app-scrollbar-off ref="yearScrollRef" @scroll="onYearScroll">
                 <div class="jump-scroll-spacer"></div>
                 <div
                   v-for="y in yearOptions"
@@ -52,7 +52,7 @@
                 >{{ y.label }}</div>
                 <div class="jump-scroll-spacer"></div>
               </div>
-              <div class="jump-scroll-col" ref="monthScrollRef" @scroll="onMonthScroll">
+              <div class="jump-scroll-col" data-app-scrollbar-off ref="monthScrollRef" @scroll="onMonthScroll">
                 <div class="jump-scroll-spacer"></div>
                 <div
                   v-for="m in monthOptions"
@@ -63,7 +63,7 @@
                 >{{ m.label }}</div>
                 <div class="jump-scroll-spacer"></div>
               </div>
-              <div class="jump-scroll-col" ref="dayScrollRef" @scroll="onDayScroll">
+              <div class="jump-scroll-col" data-app-scrollbar-off ref="dayScrollRef" @scroll="onDayScroll">
                 <div class="jump-scroll-spacer"></div>
                 <div
                   v-for="d in dayOptions"
@@ -111,13 +111,18 @@ import { Solar, Lunar } from 'lunar-javascript'
 const props = withDefaults(defineProps<{
   modelValue: string
   visible?: boolean
+  dialogTitle?: string
+  initialLunarMode?: boolean
 }>(), {
   visible: undefined,
+  dialogTitle: '跳转日期',
+  initialLunarMode: false,
 })
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'update:visible', value: boolean): void
+  (e: 'update:calendarMode', value: 'solar' | 'lunar'): void
 }>()
 
 const ITEM_HEIGHT = 36
@@ -132,16 +137,42 @@ const pickerYear = ref(today.getFullYear())
 const pickerMonth = ref(today.getMonth() + 1)
 const pickerDay = ref(today.getDate())
 
+const CHINESE_NUMERALS = ['〇', '一', '二', '三', '四', '五', '六', '七', '八', '九']
+const LUNAR_DAY_NUMERALS = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九']
+
+const formatLunarYear = (year: number) =>
+  `${String(year).split('').map(digit => CHINESE_NUMERALS[Number(digit)]).join('')}年`
+
+const formatLunarDay = (day: number) => {
+  if (day < 10) return `初${LUNAR_DAY_NUMERALS[day]}`
+  if (day === 10) return '初十'
+  if (day < 20) return `十${LUNAR_DAY_NUMERALS[day % 10]}`
+  if (day === 20) return '二十'
+  if (day < 30) return `廿${LUNAR_DAY_NUMERALS[day % 10]}`
+  return '三十'
+}
+
 const yearScrollRef = ref<HTMLElement | null>(null)
 const monthScrollRef = ref<HTMLElement | null>(null)
 const dayScrollRef = ref<HTMLElement | null>(null)
 
-const displayDate = computed(() => props.modelValue || '选择日期')
+const displayDate = computed(() => {
+  if (!props.modelValue) return '选择日期'
+  if (!props.initialLunarMode) return props.modelValue
+
+  try {
+    const [year, month, day] = props.modelValue.split('-').map(Number)
+    const lunar = Solar.fromYmd(year, month, day).getLunar() as any
+    return `农历${lunar.getYear()}年${lunar.getMonthInChinese()}月${lunar.getDayInChinese()}`
+  } catch {
+    return props.modelValue
+  }
+})
 
 const yearOptions = computed(() => {
   const years = []
   for (let y = 1900; y <= 2100; y++) {
-    years.push({ value: y, label: String(y) + '年' })
+    years.push({ value: y, label: isLunarMode.value ? formatLunarYear(y) : `${y}年` })
   }
   return years
 })
@@ -185,10 +216,11 @@ const dayOptions = computed(() => {
         } else if (jieQi) {
           label = jieQi
         } else {
-          label = lunar.getDayInChinese()
+          const chineseDay = lunar.getDayInChinese()
+          label = /^\d+$/.test(chineseDay) ? formatLunarDay(d) : chineseDay
         }
       } catch {
-        label = String(d)
+        label = formatLunarDay(d)
       }
     } else {
       label = String(d) + '日'
@@ -208,6 +240,20 @@ const switchToLunar = () => {
   pickerYear.value = lunar.getYear()
   pickerMonth.value = lunar.getMonth()
   pickerDay.value = lunar.getDay()
+  scrollPicker()
+}
+
+const switchToSolar = () => {
+  if (!isLunarMode.value) return
+  try {
+    const solar = Lunar.fromYmd(pickerYear.value, pickerMonth.value, pickerDay.value).getSolar()
+    pickerYear.value = solar.getYear()
+    pickerMonth.value = solar.getMonth()
+    pickerDay.value = solar.getDay()
+  } catch {
+    return
+  }
+  isLunarMode.value = false
   scrollPicker()
 }
 
@@ -277,6 +323,7 @@ const confirmDate = () => {
     dateStr = `${pickerYear.value}-${String(pickerMonth.value).padStart(2, '0')}-${String(pickerDay.value).padStart(2, '0')}`
   }
   emit('update:modelValue', dateStr)
+  emit('update:calendarMode', isLunarMode.value ? 'lunar' : 'solar')
   isLunarMode.value = false
   dialogVisible.value = false
 }
@@ -286,12 +333,19 @@ const onCancel = () => {
 }
 
 const initPicker = () => {
-  isLunarMode.value = false
+  isLunarMode.value = props.initialLunarMode
   const solarDate = props.modelValue || todayStr
   const [y, m, d] = solarDate.split('-').map(Number)
-  pickerYear.value = y
-  pickerMonth.value = m
-  pickerDay.value = d
+  if (isLunarMode.value) {
+    const lunar = Solar.fromYmd(y, m, d).getLunar()
+    pickerYear.value = lunar.getYear()
+    pickerMonth.value = lunar.getMonth()
+    pickerDay.value = lunar.getDay()
+  } else {
+    pickerYear.value = y
+    pickerMonth.value = m
+    pickerDay.value = d
+  }
   scrollPicker()
 }
 
@@ -322,6 +376,33 @@ watch([pickerYear, pickerMonth], () => {
     pickerDay.value = maxDay
   }
 })
+
+const isCurrentLunarDayValid = (day: number) => {
+  try {
+    const lunar = (Lunar as any).fromYmd(pickerYear.value, pickerMonth.value, day)
+    const roundTrip = lunar.getSolar().getLunar()
+    return roundTrip.getYear() === Number(pickerYear.value)
+      && Math.abs(roundTrip.getMonth()) === Math.abs(Number(pickerMonth.value))
+      && roundTrip.getDay() === day
+  } catch {
+    return false
+  }
+}
+
+watch(dayOptions, (options) => {
+  if (!isLunarMode.value) return
+  const validOptions = options.filter((option: any) => {
+    const day = Number(option.value)
+    return Number.isInteger(day) && isCurrentLunarDayValid(day)
+  })
+  if (validOptions.length !== options.length) {
+    options.splice(0, options.length, ...validOptions)
+  }
+  if (!validOptions.some((option: any) => Number(option.value) === Number(pickerDay.value))) {
+    pickerDay.value = Number(validOptions[validOptions.length - 1]?.value || 1)
+  }
+}, { immediate: true, flush: 'sync' })
+
 </script>
 
 <style scoped>
@@ -361,10 +442,13 @@ watch([pickerYear, pickerMonth], () => {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  width: 300px;
-  max-width: 90vw;
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .date-dialog-header {
@@ -395,6 +479,8 @@ watch([pickerYear, pickerMonth], () => {
 
 .date-dialog-body {
   padding: 12px 20px 20px;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .jump-toggle {
@@ -411,14 +497,25 @@ watch([pickerYear, pickerMonth], () => {
 }
 
 .jump-scrolls {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
   height: 108px;
+  min-height: 108px;
   overflow: hidden;
 }
 
 .jump-scroll-col {
-  flex: 1;
+  width: 100%;
+  min-width: 0;
+  height: 108px;
+  max-height: 108px;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
   scrollbar-width: none;
   scroll-snap-type: y mandatory;
 }
@@ -434,6 +531,7 @@ watch([pickerYear, pickerMonth], () => {
 
 .jump-scroll-item {
   height: 36px;
+  box-sizing: border-box;
   line-height: 36px;
   text-align: center;
   font-size: 16px;

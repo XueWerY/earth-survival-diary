@@ -15,6 +15,7 @@
               <div
                 ref="hourScrollRef"
                 class="drum-scroll"
+                data-app-scrollbar-off
                 @scroll="onHourScroll"
                 @scrollend="onHourScrollEnd"
               >
@@ -34,6 +35,7 @@
               <div
                 ref="minuteScrollRef"
                 class="drum-scroll"
+                data-app-scrollbar-off
                 @scroll="onMinuteScroll"
                 @scrollend="onMinuteScrollEnd"
               >

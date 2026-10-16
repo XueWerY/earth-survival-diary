@@ -1,15 +1,15 @@
-import { parse as parseYaml } from 'yaml'
-import { API_ORIGIN } from '../lib/apiBase'
+const REPOSITORY = 'XueWerY/earth-survival-diary'
 
-/** 云服务器上 electron-builder 发布的自动更新清单。 */
-export const UPDATE_BASE_URL = `${API_ORIGIN}/updates/`
-export const UPDATE_MANIFEST_URL = new URL('latest.yml', UPDATE_BASE_URL).toString()
+/** 用户查看和下载桌面版更新的 GitHub Releases 页面。 */
+export const UPDATE_BASE_URL = `https://github.com/${REPOSITORY}/releases/latest`
+export const UPDATE_MANIFEST_URL = `https://api.github.com/repos/${REPOSITORY}/releases/latest`
 
 export interface VersionCheckResult {
   hasUpdate: boolean
   latestVersion: string | null
   downloadUrl: string | null
   currentVersion: string
+  error?: string
 }
 
 export function compareVersions(a: string, b: string): number {
@@ -26,7 +26,7 @@ export function compareVersions(a: string, b: string): number {
   return 0
 }
 
-/** 从云服务器 latest.yml 读取版本和安装包地址。 */
+/** 从 GitHub Releases 获取最新版本信息；安装包由用户在浏览器中下载。 */
 export async function fetchLatestReleaseVersion(currentVersion: string): Promise<VersionCheckResult> {
   const noUpdate: VersionCheckResult = {
     hasUpdate: false,
@@ -36,37 +36,40 @@ export async function fetchLatestReleaseVersion(currentVersion: string): Promise
   }
 
   try {
-    const response = await fetch(UPDATE_MANIFEST_URL, { cache: 'no-store' })
-    if (!response.ok) return noUpdate
-
-    const manifest = parseYaml(await response.text()) as {
-      version?: unknown
-      path?: unknown
-      files?: Array<{ url?: unknown }>
-    } | null
-    if (!manifest || typeof manifest !== 'object') return noUpdate
-
-    const latestVersion = typeof manifest.version === 'string' ? manifest.version : ''
-    const packagePath = typeof manifest.path === 'string'
-      ? manifest.path
-      : manifest.files?.find(file => typeof file.url === 'string' && file.url.toLowerCase().endsWith('.exe'))?.url
-
-    if (!latestVersion || typeof packagePath !== 'string' || !packagePath || compareVersions(latestVersion, currentVersion) <= 0) {
-      return noUpdate
+    const response = await fetch(UPDATE_MANIFEST_URL, {
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    })
+    if (!response.ok) {
+      return { ...noUpdate, error: `GitHub Releases 请求失败（HTTP ${response.status}）` }
     }
 
-    const downloadUrl = new URL(packagePath, UPDATE_BASE_URL)
-    const updateOrigin = new URL(UPDATE_BASE_URL)
-    if (downloadUrl.origin !== updateOrigin.origin || !downloadUrl.pathname.startsWith(updateOrigin.pathname)) return noUpdate
+    const release = await response.json() as {
+      tag_name?: unknown
+      html_url?: unknown
+      draft?: unknown
+      prerelease?: unknown
+    }
+    const latestVersion = typeof release.tag_name === 'string'
+      ? release.tag_name.trim().replace(/^v(?=\d)/i, '')
+      : ''
+    if (!latestVersion || release.draft || release.prerelease || compareVersions(latestVersion, currentVersion) <= 0) {
+      return noUpdate
+    }
 
     return {
       hasUpdate: true,
       latestVersion,
-      downloadUrl: downloadUrl.toString(),
+      downloadUrl: typeof release.html_url === 'string' ? release.html_url : UPDATE_BASE_URL,
       currentVersion
     }
-  } catch {
-    // 云端暂不可达时保持静默，不影响登录和使用。
-    return noUpdate
+  } catch (error) {
+    return {
+      ...noUpdate,
+      error: error instanceof Error ? error.message : String(error),
+    }
   }
 }

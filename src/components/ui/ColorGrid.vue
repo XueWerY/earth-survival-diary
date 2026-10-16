@@ -3,7 +3,7 @@
     <div class="color-grid">
       <div v-for="c in colorList" :key="c" class="color-swatch" :class="{ selected: modelValue === c }" :style="{ background: c }" @click="$emit('update:modelValue', c)"></div>
     </div>
-    <div class="color-custom">
+    <div v-if="props.showCustom" class="color-custom">
       <span class="color-custom-label">自定义</span>
       <el-input :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" placeholder="#667eea" size="small" class="color-custom-input" />
     </div>
@@ -16,7 +16,9 @@ import { computed } from 'vue'
 const props = withDefaults(defineProps<{
   modelValue: string
   colors?: string[]
+  showCustom?: boolean
 }>(), {
+  showCustom: true,
   colors: () => [
     '#667eea', '#764ba2', '#f093fb', '#d53a9d', '#4facfe', '#00b4db', '#43e97b', '#11998e',
     '#fa709a', '#ee5a24', '#fee140', '#f6d365', '#a8edea', '#a18cd1', '#d299c2', '#fbc2eb',

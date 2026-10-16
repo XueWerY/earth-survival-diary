@@ -1,10 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import * as api from '../lib/api'
+import { logger } from '../lib/logger'
 
 export interface User {
     id: string
     email: string
+    createdAt?: string
     role?: string
     user_metadata?: {
         nickname?: string
@@ -15,7 +17,10 @@ export interface UserProfile {
     id: string
     nickname: string
     birthday?: string // 生日
+    birthdayCalendar?: 'solar' | 'lunar'
     phone?: string // 手机号
+    avatarDataUrl?: string
+    createdAt?: string
     created_at?: string
     updated_at?: string
 }
@@ -48,9 +53,16 @@ export const useAuthStore = defineStore('auth', () => {
     const fetchProfile = async () => {
         try {
             const { profile: userProfile } = await api.getProfile()
-            profile.value = userProfile
+            profile.value = {
+                ...userProfile,
+                id: user.value?.id || userProfile.id,
+                nickname: userProfile.nickname || user.value?.email?.split('@')[0] || '地球 Online 玩家',
+                createdAt: userProfile.createdAt || userProfile.created_at || user.value?.createdAt,
+                created_at: userProfile.createdAt || userProfile.created_at || user.value?.createdAt,
+                avatarDataUrl: typeof userProfile.avatarDataUrl === 'string' ? userProfile.avatarDataUrl : ''
+            }
         } catch (error) {
-            console.error('Failed to get user profile:', error)
+            logger.error('[Auth] 获取用户资料失败', { error: error instanceof Error ? error.message : String(error) })
         }
     }
 
@@ -66,14 +78,11 @@ export const useAuthStore = defineStore('auth', () => {
 
     // 注册
     const signUp = async (email: string, password: string, nickname?: string) => {
-        const result = await api.signUp({
-            email,
-            password,
-            nickname: nickname || '地球 Online 玩家'
-        })
+        const result = await api.signUp({ email, password })
 
         if (result.user) {
             user.value = result.user as User
+            await api.updateProfile({ nickname: nickname?.trim() || '地球 Online 玩家' })
             await fetchProfile()
         }
 
@@ -100,8 +109,7 @@ export const useAuthStore = defineStore('auth', () => {
         loading.value = false
     }
 
-    // 只清除本地用户状态（不调用服务端 signOut）
-    // 用于被踢出后的重新登录场景
+    // 只清除本地账号状态，用于重新登录
     const clearUser = () => {
         api.setToken(null)
         user.value = null

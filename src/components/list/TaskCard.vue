@@ -3,7 +3,7 @@
     <div class="list-header">
       <div class="list-name">{{ list.name }}</div>
       <div class="card-top-actions" @click.stop>
-        <button class="card-icon-btn card-icon-btn-complete" :title="list.completed ? '取消完成' : '标记完成'" :class="{ active: list.completed }" @click="handleTaskComplete(list)">
+        <button class="card-icon-btn card-icon-btn-complete" :title="list.completed ? '取消完成' : '标记完成'" :class="{ active: list.completed }" @click="requestTaskCompletionChange(list)">
           <el-icon><Check v-if="list.completed" /><CircleCheckBig v-else /></el-icon>
         </button>
         <button class="card-icon-btn card-icon-btn-edit" title="编辑任务" @click="emitEdit"><el-icon><Pencil /></el-icon></button>
@@ -56,14 +56,14 @@
       <div v-if="list.notes" class="list-notes-content">{{ list.notes }}</div>
 
       <div class="linked-notes-line" v-if="linkedNotes.length" @click.stop>
-        <span v-for="n in linkedNotes" :key="n.id" class="linked-note-tag" :style="{ borderColor: linkedNoteColor(n), color: linkedNoteColor(n) }"
-          @click="openLinkedNote(n)" @mouseenter="fitNotePreview">
+        <div v-for="n in linkedNotes" :key="n.id" class="linked-note-tag" :style="{ borderColor: linkedNoteColor(n), color: linkedNoteColor(n) }"
+          @click.prevent="openLinkedNote(n)" @mouseenter="fitNotePreview">
           <span class="linked-note-label"><el-icon><BookOpen /></el-icon>{{ n.title || '无标题笔记' }}</span>
-          <span class="linked-note-preview">
-            <span class="linked-note-preview-title">{{ n.title || '无标题笔记' }}</span>
-            <span class="linked-note-preview-body">{{ notePreview(n) }}</span>
-          </span>
-        </span>
+          <div class="linked-note-preview">
+            <div class="linked-note-preview-title">{{ n.title || '无标题笔记' }}</div>
+            <div class="linked-note-preview-body markdown-body" v-html="notePreview(n)"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -77,14 +77,17 @@
 </template>
 
 <script setup lang="ts">
+import { markTaskCompletionIntent } from '../../lib/taskCompletionEvents'
 import { ref, inject, computed } from 'vue'
 import { Calendar, RotateCcw, Check, CircleCheckBig, Bell, Trash2, Pencil, Clock, BookOpen } from '@lucide/vue'
 import dayjs from 'dayjs'
 import { useRouter } from 'vue-router'
 import { useListStore, REPEAT_STRATEGIES, type Task } from '../../stores/listStore'
-import { useNoteStore, getMdPlainText, type Note } from '../../stores/noteStore'
+import { useNoteStore, type Note } from '../../stores/noteStore'
+import { renderNotePreview } from '../../utils/notePreview'
 import { usePageNav, MODULE_ROUTES } from '../../composables/usePageNav'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
+import { logger } from '../../lib/logger'
 
 const props = defineProps<{
   list: Task
@@ -137,15 +140,7 @@ const fitNotePreview = (e: MouseEvent) => {
 }
 
 const notePreview = (note: Note): string => {
-  const text = getMdPlainText(note.content || '').trim()
-  if (!text) return '（空笔记）'
-  // 正文首行若与标题相同，则去掉，避免标题重复显示
-  const title = (note.title || '').trim()
-  const lines = text.split('\n')
-  if (title && lines.length && lines[0].trim() === title) {
-    lines.shift()
-  }
-  return lines.join('\n').trim()
+  return renderNotePreview(note.content || '', note.title || '')
 }
 
 const showEndDate = computed(() => {
@@ -163,8 +158,10 @@ const hasRepeat = computed(() => !!props.list.repeatStrategy && props.list.repea
 
 const handleTaskComplete = async (list: Task) => {
   const hadReminder = list.reminderStrategy !== 'none' && list.date
+  const isCompleting = !list.completed
   if (list.completed) await listStore.uncompleteTask(list.id)
   else await listStore.completeTask(list.id)
+  logger.info(`[List] ${isCompleting ? '完成任务' : '取消完成任务'}，名称: ${list.name}，编号: ${list.id}`)
   emit('complete', list)
   if (hadReminder) refreshReminders()
 }
@@ -287,11 +284,18 @@ const remainingTime = computed(() => getRemainingTimeDisplay(props.list))
 const toggleChecklistItem = async (listId: string, itemId: string, event: Event) => {
   event.stopPropagation()
   const hadReminder = props.list.reminderStrategy !== 'none' && !!props.list.date
+  const checklistItem = props.list.checklist?.find(item => item.id === itemId)
+  const wasCompleted = !!checklistItem?.completed
   await listStore.toggleChecklistItem(listId, itemId)
+  logger.info(`[List] ${wasCompleted ? '取消检查事项完成' : '完成检查事项'}，任务: ${props.list.name}，事项: ${checklistItem?.text || itemId}`)
   if (hadReminder) refreshReminders()
 }
 
 const showDeleteConfirm = ref(false)
+const requestTaskCompletionChange = (task: any) => {
+  markTaskCompletionIntent(task.id)
+  handleTaskComplete(task)
+}
 </script>
 
 <style scoped>
@@ -395,5 +399,83 @@ const showDeleteConfirm = ref(false)
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.linked-note-preview-body {
+  color: #cbd5e1;
+  font-size: 15px;
+  line-height: 1.85;
+  background: transparent;
+  word-wrap: break-word;
+  white-space: normal;
+  --crepe-color-inline-code: #93c5fd;
+  --crepe-color-inline-area: rgba(102, 126, 234, 0.3);
+  --crepe-color-selected: rgba(102, 126, 234, 0.35);
+  --crepe-font-code: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+.linked-note-preview-body :deep(h1),
+.linked-note-preview-body :deep(h2),
+.linked-note-preview-body :deep(h3),
+.linked-note-preview-body :deep(h4),
+.linked-note-preview-body :deep(h5),
+.linked-note-preview-body :deep(h6) {
+  margin-top: 0.5em;
+  margin-bottom: 0.3em;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.linked-note-preview-body :deep(h1) { font-size: 24px; color: #93c5fd; border-bottom: 1px solid rgba(102, 126, 234, 0.25); padding-bottom: 6px; }
+.linked-note-preview-body :deep(h2) { font-size: 21px; color: #93c5fd; }
+.linked-note-preview-body :deep(h3) { font-size: 18px; color: #c4b5fd; }
+.linked-note-preview-body :deep(h4) { font-size: 16px; color: #c4b5fd; }
+.linked-note-preview-body :deep(h5) { font-size: 15px; color: #94a3b8; }
+.linked-note-preview-body :deep(h6) { font-size: 14px; color: #94a3b8; }
+.linked-note-preview-body :deep(p) { margin: 0; padding: 4px 0; font-size: 1em; line-height: 1.5; text-indent: 2em; }
+.linked-note-preview-body :deep(li p),
+.linked-note-preview-body :deep(blockquote p) { text-indent: 0; }
+.linked-note-preview-body :deep(blockquote) {
+  position: relative;
+  box-sizing: content-box;
+  margin: 4px 0;
+  padding: 0 14px 0 40px;
+  border-radius: 0 6px 6px 0;
+  background: rgba(102, 126, 234, 0.06);
+  color: #7d8db5;
+}
+.linked-note-preview-body :deep(blockquote::before) {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  width: 4px;
+  border-radius: 100px;
+  background: var(--crepe-color-selected);
+  content: '';
+}
+.linked-note-preview-body :deep(blockquote p) { margin: 0; }
+.linked-note-preview-body :deep(code) {
+  display: inline-block;
+  padding: 0 2px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--crepe-color-inline-area), transparent 40%);
+  color: var(--crepe-color-inline-code);
+  font-family: var(--crepe-font-code);
+  font-size: 87.5%;
+  line-height: 1.4286;
+}
+.linked-note-preview-body :deep(pre) {
+  overflow-x: auto;
+  padding: 10px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--crepe-color-inline-area), transparent 40%);
+  white-space: pre-wrap;
+}
+.linked-note-preview-body :deep(pre code) { padding: 0; background: transparent; }
+.linked-note-preview-body :deep(a) { color: #93c5fd; text-decoration: none; }
+.linked-note-preview-body :deep(a:hover) { text-decoration: underline; }
+.linked-note-preview-body :deep(hr) { margin: 0.5em 0; border: none; border-top: 1px solid rgba(102, 126, 234, 0.18); }
+.linked-note-preview-body :deep(ul),
+.linked-note-preview-body :deep(ol) { margin: 0; margin-left: 0; padding-left: 40px; }
+.linked-note-preview-body :deep(img) { max-width: 100%; height: auto; border-radius: 6px; }
+.linked-note-preview-body :deep(strong) { color: #eef2ff; font-weight: 700; }
+.linked-note-preview-body :deep(del) { color: #5d6b94; }
 .linked-note-tag:hover .linked-note-preview, .linked-note-preview:hover { display: block; }
 </style>

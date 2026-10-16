@@ -1,5 +1,5 @@
 <template>
-  <el-scrollbar>
+  <AppScrollbar class="stats-scroll-area">
     <div class="stats-content">
       <div class="stats-toolbar">
         <el-radio-group v-model="statsRange" size="default">
@@ -89,7 +89,7 @@
         </div>
       </template>
     </div>
-  </el-scrollbar>
+  </AppScrollbar>
 </template>
 
 <script setup lang="ts">
@@ -99,6 +99,7 @@ import isoWeek from 'dayjs/plugin/isoWeek'
 import 'dayjs/locale/zh-cn'
 import { useTaskStore, type Task } from '../../stores/taskStore'
 import LunarDatePicker from '../common/picker/LunarDatePicker.vue'
+import AppScrollbar from '../common/scrollbar/AppScrollbar.vue'
 import { logger } from '../../lib/logger'
 
 dayjs.extend(isoWeek)
@@ -369,6 +370,12 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.stats-scroll-area {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
 .stats-content {
   max-width: 800px;
   margin: 0 auto;

@@ -1,31 +1,34 @@
 import type { GuideStep } from '../components/common/overlay/GuideOverlay.vue'
-import { useSettingsStore } from '../stores/settingsStore'
 import { useListStore } from '../stores/listStore'
+import { useNoteStore } from '../stores/noteStore'
 import { usePageNav } from '../composables/usePageNav'
+
+const showAllNotes = () => usePageNav().setNavPath(['notes', 'all'])
+
+const showGuideNote = () => {
+  const noteStore = useNoteStore()
+  const note = noteStore.notes.find(item => item.id === 'guide-note' && !item.trashedAt)
+    || noteStore.notes.find(item => !item.trashedAt)
+  usePageNav().setNavPath(note ? ['notes', 'all', note.id] : ['notes', 'all'])
+}
 
 export const guideSteps: GuideStep[] = [
   // ==================== 全局导航栏 ====================
   {
     route: '/footprint',
     selector: '.main-nav-bar',
-    title: '全局导航栏 · 收起状态',
-    description: '导航栏可以收起为仅显示图标的窄条，腾出更多内容空间。点击底部的折叠按钮即可在收起和展开之间切换。',
+    title: '全局导航栏 · 模块入口',
+    description: '左侧导航栏集中显示足迹、笔记、清单、倒数日、课程表、统计、工具箱和个人页面入口。足迹页中的“专注”按钮可打开专注计时面板。',
     padding: 0,
-    tooltipPosition: 'right-center',
-    onActivate: () => {
-      useSettingsStore().updateSettings({ sidebarCollapsed: true })
-    }
+    tooltipPosition: 'right-center'
   },
   {
     route: '/footprint',
-    selector: '.main-nav-bar',
-    title: '全局导航栏 · 展开状态',
-    description: '展开后显示完整的导航栏，包含所有功能模块的图标和名称。当前高亮的图标表示正在使用的模块，点击即可快速切换。',
+    selector: '.nav-item.active',
+    title: '全局导航栏 · 当前模块',
+    description: '当前所在模块会在导航栏中高亮显示。选择其他模块即可切换页面，当前页面状态会随模块保留。',
     padding: 0,
-    tooltipPosition: 'right-center',
-    onActivate: () => {
-      useSettingsStore().updateSettings({ sidebarCollapsed: false })
-    }
+    tooltipPosition: 'right-center'
   },
   {
     route: '/footprint',
@@ -33,13 +36,7 @@ export const guideSteps: GuideStep[] = [
     title: '足迹页面 - 日期选择',
     description: '点击左右箭头可切换前一天和后一天，中间显示公历日期与农历信息。点击日期标题可弹出日期选择器，快速跳转到任意日期。',
     padding: 0,
-    tooltipPosition: 'bottom-left',
-    onActivate: () => {
-      const dot = document.querySelector('.expand-hint .hint-dot')
-      if (dot && dot.classList.contains('collapse-dot')) {
-        (dot.closest('.expand-hint') as HTMLElement)?.click()
-      }
-    }
+    tooltipPosition: 'bottom-left'
   },
   {
     route: '/footprint',
@@ -119,118 +116,92 @@ export const guideSteps: GuideStep[] = [
     route: '/footprint',
     selector: '.record-card',
     title: '足迹页面 - 记录卡片',
-    description: '每张记录卡片展示一条活动足迹，包含活动名称、时段和备注。点击时段可修改起止时间，右上角按钮支持星标置顶、编辑和删除，名称和备注支持双击快捷编辑。',
+    description: '活动卡片展示名称、起止时间、时长和备注；右上角可星标、编辑或删除记录。',
+    fallbackSelector: '.footprint-content',
+    fallbackTitle: '足迹页面 - 记录区域',
+    fallbackDescription: '当前日期没有活动记录。新增记录后会显示在这里，并可从卡片编辑或星标。',
     tooltipPosition: 'bottom-left'
   },
   {
     route: '/footprint',
     selector: '.diary-card',
     title: '足迹页面 - 日记卡片',
-    description: '每张日记卡片展示一篇日记，包含标题、创建时间和正文内容。右上角按钮支持星标置顶、编辑和删除，标题和备注支持双击编辑。',
+    description: '日记卡片展示标题、创建时间、正文和备注；右上角可星标、编辑或删除日记。',
+    fallbackSelector: '.footprint-content',
+    fallbackTitle: '足迹页面 - 日记区域',
+    fallbackDescription: '当前日期没有日记。新增日记后会显示在这里，并可从卡片查看、编辑或星标。',
     tooltipPosition: 'bottom-left'
   },
 
   // ==================== 笔记 ====================
   {
     route: '/notes',
-    selector: '.notes-container',
-    title: '笔记页面 - 首页',
-    description: '这是笔记模块首页，顶部为面包屑导航栏，下方以卡片网格展示所有分类。点击分类卡片即可进入查看该分类下的笔记。',
+    selector: '.notes-page',
+    title: '笔记页面 - 总览',
+    description: '笔记页面分为三栏：左侧切换视图与标签，中间搜索和浏览笔记，右侧查看或编辑当前笔记。',
     tooltipPosition: 'fixed-bottom-right',
-    onActivate: () => {
-      usePageNav().setNavPath(['notes'])
-      const overlay = document.querySelector('.dialog-overlay') as HTMLElement
-      overlay?.click()
-    }
+    onActivate: showAllNotes
   },
   {
     route: '/notes',
-    selector: '.dialog-container',
-    title: '笔记页面 - 新建分类',
-    description: '点击首页右上角"+"按钮打开此表单。填写分类名称、选择图标（12×12 emoji 网格）和颜色（40 色调色板），底部也可输入自定义颜色值。点击"添加"即可创建自定义分类。',
-    tooltipPosition: 'left-top',
-    onActivate: () => {
-      const overlay = document.querySelector('.dialog-overlay') as HTMLElement
-      overlay?.click()
-      const btn = document.querySelector('.notes-breadcrumb-bar .breadcrumb-plus-btn') as HTMLElement
-      btn?.click()
-    }
+    selector: '.np-nav',
+    title: '笔记页面 - 侧边导航',
+    description: '侧边导航可切换全部笔记、收藏和回收站；标签树支持按标签筛选笔记。',
+    onActivate: showAllNotes
   },
   {
     route: '/notes',
-    selector: '.folder-card:not(:first-child)',
-    title: '笔记页面 - 分类卡片',
-    description: '每张分类卡片代表一个笔记分类。点击卡片进入查看该分类下的笔记，右上角编辑和删除按钮悬浮出现。卡片下方显示该分类下的笔记数量。',
-    onActivate: () => {
-      const overlay = document.querySelector('.dialog-overlay') as HTMLElement
-      overlay?.click()
-      usePageNav().setNavPath(['notes'])
-    }
+    selector: '.np-list',
+    title: '笔记页面 - 搜索与列表',
+    description: '列表顶部可按标题、正文或标签搜索；每条笔记显示摘要、标签和更新时间。',
+    onActivate: showAllNotes
   },
   {
     route: '/notes',
-    selector: '.notes-container',
-    title: '笔记页面 - 分类视图',
-    description: '点击分类卡片（如攻略）进入该分类的笔记列表。顶部面包屑显示当前分类路径，点击">"可下拉切换分类。右侧<svg width="14" height="14" viewBox="0 0 1024 1024" style="vertical-align:middle"><path d="M512 747.8l228.2 120a6.4 6.4 0 0 0 9.2-6.7L706 607l184.5-180a6.4 6.4 0 0 0-3.5-10.8L632 379 517.7 147.9a6.4 6.4 0 0 0-11.6 0l-114 231.2L137 416a6.4 6.4 0 0 0-3.5 11L318 607l-43.6 254a6.4 6.4 0 0 0 9.3 6.8zM313.6 924.5a70.4 70.4 0 0 1-102.1-74.3l37.8-220.9L89 473a70.4 70.4 0 0 1 39-120.1l221.8-32.3 99.2-201a70.4 70.4 0 0 1 126.2 0l99.2 201L896.2 353a70.4 70.4 0 0 1 39 120L774.7 629.5l38 220.9a70.4 70.4 0 0 1-102.2 74.2L512 820.1z" fill="currentColor"/></svg>可收藏当前视图，<svg width="14" height="14" viewBox="0 0 1024 1024" style="vertical-align:middle"><path d="M256 128v698.9L452 670a96 96 0 0 1 120 0l196 156.8V128zm-32-64h576a32 32 0 0 1 32 32v797.4a32 32 0 0 1-52 25L532 720a32 32 0 0 0-40 0L244 918.4a32 32 0 0 1-52-25V96a32 32 0 0 1 32-32" fill="currentColor"/></svg>为快速访问下拉列表，<svg width="14" height="14" viewBox="0 0 1024 1024" style="vertical-align:middle"><path d="M384 96a32 32 0 0 1 64 0v786.8a32 32 0 0 1-54.6 22.6L96 608a32 32 0 0 1 0-45.3h.2a32 32 0 0 1 45.1 0l242.8 243zm192 45.2a32 32 0 0 1 54.6-22.5L928 416a32 32 0 0 1 0 45.3h-.2a32 32 0 0 1-45.1 0L640 218.5V928a32 32 0 1 1-64 0z" fill="currentColor"/></svg>可排序笔记（更新时间/创建时间/标题）。',
-    tooltipPosition: 'fixed-bottom-right',
-    onActivate: () => {
-      const overlay = document.querySelector('.dialog-overlay') as HTMLElement
-      overlay?.click()
-      usePageNav().setNavPath(['notes', 'guide'])
-    }
+    selector: '.np-list-head',
+    title: '笔记页面 - 新建笔记',
+    description: '点击“+”可创建笔记，顶部搜索框支持检索标题、正文和标签。',
+    fallbackSelector: '.np-list',
+    fallbackTitle: '笔记页面 - 新建笔记',
+    fallbackDescription: '当前列表区域暂未显示新建控件；切换到“全部笔记”等常规视图即可创建笔记。',
+    onActivate: showAllNotes
   },
   {
     route: '/notes',
-    selector: '.note-card',
-    title: '笔记页面 - 笔记卡片',
-    description: '每张笔记卡片显示笔记标题、大纲标题数和全文字数，以及创建和修改时间。鼠标悬停时右上角显示置顶、编辑和删除按钮，可通过编辑按钮进入编辑模式。',
-    onActivate: () => {
-      const overlay = document.querySelector('.dialog-overlay') as HTMLElement
-      overlay?.click()
-      usePageNav().setNavPath(['notes', 'guide'])
-    }
+    selector: '.np-item',
+    title: '笔记页面 - 笔记条目',
+    description: '选择条目会在右侧打开笔记。普通视图下可从条目操作收藏或删除，回收站中则可恢复或彻底删除。',
+    fallbackSelector: '.np-list-scroll',
+    fallbackTitle: '笔记页面 - 笔记列表',
+    fallbackDescription: '当前视图没有笔记条目。创建笔记后会显示在这里。',
+    onActivate: showAllNotes
   },
   {
     route: '/notes',
-    selector: '.notes-container',
-    title: '笔记页面 - 编辑笔记',
+    selector: '.np-editor',
+    title: '笔记页面 - 编辑区域',
+    description: '选中笔记后，右侧编辑区提供 Markdown 编辑、标题和标签管理，并自动保存内容。',
     tooltipPosition: 'center',
-    description: '点击笔记卡片上的编辑按钮进入编辑视图。左侧为大纲导航面板，根据标题层级自动生成，点击可快速跳转。中间为 Markdown 编辑器，支持块级编辑和完整工具栏。顶部面包屑地址栏右侧有重命名笔记按钮，右下角可置顶和保存。底部状态栏显示当前时间和字数统计。',
-    onActivate: () => {
-      usePageNav().setNavPath(['notes', 'guide', 'guide-note'])
-    }
+    onActivate: showGuideNote
+  },
+  {
+    route: '/notes',
+    selector: '.editor-status-bar',
+    title: '笔记页面 - 状态栏与操作',
+    description: '底部状态栏显示字数、创建时间和更新时间，并提供大纲、反向链接、导出、源码与收藏操作。',
+    tooltipPosition: 'top-center',
+    fallbackSelector: '.np-editor',
+    fallbackTitle: '笔记页面 - 编辑操作',
+    fallbackDescription: '先选择或新建一篇笔记，状态栏会显示字数、时间信息和编辑操作。',
+    onActivate: showGuideNote
   },
 
-  // ==================== 专注 ====================
+  // ==================== 足迹中的专注 ====================
   {
-    route: '/focus',
-    selector: '.focus-style-row',
-    title: '专注页面 - 计时器风格',
-    description: '可选择圆环或数字两种计时器显示风格。圆环样式带有渐变色进度环和发光粒子（正计时模式下），数字样式简洁纯白。'
-  },
-  {
-    route: '/focus',
-    selector: '.focus-mode-row',
-    title: '专注页面 - 模式切换',
-    description: '支持番茄钟和正计时两种模式。番茄钟按固定时长倒计时，正计时自由计时。专注完成后自动生成对应的足迹记录。'
-  },
-  {
-    route: '/focus',
-    selector: '.focus-input-section',
-    title: '专注页面 - 输入专注事项',
-    description: '在这里输入你要专注的事项名称（必填）。番茄钟模式下可调整专注时长（1-120 分钟，步长 5 分钟），还可以添加备注信息。'
-  },
-  {
-    route: '/focus',
-    selector: '.favorites-section',
-    title: '专注页面 - 常用专注',
-    description: '常用专注卡片保存了你之前标记的事项。点击即可快速填充名称、备注和模式，无需重复输入。右上角删除按钮可移除不再需要的常用事项。'
-  },
-  {
-    route: '/focus',
-    selector: '.focus-start-btn',
-    title: '专注页面 - 开始专注',
-    description: '填写专注事项后，点击"开始专注"按钮即可开始计时。专注完成后会弹出保存常用选项，方便下次快速复用。'
+    route: '/footprint',
+    selector: '.focus-btn',
+    title: '足迹页面 - 专注入口',
+    description: '点击“专注”会打开原专注页面的计时面板。专注完成后会在足迹中留下记录。'
   },
 
   // ==================== 清单 ====================
@@ -238,7 +209,7 @@ export const guideSteps: GuideStep[] = [
     route: '/list',
     selector: '.list-breadcrumb-bar',
     title: '清单页面 - 面包屑导航',
-    description: '面包屑地址栏显示当前所处层级，点击">"弹出下拉列表可快速切换智能清单或自定义文件夹。右侧依次为：收藏当前视图、快速访问下拉、添加按钮（根据当前层级自动切换为添加文件夹/清单/分组/任务）。'
+    description: '面包屑地址栏显示当前层级，点击“>”可快速切换智能清单或自定义文件夹。右侧提供快速访问和添加操作；进入子页面后还可收藏当前视图。'
   },
   {
     route: '/list',
@@ -261,55 +232,53 @@ export const guideSteps: GuideStep[] = [
   {
     route: '/list',
     selector: '.card-grid',
-    title: '清单页面 - 我的清单',
-    description: '首次使用时系统自动创建"我的清单"文件夹。这里展示该文件夹下的所有清单卡片，每个清单默认包含一个"默认分组"，可以将任务归类到不同分组中方便管理。',
+    title: '清单页面 - 自定义清单',
+    description: '打开自定义文件夹后，这里会显示其中的清单卡片。选择清单后可继续管理分组和任务。',
+    fallbackSelector: '.main-content',
+    fallbackTitle: '清单页面 - 自定义文件夹',
+    fallbackDescription: '当前没有自定义文件夹。可通过右上角添加按钮创建文件夹，再在其中新建清单。',
     onActivate: () => {
       const store = useListStore()
-      const poll = () => {
-        const folder = store.folders.find(f => f.type === 'custom')
-        if (folder) {
-          usePageNav().setNavPath(['list', 'custom', folder.id])
-        } else {
-          setTimeout(poll, 100)
-        }
-      }
-      poll()
+      const folder = store.folders.find(f => f.type === 'custom')
+      usePageNav().setNavPath(folder ? ['list', 'custom', folder.id] : ['list', 'custom'])
     }
   },
   {
     route: '/list',
     selector: '.card-grid',
-    title: '清单页面 - 默认清单',
-    description: '进入一个清单后，展示该清单下的所有分组。每个清单默认包含一个"默认分组"，点击分组卡片可查看该分组下的任务列表。',
+    title: '清单页面 - 分组管理',
+    description: '进入清单后，这里展示该清单下的分组。选择分组即可查看和管理其中的任务。',
+    fallbackSelector: '.main-content',
+    fallbackTitle: '清单页面 - 清单与分组',
+    fallbackDescription: '当前文件夹中没有清单卡片。可使用添加按钮创建清单；打开清单后可管理分组。',
     onActivate: () => {
       const store = useListStore()
-      const poll = () => {
-        const folder = store.folders.find(f => f.type === 'custom')
-        if (folder && store.taskLists.length > 0) {
-          usePageNav().setNavPath(['list', 'custom', folder.id, store.taskLists[0].id])
-        } else {
-          setTimeout(poll, 100)
-        }
-      }
-      poll()
+      const folder = store.folders.find(f => f.type === 'custom')
+      const listId = folder?.listIds.find(id => store.taskLists.some(list => list.id === id))
+      usePageNav().setNavPath(folder && listId
+        ? ['list', 'custom', folder.id, listId]
+        : folder ? ['list', 'custom', folder.id] : ['list', 'custom'])
     }
   },
   {
     route: '/list',
     selector: '.list-list',
     title: '清单页面 - 任务卡片',
-    description: '进入分组后，该分组下的任务卡片在此展示。每张任务卡片包含任务名称、截止日期、优先级以及可勾选的检查事项。任务还支持设置重复策略和提醒时间。',
+    description: '进入分组后，该分组下的任务卡片会在此展示。任务可设置截止日期、优先级、检查事项、重复策略和提醒时间。',
+    fallbackSelector: '.main-content',
+    fallbackTitle: '清单页面 - 任务',
+    fallbackDescription: '当前路径下暂无可展示的任务卡片。创建并进入一个分组后，可在这里查看任务并设置日期、优先级、重复和提醒。',
     onActivate: () => {
       const store = useListStore()
-      const poll = () => {
-        const folder = store.folders.find(f => f.type === 'custom')
-        if (folder && store.taskLists.length > 0 && store.taskLists[0].groups.length > 0) {
-          usePageNav().setNavPath(['list', 'custom', folder.id, store.taskLists[0].id, store.taskLists[0].groups[0].id])
-        } else {
-          setTimeout(poll, 100)
-        }
-      }
-      poll()
+      const folder = store.folders.find(f => f.type === 'custom')
+      const listId = folder?.listIds.find(id => store.taskLists.some(list => list.id === id))
+      const list = store.taskLists.find(item => item.id === listId)
+      const group = list?.groups[0]
+      usePageNav().setNavPath(folder && list && group
+        ? ['list', 'custom', folder.id, list.id, group.id]
+        : folder && list
+          ? ['list', 'custom', folder.id, list.id]
+          : folder ? ['list', 'custom', folder.id] : ['list', 'custom'])
     }
   },
 
@@ -339,6 +308,9 @@ export const guideSteps: GuideStep[] = [
     selector: '.section',
     title: '倒数日页面 - 里程碑分区',
     description: '进入分类后，倒数日按时间划分展示：星标区域聚合重要事项，即将到来（30 天内）红色高亮提示，未来展望（30 天后）紫色展示，时光印记记录已过去的日期。',
+    fallbackSelector: '.content-wrapper',
+    fallbackTitle: '倒数日页面 - 事件区域',
+    fallbackDescription: '当前没有倒数日事件，因此分区尚未显示。添加事件后会按时间和星标状态归类。',
     tooltipPosition: 'bottom-center',
     onActivate: () => {
       usePageNav().setNavPath(['countdown', 'all'])
@@ -349,6 +321,9 @@ export const guideSteps: GuideStep[] = [
     selector: '.milestone-card',
     title: '倒数日页面 - 里程碑卡片',
     description: '每张卡片显示倒数日名称、目标日期和剩余天数。底部可切换重复策略（每年/不重复）和提醒设置。右上角按钮支持星标置顶、编辑和删除。双击名称和描述可快捷编辑。',
+    fallbackSelector: '.content-wrapper',
+    fallbackTitle: '倒数日页面 - 事件卡片',
+    fallbackDescription: '当前分类没有倒数日卡片。添加事件后，卡片会显示目标日期、剩余天数、重复方式和提醒状态。',
     tooltipPosition: 'bottom-center',
     onActivate: () => {
       usePageNav().setNavPath(['countdown', 'all'])
@@ -361,6 +336,9 @@ export const guideSteps: GuideStep[] = [
     selector: '.week-area',
     title: '课程表页面 - 教学周切换',
     description: '通过左右箭头切换教学周，显示当前周次和日期范围。',
+    fallbackSelector: '.course-container',
+    fallbackTitle: '课程表页面 - 教学周',
+    fallbackDescription: '当前显示课程列表视图。返回课程表视图后，可以在顶部切换教学周。',
     tooltipPosition: 'bottom-center'
   },
   {
@@ -368,6 +346,9 @@ export const guideSteps: GuideStep[] = [
     selector: '.corner-actions',
     title: '课程表页面 - 设置与视图切换',
     description: '齿轮按钮打开课程表设置，可配置学期日期、节次安排、课间休息等。右侧按钮可在课程网格视图和课程列表视图之间切换。',
+    fallbackSelector: '.course-container',
+    fallbackTitle: '课程表页面 - 设置与视图',
+    fallbackDescription: '当前显示课程列表视图。返回课程表视图后，可使用设置和视图切换按钮。',
     tooltipPosition: 'bottom-left'
   },
   {
@@ -375,6 +356,9 @@ export const guideSteps: GuideStep[] = [
     selector: '.course-grid-wrapper',
     title: '课程表页面 - 课程网格',
     description: '课程以网格形式按星期和节次排列。左侧显示节次名称和时间，点击空白格子可以添加课程，已添加的课程显示课程名称，点击课程可查看详情。',
+    fallbackSelector: '.course-container',
+    fallbackTitle: '课程表页面 - 课程网格',
+    fallbackDescription: '当前显示课程列表视图。切回课程表视图后，可在课程网格中查看或添加课程。',
     tooltipPosition: 'center'
   },
 
@@ -390,7 +374,7 @@ export const guideSteps: GuideStep[] = [
     route: '/statistics',
     selector: '.module-sections > :nth-child(1) .section-stats',
     title: '统计页面 - 数据指标',
-    description: '每个模块区域展示关键数据指标。以足迹为例：显示日记数、记录数、总时长、日均日记和日均记录。专注、清单、倒数日、课程表模块也各有对应的统计指标。',
+    description: '每个模块区域展示关键数据指标。足迹显示日记数、记录数、总时长、日均日记和日均记录；清单、倒数日、课程表也各有对应指标。',
     tooltipPosition: 'bottom-left'
   },
   {
@@ -398,6 +382,9 @@ export const guideSteps: GuideStep[] = [
     selector: '.section-trend',
     title: '统计页面 - 趋势图表',
     description: '当有数据时，每个模块下方显示趋势条形图。点击图表左侧的日期标签可缩小统计范围到对应时间段，方便逐段查看数据变化。',
+    fallbackSelector: '.module-sections',
+    fallbackTitle: '统计页面 - 趋势图表',
+    fallbackDescription: '当前日期范围还没有趋势数据。产生足迹或任务数据后，趋势图会显示在对应模块下方。',
     tooltipPosition: 'bottom-left'
   },
 
@@ -406,13 +393,19 @@ export const guideSteps: GuideStep[] = [
     route: '/toolbox',
     selector: '.tool-card-grid',
     title: '工具箱页面 - 实用工具',
-    description: '这里展示了插件系统注册的所有小工具。点击工具卡片即可打开使用，每种工具独立运行在工具页面内，点击"返回"按钮回到工具列表。'
+    description: '这里展示插件提供的小工具。打开工具后可使用页面顶部的返回按钮回到工具列表。',
+    fallbackSelector: '.toolbox-page',
+    fallbackTitle: '工具箱页面 - 实用工具',
+    fallbackDescription: '当前没有可显示的工具卡片。安装插件后，其工具会出现在此区域。'
   },
   {
     route: '/toolbox',
     selector: '.plugin-list',
     title: '工具箱页面 - 已安装插件',
-    description: '这里列出了所有已安装的插件。每个插件卡片显示名称、作者、版本号和简介，右侧标注该插件提供的小工具数量。插件的工具会出现在上方的工具列表中。'
+    description: '这里列出已安装插件的名称、作者、版本、简介和工具数量；插件工具会显示在上方。',
+    fallbackSelector: '.toolbox-page',
+    fallbackTitle: '工具箱页面 - 已安装插件',
+    fallbackDescription: '当前还没有已安装插件。安装插件后，这里会显示名称、作者、版本和工具数量。'
   },
 
   // ==================== 我的 ====================

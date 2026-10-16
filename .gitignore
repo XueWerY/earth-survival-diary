@@ -68,7 +68,16 @@ server/mysql.config.json
 
 # plugins
 src/plugins/*
+/build/default-plugins/
+
+# Inno Setup 编译器与生成的安装脚本（scripts/setup-inno.cjs / build-installer.cjs）
+/build/tools/
+/build/installer.generated.iss
 
 .pnpm-store/
 
 earth-survival-diary.icu_nginx/
+
+# 本地代码索引数据库与一次性诊断脚本（不随仓库分发）
+.codegraph/
+electron/zz-diag-main.cjs

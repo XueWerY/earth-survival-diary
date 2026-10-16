@@ -31,25 +31,22 @@
       <div v-if="!sugNotes.length && !sugCreateLabel" class="wiki-sug-empty">继续输入以匹配笔记</div>
     </div>
 
-    <!-- 右键格式工具栏：选中文本后右键呼出（行内格式 + 块转换） -->
+    <!-- 媒体尺寸编辑浮层 -->
     <div
-      v-if="ctxMenu.open"
-      class="md-ctx-menu"
-      :style="{ top: ctxMenu.top + 'px', left: ctxMenu.left + 'px' }"
+      v-if="mediaResize?.visible"
+      class="media-resize-panel"
+      :style="{ top: `${mediaResize.top}px`, left: `${mediaResize.left}px` }"
       @mousedown.prevent
-      @contextmenu.prevent
     >
-      <div v-for="(g, gi) in ctxGroups" :key="gi" class="md-ctx-row">
-        <button
-          v-for="it in g"
-          :key="it.title"
-          class="md-ctx-btn"
-          :class="[it.cls, { active: it.active }]"
-          :title="it.title"
-          @click="runCtxItem(it)"
-        >{{ it.label }}</button>
-      </div>
+      <span class="media-resize-title">尺寸</span>
+      <input v-model="mediaResize.width" type="number" min="0" max="4096" placeholder="宽" @keyup.enter="applyMediaResize">
+      <span class="media-resize-sep">×</span>
+      <input v-model="mediaResize.height" type="number" min="0" max="4096" placeholder="高" @keyup.enter="applyMediaResize">
+      <button type="button" class="media-resize-btn" @click="applyMediaResize">应用</button>
+      <button type="button" class="media-resize-btn ghost" @click="resetMediaResize">重置</button>
+      <button type="button" class="media-resize-btn ghost" @click="closeMediaResize">关闭</button>
     </div>
+
   </div>
 </template>
 
@@ -59,7 +56,7 @@ import { Crepe } from '@milkdown/crepe'
 import { replaceAll } from '@milkdown/kit/utils'
 import { editorViewCtx } from '@milkdown/kit/core'
 import type { EditorView } from '@milkdown/kit/prose/view'
-import { toggleMark, setBlockType, wrapIn, lift } from '@milkdown/kit/prose/commands'
+import { TextSelection } from '@milkdown/kit/prose/state'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame-dark.css'
 import { useNoteStore } from '../../stores/noteStore'
@@ -72,6 +69,57 @@ import {
   insertWikiLink,
   type WikiSuggestion,
 } from './wikiLink'
+import { readMediaAsset } from '../../services/mediaAssets'
+import { storeMediaAsset } from '../../composables/useNoteMedia'
+import type { SearchMatch } from '../../composables/useNoteSearch'
+import {
+  editorSearchPlugin,
+  editorSearchPluginKey,
+  buildSearchDecorations,
+  SEARCH_HIT_CLASS,
+  SEARCH_HIT_CURRENT_CLASS,
+  type EditorSearchState,
+} from './editorSearch'
+// 图片尺寸后缀：`![alt](esd-local-media://xxx{w=300,h=200})`。
+// Milkdown/Crepe 的图片块只认 `![alt](src)`（裸 <img> 会被解析成内联 html 节点、
+// 渲染不出图片），因此尺寸以后缀形式持久化，由本文件在进出编辑器时剥离/还原：
+//  - prepareMarkdown（进编辑器）：剥掉后缀得到干净 src，同时把尺寸记入 imageSizes；
+//  - 渲染后（resolveMediaReferencesInDom）：按 imageSizes 把 width/height 写到 <img>；
+//  - markdownUpdated（对外输出）：用 imageSizes 把后缀拼回 URL，保证存储带尺寸。
+
+/** 「引用 → 尺寸」，进入编辑器时填充，输出时用于还原后缀 */
+const imageSizes = new Map<string, { width?: number; height?: number }>()
+
+/** 剥掉图片 URL 上的尺寸后缀，并把尺寸记录到 imageSizes */
+function stripImageSizeSuffixes(md: string): string {
+  imageSizes.clear()
+  const stripped = (md || '').replace(
+    /(!\[[^\]]*\]\()([^)\s]+?)\s*\{w=(\d*),h=(\d*)\}\)/g,
+    (_full, prefix: string, url: string, width: string, height: string) => {
+      const parsedWidth = width ? Number(width) : undefined
+      const parsedHeight = height ? Number(height) : undefined
+      imageSizes.set(url, {
+        width: parsedWidth && parsedWidth > 0 ? parsedWidth : undefined,
+        height: parsedHeight && parsedHeight > 0 ? parsedHeight : undefined,
+      })
+      return prefix + url + ')'
+    },
+  )
+  return stripped
+}
+
+/** 按 imageSizes 把尺寸后缀拼回图片 URL（对外输出/存储前调用） */
+function restoreImageSizeSuffixes(md: string): string {
+  if (!imageSizes.size) return md
+  return (md || '').replace(/(!\[[^\]]*\]\()([^)\s]+?)(\))/g, (full, prefix: string, url: string, suffix: string) => {
+    const size = imageSizes.get(url)
+    if (!size) return full
+    const width = size.width ?? ''
+    const height = size.height ?? ''
+    if (!width && !height) return full
+    return `${prefix}${url}{w=${width},h=${height}}${suffix}`
+  })
+}
 
 const props = withDefaults(defineProps<{
   modelValue: string
@@ -100,11 +148,21 @@ let view: EditorView | null = null
 // 最近一次与编辑器同步过的 markdown，用于切断 props 回写的循环
 let syncedValue = ''
 
-// 丢弃旧版图片宽度语法 {w:N}，并抹平尾部空行（沿用旧编辑器“无尾部换行”的输出约定）
+// 抹平尾部空行（沿用旧编辑器“无尾部换行”的输出约定），
+// 并剥离旧版图片宽度语法 `{w:N}`（该语法已被 `{w=W,h=H}` 后缀取代，旧数据可能残留）。
+// 注意：保留 `{w=W,h=H}` 尺寸后缀——它由 stripImageSizeSuffixes 在进入编辑器前剥离，
+// 再由 restoreImageSizeSuffixes 在输出前拼回。
 const normalize = (md: string): string =>
   (md || '')
-    .replace(/(!\[[^\]]*\]\([^)\s]+\))\s*\{w:\d+\}/g, '$1')
+    .replace(/!\[[^\]]*\]\([^)\s]+?\)\s*\{w:\d+\}/g, match => match.replace(/\s*\{w:\d+\}/, ''))
+    .replace(/&#8203;|\u200b/gi, '')
     .replace(/\s+$/, '')
+
+// Markdown 的强调语法在中文粗体标签后紧接汉字时可能无法识别闭合标记。
+// 插入零宽 HTML 实体让闭合标记成为合法分隔符；导出与保存时由 normalize 移除它。
+// 同时剥掉图片尺寸后缀，避免 Cream 把 `{w=,h=}` 当成 URL 的一部分。
+const prepareMarkdown = (md: string): string => stripImageSizeSuffixes(normalize(md))
+  .replace(/(\*\*[^*\n]+?\*\*)(?=[\u3400-\u9fff\uf900-\ufaff])/g, '$1&#8203;')
 
 const toDataUrl = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -114,28 +172,73 @@ const toDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file)
   })
 
+// 浏览器无法直接加载 esd-local-media:// 引用。正文与存储里一律保存引用，
+// 编辑器渲染层（DOM）在节点出现后把 src 换成 data URL，因此：
+//  - 对外输出的 markdown 始终只含引用，自动保存重复序列化不会复制媒体；
+//  - 相同内容的文件在保存时由内容寻址复用同一资产，只保留一份。
+// 尺寸不走 PM 节点（Milkdown 图片节点只有 src/alt），而是从正文的 <img> 属性
+// 同步到 DOM，因此渲染尺寸与正文始终一致。
+async function resolveMediaReferencesInDom(root: HTMLElement): Promise<void> {
+  if (!root) return
+  const nodes = root.querySelectorAll<HTMLElement>('img[src^="esd-local-media://"], video[src^="esd-local-media://"], audio[src^="esd-local-media://"]')
+  if (!nodes.length) return
+
+  // 尺寸来自进入编辑器时记录下来的 imageSizes（引用 → width/height）
+  const cache = new Map<string, string>()
+  await Promise.all([...nodes].map(async node => {
+    const src = node.getAttribute('src') || ''
+    const match = /^esd-local-media:\/\/([a-z0-9_-]+)$/.exec(src)
+    if (!match) return
+    // 保留原始引用，供尺寸编辑反查 markdown 源
+    node.setAttribute('data-media-ref', src)
+    // 同步正文中记录的尺寸
+    const size = imageSizes.get(src)
+    if (size?.width) node.setAttribute('width', String(size.width))
+    else node.removeAttribute('width')
+    if (size?.height) node.setAttribute('height', String(size.height))
+    else node.removeAttribute('height')
+
+    let dataUrl = cache.get(src)
+    if (!dataUrl) {
+      dataUrl = await readMediaAsset('media:asset:' + match[1]) || ''
+      cache.set(src, dataUrl)
+    }
+    if (dataUrl) node.setAttribute('src', dataUrl)
+    else node.setAttribute('data-media-missing', 'true')
+  }))
+}
+
+// Milkdown 内建图片上传：落库为内容寻址资产后返回 esd-local-media:// 引用，
+// 避免 data URL 进入正文（否则每次自动保存都会重新序列化同一张大图）。
+const uploadEditorImage = async (file: File): Promise<string> => {
+  const dataUrl = await toDataUrl(file)
+  const reference = await storeMediaAsset(dataUrl)
+  if (!reference) throw new Error('不支持的图片格式')
+  return reference
+}
 const createEditor = async () => {
   const root = crepeRootRef.value
   if (!root) return
 
-  const initial = normalize(props.modelValue)
-  syncedValue = initial
+  // 进入编辑器前剥掉尺寸后缀（ Cream 只认干净 src），
+  // syncedValue 仍保留带后缀的形态，与对外输出保持一致。
+  const initial = prepareMarkdown(props.modelValue)
+  syncedValue = normalize(restoreImageSizeSuffixes(initial))
 
   const instance = new Crepe({
     root,
-    defaultValue: initial,
+    defaultValue: prepareMarkdown(initial),
     features: {
       [Crepe.Feature.Latex]: false,
       [Crepe.Feature.AI]: false,
-      // 行左侧的拖拽/加号按钮与选中文本浮动工具栏均移除：
-      // 格式与块转换统一由自建「右键工具栏」提供（见 ctxMenu 相关实现）
+      // 禁用编辑器内建浮动工具栏与行左侧块编辑按钮，由笔记页统一展示文本格式菜单。
       [Crepe.Feature.Toolbar]: false,
       [Crepe.Feature.BlockEdit]: false,
     },
     featureConfigs: {
       [Crepe.Feature.Placeholder]: { text: props.placeholder, mode: 'doc' },
       [Crepe.Feature.ImageBlock]: {
-        onUpload: toDataUrl,
+        onUpload: uploadEditorImage,
         inlineUploadButton: '上传图片',
         inlineUploadPlaceholderText: '或粘贴图片链接',
         inlineConfirmButton: '确定',
@@ -154,10 +257,15 @@ const createEditor = async () => {
   // 自建 wiki-link：必须在 create() 之前注册（remark 解析 → schema → 输入规则）
   instance.editor.use(remarkWikiLink).use(wikiLinkSchema).use(wikiLinkInputRule)
 
+  // 编辑器内搜索：装饰器插件，同样要在 create() 前注册
+  instance.editor.use(editorSearchPlugin)
+
   // 必须在 create() 之前注册监听
+  // markdownUpdated 收到的是 Cream 序列化结果（图片 URL 已剥掉尺寸后缀），
+  // 这里把后缀拼回去，保证对外输出与存储的正文始终带尺寸信息。
   instance.on((api) => {
     api.markdownUpdated((_ctx, markdown) => {
-      const next = normalize(markdown)
+      const next = normalize(restoreImageSizeSuffixes(markdown))
       if (next === syncedValue) return
       syncedValue = next
       emit('update:modelValue', next)
@@ -168,6 +276,9 @@ const createEditor = async () => {
   crepe = instance
   await instance.create()
   ready = true
+
+  // 渲染层解析媒体引用：把 DOM 里的 esd-local-media:// src 换成 data URL
+  void resolveMediaReferencesInDom(crepeRootRef.value as HTMLElement)
 
   // 取 ProseMirror 视图并包装 dispatch：每次事务后重算 [[ 联想状态
   instance.editor.action((ctx) => {
@@ -183,98 +294,6 @@ const createEditor = async () => {
   updateWikiSuggestion()
   refreshResolvedLinks()
 }
-
-// ====== 右键格式工具栏（替代 Crepe 浮动工具栏与行左侧按钮） ======
-const ctxMenu = ref({ open: false, top: 0, left: 0 })
-const closeCtxMenu = () => { if (ctxMenu.value.open) ctxMenu.value = { open: false, top: 0, left: 0 } }
-
-interface CtxItem { label: string; cls?: string; title: string; active?: boolean; run: () => void }
-
-const ctxGroups = computed<CtxItem[][]>(() => {
-  if (!ctxMenu.value.open || !view) return []
-  const v = view
-  const state = v.state
-  const { from, to } = state.selection
-  const marks = state.schema.marks as Record<string, any>
-  const nodes = state.schema.nodes as Record<string, any>
-  const $from = state.selection.$from
-  const parentName = $from.parent.type.name
-  const hasMark = (name: string) => !!marks[name] && state.doc.rangeHasMark(from, to, marks[name])
-  const d = (tr: any) => v.dispatch(tr)
-  const markCmd = (name: string) => () => {
-    const mt = marks[name]
-    if (!mt) return
-    toggleMark(mt)(state, d, v)
-  }
-  const ancestorIs = (name: string) => {
-    const nt = nodes[name]
-    if (!nt) return false
-    for (let d = $from.depth; d > 0; d--) if ($from.node(d).type === nt) return true
-    return false
-  }
-  const setBlock = (name: string, attrs: Record<string, any> | null = null) => () => {
-    const nt = nodes[name]
-    if (!nt) return
-    setBlockType(nt, attrs || undefined)(state, d, v)
-  }
-  const wrapOrLift = (name: string) => () => {
-    const nt = nodes[name]
-    if (!nt) return
-    if (ancestorIs(name)) lift(state, d, v)
-    else wrapIn(nt)(state, d, v)
-  }
-  const linkCmd = () => {
-    const href = window.prompt('链接地址：')
-    if (href === null) return
-    if (!href.trim() && !state.doc.rangeHasMark(from, to, marks.link)) return
-    toggleMark(marks.link, href.trim() ? { href: href.trim() } : undefined)(state, d, v)
-  }
-  const lv = parentName === 'heading' ? Number($from.parent.attrs.level || 0) : 0
-  const row1: CtxItem[] = []
-  if (marks.strong) row1.push({ label: 'B', cls: 'b', title: '加粗', active: hasMark('strong'), run: markCmd('strong') })
-  if (marks.em) row1.push({ label: 'I', cls: 'i', title: '斜体', active: hasMark('em'), run: markCmd('em') })
-  if (marks.strikethrough) row1.push({ label: 'S', cls: 's', title: '删除线', active: hasMark('strikethrough'), run: markCmd('strikethrough') })
-  if (marks.code_inline) row1.push({ label: '‹›', cls: 'c', title: '行内代码', active: hasMark('code_inline'), run: markCmd('code_inline') })
-  if (marks.link) row1.push({ label: '链接', title: '插入 / 移除链接', active: hasMark('link'), run: linkCmd })
-  const row2: CtxItem[] = [
-    { label: '正文', title: '正文段落', active: parentName === 'paragraph', run: setBlock('paragraph') },
-  ]
-  if (nodes.heading) {
-    row2.push({ label: 'H1', title: '一级标题', active: parentName === 'heading' && lv === 1, run: setBlock('heading', { level: 1 }) })
-    row2.push({ label: 'H2', title: '二级标题', active: parentName === 'heading' && lv === 2, run: setBlock('heading', { level: 2 }) })
-    row2.push({ label: 'H3', title: '三级标题', active: parentName === 'heading' && lv === 3, run: setBlock('heading', { level: 3 }) })
-  }
-  if (nodes.blockquote) row2.push({ label: '❝', title: '引用（已引用则解除）', active: ancestorIs('blockquote'), run: wrapOrLift('blockquote') })
-  const row3: CtxItem[] = []
-  if (nodes.bullet_list) row3.push({ label: '• 列表', title: '无序列表（已包裹则解除）', active: ancestorIs('bullet_list'), run: wrapOrLift('bullet_list') })
-  if (nodes.ordered_list) row3.push({ label: '1. 列表', title: '有序列表（已包裹则解除）', active: ancestorIs('ordered_list'), run: wrapOrLift('ordered_list') })
-  const row4: CtxItem[] = []
-  if (nodes.task_list) row4.push({ label: '☐ 任务', title: '任务列表', active: ancestorIs('task_list_item'), run: wrapOrLift('task_list') })
-  if (nodes.code_block) row4.push({ label: '代码块', title: '代码块', active: parentName === 'code_block', run: setBlock('code_block') })
-  return [row1, row2, row3, row4].filter(g => g.length)
-})
-
-const runCtxItem = (it: CtxItem) => { it.run(); closeCtxMenu() }
-
-const onEditorContext = (e: MouseEvent) => {
-  if (!view) return
-  const sel = view.state.selection
-  if (sel.empty) return  // 无选区：保留默认行为
-  e.preventDefault()
-  const mw = 270, mh = 130
-  ctxMenu.value = {
-    open: true,
-    top: Math.max(8, Math.min(e.clientY + 4, window.innerHeight - mh - 8)),
-    left: Math.max(8, Math.min(e.clientX + 4, window.innerWidth - mw - 8)),
-  }
-}
-const onDocMouseDownClose = (e: MouseEvent) => {
-  const t = e.target as HTMLElement | null
-  if (t && t.closest && t.closest('.md-ctx-menu')) return
-  closeCtxMenu()
-}
-const onDocKeyClose = (e: KeyboardEvent) => { if (e.key === 'Escape') closeCtxMenu() }
-const onScrollClose = () => closeCtxMenu()
 
 // ====== [[ wiki-link 联想 ======
 const wikiSuggestion = ref<WikiSuggestion | null>(null)
@@ -384,11 +403,128 @@ const onRootKeydown = (e: KeyboardEvent) => {
 // ====== 点击跳转 ======
 const onRootClick = (e: MouseEvent) => {
   const el = (e.target as HTMLElement).closest?.(`span[data-type="${WIKI_LINK_NODE}"]`) as HTMLElement | null
-  if (!el) return
-  e.preventDefault()
-  e.stopPropagation()
-  const target = (el.dataset.target || '').trim()
-  if (target) emit('open-wiki-link', { target })
+  if (el) {
+    e.preventDefault()
+    e.stopPropagation()
+    const target = (el.dataset.target || '').trim()
+    if (target) emit('open-wiki-link', { target })
+    return
+  }
+  // 点击媒体节点：打开尺寸编辑浮层
+  const mediaEl = (e.target as HTMLElement).closest?.('img, video, audio') as HTMLElement | null
+  if (mediaEl && crepeRootRef.value?.contains(mediaEl)) {
+    e.preventDefault()
+    e.stopPropagation()
+    openMediaResize(mediaEl)
+  }
+}
+
+// ====== 媒体尺寸编辑 ======
+// DOM 解析引用时会把原始 esd-local-media:// 引用写到 data-media-ref 属性上，
+// 因此这里能稳定反查到该节点对应的 markdown 源，改尺寸后可精确回写。
+const mediaResize = ref<{
+  visible: boolean
+  kind: 'img' | 'video' | 'audio'
+  width: string
+  height: string
+  reference: string
+  top: number
+  left: number
+} | null>(null)
+
+let mediaResizeAnchor: HTMLElement | null = null
+
+function openMediaResize(node: HTMLElement) {
+  const reference = node.getAttribute('data-media-ref') || ''
+  if (!reference || !crepe?.getMarkdown) return
+  const rect = node.getBoundingClientRect()
+  const hostRect = rootRef.value?.getBoundingClientRect()
+  mediaResizeAnchor = node
+  mediaResize.value = {
+    visible: true,
+    kind: node.tagName.toLowerCase() as 'img' | 'video' | 'audio',
+    width: node.getAttribute('width') || '',
+    height: node.getAttribute('height') || '',
+    reference,
+    top: Math.max(8, rect.bottom - (hostRect?.top || 0) + 6),
+    left: Math.max(8, rect.left - (hostRect?.left || 0)),
+  }
+}
+
+const closeMediaResize = () => {
+  mediaResize.value = null
+  mediaResizeAnchor = null
+}
+
+/**
+ * 应用尺寸：同步回 markdown。
+ * 图片：有尺寸写 `<img alt src width height>`，无尺寸写回 `![alt](src)`；
+ * 音视频：改 HTML 标签上的 width/height 属性。
+ */
+/**
+ * 应用尺寸：同步回 markdown。
+ * 图片：改 `![alt](ref){w=W,h=H}` 后缀（Cream 只认这个语法）；
+ * 音视频：改 HTML 标签上的 width/height 属性。
+ */
+function applyMediaResize() {
+  const state = mediaResize.value
+  if (!state || !mediaResizeAnchor) return
+  const width = Number.parseInt(state.width, 10)
+  const height = Number.parseInt(state.height, 10)
+  const hasWidth = Number.isFinite(width) && width > 0
+  const hasHeight = Number.isFinite(height) && height > 0
+
+  const reference = state.reference
+  const escapedReference = reference.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  // Cream 序列化结果里图片是不带后缀的，音视频是 HTML 标签
+  const current = normalize(crepe?.getMarkdown() || '')
+  const altMatch = new RegExp(`!\\[([^\\]]*)\\]\\(${escapedReference}\\)`).exec(current)
+  const alt = altMatch ? altMatch[1] : ''
+
+  let nextSource: string
+  if (state.kind === 'img') {
+    const suffix = hasWidth || hasHeight ? `{w=${hasWidth ? width : ''},h=${hasHeight ? height : ''}}` : ''
+    nextSource = `![${alt}](${reference}${suffix})`
+  } else {
+    const sizeAttributes = `${hasWidth ? ` width="${width}"` : ''}${hasHeight ? ` height="${height}"` : ''}`
+    nextSource = `<${state.kind} controls${state.kind === 'video' ? ' preload="metadata"' : ''}${sizeAttributes} src="${reference}"></${state.kind}>`
+  }
+
+  // 替换目标：图片用 markdown 语法（可带旧后缀），音视频用 HTML 标签
+  const imagePattern = new RegExp(`!\\[[^\\]]*\\]\\(${escapedReference}(?:\\{w=\\d*,h=\\d*\\})?\\)`)
+  const htmlPattern = new RegExp(`<(?:img|video|audio)\\b[^>]*src="${escapedReference}"[^>]*>`, 'i')
+
+  let next = current
+  if (state.kind === 'img' && imagePattern.test(current)) next = current.replace(imagePattern, nextSource)
+  else if (htmlPattern.test(current)) next = current.replace(htmlPattern, nextSource)
+  else if (imagePattern.test(current)) next = current.replace(imagePattern, nextSource)
+  else { closeMediaResize(); return }
+
+  // 更新尺寸表并重新进入编辑器：剥后缀 → replaceAll → 输出时拼回
+  if (hasWidth || hasHeight) {
+    imageSizes.set(reference, {
+      width: hasWidth ? width : undefined,
+      height: hasHeight ? height : undefined,
+    })
+  } else {
+    imageSizes.delete(reference)
+  }
+
+  syncedValue = normalize(restoreImageSizeSuffixes(next))
+  crepe?.editor.action(replaceAll(prepareMarkdown(next), true))
+  emit('update:modelValue', syncedValue)
+  emit('input', syncedValue)
+  void resolveMediaReferencesInDom(crepeRootRef.value as HTMLElement)
+  closeMediaResize()
+}
+
+/** 清除尺寸，恢复默认比例 */
+function resetMediaResize() {
+  const state = mediaResize.value
+  if (!state) return
+  state.width = ''
+  state.height = ''
+  applyMediaResize()
 }
 
 // ====== 已解析/未解析样式标记 ======
@@ -418,13 +554,20 @@ const injectListStyle = () => {
     '.md-editor .ProseMirror { --crepe-color-outline: #e9d5ff; }',
     '.md-editor .milkdown-list-item-block li .label-wrapper { color: #e9d5ff !important; }',
     '.md-editor .milkdown-list-item-block li .label-wrapper svg { fill: #e9d5ff !important; }',
-    '.md-editor .milkdown-list-item-block > .list-item { gap: 4px !important; }',
-    '.md-editor .milkdown-list-item-block > .list-item > .label-wrapper, .md-editor .milkdown-list-item-block li .label-wrapper { width: 16px !important; min-width: 16px !important; height: 28px !important; }',
-    '.md-editor .milkdown-list-item-block li .label-wrapper .label { width: 16px !important; padding: 2px 0 !important; }',
-    '.md-editor .ProseMirror ul { padding-left: 4px !important; margin-left: 0 !important; }',
+    '.md-editor .milkdown-list-item-block > .list-item { gap: 4px !important; align-items: flex-start !important; }',
+    '.md-editor .milkdown-list-item-block li { gap: 4px !important; align-items: flex-start !important; }',
+    '.md-editor .milkdown-list-item-block li .label-wrapper { display: flex !important; align-items: center !important; justify-content: center !important; align-self: flex-start !important; flex: 0 0 16px !important; width: 16px !important; min-width: 16px !important; height: 1.6em !important; transform: translateY(0.22em) !important; }',
+    '.md-editor .milkdown-list-item-block li .label-wrapper .label { display: flex !important; align-items: center !important; justify-content: center !important; width: 16px !important; height: 100% !important; padding: 0 !important; }',
+    '.md-editor .ProseMirror ol, .md-editor .ProseMirror ul { padding-left: 40px !important; margin-left: 0 !important; }',
     '.md-editor .ProseMirror li { margin-left: 0 !important; }',
     '.md-editor .ProseMirror ul li::marker { color: #e9d5ff !important; }',
     '.md-editor .ProseMirror ul li::before { color: #e9d5ff !important; }',
+    // 媒体块：图片/视频/音频默认独占一行、左对齐，宽度可由 width 属性覆盖
+    '.md-editor .ProseMirror img { display: block; max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0; }',
+    '.md-editor .ProseMirror video { display: block; max-width: 100%; border-radius: 8px; margin: 8px 0; background: rgba(0,0,0,.3); }',
+    '.md-editor .ProseMirror audio { display: block; width: 100%; max-width: 420px; margin: 8px 0; }',
+    '.md-editor .ProseMirror figure { margin: 8px 0; }',
+    '.md-editor .ProseMirror figcaption { color: rgba(245,243,255,.55); font-size: 12px; text-align: center; margin-top: 4px; }',
   ].join('\n')
   document.head.appendChild(listStyleEl)
 }
@@ -432,17 +575,18 @@ const removeListStyle = () => { listStyleEl?.remove(); listStyleEl = null }
 
 onMounted(() => {
   injectListStyle()
+  injectSearchStyle()
   createEditor()
   // 键盘导航（捕获阶段，先于 ProseMirror 处理）与链接点击跳转
-  rootRef.value?.addEventListener('contextmenu', onEditorContext)
-  document.addEventListener('mousedown', onDocMouseDownClose, true)
-  document.addEventListener('keydown', onDocKeyClose, true)
-  blocksContainerRef.value?.addEventListener('scroll', onScrollClose, { passive: true })
   rootRef.value?.addEventListener('keydown', onRootKeydown, true)
   rootRef.value?.addEventListener('click', onRootClick, true)
-  // wiki-link chip 由 ProseMirror 增删重建，用 MutationObserver 维护已解析标记
+  // wiki-link chip 由 ProseMirror 增删重建，用 MutationObserver 维护已解析标记；
+  // 媒体节点同样会被重建，这里一并刷新 DOM 里的引用解析
   if (crepeRootRef.value) {
-    domObserver = new MutationObserver(() => refreshResolvedLinks())
+    domObserver = new MutationObserver(() => {
+      refreshResolvedLinks()
+      void resolveMediaReferencesInDom(crepeRootRef.value as HTMLElement)
+    })
     domObserver.observe(crepeRootRef.value, { childList: true, subtree: true })
   }
 })
@@ -450,10 +594,6 @@ onMounted(() => {
 onBeforeUnmount(async () => {
   removeListStyle()
   ready = false
-  rootRef.value?.removeEventListener('contextmenu', onEditorContext)
-  document.removeEventListener('mousedown', onDocMouseDownClose, true)
-  document.removeEventListener('keydown', onDocKeyClose, true)
-  blocksContainerRef.value?.removeEventListener('scroll', onScrollClose)
   rootRef.value?.removeEventListener('keydown', onRootKeydown, true)
   rootRef.value?.removeEventListener('click', onRootClick, true)
   domObserver?.disconnect()
@@ -464,28 +604,304 @@ onBeforeUnmount(async () => {
 })
 
 // 外部切换笔记 / 日记时重建全文（含空值重置）
+// 比较与存储都用「带尺寸后缀」的形态，进入编辑器则用 prepareMarkdown 剥离后缀。
 watch(() => props.modelValue, (value) => {
   const next = normalize(value)
   if (!ready || next === syncedValue) return
   syncedValue = next
-  crepe?.editor.action(replaceAll(next, true))
+  crepe?.editor.action(replaceAll(prepareMarkdown(next), true))
+  void resolveMediaReferencesInDom(crepeRootRef.value as HTMLElement)
 })
 
-const getValue = (): string => (ready ? normalize(crepe!.getMarkdown()) : normalize(props.modelValue))
+const getValue = (): string =>
+  ready ? normalize(restoreImageSizeSuffixes(crepe!.getMarkdown())) : normalize(props.modelValue)
 
 const setValue = (content: string) => {
   const next = normalize(content)
   syncedValue = next
-  if (ready) crepe?.editor.action(replaceAll(next, true))
+  if (ready) crepe?.editor.action(replaceAll(prepareMarkdown(next), true))
   emit('update:modelValue', next)
   emit('input', next)
+  void resolveMediaReferencesInDom(crepeRootRef.value as HTMLElement)
 }
 
 const focus = () => {
   blocksContainerRef.value?.querySelector<HTMLElement>('.ProseMirror')?.focus()
 }
 
-defineExpose({ getValue, setValue, focus, blocksContainerRef })
+const getSelectionRange = () => view
+  ? { from: view.state.selection.from, to: view.state.selection.to }
+  : null
+
+/** 恢复选区（用于文件对话框夺走焦点后回到原落点） */
+const setSelectionRange = (from: number, to: number = from): boolean => {
+  if (!view) return false
+  const max = view.state.doc.content.size
+  const start = Math.max(0, Math.min(from, max))
+  const end = Math.max(start, Math.min(to, max))
+  const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, start, end))
+  view.dispatch(tr.scrollIntoView())
+  view.focus()
+  return true
+}
+
+/**
+ * 在光标处插入媒体块（自成一段）。
+ *
+ * 直接用 `tr.insertText` 只会插入纯文本，Milkdown 的图片输入规则不会触发，
+ * 媒体 markdown 会原样显示成文字。因此这里改用「改全文 → replaceAll」：
+ * 调用方通过 getSelectionOffsetInMarkdown() 取到光标对应的文本偏移，
+ * 我们在该偏移处插入片段并保证前后各有一个空行，再整体重建文档。
+ */
+const insertMediaBlock = (markdown: string): boolean => {
+  if (!ready) return false
+  const trimmed = markdown.trim()
+  if (!trimmed) return false
+
+  const offset = getSelectionOffsetInMarkdown()
+  if (offset === null) return false
+
+  // current 取 Cream 的干净 markdown（无尺寸后缀），插入的片段自带后缀，
+  // 拼出的 next 就是「带后缀」的完整形态；syncedValue 与之保持一致。
+  const current = normalize(crepe?.getMarkdown() || '')
+  const start = Math.max(0, Math.min(offset, current.length))
+  const before = current.slice(0, start)
+  const after = current.slice(start)
+  // 媒体前后补空行，保证渲染时独占一段
+  const prefix = before && !before.endsWith('\n\n') ? (before.endsWith('\n') ? '\n' : '\n\n') : ''
+  const suffix = after && !after.startsWith('\n\n') ? (after.startsWith('\n') ? '\n' : '\n\n') : ''
+  const next = normalize(restoreImageSizeSuffixes(before + prefix + trimmed + suffix + after))
+
+  // prepareMarkdown 会重新填充 imageSizes（含本次插入的尺寸）
+  syncedValue = next
+  crepe?.editor.action(replaceAll(prepareMarkdown(next), true))
+  emit('update:modelValue', next)
+  emit('input', next)
+  void resolveMediaReferencesInDom(crepeRootRef.value as HTMLElement)
+  return true
+}
+
+/**
+ * 估算光标在 markdown 文本中的偏移。
+ * ProseMirror 的 pos 与 markdown 偏移没有线性关系，这里用「光标前的纯文本」
+ * 在 markdown 中就近定位：找到该片段首次出现处，偏移即其末尾；
+ * 找不到时退化为文末。
+ */
+function getSelectionOffsetInMarkdown(): number | null {
+  if (!view || !ready) return null
+  const markdown = normalize(crepe?.getMarkdown() || '')
+  const { $from } = view.state.selection
+  const textBefore = $from.parent.textBetween(0, $from.parentOffset, '\n', '\n')
+  if (!textBefore) return markdown.length
+  const index = markdown.indexOf(textBefore)
+  if (index < 0) return markdown.length
+  return index + textBefore.length
+}
+
+defineExpose({
+  getValue,
+  setValue,
+  focus,
+  getSelectionRange,
+  setSelectionRange,
+  blocksContainerRef,
+  insertMediaBlock,
+  setSearchMatches,
+  clearSearch,
+  focusMatch,
+  getActiveMatchRange,
+  getMatchRanges,
+})
+
+// ====== 编辑器内搜索 ======
+// 高亮用 ProseMirror 装饰器：只影响渲染、不写入 doc，因此不会触发自动保存，
+// 正文里绝不会残留搜索痕迹。
+//
+// 关键技术点：PM 的 pos 与 markdown 字符偏移没有线性关系（节点边界、媒体节点
+// 都会造成偏移），所以每次更新查询时都重建一张「markdown 区间 → PM 区间」的
+// 分段线性映射表；映射失败的匹配直接丢弃（宁可少高亮，不可错位）。
+
+interface BlockMapping {
+  /** 该文本块在 markdown 中的区间 */
+  mdStart: number
+  mdEnd: number
+  /** 该文本块在 PM 中的起始 pos */
+  pmFrom: number
+}
+
+/** 当前搜索状态（含 markdown 匹配、映射后的 PM 区间与可高亮子集） */
+const searchState = ref<{
+  query: string
+  matches: SearchMatch[]
+  activeIndex: number
+  /** markdown 匹配换算后的 PM 区间，与 matches 等长；null 表示该处无法映射 */
+  pmRanges: Array<{ from: number; to: number } | null>
+  /** 可高亮的匹配子集（对外跳转与计数的权威基准） */
+  highlightable: SearchMatch[]
+}>({ query: '', matches: [], activeIndex: -1, pmRanges: [], highlightable: [] })
+
+let searchStyleEl: HTMLStyleElement | null = null
+
+/** 注入搜索高亮样式：PM 渲染层在 scoped 样式作用域之外，必须用全局 <style> */
+const injectSearchStyle = () => {
+  if (searchStyleEl) return
+  searchStyleEl = document.createElement('style')
+  searchStyleEl.textContent = [
+    `.${SEARCH_HIT_CLASS} { background: rgba(250, 204, 21, 0.32); border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.35); }`,
+    `.${SEARCH_HIT_CURRENT_CLASS} { background: rgba(251, 146, 60, 0.55); box-shadow: inset 0 0 0 1px rgba(251, 146, 60, 0.85); }`,
+  ].join('\n')
+  document.head.appendChild(searchStyleEl)
+}
+
+const removeSearchStyle = () => {
+  searchStyleEl?.remove()
+  searchStyleEl = null
+}
+
+/** 遍历文档文本块，建立 markdown ↔ PM 的分段映射 */
+function buildBlockMappings(markdown: string): BlockMapping[] {
+  if (!view) return []
+  const mappings: BlockMapping[] = []
+  let searchFrom = 0
+
+  view.state.doc.descendants((node, pos) => {
+    if (!node.isTextblock || !node.textContent) return
+    const text = node.textContent
+    const found = markdown.indexOf(text, searchFrom)
+    // 找不到就跳过该块：不参与映射，也绝不错位到别处
+    if (found < 0) return
+    mappings.push({ mdStart: found, mdEnd: found + text.length, pmFrom: pos + 1 })
+    searchFrom = found + text.length
+  })
+
+  return mappings
+}
+
+/** 把 markdown 区间换算成 PM 区间；无法映射返回 null */
+function toPmRange(mappings: BlockMapping[], start: number, end: number): { from: number; to: number } | null {
+  for (const block of mappings) {
+    if (start >= block.mdStart && end <= block.mdEnd) {
+      // 同一块内：偏移差即为 PM 偏移差（块内无嵌套节点时成立）
+      return {
+        from: block.pmFrom + (start - block.mdStart),
+        to: block.pmFrom + (end - block.mdStart),
+      }
+    }
+  }
+  return null
+}
+
+/** 重算匹配、映射与装饰器 */
+function recomputeSearchDecorations() {
+  if (!view) return
+  const { matches, activeIndex } = searchState.value
+  // 映射表只建一次：所有匹配共用
+  const mappings = buildBlockMappings(normalize(crepe?.getMarkdown() || ''))
+  const pmRanges = matches.map(match => toPmRange(mappings, match.start, match.end))
+  searchState.value.pmRanges = pmRanges
+
+  const ranges = matches
+    .map((match, index) => ({ match, pm: pmRanges[index] }))
+    .filter((entry): entry is { match: SearchMatch; pm: { from: number; to: number } } => !!entry.pm)
+    .map(({ match, pm }) => ({
+      from: pm.from,
+      to: pm.to,
+      // active 判断用原始 matches 下标，避免过滤后错位
+      active: matches.indexOf(match) === activeIndex,
+    }))
+
+  const decorationSet = buildSearchDecorations(view.state.doc, ranges)
+  // 通过 view.props.decorations 下发：setProps 本身就会触发重绘，
+  // 无需再 dispatch；插件 state 同步更新仅供调试/未来扩展。
+  view.setProps({ decorations: () => decorationSet })
+  view.dispatch(view.state.tr.setMeta(editorSearchPluginKey, {
+    query: searchState.value.query,
+    activeIndex,
+  } as EditorSearchState))
+}
+
+/**
+ * 应用外部算好的匹配结果（单一数据源）。
+ *
+ * 匹配由调用方（NoteEditor）基于它自己的文本基准完成，这里只负责
+ * markdown 区间 → PM 区间 的换算与装饰器渲染；不再内部重复匹配，
+ * 避免两边计数不一致。
+ *
+ * 跨块匹配（如正则跨越段落边界）无法换算成 PM 区间，会被过滤掉。
+ *
+ * @param matches     markdown 字符区间（调用方的基准文本）
+ * @param activeIndex 当前匹配下标；-1 表示不高亮任何一处
+ * @returns 过滤后「可高亮」的匹配列表——调用方应以此作为权威计数与跳转基准，
+ *          避免出现「计数 5 处却只高亮 3 处」的不一致
+ */
+function setSearchMatches(matches: SearchMatch[], activeIndex = -1): SearchMatch[] {
+  searchState.value = {
+    query: searchState.value.query,
+    matches,
+    activeIndex: activeIndex >= 0 && activeIndex < matches.length ? activeIndex : -1,
+    pmRanges: [],
+    highlightable: [],
+  }
+  recomputeSearchDecorations()
+  // pmRanges 与 matches 等长，null 表示该处无法映射
+  const highlightable = matches.filter((_match, index) => searchState.value.pmRanges[index])
+  searchState.value.highlightable = highlightable
+  // activeIndex 以 highlightable 为基准，需要换算回完整 matches 的下标
+  if (activeIndex >= 0 && activeIndex < highlightable.length) {
+    const target = highlightable[activeIndex]
+    searchState.value.activeIndex = matches.indexOf(target)
+  }
+  recomputeSearchDecorations()
+  return highlightable
+}
+
+/** 清除全部高亮与内部状态 */
+function clearSearch(): void {
+  searchState.value = { query: '', matches: [], activeIndex: -1, pmRanges: [], highlightable: [] }
+  recomputeSearchDecorations()
+}
+
+/**
+ * 跳到指定匹配处：index 以 highlightable（可高亮子集）为基准。
+ * 只设置选区并滚动进入视野——不调用 view.focus()：
+ * 焦点必须留在搜索输入框，否则 Enter / Shift+Enter 会被 ProseMirror
+ * 当作软换行命令处理，直接改坏正文（选中态下还会替换掉匹配文本）。
+ */
+function focusMatch(index: number): boolean {
+  const { highlightable, matches } = searchState.value
+  if (index < 0 || index >= highlightable.length) return false
+  const target = highlightable[index]
+  const realIndex = matches.indexOf(target)
+  searchState.value.activeIndex = realIndex
+
+  const pm = searchState.value.pmRanges[realIndex]
+  if (pm && view) {
+    const max = view.state.doc.content.size
+    const from = Math.max(0, Math.min(pm.from, max))
+    const to = Math.max(from, Math.min(pm.to, max))
+    const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, from, to))
+    view.dispatch(tr.scrollIntoView())
+  }
+
+  recomputeSearchDecorations()
+  return true
+}
+
+/** 取当前匹配在 markdown 中的区间（供源码模式定位） */
+function getActiveMatchRange(): { start: number; end: number } | null {
+  const { matches, activeIndex } = searchState.value
+  if (activeIndex < 0 || activeIndex >= matches.length) return null
+  return matches[activeIndex]
+}
+
+/** 取可高亮的匹配区间（与 setSearchMatches 返回值一致） */
+function getMatchRanges(): SearchMatch[] {
+  return searchState.value.highlightable
+}
+
+onBeforeUnmount(() => {
+  removeSearchStyle()
+})
 </script>
 
 <style scoped>
@@ -516,6 +932,88 @@ defineExpose({ getValue, setValue, focus, blocksContainerRef })
 
 .md-crepe-root {
   min-height: 100%;
+}
+
+/* 媒体尺寸编辑浮层 */
+.media-resize-panel {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid rgba(196, 181, 253, 0.22);
+  border-radius: 10px;
+  background: rgba(28, 25, 54, 0.97);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(14px);
+}
+
+.media-resize-title {
+  color: rgba(245, 243, 255, 0.6);
+  font-size: 11px;
+}
+
+.media-resize-panel input {
+  width: 62px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid rgba(196, 181, 253, 0.2);
+  border-radius: 6px;
+  color: #f4f1ff;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 12px;
+}
+
+.media-resize-panel input:focus {
+  border-color: rgba(167, 139, 250, 0.6);
+  outline: none;
+}
+
+.media-resize-sep {
+  color: rgba(245, 243, 255, 0.4);
+  font-size: 11px;
+}
+
+.media-resize-btn {
+  height: 24px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  color: #c4b5fd;
+  background: rgba(139, 92, 246, 0.22);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.media-resize-btn:hover {
+  background: rgba(139, 92, 246, 0.38);
+  color: #fff;
+}
+
+.media-resize-btn.ghost {
+  color: rgba(245, 243, 255, 0.6);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.media-resize-btn.ghost:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* 编辑器内媒体节点：缺失资产时给出提示样式 */
+.md-editor :deep(img[data-media-missing='true']),
+.md-editor :deep(video[data-media-missing='true']) {
+  min-height: 48px;
+  border: 1px dashed rgba(248, 113, 113, 0.5);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+/* 媒体只通过笔记右键菜单插入，保留已有图片的显示与尺寸操作。 */
+.md-editor :deep(.milkdown .milkdown-image-inline .empty-image-inline),
+.md-editor :deep(.milkdown .milkdown-image-block > .image-edit) {
+  display: none !important;
 }
 
 /* ====== 编辑器光标与选区（显眼紫色系；:deep 穿透 Milkdown 动态 DOM，scoped 下必须） ====== */
@@ -711,7 +1209,15 @@ defineExpose({ getValue, setValue, focus, blocksContainerRef })
 .md-editor :deep(.markdown-body h5) { font-size: 15px; color: #94a3b8; }
 .md-editor :deep(.markdown-body h6) { font-size: 14px; color: #94a3b8; }
 
-.md-editor :deep(.markdown-body p) { margin: 0; }
+.md-editor :deep(.markdown-body p) {
+  margin: 0;
+  text-indent: 2em;
+}
+
+.md-editor :deep(.markdown-body li p),
+.md-editor :deep(.markdown-body blockquote p) {
+  text-indent: 0;
+}
 
 /* 引用：左侧竖条由 Crepe 的 ::before 绘制（取 --crepe-color-selected），此处只加底色，避免出现双竖条 */
 .md-editor :deep(.markdown-body blockquote) {

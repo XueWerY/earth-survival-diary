@@ -2,7 +2,7 @@
  * 开发模式运行器（npm run dev）
  *
  * 职责：
- *  - 启动 Vite dev server（127.0.0.1:5173，HMR），客户端 API 由用户配置的独立服务端提供
+ *  - 启动 Vite dev server（127.0.0.1:5173，HMR），应用数据由客户端本地存储
  *  - Vite 就绪后启动 Electron，注入环境变量：
  *      ESD_DEV_URL     → http://127.0.0.1:5173（主窗口改加载 Vite dev server）
  *  - 监听 electron 目录下所有 .cjs 文件（主进程/preload）变化，自动重启 Electron：

@@ -15,13 +15,13 @@
             placeholder="给日记起个名字"
         />
       </el-form-item>
-      <el-form-item label="图标">
-        <IconPicker v-model="form.icon" />
-      </el-form-item>
-      <el-form-item label="内容" class="content-editor-form-item">
-        <MilkdownEditor
-            v-model="form.content"
-            placeholder="记录今天的心情和故事"
+      <el-form-item label="内容">
+        <el-input
+          v-model="form.content"
+          type="textarea"
+          :rows="8"
+          placeholder="记录今天的心情和故事"
+          resize="vertical"
         />
       </el-form-item>
       <el-form-item label="备注" prop="notes">
@@ -57,8 +57,7 @@ import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import dayjs from 'dayjs'
 import { useTaskStore, type Task } from '../../stores/taskStore'
-import MilkdownEditor from '../editor/MilkdownEditor.vue'
-import IconPicker from '../common/picker/IconPicker.vue'
+import { logger } from '../../lib/logger'
 import BaseDialog from '../ui/BaseDialog.vue'
 
 const props = defineProps<{
@@ -69,7 +68,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:visible': [value: boolean]
-  'submit': []
+  'submit': [task?: Task]
 }>()
 
 const taskStore = useTaskStore()
@@ -94,8 +93,7 @@ const form = reactive({
   name: '',
   date: dayjs().format('YYYY-MM-DD'),
   notes: '',
-  content: '',
-  icon: ''
+  content: ''
 })
 
 const rules = reactive<FormRules>({
@@ -109,14 +107,12 @@ watch(() => props.visible, (val) => {
     form.date = props.task.date
     form.notes = props.task.notes || ''
     form.content = (props.task as any).content || ''
-    form.icon = props.task.icon || ''
   } else if (val) {
     isEdit.value = false
     form.name = ''
     form.date = props.defaultDate || dayjs().format('YYYY-MM-DD')
     form.notes = ''
     form.content = ''
-    form.icon = ''
   } else {
     isEdit.value = false
   }
@@ -140,13 +136,13 @@ const handleSubmit = async () => {
     endTime: timeStr,
     notes: form.notes,
     content: form.content,
-    icon: form.icon || undefined,
     category: 'diary',
     isDiary: true,
     createdAt: new Date().toISOString(),
   }
 
   try {
+    let createdTask: Task | null = null
     if (isEdit.value && props.task) {
       await taskStore.updateTask(props.task.id, {
         ...newTask,
@@ -154,23 +150,20 @@ const handleSubmit = async () => {
       })
       ElMessage.success('日记已更新')
     } else {
-      await taskStore.addTask(newTask)
+      createdTask = await taskStore.addTask(newTask)
+      if (!createdTask) throw new Error('日记保存失败')
       ElMessage.success('日记已添加')
     }
     dialogVisible.value = false
-    emit('submit')
+    emit('submit', createdTask || undefined)
   } catch (e: any) {
-    console.error('[DiaryForm] Save failed', e.message)
+    logger.error('[Diary] 保存日记失败', { error: e instanceof Error ? e.message : String(e) })
     ElMessage.error('保存失败，请重试')
   }
 }
 </script>
 
 <style scoped>
-.content-editor-form-item :deep(.el-form-item__content) { display: block; }
-.content-editor-form-item :deep(.md-editor) { height: 260px; }
-.content-editor-form-item :deep(.md-blocks) { padding-left: 11px; padding-right: 11px; }
-
 .capsule-btn {
   height: 32px;
   display: flex;

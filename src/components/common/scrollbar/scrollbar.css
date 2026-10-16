@@ -1,0 +1,69 @@
+[data-app-scrollbar-host] {
+  scrollbar-width: none !important;
+  scrollbar-color: transparent transparent !important;
+  -ms-overflow-style: none !important;
+}
+
+[data-app-scrollbar-host]::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Element Plus controls may create their own scroll host internally; the shared controller paints the visible thumb. */
+.el-scrollbar__bar {
+  display: none !important;
+}
+
+.app-scrollbar-track {
+  position: fixed;
+  z-index: 10050;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.055);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color 140ms ease;
+}
+
+.app-scrollbar-track--vertical { min-width: 4px; }
+.app-scrollbar-track--horizontal { min-height: 4px; }
+.app-scrollbar-track:hover { background: rgba(255, 255, 255, 0.1); }
+
+.app-scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  box-sizing: border-box;
+  border: 1px solid rgba(220, 220, 255, 0.12);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(203, 213, 255, 0.5), rgba(167, 139, 250, 0.56));
+  box-shadow: 0 1px 5px rgba(10, 8, 28, 0.28);
+  cursor: grab;
+  touch-action: none;
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+
+.app-scrollbar-track--vertical .app-scrollbar-thumb { min-height: 18px; }
+.app-scrollbar-track--horizontal .app-scrollbar-thumb { min-width: 18px; }
+.app-scrollbar-thumb:hover,
+.app-scrollbar-thumb.is-dragging {
+  border-color: rgba(219, 234, 254, 0.28);
+  background: linear-gradient(180deg, rgba(147, 197, 253, 0.92), rgba(167, 139, 250, 0.96));
+  box-shadow: 0 0 9px rgba(147, 197, 253, 0.32);
+}
+
+.app-scrollbar-thumb.is-dragging { cursor: grabbing; }
+
+.app-scrollbar-thumb:focus-visible {
+  outline: 2px solid rgba(147, 197, 253, 0.9);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-scrollbar-track,
+  .app-scrollbar-thumb { transition: none; }
+}

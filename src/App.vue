@@ -1,10 +1,16 @@
 <template>
-  <div class="app-container desktop-layout">
+  <ScrollbarManager />
+  <BirthdayCelebration
+    :visible="birthdayCelebrationVisible"
+    :nickname="birthdayCelebrationNickname"
+    @close="birthdayCelebrationVisible = false"
+  />
+  <div v-if="isElectron" class="app-container desktop-layout">
     <!-- Canvas 2D 流星背景 -->
     <canvas ref="starCanvas" class="star-canvas" :class="{ 'canvas-hidden': !showStarCanvas }"></canvas>
 
     <!-- 计时中跨页面常驻弹窗 -->
-    <FloatingTimerBar />
+    <FloatingTimerBar class="focus-timer-floating" />
 
     <!-- 未登录时显示登录页面 -->
     <template v-if="!authStore.isAuthenticated && !authStore.loading">
@@ -31,7 +37,6 @@
         @navigate="navigateTo"
         @toggle="toggleNav"
       />
-
       <!-- 主内容区域 -->
       <main class="main-content">
         <div class="panel-wrapper">
@@ -63,6 +68,7 @@
         :steps="guideSteps"
         :visible="guideVisible"
         :current-index="guideCurrentIndex"
+        :navigating="guideNavigationBusy"
         @prev="handleGuidePrev"
         @next="handleGuideNext"
         @skip="handleGuideSkip"
@@ -77,8 +83,8 @@
             <p>发现新版本 v{{ updateVersion }}</p>
             <p class="update-hint">
               <template v-if="updateDownloadUrl">
-                或直接下载
-                <a class="update-link" :href="updateDownloadUrl" @click.prevent="openUpdateUrl">云端安装包</a>
+                前往 GitHub Releases 下载：
+                <a class="update-link" :href="updateDownloadUrl" @click.prevent="openUpdateUrl">查看发布页</a>
               </template>
             </p>
           </template>
@@ -91,8 +97,7 @@
           {{ updateMessage }}
         </div>
         <template #footer>
-          <el-button v-if="updateStatus === 'available'" type="primary" @click="handleDownloadUpdate">下载更新</el-button>
-          <el-button v-if="updateStatus === 'downloaded' && canInstallUpdate" type="primary" @click="handleInstallUpdate">立即安装并重启</el-button>
+          <el-button v-if="updateStatus === 'available'" type="primary" @click="handleDownloadUpdate">前往 GitHub 下载</el-button>
           <el-button v-else type="primary" @click="updateDialogVisible = false">确认</el-button>
         </template>
       </BaseDialog>
@@ -118,8 +123,10 @@ import { useRouter, useRoute } from 'vue-router'
 import AuthPage from './components/auth/AuthPage.vue'
 import BaseDialog from './components/ui/BaseDialog.vue'
 import FloatingTimerBar from './components/timer/FloatingTimerBar.vue'
+import ScrollbarManager from './components/common/scrollbar/ScrollbarManager.vue'
 import { useTaskStore } from './stores/taskStore'
 import { useListStore, DEFAULT_LIST_COLORS } from './stores/listStore'
+import { taskChecklistChangeDetails, taskCompletionChangeDetails, taskCompletionChangeVersion } from './lib/taskCompletionEvents'
 import { useNoteStore } from './stores/noteStore'
 import ReminderCard from './components/common/card/ReminderCard.vue'
 import { useAuthStore } from './stores/authStore'
@@ -128,22 +135,24 @@ import { useFocusStore } from './stores/focusStore'
 import { getData, setData, preloadData, clearCache, getSystemStateField, setSystemStateField } from './services/storageService'
 import { fetchLatestReleaseVersion, UPDATE_BASE_URL } from './services/versionChecker'
 import { logger } from './lib/logger'
-import { checkServerHealth } from './lib/api'
 import { usePageNav, MODULE_ROUTES } from './composables/usePageNav'
 import ErrorDialog from './components/ui/ErrorDialog.vue'
 import MainNav from './components/common/nav/MainNav.vue'
 import dayjs from 'dayjs'
+import { getNextAnnualDate, solarDateToLunarParts } from './utils/annualDate'
 // @ts-expect-error - Vite raw import
 import changelogContent from '../CHANGELOG.md?raw'
 import appVersion from 'virtual:version'
 import GuideOverlay from './components/common/overlay/GuideOverlay.vue'
+import BirthdayCelebration from './components/common/overlay/BirthdayCelebration.vue'
 import { guideSteps } from './data/guideSteps'
 import { ElMessage } from 'element-plus'
+import { LunarMonth as BirthdayLunarMonth, LunarYear as BirthdayLunarYear, Solar as BirthdaySolar } from 'lunar-javascript'
 
 const router = useRouter()
 const route = useRoute()
 
-const VALID_ROUTES = ['footprint', 'notes', 'focus', 'list', 'countdown', 'course', 'statistics', 'toolbox', 'profile']
+const VALID_ROUTES = ['footprint', 'notes', 'list', 'countdown', 'course', 'statistics', 'toolbox', 'profile']
 const MAX_SCHEDULE_DELAY = 20 * 24 * 3600 * 1000
 
 const pageNav = usePageNav()
@@ -178,14 +187,10 @@ const isInitializing = ref(false)
 const userKey = ref(0)
 
 const capturedError = ref<string | null>(null)
-const SERVER_HEALTH_CHECK_INTERVAL_MS = 2000
-let serverHealthTimer: number | null = null
-let serverHealthCheckInFlight = false
-let serverUnavailableHandled = false
 
 onErrorCaptured((err, instance, info) => {
   const errMsg = err instanceof Error ? `${err.message}\n${err.stack || ''}` : String(err)
-  logger.error('[App] onErrorCaptured 捕获错误', { error: errMsg, info })
+  logger.error('[App] 捕获应用错误', { error: errMsg, info })
   capturedError.value = `[${info}] ${errMsg}`
   return false
 })
@@ -220,44 +225,6 @@ const handleLogout = async () => {
   resetAuthenticatedState()
 }
 
-const stopServerHealthChecks = () => {
-  if (serverHealthTimer !== null) {
-    window.clearInterval(serverHealthTimer)
-    serverHealthTimer = null
-  }
-}
-
-const forceLogoutForServerUnavailable = () => {
-  if (serverUnavailableHandled || !authStore.isAuthenticated) return
-  serverUnavailableHandled = true
-  stopServerHealthChecks()
-  logger.warn('[App] 云端服务不可用，清除本地登录状态')
-  authStore.clearUser()
-  resetAuthenticatedState()
-  ElMessage.error({ message: '云端服务连接中断，已退出登录', duration: 5000 })
-}
-
-const startServerHealthChecks = () => {
-  if (serverHealthTimer !== null) return
-  serverUnavailableHandled = false
-
-  const check = async () => {
-    if (!authStore.isAuthenticated || serverHealthCheckInFlight || serverUnavailableHandled) return
-    serverHealthCheckInFlight = true
-    try {
-      const healthy = await checkServerHealth()
-      if (!healthy) forceLogoutForServerUnavailable()
-    } catch {
-      forceLogoutForServerUnavailable()
-    } finally {
-      serverHealthCheckInFlight = false
-    }
-  }
-
-  void check()
-  serverHealthTimer = window.setInterval(() => { void check() }, SERVER_HEALTH_CHECK_INTERVAL_MS)
-}
-
 const handleRefreshData = async () => {
   logger.info('[App] 刷新数据')
   clearCache()
@@ -271,6 +238,7 @@ const handleRefreshData = async () => {
 const handleProfileUpdated = async () => {
   logger.info('[App] 个人资料更新，同步倒数日数据')
   await preloadCountdownData()
+  await scheduleListReminders('生日资料更新')
 }
 
 const cleanUpCourseAutoRecordedTasks = async () => {
@@ -345,7 +313,6 @@ const updateVersion = ref('')
 const updateMessage = ref('')
 const updateDownloadUrl = ref('')
 const updatePercent = ref(0)
-const canInstallUpdate = typeof window !== 'undefined' && !!window.electronAPI?.quitAndInstall
 
 const updateStatusText = computed(() => {
   switch (updateStatus.value) {
@@ -360,7 +327,7 @@ const updateStatusText = computed(() => {
 
 const openUpdateUrl = () => {
   const url = updateDownloadUrl.value || UPDATE_BASE_URL
-  logger.info('[App] 用户打开云端安装包')
+  logger.info('[App] 用户前往 GitHub Releases')
   if (window.electronAPI?.openExternal) {
     window.electronAPI.openExternal(url)
   } else {
@@ -374,35 +341,41 @@ const startVersionChecks = async () => {
   if (versionChecksStarted.value) return
   versionChecksStarted.value = true
   logger.info('[更新] 开始版本检测')
-  setupUpdateStatusListener()
-
   if (authStore.user?.id) {
     try {
       const storedVersion = await getSystemStateField('version')
       if (storedVersion !== appVersion) {
         await setSystemStateField('version', appVersion)
-        logger.info('[App] 检测到版本更新', { oldVersion: storedVersion, newVersion: appVersion })
+        logger.info('[App] 客户端版本记录已更新', { oldVersion: storedVersion, newVersion: appVersion })
         showAppChangelogDialog.value = true
       }
     } catch (e) {
-      logger.warn('[App] 云端版本状态读取失败', { error: e instanceof Error ? e.message : String(e) })
+      logger.warn('[App] 本地版本状态读取失败', { error: e instanceof Error ? e.message : String(e) })
     }
     void checkRemoteUpdate(appVersion)
   }
 }
 
-/** 从云服务器自动更新清单中读取版本和安装包地址。 */
+/** 检查 GitHub Releases 的最新版本，安装包由用户在浏览器中下载。 */
 const checkRemoteUpdate = async (currentVersion: string) => {
   try {
     const result = await fetchLatestReleaseVersion(currentVersion)
+    if (result.error) {
+      logger.warn('[更新] 版本检测失败', { error: result.error })
+      return
+    }
     if (result.hasUpdate && result.latestVersion) {
       updateStatus.value = 'available'
       updateVersion.value = result.latestVersion
       updateDownloadUrl.value = result.downloadUrl || ''
       updateDialogVisible.value = true
-      logger.info('[更新] 检测到远程新版本', { current: currentVersion, latest: result.latestVersion })
+      logger.info('[更新] GitHub Releases 有新版本', { current: currentVersion, latest: result.latestVersion })
+    } else {
+      logger.info('[更新] 版本检测完成，当前无可用更新', { current: currentVersion })
     }
-  } catch { /* 网络不可达，静默跳过 */ }
+  } catch (error) {
+    logger.warn('[更新] 版本检测失败', { error: error instanceof Error ? error.message : String(error) })
+  }
 }
 
 const setupUpdateStatusListener = () => {
@@ -430,31 +403,8 @@ const setupUpdateStatusListener = () => {
   })
 }
 
-/** 点击「下载更新」：自动下载安装包并打开安装程序 */
-const handleDownloadUpdate = async () => {
-  if (window.electronAPI?.downloadUpdate) {
-    updateStatus.value = 'downloading'
-    updatePercent.value = 0
-    try {
-      const result = await window.electronAPI.downloadUpdate()
-      if (result?.ok === false) throw new Error(result.error || '下载失败')
-    } catch (e) {
-      updateStatus.value = 'error'
-      updateMessage.value = e instanceof Error ? e.message : '下载失败'
-    }
-    return
-  }
-
-  if (updateDownloadUrl.value) openUpdateUrl()
-  else {
-    updateStatus.value = 'error'
-    updateMessage.value = '云端安装包暂不可用，请稍后重试'
-  }
-}
-
-const handleInstallUpdate = () => {
-  window.electronAPI?.quitAndInstall()
-}
+/** 打开 GitHub Releases，用户自行下载并安装。 */
+const handleDownloadUpdate = () => openUpdateUrl()
 
 // 暴露全局函数供 ProfilePage 调用（非 Electron 端使用）
 (window as any).__checkForUpdate = async () => {
@@ -462,7 +412,10 @@ const handleInstallUpdate = () => {
   updateDialogVisible.value = true
   try {
     const result = await fetchLatestReleaseVersion(appVersion)
-    if (result.hasUpdate && result.latestVersion) {
+    if (result.error) {
+      updateStatus.value = 'error'
+      updateMessage.value = result.error
+    } else if (result.hasUpdate && result.latestVersion) {
       updateStatus.value = 'available'
       updateVersion.value = result.latestVersion
       updateDownloadUrl.value = result.downloadUrl || ''
@@ -514,7 +467,7 @@ const getNextOccurrence = (baseDate: string, strategy: string, customDays: numbe
   }
 }
 
-const scheduleListReminders = async () => {
+const scheduleListReminders = async (reason = '外部模块主动刷新') => {
   if (!window.electronAPI?.scheduleReminders) return
   const userId = authStore.user?.id
   if (!userId) return
@@ -595,9 +548,14 @@ const scheduleListReminders = async () => {
 
           let nextDate: dayjs.Dayjs
           if (cm.repeatStrategy === 'yearly') {
-            const occ = getNextOccurrence(cm.targetDate, 'yearly', undefined, today)
-            if (!occ) continue
-            nextDate = occ
+            nextDate = dayjs(getNextAnnualDate(
+              cm.targetDate,
+              cm.repeatCalendar === 'lunar' ? 'lunar' : 'solar',
+              cm.lunarMonth,
+              cm.lunarDay,
+              today.format('YYYY-MM-DD')
+            ))
+            if (!nextDate.isValid()) continue
           } else {
             nextDate = dayjs(cm.targetDate)
           }
@@ -622,7 +580,7 @@ const scheduleListReminders = async () => {
             targetDate: cm.targetDate
           })
         }
-        logger.info('[提醒] 倒数日提醒已加入调度', { count: countdownMilestones.filter((cm: any) => cm.reminderStrategy && cm.reminderStrategy !== 'none' && cm.countMode !== 'countup').length })
+        const countdownReminderCount = countdownMilestones.filter((cm: any) => cm.reminderStrategy && cm.reminderStrategy !== 'none' && cm.countMode !== 'countup').length
       }
     } catch (e) {
       logger.warn('[提醒] 获取倒数日数据失败', { error: e instanceof Error ? e.message : String(e) })
@@ -643,7 +601,6 @@ const scheduleListReminders = async () => {
           repeatStrategy: 'none',
           focusDuration: timerState.targetDuration
         })
-        logger.info('[提醒] 专注提醒已加入调度', { name: '专注完成' })
       }
     }
 
@@ -663,7 +620,6 @@ const scheduleListReminders = async () => {
         repeatStrategy: 'hourly',
         focusStartTimestamp: timerState.startTimestamp
       })
-      logger.info('[提醒] 正计时整点提醒已加入调度', { nextHourMark, triggerTime })
     }
 
     const timeToMinutes = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
@@ -756,7 +712,6 @@ const scheduleListReminders = async () => {
               }
             }
           }
-          if (courseCount > 0) logger.info('[提醒] 课程提醒已加入调度', { count: courseCount })
         }
       }
     } catch (e) {
@@ -767,14 +722,24 @@ const scheduleListReminders = async () => {
       logger.debug('[提醒] 生成提醒期间用户已切换，丢弃旧调度请求', { userId })
       return
     }
-    logger.info('[提醒] 调度提醒任务', { userId, count: reminders.length, persistDuration })
-    await window.electronAPI.scheduleReminders(userId, reminders, persistDuration)
+    await window.electronAPI.scheduleReminders(userId, reminders, persistDuration, reason)
   } catch (e) {
     logger.error('[提醒] 调度失败', { error: e instanceof Error ? e.message : String(e) })
   }
 }
 
-provide('refreshReminders', scheduleListReminders)
+const isChecklistToggleCaller = () => Boolean(new Error().stack?.includes('toggleChecklistItem'))
+provide('refreshReminders', (reason?: string) => {
+  if (!reason && isChecklistToggleCaller()) {
+    const change = taskChecklistChangeDetails.value
+    const taskLabel = change
+      ? `${change.taskName}（${change.taskId}）`
+      : '未知任务'
+    logger.debug(`[Reminder] 检查事项变更，任务 = ${taskLabel}，跳过提醒计划更新`)
+    return
+  }
+  return scheduleListReminders(reason || '外部模块主动刷新')
+})
 provide('isElectron', isElectron)
 
 const countdownMilestones = ref<any[]>([])
@@ -782,34 +747,77 @@ const countdownCategories = ref<any[]>([])
 provide('countdownMilestones', countdownMilestones)
 provide('countdownCategories', countdownCategories)
 
+watch(taskCompletionChangeVersion, () => {
+  if (!dataInitialized.value) return
+  const change = taskCompletionChangeDetails.value
+  const reason = change
+    ? `任务完成状态变化，任务编号 = ${change.taskId}，${change.previous ? '已完成' : '未完成'} → ${change.completed ? '已完成' : '未完成'}`
+    : '任务完成状态变化'
+  void scheduleListReminders(reason)
+})
+
 const guideVisible = ref(false)
 const guideCurrentIndex = ref(0)
 const guideCompleted = ref(false)
 const guideRunning = ref(false)
+const guideStartBusy = ref(false)
+const guideNavigationBusy = ref(false)
+
+const navigateGuideToStep = async (index: number) => {
+  if (guideNavigationBusy.value) return
+  const step = guideSteps[index]
+  if (!step) return
+
+  const module = step.route.replace(/^\//, '')
+  guideNavigationBusy.value = true
+  try {
+    if (route.path !== step.route) {
+      await router.push(step.route)
+    }
+    pageNav.setNavContext({ segments: [], plusVisible: false, plusOnClick: null, goModuleHome: () => {} })
+    pageNav.setNavPath([module])
+    await nextTick()
+    guideCurrentIndex.value = index
+    setSystemStateField('guideLastIndex', index).catch(() => {})
+  } finally {
+    guideNavigationBusy.value = false
+  }
+}
 
 const startGuide = async () => {
-  if (focusStore.timerState) {
-    ElMessage.warning('请先停止专注')
-    logger.info('[引导] 检测到正在专注，已阻止启动引导')
-    return
-  }
-  let lastIndex = 0
+  if (guideVisible.value || guideStartBusy.value || guideNavigationBusy.value) return
+  guideStartBusy.value = true
   try {
-    const saved = await getSystemStateField('guideLastIndex')
-    if (typeof saved === 'number' && saved > 0 && saved < guideSteps.length) {
-      lastIndex = saved
+    if (focusStore.timerState) {
+      guideRunning.value = false
+      ElMessage.warning('请先停止专注')
+      logger.info('[引导] 检测到正在专注，已阻止启动引导')
+      return
     }
-  } catch {}
-  guideCurrentIndex.value = lastIndex
-  guideVisible.value = true
-  guideRunning.value = true
-  if (route.path !== guideSteps[lastIndex].route) {
-    router.push(guideSteps[lastIndex].route)
+
+    let lastIndex = 0
+    try {
+      const saved = await getSystemStateField('guideLastIndex')
+      if (typeof saved === 'number' && Number.isInteger(saved) && saved > 0 && saved < guideSteps.length) {
+        lastIndex = saved
+      }
+    } catch {}
+
+    guideRunning.value = true
+    await navigateGuideToStep(lastIndex)
+    guideVisible.value = true
+    logger.info('[引导] 新手引导已启动', { fromStep: lastIndex })
+  } catch (error) {
+    guideRunning.value = false
+    logger.warn('[引导] 无法打开引导页面', { error: error instanceof Error ? error.message : String(error) })
+    ElMessage.error('打开引导失败，请重试')
+  } finally {
+    guideStartBusy.value = false
   }
-  logger.info('[引导] 新手引导已启动', { fromStep: lastIndex })
 }
 
 const closeGuide = async () => {
+  if (guideNavigationBusy.value) return
   guideVisible.value = false
   guideCompleted.value = true
   guideRunning.value = false
@@ -821,43 +829,48 @@ const closeGuide = async () => {
   startVersionChecks()
 }
 
-const handleGuidePrev = () => {
+const handleGuidePrev = async () => {
+  if (guideNavigationBusy.value) return
   if (guideCurrentIndex.value <= 0) return
   const prevIdx = guideCurrentIndex.value - 1
-  const prevRoute = guideSteps[prevIdx].route
-  if (prevRoute !== route.path) {
-    router.push(prevRoute)
+  try {
+    await navigateGuideToStep(prevIdx)
+  } catch (error) {
+    logger.warn('[引导] 上一步页面切换失败', { error: error instanceof Error ? error.message : String(error) })
+    ElMessage.error('页面切换失败，请重试')
   }
-  guideCurrentIndex.value = prevIdx
-  setSystemStateField('guideLastIndex', prevIdx).catch(() => {})
 }
 
-const handleGuideNext = () => {
+const handleGuideNext = async () => {
+  if (guideNavigationBusy.value) return
   const nextIdx = guideCurrentIndex.value + 1
   if (nextIdx >= guideSteps.length) {
-    closeGuide()
+    await closeGuide()
     return
   }
-  const nextRoute = guideSteps[nextIdx].route
-  if (nextRoute !== route.path) {
-    router.push(nextRoute)
+  try {
+    await navigateGuideToStep(nextIdx)
+  } catch (error) {
+    logger.warn('[引导] 下一步页面切换失败', { error: error instanceof Error ? error.message : String(error) })
+    ElMessage.error('页面切换失败，请重试')
   }
-  guideCurrentIndex.value = nextIdx
-  setSystemStateField('guideLastIndex', nextIdx).catch(() => {})
 }
 
 const handleGuideSkip = () => {
   closeGuide()
 }
 
-const handleGuideExit = () => {
+const handleGuideExit = async () => {
+  if (guideNavigationBusy.value) return
   guideVisible.value = false
   guideRunning.value = false
+  await setSystemStateField('guideLastIndex', guideCurrentIndex.value).catch(() => {})
   logger.info('[引导] 退出引导，已保存进度', { step: guideCurrentIndex.value })
 }
 
 provide('startGuide', startGuide)
 provide('guideVisible', guideVisible)
+provide('guideRunning', guideRunning)
 
 /** 为新用户创建默认数据（默认清单、示例任务、默认课程、示例足迹、示例日记） */
 const ensureDefaultData = async () => {
@@ -969,35 +982,40 @@ const initializeData = async () => {
     return
   }
   isInitializing.value = true
-  logger.debug('[App] 开始初始化数据...')
   try {
     clearCache()
 
     try {
       const savedPage = await getSystemStateField('currentPage')
-      logger.debug('[App] initializeData savedPage', { savedPage })
       const DEFAULT_PAGE = 'footprint'
       if (savedPage && VALID_ROUTES.includes(savedPage)) {
-        logger.debug('[App] initializeData router.replace 开始', { currentPage: route.name, savedPage })
+        const savedModuleState = savedPage === 'list'
+          ? (await getSystemStateField('list')) as Record<string, any> | undefined
+          : undefined
+        const savedNavPath = savedModuleState?.navPath
+        const restoredNavPath = Array.isArray(savedNavPath) && savedNavPath[0] === savedPage
+          ? savedNavPath as string[]
+          : [savedPage]
+        pageNav.setNavPath(restoredNavPath)
         await router.replace(`/${savedPage}`)
         // hash 路由下 router.replace 到相同路由是空操作，不会触发 route watch 来设置 navPath，
         // 因此这里显式恢复选中模块，保证刷新后导航栏高亮正确（含此前缺漏的 toolbox 等模块）
-        pageNav.setNavPath([savedPage])
-        logger.debug('[App] initializeData router.replace 完成', { currentPage: route.name })
-        logger.debug('[App] 恢复路由状态:', { page: savedPage })
+        logger.debug('[App] 已恢复上次打开页面', { currentPage: savedPage })
       } else {
-        // state.json 缺失 / currentPage 字段缺失 / 值无效：回退默认首页，并记录 currentPage 以便下次恢复
-        logger.debug('[App] 无有效 currentPage，回退默认首页', { savedPage, default: DEFAULT_PAGE })
+        // state.yaml 缺失 / currentPage 字段缺失 / 值无效：回退默认首页，并记录 currentPage 以便下次恢复
+        logger.debug('[App] 没有有效页面记录，回到默认首页', { savedPage, default: DEFAULT_PAGE })
         await router.replace(MODULE_ROUTES[DEFAULT_PAGE])
         pageNav.setNavPath([DEFAULT_PAGE])
         await setSystemStateField('currentPage', DEFAULT_PAGE)
       }
     } catch (e) {
-      logger.warn('[App] initializeData 路由恢复失败', { error: e })
+      logger.warn('[App] 恢复上次页面失败', { error: e })
       logger.debug('[App] 恢复失败，使用默认路由')
     }
 
-    logger.debug('[App] 开始并行加载所有模块数据...')
+    // 先以 profile.yaml 的账号资料为准，再同步注册日和生日倒数日。
+    await authStore.fetchProfile()
+
     // 并行加载所有模块数据
     await Promise.all([
       taskStore.loadTasks(),
@@ -1009,8 +1027,6 @@ const initializeData = async () => {
       noteStore.loadData(),
     ])
 
-    logger.debug('[App] 并行加载完成')
-
     // 为新用户创建默认数据
     await ensureDefaultData()
 
@@ -1018,17 +1034,10 @@ const initializeData = async () => {
 
     cleanUpCourseAutoRecordedTasks()
 
-    scheduleListReminders()
+    await scheduleListReminders('登录后数据初始化')
 
     // 成功登录后立即加载自动清理日志设置并执行清理
     runAutoCleanAfterLogin()
-
-    // 启动后应用已保存的窗口分辨率设置
-    if (window.electronAPI?.applyWindowSize && authStore.user?.id) {
-      window.electronAPI.applyWindowSize(authStore.user.id).catch((e: any) => {
-        logger.warn('[App] 应用窗口分辨率失败', { error: e instanceof Error ? e.message : String(e) })
-      })
-    }
 
     try {
       const isCompleted = await getSystemStateField('guideCompleted')
@@ -1053,9 +1062,7 @@ const initializeData = async () => {
   } catch (error) {
     logger.error('[App] 初始化数据失败:', { error: error instanceof Error ? error.message : String(error) })
   } finally {
-    logger.debug('[App] initializeData 设置 dataInitialized = true', { navPath: pageNav.navPath.value, route: route.name })
     dataInitialized.value = true
-    logger.debug('[App] dataInitialized 已设置为 true')
   }
 }
 
@@ -1084,7 +1091,7 @@ function runAutoCleanAfterLogin() {
         .filter(Boolean)
       return Promise.all(promises)
     }).then(() => {
-      logger.info('[App] 登录后自动清理日志完成', { threshold: thresholdStr })
+      logger.info('[App] 旧日志清理完成')
     }).catch((e: any) => {
       logger.error('[App] 登录后自动清理日志失败', { error: e })
     })
@@ -1094,6 +1101,72 @@ function runAutoCleanAfterLogin() {
 // 预加载倒数日数据
 const SYSTEM_MILESTONE_ID = 'system-usage-days'
 const BIRTHDAY_MILESTONE_ID = 'user-birthday'
+
+const BIRTHDAY_MILESTONE_DESCRIPTION = '生日快乐！愿新的一岁平安喜乐，心愿皆成。'
+let birthdayCelebrationShownInSession = ''
+const birthdayCelebrationVisible = ref(false)
+const birthdayCelebrationNickname = ref('')
+
+function showBirthdayBlessing(nickname = '') {
+  birthdayCelebrationNickname.value = nickname
+  birthdayCelebrationVisible.value = true
+}
+
+function checkBirthdayCelebration() {
+  const profile = authStore.profile as Record<string, unknown> | null
+  const birthdayValue = profile?.birthday ?? profile?.birthdayDate ?? profile?.birthDate
+  const birthdayMatch = String(birthdayValue ?? '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)
+  if (!birthdayMatch) return
+
+  const [, year, month, day] = birthdayMatch
+  const today = new Date()
+  const todayYear = today.getFullYear()
+  const todayMonth = today.getMonth() + 1
+  const todayDay = today.getDate()
+  const todayKey = `${todayYear}-${String(todayMonth).padStart(2, '0')}-${String(todayDay).padStart(2, '0')}`
+  const calendar = String(profile?.birthdayCalendar ?? profile?.birthdayType ?? 'solar').toLowerCase()
+  let isBirthday = false
+
+  if (calendar === 'lunar' || calendar === '农历') {
+    const birthdayParts = BirthdaySolar.fromYmd(Number(year), Number(month), Number(day)).getLunar()
+    const todayParts = BirthdaySolar.fromYmd(todayYear, todayMonth, todayDay).getLunar()
+    const targetMonth = Math.abs(birthdayParts.getMonth())
+    const leapMonth = BirthdayLunarYear.fromYear(todayParts.getYear()).getLeapMonth()
+    const expectedMonth = birthdayParts.getMonth() < 0 && leapMonth === targetMonth ? -targetMonth : targetMonth
+    const currentMonth = todayParts.getMonth()
+    const dayCount = BirthdayLunarMonth.fromYm(todayParts.getYear(), expectedMonth).getDayCount()
+    isBirthday = currentMonth === expectedMonth && todayParts.getDay() === Math.min(birthdayParts.getDay(), dayCount)
+  } else {
+    const birthdayMonth = Number(month)
+    const birthdayDay = Number(day)
+    const isLeapYear = new Date(todayYear, 1, 29).getMonth() === 1
+    const expectedDay = birthdayMonth === 2 && birthdayDay === 29 && !isLeapYear ? 28 : birthdayDay
+    isBirthday = todayMonth === birthdayMonth && todayDay === expectedDay
+  }
+
+  if (!isBirthday) return
+  const userKey = String(profile?.id ?? authStore.user?.id ?? profile?.email ?? 'current-user')
+  const storageKey = `birthday-celebration:${userKey}:${todayKey}`
+  if (birthdayCelebrationShownInSession === storageKey) return
+  try {
+    if (localStorage.getItem(storageKey)) return
+    localStorage.setItem(storageKey, 'shown')
+  } catch {
+    // Storage may be unavailable; session state still prevents repeated celebrations.
+  }
+  birthdayCelebrationShownInSession = storageKey
+  showBirthdayBlessing(String(profile?.nickname ?? profile?.displayName ?? ''))
+}
+
+let birthdayCelebrationTimer: number | undefined
+watch(() => authStore.profile, checkBirthdayCelebration, { deep: true })
+onMounted(() => {
+  checkBirthdayCelebration()
+  birthdayCelebrationTimer = window.setInterval(checkBirthdayCelebration, 60_000)
+})
+onUnmounted(() => {
+  if (birthdayCelebrationTimer !== undefined) window.clearInterval(birthdayCelebrationTimer)
+})
 const HOLIDAY_ID_PREFIX = 'system-holiday-'
 
 const DEFAULT_COUNTDOWN_CATEGORIES = [
@@ -1205,9 +1278,12 @@ const preloadCountdownData = async () => {
     getData<any[]>('countdown', 'categories')
   ])
 
-  const categoriesArr = (savedCategories && savedCategories.length > 0)
-    ? savedCategories
-    : [...DEFAULT_COUNTDOWN_CATEGORIES]
+  const categoriesArr = Array.isArray(savedCategories) ? [...savedCategories] : []
+  for (const defaultCategory of DEFAULT_COUNTDOWN_CATEGORIES) {
+    if (!categoriesArr.some(category => category.value === defaultCategory.value)) {
+      categoriesArr.push({ ...defaultCategory })
+    }
+  }
   countdownCategories.value = categoriesArr
   preloadData('countdown', 'categories', categoriesArr)
 
@@ -1228,12 +1304,29 @@ const preloadCountdownData = async () => {
       reminderDays: m.reminderDays || 0,
       reminderHours: m.reminderHours || 0,
       reminderMinutes: m.reminderMinutes || 0,
-      repeatStrategy: m.repeatStrategy || 'none'
+      repeatStrategy: m.repeatStrategy || 'none',
+      repeatCalendar: m.repeatCalendar === 'lunar' ? 'lunar' : 'solar',
+      lunarMonth: m.lunarMonth || 1,
+      lunarDay: m.lunarDay || 1
     }))
   }
 
   const today = dayjs().startOf('day')
   const year = today.year()
+  for (const milestone of milestonesArr) {
+    if (milestone.repeatStrategy !== 'yearly' || milestone.countMode === 'countup') continue
+    const nextDate = getNextAnnualDate(
+      milestone.targetDate,
+      milestone.repeatCalendar === 'lunar' ? 'lunar' : 'solar',
+      milestone.lunarMonth,
+      milestone.lunarDay,
+      today.format('YYYY-MM-DD')
+    )
+    if (nextDate !== milestone.targetDate) {
+      milestone.targetDate = nextDate
+      milestone.updatedAt = new Date().toISOString()
+    }
+  }
   const holidays = generateHolidays(year)
   const adjustedHolidays = holidays.map(h => {
     if (dayjs(h.date).isBefore(today)) {
@@ -1289,9 +1382,17 @@ const preloadCountdownData = async () => {
   })
 
   const userAny = authStore.user as { createdAt?: string; created_at?: string } | null | undefined
-  const startDate = authStore.profile?.created_at || userAny?.createdAt || userAny?.created_at || new Date().toISOString()
-  const registrationDay = dayjs(startDate).format('YYYY-MM-DD')
   const systemIdx = milestonesArr.findIndex((m: any) => m.id === SYSTEM_MILESTONE_ID)
+  const existingSystemMilestone = systemIdx > -1 ? milestonesArr[systemIdx] : null
+  const registrationDate = [
+    authStore.profile?.createdAt,
+    userAny?.createdAt,
+    authStore.profile?.created_at,
+    userAny?.created_at,
+    existingSystemMilestone?.targetDate,
+    existingSystemMilestone?.createdAt
+  ].find(value => typeof value === 'string' && dayjs(value).isValid()) || today.toISOString()
+  const registrationDay = dayjs(registrationDate).format('YYYY-MM-DD')
   if (systemIdx === -1) {
     milestonesArr.unshift({
       id: SYSTEM_MILESTONE_ID,
@@ -1303,37 +1404,69 @@ const preloadCountdownData = async () => {
       pinned: true,
       isSystem: true,
       repeatStrategy: 'yearly',
-      createdAt: startDate,
+      createdAt: registrationDate,
       updatedAt: new Date().toISOString()
     })
   } else {
     const sm = milestonesArr[systemIdx]
-    if (sm.targetDate !== registrationDay || sm.category !== 'anniversary') {
-      milestonesArr[systemIdx] = { ...sm, targetDate: registrationDay, category: 'anniversary', updatedAt: new Date().toISOString() }
+    if (sm.targetDate !== registrationDay || sm.category !== 'anniversary' || sm.createdAt !== registrationDate) {
+      milestonesArr[systemIdx] = { ...sm, targetDate: registrationDay, category: 'anniversary', createdAt: registrationDate, updatedAt: new Date().toISOString() }
     }
   }
 
-  const birthday = (authStore.profile as any)?.birthday
+  const rawBirthday = (authStore.profile as any)?.birthday
+  const birthday = typeof rawBirthday === 'string' && dayjs(rawBirthday).isValid()
+    ? dayjs(rawBirthday).format('YYYY-MM-DD')
+    : ''
+  const birthdayCalendar = (authStore.profile as any)?.birthdayCalendar === 'lunar' ? 'lunar' : 'solar'
+  const birthdayLunarParts = birthday ? solarDateToLunarParts(birthday) : null
+  const birthdayMonth = birthdayCalendar === 'lunar' ? birthdayLunarParts?.month : undefined
+  const birthdayDay = birthdayCalendar === 'lunar' ? birthdayLunarParts?.day : undefined
+  const birthdayDate = birthday ? getNextAnnualDate(
+    birthday,
+    birthdayCalendar,
+    birthdayMonth,
+    birthdayDay,
+    today.format('YYYY-MM-DD')
+  ) : ''
   const bIdx = milestonesArr.findIndex((m: any) => m.id === BIRTHDAY_MILESTONE_ID)
-  if (birthday && bIdx === -1) {
-    const [, m, d] = birthday.split('-').map(Number)
+  if (birthday && birthdayDate && bIdx === -1) {
     milestonesArr.push({
       id: BIRTHDAY_MILESTONE_ID,
       name: '我的生日',
-      targetDate: `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
-      category: 'birthday', description: '', pinned: true, isSystem: true,
+      targetDate: birthdayDate,
+      category: 'birthday', description: BIRTHDAY_MILESTONE_DESCRIPTION, countMode: 'countdown', pinned: true, isSystem: true,
       repeatStrategy: 'yearly',
+      repeatCalendar: birthdayCalendar,
+      lunarMonth: birthdayMonth || 1,
+      lunarDay: birthdayDay || 1,
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       reminderStrategy: 'advance', reminderDays: 1, reminderHours: 0, reminderMinutes: 0
     })
-  } else if (!birthday && bIdx > -1) {
+  } else if (authStore.profile && !birthday && bIdx > -1) {
     milestonesArr.splice(bIdx, 1)
-  } else if (birthday && bIdx > -1) {
-    const [, m, d] = birthday.split('-').map(Number)
-    const bDate = `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  } else if (birthday && birthdayDate && bIdx > -1) {
     const bm = milestonesArr[bIdx]
-    if (bm.targetDate !== bDate || !bm.reminderStrategy) {
-      milestonesArr[bIdx] = { ...bm, targetDate: bDate, reminderStrategy: bm.reminderStrategy || 'advance', reminderDays: bm.reminderDays || 1, reminderHours: bm.reminderHours || 0, reminderMinutes: bm.reminderMinutes || 0, repeatStrategy: 'yearly', updatedAt: new Date().toISOString() }
+    if (bm.name !== '我的生日' || bm.targetDate !== birthdayDate || bm.category !== 'birthday' || bm.description !== BIRTHDAY_MILESTONE_DESCRIPTION || bm.countMode !== 'countdown' || bm.repeatStrategy !== 'yearly' || bm.repeatCalendar !== birthdayCalendar || bm.lunarMonth !== (birthdayMonth || 1) || bm.lunarDay !== (birthdayDay || 1) || !bm.reminderStrategy) {
+      milestonesArr[bIdx] = {
+        ...bm,
+        name: '我的生日',
+        targetDate: birthdayDate,
+        category: 'birthday',
+        description: BIRTHDAY_MILESTONE_DESCRIPTION,
+        countMode: 'countdown',
+        pinned: true,
+        isSystem: true,
+        repeatStrategy: 'yearly',
+        repeatCalendar: birthdayCalendar,
+        lunarMonth: birthdayMonth || 1,
+        lunarDay: birthdayDay || 1,
+        reminderStrategy: bm.reminderStrategy || 'advance',
+        reminderDays: bm.reminderDays ?? 1,
+        reminderHours: bm.reminderHours ?? 0,
+        reminderMinutes: bm.reminderMinutes ?? 0,
+        updatedAt: new Date().toISOString()
+      }
     }
   }
 
@@ -1341,7 +1474,6 @@ const preloadCountdownData = async () => {
   await setData('countdown', 'categories', categoriesArr)
   await setData('countdown', 'countdowns', milestonesArr)
   preloadData('countdown', 'countdowns', milestonesArr)
-  logger.info('[预加载] 倒数日数据加载完成', { milestones: milestonesArr.length, categories: categoriesArr.length })
 }
 
 // 预加载课程表数据
@@ -1358,14 +1490,10 @@ watch(
   async (newName, oldName) => {
     // 初始化阶段（含默认路由重定向）不持久化 currentPage，避免覆盖已保存的上次浏览页
     if (!dataInitialized.value) return
-    logger.debug('[App] route watch 触发', { oldName, newName, currentModule: pageNav.currentModule.value, navPath: [...pageNav.navPath.value] })
     if (newName && typeof newName === 'string' && VALID_ROUTES.includes(newName)) {
       if (pageNav.currentModule.value !== newName) {
-        logger.debug('[App] route watch 模块变化，设置 navPath', { from: pageNav.currentModule.value, to: newName })
         pageNav.setNavPath([newName])
         pageNav.setNavContext({ segments: [], plusVisible: false, plusOnClick: null, goModuleHome: () => {} })
-      } else {
-        logger.debug('[App] route watch 模块未变化，跳过 navPath 设置', { module: newName })
       }
       await setSystemStateField('currentPage', newName)
     }
@@ -1374,11 +1502,9 @@ watch(
 watch(
     () => authStore.isAuthenticated,
     async (isAuthenticated, wasAuthenticated) => {
-      logger.debug('[App] isAuthenticated 变化:', { wasAuthenticated, isAuthenticated, dataInitialized: dataInitialized.value })
-      if (isAuthenticated) startServerHealthChecks()
-      else stopServerHealthChecks()
+      logger.debug(`[App] 登录状态切换为${isAuthenticated ? '已登录' : '未登录'}`)
       if (isAuthenticated && !wasAuthenticated && !dataInitialized.value) {
-        logger.info('[App] 检测到用户登录，开始初始化数据')
+        logger.info('[App] 开始初始化数据')
         await initializeData()
       }
     }
@@ -1387,7 +1513,7 @@ watch(
 // 专注模块全屏状态
 const isFocusFullscreen = ref(false)
 
-// 桌面端左侧导航栏收起状态（保存到云端账户配置）
+// 桌面端左侧导航栏收起状态（保存到本地账户配置）
 const navCollapsed = ref(false)
 const toggleNav = () => {
   navCollapsed.value = !navCollapsed.value
@@ -1399,16 +1525,16 @@ const isStatsFullscreen = ref(false)
 
 const handleFullscreenFromRoute = (fullscreen: boolean) => {
   // 笔记页：常规模式显示全局导航，全屏编辑模式下隐藏（fullscreen=true）
-  if (route.name === 'focus' || route.name === 'notes') {
+  if (route.name === 'notes') {
     isFocusFullscreen.value = fullscreen
   } else if (route.name === 'footprint') {
     isStatsFullscreen.value = fullscreen
   }
 }
 
-// 离开全屏模块（专注/笔记）时复位导航显隐，避免其他模块停留在导航被隐藏的状态
+// 离开全屏笔记页时复位导航显隐，避免其他模块停留在导航被隐藏的状态
 watch(() => route.name, (name) => {
-  if (name !== 'focus' && name !== 'notes') {
+  if (name !== 'notes') {
     isFocusFullscreen.value = false
   }
 })
@@ -1429,7 +1555,7 @@ interface Meteor {
 onMounted(async () => {
   // 注册倒数日刷新回调
   (window as any).__countdownRefresh = () => {
-    scheduleListReminders()
+    scheduleListReminders('倒数日数据变更')
   }
 
   // 注册提醒 IPC 监听
@@ -1446,9 +1572,7 @@ onMounted(async () => {
 
   // 已登录时加载数据并调度提醒
   if (authStore.isAuthenticated) {
-    startServerHealthChecks()
     await initializeData()
-    scheduleListReminders()
     startVersionChecks()
   }
 
@@ -1816,22 +1940,86 @@ onUnmounted(() => {
 
 .reminder-stack {
   position: fixed;
-  top: 80px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 20px;
+  right: 24px;
+  left: auto;
+  transform: none;
   z-index: 2900;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
   pointer-events: none;
-  width: 300px;
+  width: min(308px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 4px;
 }
 
 .reminder-stack :deep(.reminder-card) {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 600px) {
+  .reminder-stack {
+    top: 12px;
+    right: 12px;
+    width: calc(100vw - 24px);
+  }
 }
 
 :deep(.cl-version) { color: var(--chalk-amber); font-size: 14px; font-weight: 600; margin: 14px 0 6px; padding: 5px 0 5px 10px; border-left: 3px solid #f0c040; background: linear-gradient(90deg, rgba(240,192,64,0.06) 0%, transparent 100%); border-radius: 0 4px 4px 0; }
 :deep(.cl-list) { margin: 0 0 4px 16px; padding: 0; list-style: none; color: var(--chalk-white-75); }
 :deep(.cl-list li) { font-size: 12px; line-height: 1.7; padding: 2px 0; position: relative; padding-left: 14px; }
 :deep(.cl-list li)::before { content: '•'; position: absolute; left: 0; color: rgba(255,255,255,0.25); font-size: 10px; top: 5px; }</style>
+<style>
+.nav-profile-item.active {
+  background: transparent !important;
+}
+
+/* 全局提示固定到窗口右上角，使用与应用主题一致的轻透玻璃卡片。 */
+.el-message {
+  left: auto !important;
+  right: 24px !important;
+  transform: none !important;
+  box-sizing: border-box;
+  min-width: 300px;
+  max-width: min(440px, calc(100vw - 32px));
+  padding: 13px 17px;
+  border: 1px solid rgba(196, 181, 253, 0.28) !important;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(28, 27, 58, 0.96), rgba(22, 34, 62, 0.94)) !important;
+  box-shadow: 0 14px 38px rgba(5, 8, 24, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  backdrop-filter: blur(18px);
+}
+
+.el-message .el-message__content {
+  color: #eef2ff;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.el-message .el-message__icon {
+  font-size: 18px;
+}
+
+.el-message .el-message__closeBtn {
+  color: rgba(226, 232, 240, 0.62);
+}
+
+.el-message--success { border-color: rgba(52, 211, 153, 0.38) !important; }
+.el-message--warning { border-color: rgba(251, 191, 36, 0.4) !important; }
+.el-message--error { border-color: rgba(248, 113, 113, 0.42) !important; }
+
+@media (max-width: 600px) {
+  .el-message {
+    right: 12px !important;
+    min-width: 0;
+    max-width: calc(100vw - 24px);
+  }
+}
+</style>

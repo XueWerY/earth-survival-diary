@@ -14,11 +14,35 @@ const crypto = require('crypto')
 const esbuild = require('esbuild')
 const sfc = require('@vue/compiler-sfc')
 
+function formatBuildLogLine(level, message) {
+  const now = new Date()
+  const time = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Shanghai', hour12: false }) + '.' + String(now.getMilliseconds()).padStart(3, '0')
+  const label = level.toUpperCase().padEnd(5, ' ')
+  const channel = '[   Plugin   ]'
+  const localizedMessage = String(message)
+    .replace(/Transform failed with (\d+) errors?/gi, '转换失败，共 $1 个错误')
+    .replace(/Build failed with (\d+) errors?/gi, '构建失败，共 $1 个错误')
+    .replace(/Expected (.+?) but found (.+?)(?=\s|$)/gi, '预期为 $1，但实际发现 $2')
+    .replace(/Could not resolve/gi, '无法解析')
+    .replace(/No matching export/gi, '没有匹配的导出项')
+    .replace(/Could not read from file/gi, '无法从文件读取')
+    .replace(/Unexpected end of file/gi, '文件意外结束')
+    .replace(/Unexpected token/gi, '意外标记')
+    .replace(/Expected identifier/gi, '预期为标识符')
+    .replace(/\berror\b/gi, '错误')
+  return `[${time}] [${label}] ${channel} ${localizedMessage.replace(/[\r\n\t]+/g, ' ')}`
+}
+
+function buildLog(level, message) {
+  const method = level === 'ERROR' ? 'error' : level === 'WARN' ? 'warn' : 'log'
+  console[method](formatBuildLogLine(level, message))
+}
+
 // 渲染端桥接对象 window.__ESD_BRIDGE__ 的键白名单
 // 键的来源：裸导入直接用模块名；应用内部导入用相对 src/ 的路径（.ts/.js 扩展名省略，.vue 保留）
 const BARE_BRIDGE = new Set([
   'vue', 'pinia', 'element-plus', '@element-plus/icons-vue',
-  'dayjs', 'qrcode', 'jsqr',
+  'dayjs', 'qrcode', 'jsqr', 'yaml',
 ])
 const SRC_BRIDGE = new Set([
   'lib/logger', 'lib/api', 'services/storageService',
@@ -152,7 +176,7 @@ if (typeof document !== 'undefined') { const __styleEl = document.createElement(
 async function compilePlugin(pluginDir, outputDir) {
   const pluginJsonPath = path.join(pluginDir, 'plugin.json')
   if (!fs.existsSync(pluginJsonPath)) {
-    console.error(`[build-plugin] 缺少 plugin.json: ${pluginJsonPath}`)
+    buildLog('ERROR', `缺少 plugin.json：${pluginJsonPath}`)
     return false
   }
 
@@ -166,7 +190,7 @@ async function compilePlugin(pluginDir, outputDir) {
     const vueFile = path.join(pluginDir, 'tools', toolId, 'index.vue')
 
     if (!fs.existsSync(vueFile)) {
-      console.warn(`[build-plugin] 跳过不存在的组件: ${vueFile}`)
+      buildLog('WARN', `跳过不存在的组件：${vueFile}`)
       fs.writeFileSync(outPath, genPlaceholderToolJs(toolId), 'utf-8')
       continue
     }
@@ -185,13 +209,14 @@ async function compilePlugin(pluginDir, outputDir) {
       // GUI 模式下 console.error 不可见，落盘到 PLUGINS_DIR 旁的 bundler-errors.log 便于排障
       const errLog = path.join(path.dirname(pluginDir), 'bundler-errors.log')
       const lines = (e.errors || []).flat().map(x => x.text || (x.location && `${x.location.file}:${x.location.line} ${x.location.lineText}`) || JSON.stringify(x)).concat([e.message, e.stack && e.stack.split('\n').slice(0, 3).join('\n')].filter(Boolean))
-      fs.appendFileSync(errLog, `\n[${new Date().toISOString()}] ${toolId}: ${e.message}\n${lines.join('\n')}\n`, 'utf-8')
-      console.error(`[build-plugin] 工具打包失败 ${toolId}: ${e.message}`)
+      const detail = lines.join('，')
+      fs.appendFileSync(errLog, `${formatBuildLogLine('ERROR', `工具打包失败 ${toolId}：${e.message}，详情：${detail}`)}\n`, 'utf-8')
+      buildLog('ERROR', `工具打包失败 ${toolId}：${e.message}`)
       fs.writeFileSync(outPath, genPlaceholderToolJs(toolId), 'utf-8')
     }
   }
 
-  console.log(`[build-plugin] ${name} v${version} 打包完成 (${Object.keys(toolsMeta).length} 个工具)`)
+  buildLog('INFO', `${name} v${version} 打包完成，共 ${Object.keys(toolsMeta).length} 个工具`)
   return true
 }
 
@@ -212,7 +237,7 @@ if (require.main === module) {
   // 无参数：编译 src/plugins 下所有本地插件（供 pnpm build 使用）
   const pluginsRoot = path.join(__dirname, '..', 'src', 'plugins')
   if (!fs.existsSync(pluginsRoot)) {
-    console.log(`[build-plugin] 本地插件目录不存在，跳过: ${pluginsRoot}`)
+    buildLog('INFO', `本地插件目录不存在，跳过：${pluginsRoot}`)
     process.exit(0)
   }
   const entries = fs.readdirSync(pluginsRoot, { withFileTypes: true })
@@ -224,7 +249,7 @@ if (require.main === module) {
       const success = await compilePlugin(dir, path.join(dir, 'dist'))
       if (!success) ok = false
     }
-    console.log('[build-plugin] 本地插件编译完成')
+    buildLog('INFO', '本地插件编译完成')
     process.exit(ok ? 0 : 1)
   })()
 }

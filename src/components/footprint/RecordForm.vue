@@ -22,9 +22,6 @@
           <TimePickerPopover v-model="form.endTime" :offset-minutes="60" placeholder="结束" />
         </div>
       </el-form-item>
-      <el-form-item label="图标">
-        <IconPicker v-model="form.icon" />
-      </el-form-item>
       <el-form-item label="备注" prop="notes">
         <el-input
             v-model="form.notes"
@@ -58,8 +55,8 @@ import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import dayjs from 'dayjs'
 import { useTaskStore, type Task } from '../../stores/taskStore'
+import { logger } from '../../lib/logger'
 import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
-import IconPicker from '../common/picker/IconPicker.vue'
 import BaseDialog from '../ui/BaseDialog.vue'
 
 const props = defineProps<{
@@ -70,7 +67,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:visible': [value: boolean]
-  'submit': []
+  'submit': [task?: Task]
 }>()
 
 const taskStore = useTaskStore()
@@ -91,8 +88,7 @@ const form = reactive({
   date: dayjs().format('YYYY-MM-DD'),
   startTime: '',
   endTime: '',
-  notes: '',
-  icon: ''
+  notes: ''
 })
 
 const rules = reactive<FormRules>({
@@ -107,7 +103,6 @@ watch(() => props.visible, (val) => {
     form.startTime = props.task.startTime
     form.endTime = props.task.endTime
     form.notes = props.task.notes || ''
-    form.icon = props.task.icon || ''
   } else if (val) {
     isEdit.value = false
     form.name = ''
@@ -115,7 +110,6 @@ watch(() => props.visible, (val) => {
     form.startTime = ''
     form.endTime = ''
     form.notes = ''
-    form.icon = ''
   } else {
     isEdit.value = false
   }
@@ -145,12 +139,12 @@ const handleSubmit = async () => {
     startTime: form.startTime,
     endTime: form.endTime,
     notes: form.notes,
-    icon: form.icon || undefined,
     category: 'activity',
     isDiary: false,
     createdAt: new Date().toISOString(),
   }
 
+  let createdTask: Task | undefined
   try {
     if (isEdit.value && props.task) {
       await taskStore.updateTask(props.task.id, {
@@ -159,13 +153,15 @@ const handleSubmit = async () => {
       })
       ElMessage.success('记录已更新')
     } else {
-      await taskStore.addTask(newTask)
+      const savedTask = await taskStore.addTask(newTask)
+      if (!savedTask) throw new Error('足迹保存失败')
+      createdTask = savedTask
       ElMessage.success('记录已添加')
     }
     dialogVisible.value = false
-    emit('submit')
+    emit('submit', createdTask)
   } catch (e: any) {
-    console.error('[RecordForm] Save failed', e.message)
+    logger.error('[Footprint] 保存足迹失败', { error: e instanceof Error ? e.message : String(e) })
     ElMessage.error('保存失败，请重试')
   }
 }

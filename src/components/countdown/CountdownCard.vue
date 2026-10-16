@@ -36,14 +36,14 @@
     <div class="milestone-date">
       <span class="date-plain-text">
         <el-icon><Calendar /></el-icon>
-        {{ formatDate(milestone.targetDate) }}
+        {{ formatDate(displayedTargetDate) }}
       </span>
     </div>
 
     <!-- 元数据行（重复策略和提醒策略） -->
     <div v-if="milestone.countMode !== 'countup'" class="milestone-meta">
       <span class="meta-item repeat-text">
-        {{ milestone.repeatStrategy === 'yearly' ? '每年重复' : '不重复' }}
+        {{ milestone.repeatStrategy === 'yearly' ? (milestone.repeatCalendar === 'lunar' ? '农历每年重复' : '每年重复') : '不重复' }}
       </span>
       <span class="meta-separator">·</span>
       <template v-if="reminderLabel">
@@ -71,6 +71,7 @@ import { ref, computed, watch } from 'vue'
 import { useCountTween } from '../../composables/useMotion'
 import { Calendar, Star, Trash2, Pencil } from '@lucide/vue'
 import dayjs from 'dayjs'
+import { getNextAnnualDate } from '../../utils/annualDate'
 
 interface Milestone {
   id: string
@@ -88,6 +89,9 @@ interface Milestone {
   reminderHours?: number
   reminderMinutes?: number
   repeatStrategy?: string
+  repeatCalendar?: 'solar' | 'lunar'
+  lunarMonth?: number
+  lunarDay?: number
 }
 
 const props = defineProps<{
@@ -110,6 +114,16 @@ defineEmits<{
 const formatDate = (date: string): string => {
   return dayjs(date).format('YYYY年MM月DD日')
 }
+
+const displayedTargetDate = computed(() => {
+  if (props.milestone.repeatStrategy !== 'yearly' || props.milestone.countMode === 'countup') return props.milestone.targetDate
+  return getNextAnnualDate(
+    props.milestone.targetDate,
+    props.milestone.repeatCalendar === 'lunar' ? 'lunar' : 'solar',
+    props.milestone.lunarMonth,
+    props.milestone.lunarDay
+  )
+})
 
 // 天数数字滚动动效
 const displayDays = ref(props.countdownDays)

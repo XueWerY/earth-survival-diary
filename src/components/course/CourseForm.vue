@@ -2,17 +2,17 @@
   <BaseDialog
       :visible="dialogVisible"
       :title="isEdit ? '编辑课程' : '添加课程'"
-      :width="500"
+      :width="760"
       @update:visible="closeDialog"
   >
-    <el-form :model="form" :rules="rules" ref="formRef" label-width="80px">
+    <el-form :model="form" :rules="rules" ref="formRef" label-position="top" class="course-form-grid">
       <!-- 课程名称 -->
-      <el-form-item label="课程名称" prop="name">
+      <el-form-item label="课程名称" prop="name" class="course-field">
         <el-input v-model="form.name" placeholder="输入课程名称" maxlength="30" show-word-limit />
       </el-form-item>
 
       <!-- 上课时间 -->
-      <el-form-item label="上课时间" required>
+      <el-form-item label="上课时间" required class="course-field-wide">
         <div class="time-row">
           <el-select v-model="form.dayOfWeek" placeholder="选择星期" style="width: 120px">
             <el-option v-for="day in WEEKDAYS" :key="day.value" :label="day.label" :value="day.value" />
@@ -40,17 +40,17 @@
       </el-form-item>
 
       <!-- 上课地点 -->
-      <el-form-item label="上课地点">
+      <el-form-item label="上课地点" class="course-field">
         <el-input v-model="form.location" placeholder="教室/地点（可选）" maxlength="30" />
       </el-form-item>
 
       <!-- 授课教师 -->
-      <el-form-item label="授课教师">
+      <el-form-item label="授课教师" class="course-field">
         <el-input v-model="form.teacher" placeholder="教师姓名（可选）" maxlength="20" />
       </el-form-item>
 
       <!-- 颜色选择 -->
-      <el-form-item label="课程颜色">
+      <el-form-item label="课程颜色" class="course-field-wide">
         <div class="color-picker">
           <div
               v-for="color in COLORS"
@@ -64,7 +64,7 @@
       </el-form-item>
 
       <!-- 周次设置 -->
-      <el-form-item label="上课周次">
+      <el-form-item label="上课周次" class="course-field-wide">
         <div class="weeks-setting">
           <el-checkbox v-model="allWeeks">每周都有</el-checkbox>
           <div v-if="!allWeeks" class="week-selector">
@@ -76,7 +76,7 @@
       </el-form-item>
 
       <!-- 备注 -->
-      <el-form-item label="备注">
+      <el-form-item label="备注" class="course-field-wide">
         <el-input
             v-model="form.note"
             type="textarea"
@@ -267,6 +267,20 @@ const handleDelete = () => {
 </script>
 
 <style scoped>
+.course-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 20px;
+}
+
+.course-field { min-width: 0; }
+.course-field-wide { grid-column: 1 / -1; }
+
+@media (max-width: 640px) {
+  .course-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .course-field-wide { grid-column: auto; }
+}
+
 .time-row {
   display: flex;
   align-items: center;

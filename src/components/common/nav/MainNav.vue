@@ -5,7 +5,7 @@
   >
     <div class="nav-items-scroll" ref="scrollRef">
       <button
-        v-for="m in MODULES"
+        v-for="m in navModules"
         :key="m"
         class="nav-item"
         :class="{ active: activeModule === m }"
@@ -18,12 +18,26 @@
         <span class="nav-item-label">{{ MODULE_LABELS[m] }}</span>
       </button>
     </div>
+
+    <button
+      class="nav-item nav-profile-item"
+      :class="{ active: activeModule === 'profile' }"
+      :title="MODULE_LABELS.profile"
+      :aria-label="MODULE_LABELS.profile"
+      @click="emit('navigate', 'profile')"
+    >
+      <span class="nav-item-icon nav-profile-avatar">
+        <img :src="profileAvatar" alt="">
+      </span>
+      <span class="nav-item-label">{{ MODULE_LABELS.profile }}</span>
+    </button>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { MODULES, MODULE_ICONS, MODULE_LABELS } from '../../../composables/usePageNav'
+import { useAuthStore } from '../../../stores/authStore'
 
 const props = withDefaults(defineProps<{
   activeModule: string
@@ -40,6 +54,9 @@ const emit = defineEmits<{
 }>()
 
 const scrollRef = ref<HTMLElement | null>(null)
+const navModules = MODULES.filter(module => module !== 'profile')
+const authStore = useAuthStore()
+const profileAvatar = computed(() => authStore.profile?.avatarDataUrl || './default-avatar.svg')
 
 const scrollToActive = () => {
   nextTick(() => {
@@ -235,5 +252,41 @@ watch(() => props.activeModule, scrollToActive)
 .nav-left .nav-item {
   width: 100%;
   justify-content: center;
+}
+
+.nav-profile-item {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  align-self: center;
+  justify-content: center;
+  margin: 0 0 14px;
+  padding: 0;
+  border-radius: 16px;
+}
+
+.nav-profile-avatar {
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border: 2px solid rgba(226, 232, 240, 0.3);
+  border-radius: 50%;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.nav-profile-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nav-profile-item.active .nav-profile-avatar {
+  border-color: #c4b5fd;
+  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.18);
+}
+
+.nav-profile-item:not(.active):hover .nav-profile-avatar {
+  border-color: rgba(196, 181, 253, 0.8);
 }
 </style>

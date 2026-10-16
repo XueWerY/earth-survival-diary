@@ -44,7 +44,7 @@
 
       <div v-else class="content-wrapper">
         <div class="content-body">
-          <el-scrollbar>
+          <AppScrollbar class="countdown-scroll-area">
             <template v-if="isCategoryView">
               <el-empty
                   v-if="filteredMilestones.length === 0"
@@ -140,7 +140,7 @@
                 </div>
               </div>
             </template>
-          </el-scrollbar>
+          </AppScrollbar>
         </div>
       </div>
     </div>
@@ -199,26 +199,32 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, inject, type Ref } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, inject, nextTick, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Calendar, Clock, Timer, Star, Sun, Trash2, Plus, Check, X, Pencil } from '@lucide/vue'
 import dayjs from 'dayjs'
 import CountdownForm from './CountdownForm.vue'
 import CountdownCard from './CountdownCard.vue'
+import AppScrollbar from '../common/scrollbar/AppScrollbar.vue'
 import BaseDialog from '../ui/BaseDialog.vue'
 import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
 import ColorGrid from '../ui/ColorGrid.vue'
 import IconPicker from '../common/picker/IconPicker.vue'
 import { setData } from '../../services/storageService'
 import { logger } from '../../lib/logger'
+import { useCardEntrance } from '../../composables/useMotion'
+import { getNextAnnualDate } from '../../utils/annualDate'
+import { registerCountdownCategoryLabels } from '../../utils/navPathLabels'
 import { usePageNav, restoreModuleNavPath, type BreadcrumbSegment, type DropdownItem } from '../../composables/usePageNav'
 
 const pageNav = usePageNav()
 
 const isElectron = inject<boolean>('isElectron', false)
+const guideRunning = inject<Ref<boolean>>('guideRunning', ref(false))
 
 // 卡片网格响应式列数：实测内容区宽度 → 1/2/3 列（卡片间距 d = 25px）
 const mainContentRef = ref<HTMLElement | null>(null)
+const cardEntrance = useCardEntrance(mainContentRef, '.milestone-card, .folder-card')
 const contentWidth = ref(0)
 const CARD_GAP = 25
 const computeCardCols = (w: number): number => {
@@ -245,6 +251,9 @@ interface Milestone {
   reminderHours?: number
   reminderMinutes?: number
   repeatStrategy?: string
+  repeatCalendar?: 'solar' | 'lunar'
+  lunarMonth?: number
+  lunarDay?: number
 }
 
 interface Category {
@@ -401,6 +410,7 @@ const closeDropdown = () => {
 watch(
   [navPath, categories],
   () => {
+    registerCountdownCategoryLabels(categories.value)
     localBreadcrumbSegments.value = computeBreadcrumbSegments()
     closeDropdown()
   },
@@ -412,15 +422,22 @@ const isDefaultCategory = (value: string): boolean => {
 }
 
 const initFilterState = async () => {
-  logger.debug('[CountdownList] initFilterState 开始', { navPath: pageNav.navPath.value })
+  if (guideRunning.value) return
   if (pageNav.navPath.value.length > 1 && pageNav.navPath.value[0] === 'countdown') {
-    logger.debug('[CountdownList] initFilterState 已有具体路径，跳过恢复')
     return
   }
   const restored = await restoreModuleNavPath('countdown')
-  logger.debug('[CountdownList] initFilterState 恢复的路径', { restored, currentNavPath: pageNav.navPath.value })
   pageNav.setNavPath(restored)
-  logger.debug('[CountdownList] initFilterState 完成', { navPath: pageNav.navPath.value })
+}
+
+const getMilestoneTargetDate = (milestone: Milestone): string => {
+  if (milestone.repeatStrategy !== 'yearly' || milestone.countMode === 'countup') return milestone.targetDate
+  return getNextAnnualDate(
+    milestone.targetDate,
+    milestone.repeatCalendar === 'lunar' ? 'lunar' : 'solar',
+    milestone.lunarMonth,
+    milestone.lunarDay
+  )
 }
 
 const filteredMilestones = computed(() => {
@@ -430,7 +447,7 @@ const filteredMilestones = computed(() => {
     result = result.filter(m => m.category === currentCategoryFromPath.value)
   }
 
-  result.sort((a, b) => new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime())
+  result.sort((a, b) => new Date(getMilestoneTargetDate(a)).getTime() - new Date(getMilestoneTargetDate(b)).getTime())
 
   return result
 })
@@ -468,7 +485,7 @@ const passedMilestones = computed(() => {
 
 const getDaysDiff = (milestone: Milestone): number => {
   const today = dayjs().startOf('day')
-  const target = dayjs(milestone.targetDate).startOf('day')
+  const target = dayjs(getMilestoneTargetDate(milestone)).startOf('day')
 
   if (!target.isValid()) {
     return 999999
@@ -611,37 +628,49 @@ const moveCategoryCard = (cat: Category, direction: 'left' | 'right') => {
 }
 
 const handleCountdownFormSubmit = (data: Partial<Milestone>) => {
-  const hasReminder = data.reminderStrategy && data.reminderStrategy !== 'none'
+  const submitted = { ...data }
+  if (submitted.repeatStrategy === 'yearly' && submitted.targetDate) {
+    submitted.targetDate = getNextAnnualDate(
+      submitted.targetDate,
+      submitted.repeatCalendar === 'lunar' ? 'lunar' : 'solar',
+      submitted.lunarMonth,
+      submitted.lunarDay
+    )
+  }
+  const hasReminder = submitted.reminderStrategy && submitted.reminderStrategy !== 'none'
   if (editingMilestoneForForm.value) {
     const index = milestones.value.findIndex(m => m.id === editingMilestoneForForm.value!.id)
     if (index > -1) {
       milestones.value[index] = {
         ...milestones.value[index],
-        ...data,
+        ...submitted,
         updatedAt: new Date().toISOString()
       }
-      logger.info('[倒数日] 编辑倒数日', { id: editingMilestoneForForm.value.id, name: data.name, reminder: data.reminderStrategy === 'advance' ? `提前${data.reminderDays}天${data.reminderHours}小时${data.reminderMinutes}分钟` : data.reminderStrategy, repeat: data.repeatStrategy })
+      logger.info('[倒数日] 编辑倒数日', { id: editingMilestoneForForm.value.id, name: submitted.name, reminder: submitted.reminderStrategy === 'advance' ? `提前${submitted.reminderDays}天${submitted.reminderHours}小时${submitted.reminderMinutes}分钟` : submitted.reminderStrategy, repeat: submitted.repeatStrategy })
       ElMessage.success('更新成功')
     }
   } else {
     const newMilestone: Milestone = {
       id: Date.now().toString(),
-      name: data.name || '未命名',
-      targetDate: data.targetDate || dayjs().format('YYYY-MM-DD'),
-      category: data.category || 'life',
-      description: data.description || '',
-      countMode: data.countMode === 'countup' ? 'countup' : 'countdown',
+      name: submitted.name || '未命名',
+      targetDate: submitted.targetDate || dayjs().format('YYYY-MM-DD'),
+      category: submitted.category || 'life',
+      description: submitted.description || '',
+      countMode: submitted.countMode === 'countup' ? 'countup' : 'countdown',
       pinned: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      reminderStrategy: data.reminderStrategy || 'none',
-      reminderDays: data.reminderDays || 0,
-      reminderHours: data.reminderHours || 0,
-      reminderMinutes: data.reminderMinutes || 0,
-      repeatStrategy: data.repeatStrategy || 'none'
+      reminderStrategy: submitted.reminderStrategy || 'none',
+      reminderDays: submitted.reminderDays || 0,
+      reminderHours: submitted.reminderHours || 0,
+      reminderMinutes: submitted.reminderMinutes || 0,
+      repeatStrategy: submitted.repeatStrategy || 'none',
+      repeatCalendar: submitted.repeatCalendar === 'lunar' ? 'lunar' : 'solar',
+      lunarMonth: submitted.lunarMonth || 1,
+      lunarDay: submitted.lunarDay || 1
     }
     milestones.value.push(newMilestone)
-    logger.info('[倒数日] 添加倒数日', { name: data.name })
+    logger.info('[倒数日] 添加倒数日', { name: submitted.name })
     ElMessage.success('添加成功')
   }
   saveData()
@@ -765,7 +794,6 @@ const refreshReminders = () => {
 }
 
 onMounted(async () => {
-  logger.debug('[CountdownList] onMounted 开始', { navPath: pageNav.navPath.value })
   await initFilterState()
   if (mainContentRef.value) {
     contentResizeObserver = new ResizeObserver((entries) => {
@@ -774,7 +802,23 @@ onMounted(async () => {
     contentResizeObserver.observe(mainContentRef.value)
     contentWidth.value = mainContentRef.value.clientWidth
   }
-  logger.debug('[CountdownList] onMounted 结束', { navPath: pageNav.navPath.value })
+  await nextTick()
+  cardEntrance.play()
+})
+
+watch(navPath, async () => {
+  await nextTick()
+  cardEntrance.play()
+})
+
+watch(() => milestones.value.length, async () => {
+  await nextTick()
+  cardEntrance.play()
+})
+
+watch(() => categories.value.length, async () => {
+  await nextTick()
+  cardEntrance.play()
 })
 
 onUnmounted(() => { contentResizeObserver?.disconnect() })
@@ -973,27 +1017,13 @@ onUnmounted(() => { contentResizeObserver?.disconnect() })
   display: flex;
   flex-direction: column;
   min-width: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
+  min-height: 0;
+  overflow: hidden;
   margin: 0;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.content-wrapper::-webkit-scrollbar {
-  display: none;
 }
 
 .main-content::-webkit-scrollbar {
   display: none;
-}
-
-:deep(.el-scrollbar__bar.is-vertical) {
-  display: none !important;
-}
-
-:deep(.el-scrollbar__bar.is-horizontal) {
-  display: none !important;
 }
 
 @media (max-width: 1240px) {
@@ -1004,7 +1034,15 @@ onUnmounted(() => { contentResizeObserver?.disconnect() })
 
 .content-body {
   flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+}
+
+.content-body :deep(.countdown-scroll-area) {
+  flex: 1;
+  min-height: 0;
 }
 
 .section {

@@ -3,8 +3,8 @@ import fs from 'fs'
 import path from 'path'
 
 const ROOT = process.cwd()
-const INPUT_PNG = path.join(ROOT, 'build', 'app-icon.png')
-const BUILD_DIR = path.join(ROOT, 'build')
+const INPUT_PNG = path.join(ROOT, 'build', 'images', 'app-icon.png')
+const BUILD_DIR = path.join(ROOT, 'build', 'images')
 
 // 桌面端 PNG 图标尺寸
 const desktopSizes = {
@@ -18,27 +18,27 @@ const desktopSizes = {
 
 async function generateIcons() {
   if (!fs.existsSync(INPUT_PNG)) {
-    console.error(`Error: Source icon not found at ${INPUT_PNG}`)
+    console.error(`错误：未找到源图标：${INPUT_PNG}`)
     process.exit(1)
   }
 
   const pngBuffer = fs.readFileSync(INPUT_PNG)
 
   // 1. 生成桌面端 PNG 图标
-  console.log('=== Desktop PNG icons ===')
+  console.log('=== 桌面端 PNG 图标 ===')
   for (const [filename, size] of Object.entries(desktopSizes)) {
     const outputPath = path.join(BUILD_DIR, filename)
     await sharp(pngBuffer)
       .resize(size, size)
       .png()
       .toFile(outputPath)
-    console.log(`✓ Generated ${filename} (${size}x${size})`)
+    console.log(`✓ 已生成 ${filename}（${size}×${size}）`)
   }
 
-  console.log('\nAll icons generated successfully!')
+  console.log('\n图标已全部生成！')
 }
 
 generateIcons().catch(err => {
-  console.error('Error:', err)
+  console.error('生成图标失败：', err)
   process.exit(1)
 })

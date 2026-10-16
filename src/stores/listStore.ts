@@ -2,6 +2,13 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import dayjs from 'dayjs'
 import * as api from '../lib/api'
+import {
+  authorizeTaskCompletion,
+  consumeAuthorizedTaskCompletion,
+  taskChecklistChangeDetails,
+  taskCompletionChangeDetails,
+  taskCompletionChangeVersion
+} from '../lib/taskCompletionEvents'
 import { logger } from '../lib/logger'
 import { getData, setData } from '../services/storageService'
 
@@ -208,15 +215,12 @@ export const useListStore = defineStore('list', () => {
   // 加载数据
   const loadData = async () => {
     if (isLoaded.value) {
-      logger.debug('[ListStore] loadData 跳过（已加载）')
       return
     }
-    logger.debug('[ListStore] loadData 开始')
 
     try {
       // 加载清单
       const { lists: dbLists } = await api.getLists()
-      logger.debug('[ListStore] loadData 获取清单', { count: dbLists?.length })
       taskLists.value = dbLists.map(db => {
         const rawGroups = (db.groups && db.groups.length > 0) ? db.groups : [{
           id: `${db.id}-default`,
@@ -291,9 +295,9 @@ export const useListStore = defineStore('list', () => {
       await ensureAllListsInFolders()
 
       isLoaded.value = true
-      logger.debug('[ListStore] loadData 完成', { listsCount: taskLists.value.length, tasksCount: lists.value.length, foldersCount: folders.value.length })
+      logger.debug('[ListStore] 清单数据已就绪', { listsCount: taskLists.value.length, tasksCount: lists.value.length })
     } catch (error) {
-      logger.error('[ListStore] loadData 失败', { error })
+      logger.error('[ListStore] 数据加载失败', { error })
     }
   }
 
@@ -325,7 +329,7 @@ export const useListStore = defineStore('list', () => {
       }
       return newList
     } catch (error) {
-      console.error('Failed to add list:', error)
+      logger.error('[ListStore] 添加清单失败', { error: error instanceof Error ? error.message : String(error) })
       return null
     }
   }
@@ -346,7 +350,7 @@ export const useListStore = defineStore('list', () => {
         }
       }
     } catch (error) {
-      console.error('Failed to update list:', error)
+      logger.error('[ListStore] 更新清单失败', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -383,7 +387,7 @@ export const useListStore = defineStore('list', () => {
       folders.value.forEach(f => { f.listIds = f.listIds.filter(lid => lid !== id) })
       await saveFolders()
     } catch (error) {
-      console.error('Failed to delete list:', error)
+      logger.error('[ListStore] 删除清单失败', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -401,7 +405,7 @@ export const useListStore = defineStore('list', () => {
       taskLists.value.forEach((l, i) => l.order = i)
       await api.reorderLists(orders)
     } catch (error) {
-      console.error('Failed to reorder lists:', error)
+      logger.error('[ListStore] 调整清单顺序失败', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -418,7 +422,7 @@ export const useListStore = defineStore('list', () => {
       taskLists.value.forEach((l, i) => l.order = i)
       await api.reorderLists(orders)
     } catch (error) {
-      console.error('Failed to reorder lists:', error)
+      logger.error('[ListStore] 调整清单顺序失败', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -500,7 +504,7 @@ export const useListStore = defineStore('list', () => {
       list.groups.push(newGroup)
       return newGroup
     } catch (error) {
-      console.error('Failed to add group:', error)
+      logger.error('[ListStore] 添加分组失败', { error: error instanceof Error ? error.message : String(error) })
       return null
     }
   }
@@ -518,7 +522,7 @@ export const useListStore = defineStore('list', () => {
     try {
       await api.updateGroup(listId, groupId, updates)
     } catch (error) {
-      console.error('Failed to update group:', error)
+      logger.error('[ListStore] 更新分组失败', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -534,10 +538,10 @@ export const useListStore = defineStore('list', () => {
 
     try {
       const orders = list.groups.map(g => ({ id: g.id, order: g.order }))
-      console.log('[ListStore] moveGroupUp completed', { listId, groupId, fromIndex: index, toIndex: index - 1, orders })
+      logger.debug('[ListStore] 分组上移', { listId, groupId, fromIndex: index, toIndex: index - 1, orders })
       await api.reorderGroups(listId, orders)
     } catch (error) {
-      console.error('[ListStore] moveGroupUp sync failed', error)
+      logger.error('[ListStore] 同步分组上移失败', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -553,10 +557,10 @@ export const useListStore = defineStore('list', () => {
 
     try {
       const orders = list.groups.map(g => ({ id: g.id, order: g.order }))
-      console.log('[ListStore] moveGroupDown completed', { listId, groupId, fromIndex: index, toIndex: index + 1, orders })
+      logger.debug('[ListStore] 分组下移', { listId, groupId, fromIndex: index, toIndex: index + 1, orders })
       await api.reorderGroups(listId, orders)
     } catch (error) {
-      console.error('[ListStore] moveGroupDown sync failed', error)
+      logger.error('[ListStore] 同步分组下移失败', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -571,7 +575,7 @@ export const useListStore = defineStore('list', () => {
     try {
       await api.deleteGroup(listId, groupId, { deleteTasks })
     } catch (error) {
-      console.error('Failed to delete group:', error)
+      logger.error('[ListStore] 删除分组失败', { error: error instanceof Error ? error.message : String(error) })
       return
     }
 
@@ -749,7 +753,7 @@ export const useListStore = defineStore('list', () => {
       lists.value.unshift(newTask)
       return newTask
     } catch (error) {
-      console.error('Failed to add task:', error)
+      logger.error('[ListStore] 添加任务失败', { error: error instanceof Error ? error.message : String(error) })
       return null
     }
   }
@@ -766,7 +770,7 @@ export const useListStore = defineStore('list', () => {
         name: updates.name,
         description: updates.notes,
         repeatCompletedCount: updates.repeatCompletedCount,
-        completed: updates.completed,
+        completed: updates.completed !== undefined && authorizeTaskCompletion(id) ? updates.completed : undefined,
         groupId: updates.groupId,
         date: updates.date,
         endTime: updates.endTime,
@@ -809,7 +813,22 @@ export const useListStore = defineStore('list', () => {
       if (updates.priority !== undefined) task.priority = updates.priority
       if (updates.checklist !== undefined) task.checklist = updates.checklist
       if (updates.linkedNoteIds !== undefined) task.linkedNoteIds = updates.linkedNoteIds
-      if (updates.completed !== undefined) task.completed = updates.completed
+      if (updates.checklist !== undefined) {
+        const taskRecord = task as any
+        taskChecklistChangeDetails.value = {
+          taskId: id,
+          taskName: String(taskRecord.name || taskRecord.title || id)
+        }
+      }
+      if (updates.completed !== undefined && consumeAuthorizedTaskCompletion(id) && task.completed !== updates.completed) {
+        taskCompletionChangeDetails.value = {
+          taskId: id,
+          previous: task.completed,
+          completed: updates.completed
+        }
+        task.completed = updates.completed
+        taskCompletionChangeVersion.value += 1
+      }
       if (updates.completedStartTime !== undefined) task.completedStartTime = updates.completedStartTime
       if (updates.completedEndTime !== undefined) task.completedEndTime = updates.completedEndTime
       if (updates.notes !== undefined) task.notes = updates.notes
@@ -819,7 +838,7 @@ export const useListStore = defineStore('list', () => {
       if (updates.reminderMinutes !== undefined) task.reminderMinutes = updates.reminderMinutes
       task.updatedAt = new Date().toISOString()
     } catch (error) {
-      console.error('Failed to update task:', error)
+      logger.error('[ListStore] 更新任务失败', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -829,7 +848,7 @@ export const useListStore = defineStore('list', () => {
       await api.deleteListTask(id)
       lists.value = lists.value.filter(m => m.id !== id)
     } catch (error) {
-      console.error('Failed to delete task:', error)
+      logger.error('[ListStore] 删除任务失败', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 

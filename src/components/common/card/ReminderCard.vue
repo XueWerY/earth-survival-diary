@@ -200,7 +200,7 @@ const endDateText = computed<{ label: string; value: string } | null>(() => {
 .reminder-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--chalk-amber);
+  color: #e0d7ff;
   line-height: 1;
 }
 
@@ -240,10 +240,13 @@ const endDateText = computed<{ label: string; value: string } | null>(() => {
 }
 
 .reminder-card-row {
+  min-width: 0;
+  max-width: 100%;
   text-align: center;
   font-size: 12px;
   line-height: 1.4;
   margin-bottom: 4px;
+  overflow-wrap: anywhere;
 }
 
 .reminder-row-repeat {

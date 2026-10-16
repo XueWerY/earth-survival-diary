@@ -1,5 +1,5 @@
 <template>
-  <div class="notes-page" :class="{ 'fs-edit': fullscreenEdit }">
+  <div class="notes-page" :class="{ 'fs-edit': fullscreenEdit }" @contextmenu.prevent>
     <!-- ====== 左栏：导航 ====== -->
     <aside class="np-nav" :class="{ 'drawer-open': navDrawerOpen }">
 
@@ -8,11 +8,6 @@
           <el-icon><Files /></el-icon>
           <span class="np-nav-name">全部笔记</span>
           <span class="np-nav-count">{{ activeNotes.length }}</span>
-        </button>
-        <button class="np-nav-item" :class="{ active: currentView === 'today' }" @click="setView('today')">
-          <el-icon><CalendarDays /></el-icon>
-          <span class="np-nav-name">今日</span>
-          <span class="np-nav-count">{{ viewCount('today') }}</span>
         </button>
         <button class="np-nav-item" :class="{ active: currentView === 'favorites' }" @click="setView('favorites')">
           <el-icon><Star /></el-icon>
@@ -81,6 +76,9 @@
                 </button>
               </template>
               <template v-else>
+                <button class="np-item-btn" title="编辑笔记" @click.stop="openNote(note.id)">
+                  <el-icon><Pencil /></el-icon>
+                </button>
                 <button
                   class="np-item-btn"
                   :class="{ on: note.pinned }"
@@ -94,7 +92,6 @@
                 </button>
               </template>
             </span>
-            <el-icon v-if="note.pinned && currentView !== 'trash'" class="np-item-pin"><Star fill="currentColor" /></el-icon>
           </div>
           <div class="np-item-excerpt">{{ excerpt(note) }}</div>
           <div class="np-item-meta">
@@ -113,10 +110,6 @@
         <div v-if="visibleNotes.length === 0" class="np-empty">
           <p>{{ emptyText }}</p>
           <p class="np-empty-sub">{{ emptySub }}</p>
-          <button v-if="currentView === 'today' && !query.trim()" class="np-empty-create" @click="createDailyNote">
-            <el-icon><Plus /></el-icon>
-            <span>新建今日笔记</span>
-          </button>
         </div>
       </div>
     </section>
@@ -271,10 +264,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick, inject } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  Files, CalendarDays, Star, Trash2,
+  Files, Star, Trash2, Pencil,
   Plus, Search, PanelLeft, X, RotateCcw
 } from '@lucide/vue'
 import NoteEditor from './NoteEditor.vue'
@@ -296,11 +289,12 @@ const emit = defineEmits<{
 
 const pageNav = usePageNav()
 const noteStore = useNoteStore()
+const guideRunning = inject('guideRunning', ref(false))
 
 // ====== 视图状态（navPath: ['notes', view] / ['notes', view, noteId]）======
-// view ∈ 'all' | 'today' | 'favorites' | 'trash' | 标签id
-// 兼容旧持久化数据：旧路径 ['notes', 分类id, 笔记id] 中分类 id 已在迁移时复用为标签 id
-const RESERVED_VIEWS = ['all', 'today', 'favorites', 'trash']
+// view ∈ 'all' | 'favorites' | 'trash' | 标签id
+// 旧导航路径中的分类 ID 与默认标签 ID 相同，因此仍可直接解析。
+const RESERVED_VIEWS = ['all', 'favorites', 'trash']
 
 const navPath = computed(() => pageNav.navPath.value)
 
@@ -422,7 +416,7 @@ watch(searchVersion, () => {
 // 笔记只归属实际被打的标签，聚合仅在查看时展开
 const activeTagIds = computed<string[] | null>(() => {
   const view = currentView.value
-  if (view === 'all' || view === 'today' || view === 'favorites' || view === 'trash') return null
+  if (view === 'all' || view === 'favorites' || view === 'trash') return null
   let path: string
   if (view.startsWith('v:')) {
     path = view.slice(2)
@@ -438,10 +432,6 @@ const activeTagIds = computed<string[] | null>(() => {
 
 const notesForView = computed(() => {
   const view = currentView.value
-  if (view === 'today') {
-    const today = dayjs().format('YYYY-MM-DD')
-    return noteStore.notes.filter(n => n.title === today)
-  }
   if (view === 'favorites') return noteStore.notes.filter(n => n.pinned)
   if (view === 'trash') return noteStore.trashedNotes
   const ids = activeTagIds.value
@@ -467,10 +457,6 @@ const visibleNotes = computed(() => {
 
 const viewCount = (view: string) => {
   if (view === 'favorites') return noteStore.notes.filter(n => n.pinned).length
-  if (view === 'today') {
-    const today = dayjs().format('YYYY-MM-DD')
-    return noteStore.notes.filter(n => n.title === today).length
-  }
   if (view === 'trash') return noteStore.trashedNotes.length
   return noteStore.notes.length
 }
@@ -504,7 +490,6 @@ const timeText = (dt?: string) => {
 const emptyText = computed(() => {
   const view = currentView.value
   if (query.value.trim()) return '没有匹配的笔记'
-  if (view === 'today') return '今日还没有笔记'
   if (view === 'favorites') return '暂无收藏'
   if (view === 'trash') return '回收站是空的'
   if (view === 'all') return '还没有笔记'
@@ -521,9 +506,9 @@ const editorRef = ref<InstanceType<typeof NoteEditor> | null>(null)
 const titleInputRef = ref<HTMLInputElement | null>(null)
 const titleDraft = ref('')
 
-watch(selectedId, (id) => {
-  titleDraft.value = id ? (selectedNote.value?.title || '') : ''
-})
+watch([selectedId, () => selectedNote.value?.title], ([id, title]) => {
+  titleDraft.value = id ? (title || '') : ''
+}, { immediate: true })
 
 const onTitleInput = () => {
   // 同步到 NoteEditor 内部标题，保存时一并落库（自动保存在阶段 4 接入）
@@ -801,26 +786,6 @@ const createNote = async () => {
   entrance.play()
 }
 
-// ====== 每日笔记：标题为当天日期的普通笔记 + 系统标签「每日」 ======
-const DAILY_TAG_NAME = '每日'
-
-const createDailyNote = async () => {
-  const today = dayjs().format('YYYY-MM-DD')
-  const existing = noteStore.notes.find(n => n.title === today)
-  if (existing) {
-    openNote(existing.id)
-    return
-  }
-  // 「每日」标签不存在时自动创建（addTag 同名幂等）
-  const tag = await noteStore.addTag({ name: DAILY_TAG_NAME })
-  const note = await noteStore.addNote({ title: today, content: '', tagIds: tag ? [tag.id] : [], pinned: false })
-  if (note) {
-    ElMessage.success('已创建今日笔记')
-    openNote(note.id)
-    entrance.play()
-  }
-}
-
 const togglePin = async (note: Note) => {
   await noteStore.togglePin(note.id)
 }
@@ -882,6 +847,10 @@ const onEmptyTrashConfirmed = async () => {
 
 // ====== 初始化 ======
 const initNavPath = async () => {
+  if (guideRunning.value) {
+    if (pageNav.navPath.value[0] !== 'notes') pageNav.setNavPath(['notes', 'all'])
+    return
+  }
   const path = pageNav.navPath.value
   if (path.length > 1 && path[0] === 'notes') return
   const restored = await restoreModuleNavPath('notes')
@@ -892,7 +861,7 @@ onMounted(async () => {
   emit('fullscreen-change', fullscreenEdit.value)
   await noteStore.loadData()
   await initNavPath()
-  // 进入笔记页与窗口重新聚焦时同步云端变更，接收其他客户端的笔记更新
+  // 进入笔记页与窗口重新聚焦时重载本地文件，读取最新的本机笔记
   noteStore.syncFromRemote()
   window.addEventListener('focus', onWindowFocus)
   document.addEventListener('click', onDocClick)
@@ -900,7 +869,6 @@ onMounted(async () => {
   window.addEventListener('resize', onResize)
   await nextTick()
   entrance.play()
-  logger.info('[笔记] 三栏页面已挂载', { notes: noteStore.notes.length, tags: noteStore.tags.length })
 })
 
 onBeforeUnmount(() => {
@@ -1239,25 +1207,11 @@ watch([currentView, () => noteStore.notes.length], () => {
   color: #93c5fd;
 }
 
-.np-item-pin {
-  flex-shrink: 0;
-  font-size: 12px;
-  color: var(--chalk-amber);
-}
-
 .np-item-actions {
-  display: none;
+  display: inline-flex;
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
-}
-
-.np-item:hover .np-item-actions {
-  display: inline-flex;
-}
-
-.np-item:hover .np-item-pin {
-  display: none;
 }
 
 .np-item-btn {

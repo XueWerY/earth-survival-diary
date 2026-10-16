@@ -3,6 +3,16 @@
     <div class="stats-scroll-wrapper">
       <div class="stats-content">
         <div class="date-range-bar">
+          <div class="module-picker-row">
+            <span class="date-range-label">统计模块：</span>
+            <el-select v-model="selectedStatsModule" class="module-picker" aria-label="选择统计模块">
+              <el-option label="足迹" value="footprint" />
+              <el-option label="清单" value="list" />
+              <el-option label="倒数日" value="countdown" />
+              <el-option label="课程表" value="course" />
+              <el-option label="笔记" value="notes" />
+            </el-select>
+          </div>
           <div class="date-range-row">
             <div class="date-range-label">统计范围：</div>
             <DateScrollPicker v-model="startDate" class="date-picker-inline" />
@@ -12,7 +22,7 @@
         </div>
 
         <div class="module-sections">
-          <div class="module-section">
+          <div v-if="selectedStatsModule === 'footprint'" class="module-section">
             <div class="section-header">
               <span class="section-icon">👣</span>
               <span class="section-title">足迹</span>
@@ -88,56 +98,45 @@
             <div class="section-empty" v-if="footprintStats.diaryCount === 0 && footprintStats.recordCount === 0">暂无数据</div>
           </div>
 
-          <div class="module-section">
+          <div v-if="selectedStatsModule === 'notes'" class="module-section">
             <div class="section-header">
-              <span class="section-icon">🧘</span>
-              <span class="section-title">专注</span>
+              <span class="section-icon">📝</span>
+              <span class="section-title">笔记</span>
             </div>
             <div class="section-stats">
               <div class="stat-item">
-                <span class="stat-label">常用专注</span>
-                <span class="stat-value">{{ focusStats.favoriteCount }}</span>
+                <span class="stat-label">本期笔记</span>
+                <span class="stat-value">{{ noteStats.totalCount }}</span>
               </div>
               <div class="stat-item">
-                <span class="stat-label">专注次数</span>
-                <span class="stat-value">{{ focusStats.sessionCount }}</span>
+                <span class="stat-label">置顶笔记</span>
+                <span class="stat-value">{{ noteStats.pinnedCount }}</span>
               </div>
               <div class="stat-item">
-                <span class="stat-label">总时长</span>
-                <span class="stat-value">{{ focusStats.totalDuration }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">番茄/正计时</span>
-                <span class="stat-value">{{ focusStats.pomodoroCount }} / {{ focusStats.stopwatchCount }}</span>
+                <span class="stat-label">涉及标签</span>
+                <span class="stat-value">{{ noteStats.tagCount }}</span>
               </div>
             </div>
-            <div class="section-trend" v-if="focusStats.trendData.length > 0">
-              <div class="trend-title">每日专注时长</div>
+            <div v-if="noteStats.trend.length > 0" class="section-trend">
+              <div class="trend-title">每日新增笔记</div>
               <div class="trend-bars">
-                <div
-                  v-for="(item, idx) in focusStats.trendData"
-                  :key="idx"
-                  class="trend-bar-item"
-                >
+                <div v-for="(item, idx) in noteStats.trend" :key="`note-${idx}`" class="trend-bar-item">
                   <div
                     class="trend-bar-label clickable"
-                    :style="{ width: focusStats.trendLabelMaxLen + 'ch' }"
+                    :style="{ width: noteStats.labelMaxLen + 'ch' }"
                     @click="setRangeFromTrend(item.rangeStart, item.rangeEnd)"
                   >{{ item.label }}</div>
                   <div class="trend-bar-track">
-                    <div
-                      class="trend-bar-fill focus-bar-fill"
-                      :style="{ width: getBarPercent(item.value, focusStats.trendMax) + '%' }"
-                    ></div>
+                    <div class="trend-bar-fill" :style="{ width: getBarPercent(item.value, noteStats.max) + '%' }"></div>
                   </div>
-                  <div class="trend-bar-val">{{ formatDurationLabel(item.value) }}</div>
+                  <div class="trend-bar-val">{{ item.value }}篇</div>
                 </div>
               </div>
             </div>
-            <div class="section-empty" v-else>暂无数据</div>
+            <div v-if="noteStats.totalCount === 0" class="section-empty">暂无数据</div>
           </div>
 
-          <div class="module-section">
+          <div v-if="selectedStatsModule === 'list'" class="module-section">
             <div class="section-header">
               <span class="section-icon">📋</span>
               <span class="section-title">清单</span>
@@ -171,7 +170,7 @@
             <div class="section-empty" v-if="listStats.recurringCount === 0 && listStats.nonRecurringCount === 0 && listStats.completedCount === 0">暂无数据</div>
           </div>
 
-          <div class="module-section">
+          <div v-if="selectedStatsModule === 'countdown'" class="module-section">
             <div class="section-header">
               <span class="section-icon">⏳</span>
               <span class="section-title">倒数日</span>
@@ -222,7 +221,7 @@
             <div class="section-empty" v-else>暂无数据</div>
           </div>
 
-          <div class="module-section">
+          <div v-if="selectedStatsModule === 'course'" class="module-section">
             <div class="section-header">
               <span class="section-icon">📖</span>
               <span class="section-title">课程表</span>
@@ -272,10 +271,9 @@
 import { ref, computed, inject, onMounted } from 'vue'
 import type { Ref } from 'vue'
 import dayjs from 'dayjs'
-import { useAuthStore } from '../../stores/authStore'
 import { useTaskStore } from '../../stores/taskStore'
-import { useFocusStore } from '../../stores/focusStore'
 import { useListStore } from '../../stores/listStore'
+import { useNoteStore } from '../../stores/noteStore'
 import { getData } from '../../services/storageService'
 import { usePageNav } from '../../composables/usePageNav'
 import { logger } from '../../lib/logger'
@@ -283,10 +281,9 @@ import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 
 const isElectron = inject<boolean>('isElectron', false)
 const pageNav = usePageNav()
-const authStore = useAuthStore()
 const taskStore = useTaskStore()
-const focusStore = useFocusStore()
 const listStore = useListStore()
+const noteStore = useNoteStore()
 
 const countdownMilestones = inject<Ref<any[]>>('countdownMilestones', ref([]))
 const countdownCategories = inject<Ref<any[]>>('countdownCategories', ref([]))
@@ -295,19 +292,24 @@ const DAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', '
 
 const startDate = ref(dayjs().format('YYYY-MM-DD'))
 const endDate = ref(dayjs().format('YYYY-MM-DD'))
+const selectedStatsModule = ref('footprint')
 
 const courseList = ref<any[]>([])
+const courseCheckins = ref<any[]>([])
 const completedListRecords = ref<any[]>([])
 
 const initDateRange = () => {
-  const profileCreatedAt = authStore.profile?.created_at
-  const userAny = authStore.user as { createdAt?: string; created_at?: string } | null | undefined
-  const createdAt = profileCreatedAt || userAny?.createdAt || userAny?.created_at
-  if (createdAt) {
-    startDate.value = dayjs(createdAt).format('YYYY-MM-DD')
-  } else {
-    startDate.value = dayjs().subtract(30, 'day').format('YYYY-MM-DD')
-  }
+  const dates = [
+    ...taskStore.tasks.map(record => record.date || record.createdAt),
+    ...noteStore.notes.map(note => note.createdAt),
+    ...completedListRecords.value.map(record => record.completedDate || record.date || record.createdAt),
+    ...courseCheckins.value.map(record => record.date || record.checkInDate || record.createdAt),
+    ...countdownMilestones.value.map(record => record.createdAt)
+  ]
+    .map(value => value ? dayjs(value).format('YYYY-MM-DD') : '')
+    .filter(value => value && dayjs(value).isValid())
+    .sort()
+  startDate.value = dates[0] || dayjs().subtract(30, 'day').format('YYYY-MM-DD')
   endDate.value = dayjs().format('YYYY-MM-DD')
 }
 
@@ -411,26 +413,25 @@ const footprintStats = computed(() => {
   }
 })
 
-const focusStats = computed(() => {
-  const rangeRecords = focusStore.records.filter(r => r.date >= startDate.value && r.date <= endDate.value)
-  const sessionCount = rangeRecords.length
-  const totalDuration = rangeRecords.reduce((sum, r) => sum + r.duration, 0)
-  const pomodoroCount = rangeRecords.filter(r => r.type === 'pomodoro').length
-  const stopwatchCount = rangeRecords.filter(r => r.type === 'stopwatch').length
-  const favoriteCount = focusStore.favorites.length
-
-  const focusDateData = rangeRecords.map(r => ({ date: r.date, value: r.duration }))
-  const { items: trendData, maxLabelLen: trendLabelMaxLen } = buildTrend(focusDateData, '分', true)
-
+const noteStats = computed(() => {
+  const notes = noteStore.notes.filter(note => {
+    if (note.trashedAt) return false
+    const createdAt = dayjs(note.createdAt)
+    return createdAt.isValid() && createdAt.format('YYYY-MM-DD') >= startDate.value && createdAt.format('YYYY-MM-DD') <= endDate.value
+  })
+  const trendResult = buildTrend(
+    notes.map(note => ({ date: dayjs(note.createdAt).format('YYYY-MM-DD'), value: 1 })),
+    '篇',
+    false
+  )
+  const tagIds = new Set(notes.flatMap(note => note.tagIds || []))
   return {
-    favoriteCount,
-    sessionCount,
-    totalDuration: formatDurationLabel(totalDuration),
-    pomodoroCount,
-    stopwatchCount,
-    trendData,
-    trendMax: getTrendMax(trendData),
-    trendLabelMaxLen
+    totalCount: notes.length,
+    pinnedCount: notes.filter(note => note.pinned).length,
+    tagCount: tagIds.size,
+    trend: trendResult.items,
+    labelMaxLen: trendResult.maxLabelLen,
+    max: getTrendMax(trendResult.items)
   }
 })
 
@@ -534,14 +535,6 @@ const getBarPercent = (value: number, max: number) => {
   return Math.round((value / max) * 100)
 }
 
-const formatDurationLabel = (min: number) => {
-  const h = Math.floor(min / 60)
-  const m = min % 60
-  if (h > 0 && m > 0) return `${h}h${m}m`
-  if (h > 0) return `${h}h`
-  return `${m}m`
-}
-
 const setRangeFromTrend = (rangeStart: string, rangeEnd: string) => {
   startDate.value = rangeStart
   endDate.value = rangeEnd
@@ -579,9 +572,8 @@ onMounted(async () => {
     goModuleHome: () => { pageNav.setNavPath(['statistics']) }
   })
 
+  await Promise.all([loadCourses(), loadCourseCheckins(), loadCompletedTasks(), noteStore.loadData()])
   initDateRange()
-  await Promise.all([loadCourses(), loadCompletedTasks()])
-  logger.info('[统计] 统计页面挂载')
 })
 </script>
 
@@ -597,39 +589,57 @@ onMounted(async () => {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-.stats-scroll-wrapper::-webkit-scrollbar {
-  width: 6px;
-}
-
-.stats-scroll-wrapper::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
-}
+.stats-scroll-wrapper::-webkit-scrollbar { display: none; }
 
 .stats-content {
   width: 100%;
+  min-width: 0;
   padding: 24px 16px;
+  box-sizing: border-box;
 }
 
 .date-range-bar {
   display: flex;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   margin-bottom: 28px;
   padding: 16px 20px;
   background: rgba(255, 255, 255, 0.03);
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.module-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 1 270px;
+  min-width: 0;
+}
+
+.module-picker {
+  width: 180px;
+  min-width: 0;
 }
 
 .date-range-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  justify-content: center;
+  justify-content: flex-end;
   flex-wrap: nowrap;
+  flex: 1 1 420px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .date-range-label {
@@ -639,7 +649,8 @@ onMounted(async () => {
 }
 
 .date-picker-inline {
-  flex-shrink: 0;
+  flex: 0 1 130px;
+  width: 130px;
   max-width: 130px;
   min-width: 0;
 }
@@ -666,16 +677,33 @@ onMounted(async () => {
 }
 
 .module-sections {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
+  align-items: start;
 }
 
 .module-section {
+  min-width: 0;
   background: rgba(255, 255, 255, 0.03);
   border-radius: 12px;
   padding: 20px 24px;
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 640px) {
+  .date-range-bar { align-items: stretch; }
+  .module-picker-row { width: 100%; }
+  .module-picker { flex: 1; width: auto; }
+  .date-range-row {
+    display: grid;
+    width: 100%;
+    grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
+    gap: 8px;
+  }
+  .date-picker-inline { width: 100%; max-width: none; }
+  .date-picker-inline :deep(.date-trigger) { width: 100%; max-width: none; box-sizing: border-box; }
+  .date-range-label { font-size: 12px; }
 }
 
 .section-header {
@@ -785,10 +813,6 @@ onMounted(async () => {
   background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
   border-radius: 3px;
   transition: width 0.3s ease;
-}
-
-.focus-bar-fill {
-  background: linear-gradient(90deg, #f59e0b 0%, #ef4444 100%);
 }
 
 .list-bar-fill {

@@ -107,15 +107,15 @@
   <BaseDialog
     :visible="dialogVisible"
     :title="editingCourse ? '编辑课程' : '添加课程'"
-    :width="500"
+    :width="1080"
     teleport
     @update:visible="dialogVisible = $event"
   >
     <el-form :model="courseForm" :rules="courseRules" ref="courseFormRef" class="course-form">
-      <el-form-item label="课程名称" prop="name">
+      <el-form-item label="课程名称" prop="name" class="course-grid-field course-name-item">
         <el-input v-model="courseForm.name" placeholder="输入课程名称" maxlength="30" show-word-limit />
       </el-form-item>
-      <el-form-item label="上课时间">
+      <el-form-item label="上课时间" class="course-grid-field course-time-item">
         <div class="time-area">
           <div class="time-day-row">
             <el-radio-group v-model="courseForm.dayOfWeek">
@@ -130,16 +130,19 @@
           </div>
         </div>
       </el-form-item>
-      <el-form-item label="上课地点">
+      <el-form-item label="上课地点" class="course-grid-field course-location-item">
         <el-input v-model="courseForm.location" placeholder="教室/地点（可选）" maxlength="30" />
       </el-form-item>
-      <el-form-item label="授课教师">
+      <el-form-item label="授课教师" class="course-grid-field course-teacher-item">
         <el-input v-model="courseForm.teacher" placeholder="教师姓名（可选）" maxlength="20" />
       </el-form-item>
-      <el-form-item label="课程颜色">
-        <ColorGrid v-model="courseForm.color" />
+      <el-form-item label="课程颜色" class="course-grid-field course-color-item">
+        <ColorGrid v-model="courseForm.color" :show-custom="false" />
       </el-form-item>
-      <el-form-item label="上课周次">
+      <el-form-item label="自定义" class="course-grid-field course-custom-color-item">
+        <el-input v-model="courseForm.color" placeholder="#667eea" />
+      </el-form-item>
+      <el-form-item label="上课周次" class="course-grid-field course-weeks-item">
         <div class="weeks-setting">
           <el-checkbox v-model="allWeeks">每周都有</el-checkbox>
           <div v-if="!allWeeks" class="week-selector">
@@ -149,7 +152,7 @@
           </div>
         </div>
       </el-form-item>
-      <el-form-item label="备注">
+      <el-form-item label="备注" class="course-grid-field course-note-item">
         <el-input v-model="courseForm.note" type="textarea" :autosize="{ minRows: 1, maxRows: 5 }" placeholder="添加备注（可选）" maxlength="100" show-word-limit />
       </el-form-item>
     </el-form>
@@ -241,6 +244,7 @@
         </div>
         <div class="dialog-divider"></div>
         <div class="dialog-body">
+          <div class="course-settings-grid">
           <div class="setting-item">
             <span class="setting-label">开学日期</span>
             <span class="setting-desc">学期第一周的周一日期</span>
@@ -393,6 +397,8 @@
             </div>
           </div>
 
+          </div>
+
           <div class="form-footer">
             <button class="capsule-btn cancel-btn" @click="cancelCourseSettings">
               <svg class="capsule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -532,7 +538,7 @@ const courses = ref<Course[]>([])
 
 const settingsStore = useSettingsStore()
 const pageNav = usePageNav()
-const refreshReminders = inject<() => void>('refreshReminders', () => {})
+const refreshReminders = inject<(reason?: string) => void>('refreshReminders', () => {})
 
 const isElectron = computed(() => typeof window !== 'undefined' && !!(window as any).electronAPI)
 
@@ -997,10 +1003,62 @@ function getCourseWeeksText(course: Course): string {
   return `第${formatWeeks(course.weeks)}周`
 }
 
+const COURSE_AUTO_COLORS = [
+  '#667eea', '#764ba2', '#f093fb', '#4facfe', '#00b4db', '#43e97b', '#11998e', '#fa709a',
+  '#ee5a24', '#fee140', '#a18cd1', '#ff6b6b', '#4ecdc4', '#45b7d1', '#2b32b2', '#3498db',
+  '#e74c3c', '#1abc9c', '#9b59b6', '#e67e22', '#2ecc71', '#00bcd4', '#8e44ad', '#d53a9d'
+]
+
+function findAvailableCourseColor(usedColors: Set<string>) {
+  const available = COURSE_AUTO_COLORS.find(color => !usedColors.has(color.toLowerCase()))
+  if (available) return available
+
+  for (let hue = 0; hue < 360; hue += 1) {
+    const candidate = `hsl(${hue}, 72%, 62%)`
+    if (!usedColors.has(candidate)) return candidate
+  }
+  return `hsl(${(usedColors.size * 37) % 360}, 72%, 62%)`
+}
+
+function getNextCourseColor() {
+  const usedColors = new Set<string>()
+  for (const course of courses.value) {
+    const color = course.color?.trim().toLowerCase()
+    if (color) usedColors.add(color)
+  }
+  return findAvailableCourseColor(usedColors)
+}
+
+watch(courses, allCourses => {
+  if (allCourses.length === 0) return
+
+  const usedColors = new Set<string>()
+  let changed = false
+  const normalizedCourses = allCourses.map(course => {
+    const color = course.color?.trim() || ''
+    const normalizedColor = color.toLowerCase()
+    if (normalizedColor && !usedColors.has(normalizedColor)) {
+      usedColors.add(normalizedColor)
+      return course
+    }
+
+    const assignedColor = findAvailableCourseColor(usedColors)
+    usedColors.add(assignedColor.toLowerCase())
+    changed = true
+    return { ...course, color: assignedColor }
+  })
+
+  if (changed) {
+    courses.value = normalizedCourses
+    void saveCourses()
+  }
+}, { immediate: true })
+
 async function handleCourseFormSubmit() {
   if (!courseFormRef.value) return
   await courseFormRef.value.validate((valid: boolean) => {
     if (!valid) return
+    const reminderReason = editingCourse.value ? '课程编辑' : '课程添加'
     if (editingCourse.value) {
       const idx = courses.value.findIndex(c => c.id === editingCourse.value!.id)
       if (idx > -1) {
@@ -1028,7 +1086,7 @@ async function handleCourseFormSubmit() {
         periodIds: [...courseForm.value.periodIds],
         location: courseForm.value.location,
         teacher: courseForm.value.teacher,
-        color: courseForm.value.color,
+        color: getNextCourseColor(),
         weeks: allWeeks.value ? [] : [...courseForm.value.weeks],
         note: courseForm.value.note,
         createdAt: new Date().toISOString(),
@@ -1036,10 +1094,10 @@ async function handleCourseFormSubmit() {
       }
       courses.value = [...courses.value, newCourse]
       ElMessage.success('课程已添加')
-      logger.info('[课程表] 添加课程', { name: courseForm.value.name })
+      logger.info('[课程表] 添加课程', { id: newCourse.id, name: courseForm.value.name })
     }
     saveCourses()
-    refreshReminders()
+    refreshReminders(reminderReason)
     closeDialog()
   })
 }
@@ -1060,14 +1118,17 @@ function handleListCardDelete(course: Course) {
 async function confirmDeleteCourse() {
   const id = pendingDeleteCourseId.value
   if (!id) return
+  const deletedCourse = courses.value.find(course => course.id === id)
   courses.value = courses.value.filter(c => c.id !== id)
   showDeleteCourseConfirm.value = false
   pendingDeleteCourseId.value = null
   closeDialog()
+  showCourseDetail.value = false
+  detailCourse.value = null
   await saveCourses()
-  refreshReminders()
+  refreshReminders('课程删除')
   ElMessage.success('课程已删除')
-  logger.info('[课程表] 删除课程', { id })
+  logger.info('[课程表] 删除课程', { id, name: deletedCourse?.name })
 }
 
 const showCourseSettings = ref(false)
@@ -1154,7 +1215,7 @@ async function confirmCourseSettings() {
     periodCountPerSession: courseSettingsDraft.value.periodCountPerSession
   })
   logger.info('[设置] 修改课程表设置')
-  refreshReminders()
+  refreshReminders('课程表设置变更')
   showCourseSettings.value = false
 }
 
@@ -1352,7 +1413,22 @@ onUnmounted(() => {
 }
 
 /* 表单样式 */
+.course-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 20px;
+}
+.course-grid-field { min-width: 0; }
+.course-name-item { grid-column: 1; grid-row: 1; }
+.course-location-item { grid-column: 2; grid-row: 1; }
+.course-teacher-item { grid-column: 3; grid-row: 1; }
+.course-time-item { grid-column: 1; grid-row: 2; }
+.course-weeks-item { grid-column: 3; grid-row: 2; }
+.course-color-item { grid-column: 1; grid-row: 3; }
+.course-custom-color-item { grid-column: 3; grid-row: 3; }
+.course-note-item { grid-column: 1 / -1; grid-row: 4; }
 .course-form :deep(.el-form-item) { display: block; margin-bottom: 12px; }
+.course-form :deep(.el-form-item) { min-width: 0; }
 .course-form :deep(.el-form-item:last-child) { margin-bottom: 0; }
 .course-form :deep(.el-form-item__label) { display: block; text-align: left; line-height: normal; padding-bottom: 4px; color: var(--chalk-white-70); }
 .course-form :deep(.el-form-item__content) { display: block; }
@@ -1448,7 +1524,7 @@ onUnmounted(() => {
 /* 课程表设置弹窗 */
 .dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9999; }
 .dialog-container { background: rgba(30,28,52,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; }
-.course-settings-dialog { width: 500px; }
+.course-settings-dialog { width: min(880px, 92vw); }
 .course-settings-dialog .dialog-header { padding-bottom: 12px; }
 .course-settings-dialog .dialog-body { padding-bottom: 0; }
 .course-settings-dialog .form-footer { position: sticky; bottom: 0; background: rgba(30,28,52,0.98); z-index: 1; padding-bottom: 16px; }
@@ -1464,6 +1540,9 @@ onUnmounted(() => {
 
 .setting-item { display: flex; flex-direction: column; padding: 16px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; gap: 8px; margin-bottom: 8px; }
 .setting-item-break { gap: 10px; }
+.course-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.course-settings-grid .setting-item { min-width: 0; margin: 0; }
+.course-settings-grid .setting-item-break { grid-column: 1 / -1; }
 .setting-label { font-size: 14px; font-weight: 500; color: #fff; }
 .setting-desc { font-size: 12px; color: rgba(255, 255, 255, 0.5); }
 .setting-control { display: flex; align-items: center; gap: 8px; }
@@ -1503,6 +1582,70 @@ onUnmounted(() => {
 .course-settings-dialog .setting-item .break-mode-row :deep(.el-radio-button) { flex: 1; }
 .course-settings-dialog .setting-item .break-mode-row :deep(.el-radio-button__inner) { width: 100%; }
 
+@media (max-width: 680px) {
+  .course-settings-grid { grid-template-columns: minmax(0, 1fr); }
+  .course-settings-grid .setting-item-break { grid-column: auto; }
+}
+
 /* 删除课程确认弹窗 */
 .confirm-message { color: #fbbf24; }
+
+@media (max-width: 1000px) {
+  .course-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .course-name-item,
+  .course-location-item,
+  .course-teacher-item,
+  .course-time-item,
+  .course-weeks-item,
+  .course-color-item,
+  .course-custom-color-item { grid-column: auto; grid-row: auto; }
+  .course-note-item { grid-column: 1 / -1; grid-row: auto; }
+}
+
+@media (max-width: 700px) {
+  .course-form { grid-template-columns: minmax(0, 1fr); }
+}
+.course-form {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  column-gap: 16px;
+}
+
+.course-form :deep(.el-form-item:nth-child(1)) { grid-column: 1 / 3; grid-row: 1; }
+.course-form :deep(.el-form-item:nth-child(2)) { grid-column: 1 / 4; grid-row: 2; }
+.course-form :deep(.el-form-item:nth-child(3)) { grid-column: 3 / 5; grid-row: 1; }
+.course-form :deep(.el-form-item:nth-child(4)) { grid-column: 5 / 7; grid-row: 1; }
+.course-form :deep(.el-form-item:nth-child(7)) { grid-column: 4 / 7; grid-row: 2; }
+.course-form :deep(.el-form-item:nth-child(8)) { grid-column: 1 / -1; grid-row: 3; }
+
+.course-form :deep(.el-form-item:has(input[placeholder="输入课程名称"])) { grid-column: 1 / 3; grid-row: 1; }
+.course-form :deep(.el-form-item:has(input[placeholder="教室/地点（可选）"])) { grid-column: 3 / 5; grid-row: 1; }
+.course-form :deep(.el-form-item:has(input[placeholder="教师姓名（可选）"])) { grid-column: 5 / 7; grid-row: 1; }
+.course-form :deep(.el-form-item:has(.time-area)) { grid-column: 1 / 4; grid-row: 2; }
+.course-form :deep(.el-form-item:has(.weeks-setting)) { grid-column: 4 / 7; grid-row: 2; }
+.course-form :deep(.el-form-item:has(textarea[placeholder="添加备注（可选）"])) { grid-column: 1 / -1; grid-row: 3; }
+.course-form :deep(.el-form-item:has(.color-section)),
+.course-form :deep(.el-form-item:has(input[placeholder="#667eea"])) { display: none !important; }
+
+@media (max-width: 700px) {
+  .course-form { grid-template-columns: minmax(0, 1fr); }
+  .course-form :deep(.el-form-item:nth-child(1)),
+  .course-form :deep(.el-form-item:nth-child(2)),
+  .course-form :deep(.el-form-item:nth-child(3)),
+  .course-form :deep(.el-form-item:nth-child(4)),
+  .course-form :deep(.el-form-item:nth-child(7)),
+  .course-form :deep(.el-form-item:nth-child(8)) {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .course-form :deep(.el-form-item:has(input[placeholder="输入课程名称"])),
+  .course-form :deep(.el-form-item:has(input[placeholder="教室/地点（可选）"])),
+  .course-form :deep(.el-form-item:has(input[placeholder="教师姓名（可选）"])),
+  .course-form :deep(.el-form-item:has(.time-area)),
+  .course-form :deep(.el-form-item:has(.weeks-setting)),
+  .course-form :deep(.el-form-item:has(textarea[placeholder="添加备注（可选）"])) {
+    grid-column: 1;
+    grid-row: auto;
+  }
+}
 </style>

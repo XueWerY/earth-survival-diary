@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import dayjs from 'dayjs'
 import * as api from '../lib/api'
+import { logger } from '../lib/logger'
 
 // 前端任务类型
 export interface Task {
@@ -57,7 +58,7 @@ export const useTaskStore = defineStore('task', () => {
       tasks.value = [...footprintTasks, ...diaryTasks]
       isLoaded.value = true
     } catch (error) {
-      console.error('Failed to load tasks:', error)
+      logger.error('[Data] 加载足迹和日记失败', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -69,7 +70,7 @@ export const useTaskStore = defineStore('task', () => {
   }
 
   // Add a new task
-  const addTask = async (task: Omit<Task, 'id' | 'duration' | 'completed'>) => {
+  const addTask = async (task: Omit<Task, 'id' | 'duration' | 'completed'>): Promise<Task | null> => {
     try {
       const duration = calculateDuration(task.startTime, task.endTime)
       const apiCall = task.category === 'diary' ? api.addDiary : api.addTask
@@ -84,9 +85,15 @@ export const useTaskStore = defineStore('task', () => {
         icon: task.icon,
         pinned: (task as any).pinned
       })
-      tasks.value.unshift({ ...dbToTask(dbTask), duration })
+      const createdTask = { ...dbToTask(dbTask), duration }
+      tasks.value.unshift(createdTask)
+      return createdTask
     } catch (error) {
-      console.error('Failed to add task:', error)
+      const isDiary = task.category === 'diary'
+      logger.error(isDiary ? '[Diary] 新增日记失败' : '[Footprint] 新增足迹失败', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return null
     }
   }
 
@@ -105,7 +112,7 @@ export const useTaskStore = defineStore('task', () => {
       })
       tasks.value.unshift({ ...dbToTask(dbTask), duration, completed: true })
     } catch (error) {
-      console.error('Failed to add completed task:', error)
+      logger.error('[Footprint] 添加已完成足迹失败', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -123,7 +130,7 @@ export const useTaskStore = defineStore('task', () => {
         })
         tasks.value.unshift({ ...dbToTask(dbTask), duration: task.duration })
       } catch (error) {
-        console.error('Failed to add split task:', error)
+        logger.error('[Footprint] 添加分段足迹失败', { error: error instanceof Error ? error.message : String(error) })
       }
     }
   }
@@ -150,21 +157,28 @@ export const useTaskStore = defineStore('task', () => {
       })
       tasks.value[index] = dbToTask(dbTask)
     } catch (error) {
-      console.error('Failed to update task:', error)
+      const isDiary = tasks.value[index].isDiary || tasks.value[index].category === 'diary'
+      logger.error(isDiary ? '[Diary] 更新日记失败' : '[Footprint] 更新足迹失败', {
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 
   // Delete a task
   const deleteTask = async (id: string) => {
+    const task = tasks.value.find(item => item.id === id)
+    if (!task) return
+    const isDiary = task.isDiary || task.category === 'diary'
     try {
       const index = tasks.value.findIndex(t => t.id === id)
       if (index === -1) return
-      const isDiary = tasks.value[index].isDiary
       const apiCall = isDiary ? api.deleteDiary : api.deleteTask
       await apiCall(id)
       tasks.value.splice(index, 1)
     } catch (error) {
-      console.error('Failed to delete task:', error)
+      logger.error(isDiary ? '[Diary] 删除日记失败' : '[Footprint] 删除足迹失败', {
+        error: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 

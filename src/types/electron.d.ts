@@ -18,6 +18,10 @@ declare global {
       openDirectory: () => Promise<string | null>
       readFile: (filePath: string) => Promise<string | null>
       writeFile: (filePath: string, content: string) => Promise<boolean>
+      readLocalData: (key: string) => Promise<{ found: boolean; value?: unknown }>
+      writeLocalData: (key: string, value: unknown) => Promise<boolean>
+      removeLocalData: (key: string) => Promise<boolean>
+      listLocalDataRecords: (prefix: string) => Promise<Array<{ key: string; value: unknown }>>
       restartApp: () => void
       getLogFileSize: () => Promise<{ size: number; exists: boolean }>
       getLogDirSize: () => Promise<{ size: number }>
@@ -25,10 +29,8 @@ declare global {
       clearLogs: () => Promise<boolean>
       openLogViewer: (content: string) => Promise<void>
       openChangelogWindow: (content: string) => Promise<void>
-      getRemoteApiConfig: () => Promise<{ baseUrl: string; token: string }>
-      setRemoteApiConfig: (token: string) => Promise<boolean>
       writeRendererLogs: (entries: Array<{ level: string; message: string; meta?: Record<string, any>; timestamp?: string }>) => Promise<boolean>
-      scheduleReminders: (userId: string, reminders: ReminderItem[], persistDuration: number | null) => Promise<{ ok: boolean; count: number; error?: string }>
+      scheduleReminders: (userId: string, reminders: ReminderItem[], persistDuration: number | null, reason?: string) => Promise<{ ok: boolean; count: number; error?: string }>
       cancelAllReminders: () => Promise<{ ok: boolean }>
       getReminderPersistDuration: () => Promise<{ persistDuration: number }>
   getAllReminders: () => Promise<any[]>
@@ -56,24 +58,11 @@ declare global {
       offPowerShellOutput: () => void
       killPowerShell: () => Promise<{ success: boolean; error?: string }>
 
-      // 主进程 HTTPS JSON 请求（绕开渲染进程同源限制）
-      httpGetJson: (url: string) => Promise<any>
-      // 主进程 HTTPS PATCH JSON 请求（保存 snowbaby 配置等，返回 { status, data }）
-      httpPatchJson: (url: string, body: any) => Promise<{ status: number; data: any }>
       // 主进程 HTTPS 文本请求（下载插件源码等，返回 { status, text }）
       httpGetText: (url: string) => Promise<{ status: number; text: string; error?: string }>
 
       // 插件管理
       getPluginsDirPath: () => Promise<string>
-      getSnowbabyDirPath: () => Promise<string>
-      getSnowbabyStatus: () => Promise<{ installed: boolean; version: string | null }>
-      installSnowbaby: () => Promise<{ success: boolean; error?: string }>
-      updateSnowbaby: () => Promise<{ success: boolean; upToDate?: boolean; error?: string }>
-      checkSnowbabyUpdate: () => Promise<{ hasUpdate: boolean; currentVersion?: string | null; latestVersion?: string | null; error?: string }>
-      uninstallSnowbaby: () => Promise<{ success: boolean; error?: string }>
-      startSnowbaby: (payload: { dataDir?: string; pluginDir: string }) => Promise<{ success: boolean; pid?: number; error?: string }>
-      stopSnowbaby: () => Promise<{ success: boolean; error?: string }>
-      isSnowbabyRunning: (payload: { pidPath: string; pluginDir: string }) => Promise<{ running: boolean; pid?: number | null; error?: string }>
       createDirectory: (dirPath: string) => Promise<boolean>
       removeDirectory: (dirPath: string) => Promise<boolean>
       getRuntimePluginManifests: () => Promise<any[]>

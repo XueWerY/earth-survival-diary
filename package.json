@@ -1,19 +1,18 @@
 {
   "name": "earth-survival-diary",
   "private": true,
-  "version": "2026.10.7-1",
+  "version": "2026.10.12-1",
   "author": "XueWerY <3073820063@qq.com>",
   "type": "module",
-  "main": "electron/main.cjs",
+  "main": "electron/bootstrap.cjs",
   "repository": "XueWerY/earth-survival-diary",
   "scripts": {
     "dev": "node scripts/dev.cjs",
-    "server:start": "node server/index.cjs",
-    "server:package": "node scripts/package-server.cjs",
-    "data:migrate:mysql-to-yaml": "node scripts/migrate-mysql-to-yaml.cjs",
-    "build": "node scripts/build-tools.cjs install-deps && vite build && node electron/build-plugin.cjs && node scripts/package-default-plugins.cjs && node scripts/generate-icons.js && node scripts/build-tools.cjs make-ico",
-    "electron:build:win": "node scripts/build-tools.cjs pre-clean-release && npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --win && node scripts/build-tools.cjs cleanup-release",
-    "electron:build:win:release": "node scripts/build-tools.cjs pre-clean-release && npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --win && node scripts/build-tools.cjs cleanup-release",
+    "build": "node scripts/build-tools.cjs install-deps && vite build && node electron/build-plugin.cjs && node scripts/generate-icons.js && node scripts/generate-installer-images.js && node scripts/build-tools.cjs make-ico",
+    "electron:build:win": "node scripts/build-tools.cjs pre-clean-release && npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --win dir --config build/electron-builder.override.json && node scripts/build-installer.cjs && node scripts/build-tools.cjs cleanup-release",
+    "electron:build:win:release": "node scripts/build-tools.cjs pre-clean-release && npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --win dir && node scripts/build-installer.cjs && node scripts/build-tools.cjs cleanup-release",
+    "build:installer": "node scripts/build-installer.cjs",
+    "setup:inno": "node scripts/setup-inno.cjs",
     "publish-release": "node scripts/build-tools.cjs publish-release"
   },
   "dependencies": {
@@ -31,10 +30,12 @@
     "html2canvas": "1.4.1",
     "jsqr": "^1.4.0",
     "lunar-javascript": "^1.7.7",
+    "micromark": "4.0.2",
     "pinia": "^3.0.4",
     "qrcode": "^1.5.4",
     "vue": "^3.5.24",
-    "vue-router": "4"
+    "vue-router": "4",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/node": "^24.12.2",
@@ -44,14 +45,11 @@
     "electron": "^41.3.0",
     "electron-builder": "^26.8.1",
     "esbuild": "^0.28.1",
-    "mysql2": "^3.11.5",
-    "pino-pretty": "^13.1.3",
     "puppeteer-core": "^23.11.1",
     "sharp": "^0.34.5",
     "typescript": "^5.8.5",
     "vite": "^8.0.8",
-    "vue-tsc": "^3.1.0",
-    "yaml": "^2.9.1"
+    "vue-tsc": "^3.1.0"
   },
   "build": {
     "appId": "com.earth-survival-diary.app",
@@ -64,23 +62,17 @@
       "dist/**/*",
       "electron/**/*",
       "!electron/mysql.config.json",
-      "build/**/*",
-      "!build/default-plugins/**/*",
       "package.json",
       "!node_modules/**/*"
     ],
     "extraResources": [
       {
-        "from": "build/icon.png",
-        "to": "build/icon.png"
+        "from": "build/images/icon.png",
+        "to": "build/images/icon.png"
       },
       {
-        "from": "build/icon.ico",
-        "to": "build/icon.ico"
-      },
-      {
-        "from": "build/default-plugins",
-        "to": "default-plugins"
+        "from": "build/images/icon.ico",
+        "to": "build/images/icon.ico"
       },
       {
         "from": "electron/node_modules",
@@ -88,18 +80,24 @@
       }
     ],
     "win": {
-      "icon": "build/icon.ico",
-      "target": "nsis"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "include": "build/installer.nsh"
-    },
-    "publish": {
-      "provider": "generic",
-      "url": "https://www.earth-survival-diary.icu/updates/",
-      "channel": "latest"
+      "icon": "build/images/icon.ico",
+      "target": "dir",
+      "executableName": "Earth-Survival-Diary"
     }
+  },
+  "innoSetup": {
+    "guid": "302f4125-b87c-51f8-aebe-24e8fdc371d8",
+    "perUser": true,
+    "allowElevation": true,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "deleteAppDataOnUninstall": false,
+    "runAfterFinish": true,
+    "artifactName": "Earth-Survival-Diary-Setup-${version}.${ext}",
+    "uninstallDisplayName": "${productName} ${version}",
+    "scriptTemplate": "build/installer.iss",
+    "compilerVersion": "6.7.3",
+    "_comment": "Inno Setup 安装/卸载配置；electron-builder 只读取 build 字段，本块由 scripts/build-installer.cjs 消费。"
   }
 }

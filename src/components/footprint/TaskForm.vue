@@ -93,6 +93,7 @@ import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import dayjs from 'dayjs'
 import { useTaskStore, type Task } from '../../stores/taskStore'
+import { logger } from '../../lib/logger'
 import TimePickerPopover from '../common/picker/TimePickerPopover.vue'
 
 const props = defineProps<{
@@ -232,7 +233,7 @@ const handleSubmit = async () => {
     dialogVisible.value = false
     emit('submit')
   } catch (e: any) {
-    console.error('[TaskForm] Save failed', e.message)
+    logger.error('[Footprint] 保存记录失败', { error: e instanceof Error ? e.message : String(e) })
     ElMessage.error('保存失败，请重试')
   }
 }

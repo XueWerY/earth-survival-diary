@@ -5,7 +5,6 @@ import { getPluginPageOverride } from '../lib/pluginLoader'
 
 const defaultTaskList = () => import('../components/footprint/TaskList.vue')
 const defaultNotesPage = () => import('../components/notes/NotesPage.vue')
-const defaultFocusTimer = () => import('../components/focus/FocusTimer.vue')
 const defaultListPage = () => import('../components/list/ListPage.vue')
 const defaultCountdownList = () => import('../components/countdown/CountdownList.vue')
 const defaultCourseSchedule = () => import('../components/course/CourseSchedule.vue')
@@ -16,7 +15,6 @@ const defaultProfilePage = () => import('../components/profile/ProfilePage.vue')
 const pageComponentNames: Record<string, string> = {
   footprint: 'TaskList',
   notes: 'NotesPage',
-  focus: 'FocusTimer',
   list: 'ListPage',
   countdown: 'CountdownList',
   course: 'CourseSchedule',
@@ -28,7 +26,6 @@ const pageComponentNames: Record<string, string> = {
 const defaultLoaders: Record<string, () => Promise<any>> = {
   footprint: defaultTaskList,
   notes: defaultNotesPage,
-  focus: defaultFocusTimer,
   list: defaultListPage,
   countdown: defaultCountdownList,
   course: defaultCourseSchedule,
@@ -57,7 +54,7 @@ const routes = [
   { path: '/', redirect: '/footprint' },
   { path: '/footprint', name: 'footprint', component: resolveComponent('footprint') },
   { path: '/notes', name: 'notes', component: resolveComponent('notes') },
-  { path: '/focus', name: 'focus', component: resolveComponent('focus') },
+  { path: '/focus', redirect: '/footprint' },
   { path: '/list', name: 'list', component: resolveComponent('list') },
   { path: '/countdown', name: 'countdown', component: resolveComponent('countdown') },
   { path: '/course', name: 'course', component: resolveComponent('course') },
@@ -69,12 +66,6 @@ const routes = [
 const router = createRouter({
   history: createWebHashHistory(),
   routes,
-})
-
-router.beforeEach((to, from) => {
-  if (from.name) {
-    logger.info(`[Router] 路由切换: ${String(from.name)} → ${String(to.name)}`)
-  }
 })
 
 export default router

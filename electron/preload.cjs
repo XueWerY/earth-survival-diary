@@ -15,6 +15,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openDirectory: () => ipcRenderer.invoke('open-directory'),
   readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
   writeFile: (filePath, content) => ipcRenderer.invoke('write-file', filePath, content),
+  readLocalData: (key) => ipcRenderer.invoke('local-data-read', key),
+  writeLocalData: (key, value) => ipcRenderer.invoke('local-data-write', key, value),
+  removeLocalData: (key) => ipcRenderer.invoke('local-data-remove', key),
+  listLocalDataRecords: (prefix) => ipcRenderer.invoke('local-data-list', prefix),
   restartApp: () => ipcRenderer.send('restart-app'),
   getLogFileSize: () => ipcRenderer.invoke('get-log-file-size'),
   getLogDirSize: () => ipcRenderer.invoke('get-log-dir-size'),
@@ -22,10 +26,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   clearLogs: () => ipcRenderer.invoke('clear-logs'),
   openLogViewer: (content) => ipcRenderer.invoke('open-log-viewer', content),
   openChangelogWindow: (content) => ipcRenderer.invoke('open-changelog-window', content),
-  getRemoteApiConfig: () => ipcRenderer.invoke('get-remote-api-config'),
-  setRemoteApiConfig: (token) => ipcRenderer.invoke('set-remote-api-config', token),
   writeRendererLogs: (entries) => ipcRenderer.invoke('write-renderer-logs', entries),
-  scheduleReminders: (userId, reminders, persistDuration) => ipcRenderer.invoke('schedule-reminders', userId, reminders, persistDuration),
+  scheduleReminders: (userId, reminders, persistDuration, reason) => ipcRenderer.invoke('schedule-reminders', userId, reminders, persistDuration, reason),
   cancelAllReminders: () => ipcRenderer.invoke('cancel-all-reminders'),
   getReminderPersistDuration: () => ipcRenderer.invoke('get-reminder-persist-duration'),
       getAllReminders: () => ipcRenderer.invoke('get-all-reminders'),
@@ -56,24 +58,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   offPowerShellOutput: () => ipcRenderer.removeAllListeners('powershell-output'),
   killPowerShell: () => ipcRenderer.invoke('kill-powershell'),
 
-  // 主进程 HTTPS JSON 请求（绕开渲染进程同源限制）
-  httpGetJson: (url) => ipcRenderer.invoke('http-get-json', url),
-  // 主进程 HTTPS PATCH JSON 请求（保存 snowbaby 配置等）
-  httpPatchJson: (url, body) => ipcRenderer.invoke('http-patch-json', url, body),
   // 主进程 HTTPS 文本请求（下载插件源码等，返回 { status, text }）
   httpGetText: (url) => ipcRenderer.invoke('http-get-text', url),
 
   // 插件管理
   getPluginsDirPath: () => ipcRenderer.invoke('get-plugins-dir-path'),
-  getSnowbabyDirPath: () => ipcRenderer.invoke('get-snowbaby-dir-path'),
-  getSnowbabyStatus: () => ipcRenderer.invoke('snowbaby-get-status'),
-  installSnowbaby: () => ipcRenderer.invoke('snowbaby-install'),
-  updateSnowbaby: () => ipcRenderer.invoke('snowbaby-update'),
-  checkSnowbabyUpdate: () => ipcRenderer.invoke('snowbaby-check-update'),
-  uninstallSnowbaby: () => ipcRenderer.invoke('snowbaby-uninstall'),
-  startSnowbaby: (payload) => ipcRenderer.invoke('snowbaby-start', payload),
-  stopSnowbaby: () => ipcRenderer.invoke('snowbaby-stop'),
-  isSnowbabyRunning: (payload) => ipcRenderer.invoke('snowbaby-is-running', payload),
   createDirectory: (dirPath) => ipcRenderer.invoke('create-directory', dirPath),
   removeDirectory: (dirPath) => ipcRenderer.invoke('remove-directory', dirPath),
   getRuntimePluginManifests: () => ipcRenderer.invoke('get-runtime-plugin-manifests'),

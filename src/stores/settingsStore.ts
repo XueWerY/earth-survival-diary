@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import * as api from '../lib/api'
+import { logger } from '../lib/logger'
 
 // 扩展用户设置接口
 export interface ExtendedUserSettings {
@@ -83,6 +84,27 @@ export const useSettingsStore = defineStore('settings', () => {
     const isLoaded = ref(false)
     const isLoading = ref(false)
 
+    const mergeSettings = (saved: Record<string, any>): ExtendedUserSettings => ({
+        ...defaultSettings,
+        ...saved,
+        focus: {
+            ...defaultSettings.focus,
+            ...(saved.focus || {})
+        },
+        course: {
+            ...defaultSettings.course,
+            ...(saved.course || {}),
+            periodCountPerSession: {
+                ...defaultSettings.course.periodCountPerSession,
+                ...(saved.course?.periodCountPerSession || {})
+            }
+        },
+        toolbox: {
+            ...defaultSettings.toolbox,
+            ...(saved.toolbox || {})
+        }
+    })
+
     // 加载设置
     const loadSettings = async () => {
         if (isLoaded.value) return
@@ -90,13 +112,10 @@ export const useSettingsStore = defineStore('settings', () => {
         isLoading.value = true
         try {
             const result = await api.getSettings()
-            settings.value = {
-                ...defaultSettings,
-                ...result.settings
-            }
+            settings.value = mergeSettings((result.settings || {}) as Record<string, any>)
             isLoaded.value = true
         } catch (error) {
-            console.error('Failed to load settings:', error)
+            logger.error('[Settings] 加载设置失败', { error: error instanceof Error ? error.message : String(error) })
         } finally {
             isLoading.value = false
         }
@@ -107,13 +126,10 @@ export const useSettingsStore = defineStore('settings', () => {
         try {
             const result = await api.updateSettings(newSettings)
             // 合并返回的设置
-            settings.value = {
-                ...settings.value,
-                ...result.settings
-            }
+            settings.value = mergeSettings({ ...settings.value, ...(result.settings || {}) } as Record<string, any>)
             return true
         } catch (error) {
-            console.error('Failed to update settings:', error)
+            logger.error('[Settings] 保存设置失败', { error: error instanceof Error ? error.message : String(error) })
             return false
         }
     }

@@ -1,5 +1,7 @@
-// 统一数据存储服务 - 通过云端 API 读写用户数据
-import { getApiBaseUrl, getApiServerUrl, hydrateApiConfig } from '../lib/apiBase'
+// 业务数据、图片和视频媒体均保存在本机应用数据目录。
+import { deleteData as deleteRemoteData, deleteRemoteNote, fetchNotes, getData as getRemoteData, setData as setRemoteData, createRemoteNote, updateRemoteNote } from '../lib/api'
+import { logger } from '../lib/logger'
+import { hydrateMediaPayload } from './localDataStore'
 
 const cache = new Map<string, any>()
 const pendingRequests = new Map<string, Promise<any>>()
@@ -9,19 +11,11 @@ function getAuthToken(): string | null {
   return localStorage.getItem('auth_token')
 }
 
-function authHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  const token = getAuthToken()
-  if (token) headers['Authorization'] = `Bearer ${token}`
-  return headers
-}
-
 function cacheKey(type: string, key: string): string {
-  return `${getApiServerUrl() || 'local'}::${getAuthToken() || 'anonymous'}::${type}/${key}`
+  return `${getAuthToken() || 'anonymous'}::${type}/${key}`
 }
 
 export async function getData<T>(type: string, key: string): Promise<T | null> {
-  await hydrateApiConfig()
   const ck = cacheKey(type, key)
   if (cache.has(ck)) {
     return cache.get(ck) as T
@@ -33,88 +27,55 @@ export async function getData<T>(type: string, key: string): Promise<T | null> {
 
   const token = getAuthToken()
   const requestGeneration = cacheGeneration
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
-  }
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
 
   let promise: Promise<T | null>
-  promise = fetch(`${getApiBaseUrl()}/data/${type}/${key}`, { headers })
-      .then(res => res.json())
-      .then(result => {
-        if (pendingRequests.get(ck) === promise) pendingRequests.delete(ck)
-        if (requestGeneration !== cacheGeneration || token !== getAuthToken()) return null
-        if (result.success) {
-          cache.set(ck, result.data)
-          return result.data as T | null
-        }
-        return null
-      })
-      .catch(err => {
-        if (pendingRequests.get(ck) === promise) pendingRequests.delete(ck)
-        console.error(`Failed to get data for ${type}/${key}:`, err)
-        return null
-      })
+  promise = (async () => {
+    try {
+      const result = await getRemoteData<T>(`${encodeURIComponent(type)}/${encodeURIComponent(key)}`)
+      if (pendingRequests.get(ck) === promise) pendingRequests.delete(ck)
+      if (requestGeneration !== cacheGeneration || token !== getAuthToken()) return null
+      if (result.success) {
+        cache.set(ck, result.data)
+        return result.data as T | null
+      }
+      return null
+    } catch (err) {
+      if (pendingRequests.get(ck) === promise) pendingRequests.delete(ck)
+      logger.error(`[Storage] 本地读取失败：${type}/${key}`, { error: err instanceof Error ? err.message : String(err) })
+      return null
+    }
+  })()
 
   pendingRequests.set(ck, promise)
   return promise
 }
 
 export async function setData<T>(type: string, key: string, data: T): Promise<boolean> {
-  await hydrateApiConfig()
   const ck = cacheKey(type, key)
   const requestGeneration = cacheGeneration
-
   const token = getAuthToken()
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
-  }
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-
   try {
-    const res = await fetch(`${getApiBaseUrl()}/data/${type}/${key}`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ data })
-    })
-    const result = await res.json()
-    if (result.success && requestGeneration === cacheGeneration && token === getAuthToken()) {
+    const result = await setRemoteData(`${encodeURIComponent(type)}/${encodeURIComponent(key)}`, data)
+    if (!result.success) throw new Error('本地保存未成功')
+    if (requestGeneration === cacheGeneration && token === getAuthToken()) {
       cache.set(ck, data)
     }
-    return result.success
+    return true
   } catch (err) {
     cache.delete(ck)
-    console.error(`Failed to set data for ${type}/${key}:`, err)
+    logger.error(`[Storage] 本地保存失败：${type}/${key}`, { error: err instanceof Error ? err.message : String(err) })
     return false
   }
 }
 
 export async function deleteData(type: string, key: string): Promise<boolean> {
-  await hydrateApiConfig()
   const ck = cacheKey(type, key)
   cache.delete(ck)
-
-  const token = getAuthToken()
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
-  }
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
-
   try {
-    const res = await fetch(`${getApiBaseUrl()}/data/${type}/${key}`, {
-      method: 'DELETE',
-      headers
-    })
-    const result = await res.json()
-    return result.success
+    const result = await deleteRemoteData(`${encodeURIComponent(type)}/${encodeURIComponent(key)}`)
+    return !!result.success
   } catch (err) {
-    console.error(`Failed to delete data for ${type}/${key}:`, err)
+    logger.error(`[Storage] 删除本地数据失败：${type}/${key}`, { error: err instanceof Error ? err.message : String(err) })
     return false
   }
 }
@@ -125,9 +86,7 @@ export function clearCache() {
   pendingRequests.clear()
 }
 
-// ============ 笔记：单条记录级读写 ============
-// 笔记不再走「整份数组读-改-写」：桌面端有两处写入方（主窗口与全局捕获窗口），
-// 整份写回会让后写者抹掉先写者的新增/修改，因此改为服务端记录级端点 /api/notes。
+// ============ 笔记：本地记录读写 ============
 
 export interface NoteRecord {
   id: string
@@ -155,62 +114,54 @@ export function normalizeNoteRecord(raw: any): NoteRecord {
   }
 }
 
-export async function listNotes(): Promise<NoteRecord[]> {
-  await hydrateApiConfig()
+async function loadLocalNotes(): Promise<{ notes: NoteRecord[]; ready: boolean }> {
   try {
-    const res = await fetch(`${getApiBaseUrl()}/notes`, { headers: authHeaders() })
-    const result = await res.json()
-    if (!result.success || !Array.isArray(result.notes)) return []
-    return result.notes.map(normalizeNoteRecord)
+    const result = await fetchNotes()
+    if (!result.success || !Array.isArray(result.notes)) return { notes: [], ready: false }
+    const notes = await Promise.all(result.notes.map(async note => normalizeNoteRecord(await hydrateMediaPayload(note))))
+    return { notes, ready: true }
   } catch (err) {
-    console.error('Failed to list notes:', err)
-    return []
+    logger.error('[Storage] 本地读取笔记失败', { error: err instanceof Error ? err.message : String(err) })
+    return { notes: [], ready: false }
   }
 }
 
+export async function listNotes(): Promise<NoteRecord[]> {
+  return (await loadLocalNotes()).notes
+}
+
 export async function createNote(payload: Partial<NoteRecord>): Promise<NoteRecord | null> {
-  await hydrateApiConfig()
+  const loaded = await loadLocalNotes()
+  if (!loaded.ready) return null
+  const note = normalizeNoteRecord({ ...payload, id: payload.id || Date.now().toString() + Math.random().toString(36).slice(2, 8) })
   try {
-    const res = await fetch(`${getApiBaseUrl()}/notes`, {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify(payload)
-    })
-    const result = await res.json()
-    return result.success ? normalizeNoteRecord(result.note) : null
-  } catch (err) {
-    console.error('Failed to create note:', err)
+    const result = await createRemoteNote(note)
+    return result.success && result.note ? normalizeNoteRecord(result.note) : null
+  } catch (error) {
+    logger.error('[Storage] 本地新增笔记失败', { error: error instanceof Error ? error.message : String(error) })
     return null
   }
 }
 
 export async function patchNote(id: string, patch: Partial<NoteRecord>): Promise<NoteRecord | null> {
-  await hydrateApiConfig()
+  const loaded = await loadLocalNotes()
+  if (!loaded.ready) return null
   try {
-    const res = await fetch(`${getApiBaseUrl()}/notes/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      headers: authHeaders(),
-      body: JSON.stringify(patch)
-    })
-    const result = await res.json()
-    return result.success ? normalizeNoteRecord(result.note) : null
-  } catch (err) {
-    console.error('Failed to patch note:', err)
+    const result = await updateRemoteNote(id, { ...patch, updatedAt: new Date().toISOString() })
+    return result.success && result.note ? normalizeNoteRecord(result.note) : null
+  } catch (error) {
+    logger.error('[Storage] 本地更新笔记失败', { id, error: error instanceof Error ? error.message : String(error) })
     return null
   }
 }
 
 export async function deleteNoteById(id: string): Promise<boolean> {
-  await hydrateApiConfig()
+  const loaded = await loadLocalNotes()
+  if (!loaded.ready) return false
   try {
-    const res = await fetch(`${getApiBaseUrl()}/notes/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-      headers: authHeaders()
-    })
-    const result = await res.json()
-    return !!result.success
-  } catch (err) {
-    console.error('Failed to delete note:', err)
+    return !!(await deleteRemoteNote(id)).success
+  } catch (error) {
+    logger.error('[Storage] 本地删除笔记失败', { id, error: error instanceof Error ? error.message : String(error) })
     return false
   }
 }
@@ -230,6 +181,7 @@ export interface SystemState {
   currentPage?: string
   statsActiveTab?: string
   guideCompleted?: boolean
+  guideLastIndex?: number
   version?: string
   defaultsInitialized?: boolean
   navCollapsed?: boolean
