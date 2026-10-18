@@ -6,6 +6,7 @@ import {
 import { getSystemStateField, setSystemStateField, type SystemState } from '../services/storageService'
 import { useListStore } from '../stores/listStore'
 import { useNoteStore } from '../stores/noteStore'
+import { useTempNoteStore } from '../stores/tempNoteStore'
 import { logger } from '../lib/logger'
 import { getCountdownCategoryLabel } from '../utils/navPathLabels'
 
@@ -68,9 +69,26 @@ const MODULE_PERSIST_KEYS: Partial<Record<string, keyof SystemState>> = {
 const NAV_PATH_SEGMENT_LABELS: Record<string, string> = {
   smart: '智能清单', custom: '自定义清单', all: '全部', __all__: '全部',
   today: '今天', expired: '已过期', future: '未来七天', recent: '最近',
-  favorites: '收藏', trash: '回收站', archived: '归档',
+  favorites: '收藏', trash: '回收站', archived: '归档', temp: '临时笔记',
   birthday: '生日', anniversary: '纪念日', holiday: '节日', travel: '旅行',
   entertainment: '娱乐', work: '工作', study: '学习', life: '生活'
+}
+
+/**
+ * 临时笔记的导航段是 `tmp:<绝对路径>`（id 由路径派生）。
+ * 日志里不该出现内部前缀：优先取标题（文件名去扩展名），否则退化为路径 basename。
+ */
+function describeTempNoteSegment(segment: string): string | null {
+  if (!segment.startsWith('tmp:')) return null
+  const filePath = segment.slice('tmp:'.length)
+  try {
+    const title = useTempNoteStore().find(segment)?.title
+    if (title && title.trim()) return title.trim()
+  } catch {
+    /* store 尚未初始化时用路径兜底 */
+  }
+  const base = filePath.split(/[\\/]/).pop() || filePath
+  return base.replace(/\.(md|markdown)$/i, '') || '未命名'
 }
 
 export interface NavState {
@@ -109,6 +127,8 @@ function createNavState(): NavState {
         return path
           .map((segment, index) => {
             if (index === 0) return MODULE_LABELS[segment] || segment
+            const tempLabel = describeTempNoteSegment(segment)
+            if (tempLabel) return tempLabel
             if (noteTagLabels[segment]) return noteTagLabels[segment]
             if (NAV_PATH_SEGMENT_LABELS[segment]) return NAV_PATH_SEGMENT_LABELS[segment]
             const note = noteStore.notes.find(item => item.id === segment)
@@ -145,6 +165,8 @@ function createNavState(): NavState {
     return path
       .map((segment, index) => {
         if (index === 0) return MODULE_LABELS[segment] || segment
+        const tempLabel = describeTempNoteSegment(segment)
+        if (tempLabel) return tempLabel
         if (path[0] === 'countdown' && index === 1) return getCountdownCategoryLabel(segment) || NAV_PATH_SEGMENT_LABELS[segment] || segment
         return NAV_PATH_SEGMENT_LABELS[segment] || segment
       })

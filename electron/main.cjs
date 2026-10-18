@@ -1418,6 +1418,56 @@ ipcMain.handle('write-file', async (_event, filePath, content) => {
   }
 })
 
+// ====== 临时笔记（原地编辑外部 .md）所需的二进制 / 目录 / 状态 IPC ======
+// 这些接口不加 isPathAllowed 限制，与既有 read-file / write-file 保持同一信任级别：
+// 路径来自用户在文件对话框中选择的 .md 文件及其同级 media 目录。
+ipcMain.handle('read-binary-file', async (_event, filePath) => {
+  try {
+    return fs.readFileSync(filePath).toString('base64')
+  } catch (e) {
+    errorLog('[FileSystem] 读取二进制文件失败：' + e.message)
+    return null
+  }
+})
+
+ipcMain.handle('write-binary-file', async (_event, filePath, base64) => {
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true })
+    fs.writeFileSync(filePath, Buffer.from(String(base64 || ''), 'base64'))
+    return true
+  } catch (e) {
+    errorLog('[FileSystem] 写入二进制文件失败：' + e.message)
+    return false
+  }
+})
+
+ipcMain.handle('ensure-directory', async (_event, dirPath) => {
+  try {
+    fs.mkdirSync(dirPath, { recursive: true })
+    return true
+  } catch (e) {
+    errorLog('[FileSystem] 创建目录失败：' + e.message)
+    return false
+  }
+})
+
+ipcMain.handle('stat-file', async (_event, filePath) => {
+  try {
+    const stat = fs.statSync(filePath)
+    return { exists: true, size: stat.size, mtimeMs: stat.mtimeMs, isDirectory: stat.isDirectory() }
+  } catch {
+    return { exists: false, size: 0, mtimeMs: 0, isDirectory: false }
+  }
+})
+
+ipcMain.handle('path-exists', async (_event, targetPath) => {
+  try {
+    return fs.existsSync(targetPath)
+  } catch {
+    return false
+  }
+})
+
 // ====== 文件管理器 IPC ======
 const PLUGINS_DIR = app.isPackaged
   ? path.join(app.getPath('userData'), 'plugins')
@@ -1455,6 +1505,91 @@ ipcMain.handle('read-directory', async (_event, dirPath) => {
   } catch (e) {
     errorLog('[FileManager] 读取目录失败：' + e.message)
     throw e
+  }
+})
+
+/**
+ * 「选择本地 .md 文件」用的目录浏览（只读）。
+ *
+ * 为什么不复用 read-directory：那个 handler 有 isPathAllowed() 限制，
+ * 只允许 userData/logs 与插件目录——而临时笔记本来就要打开**用户任意位置**的 .md
+ * 文件，用它必然 "Access denied"。这里单独开一个**只列出目录项**的只读通道，
+ * 把权限面控制到最小：
+ *   - 只返回元信息（name/path/isDirectory/size），不返回任何文件内容；
+ *   - 不做任何写操作（不会删/改/建）；
+ *   - 复用用户已经通过「选择文件夹」授权过的根目录做白名单校验，
+ *     避免变成「任意路径可枚举」的通用后门。
+ *
+ * @param {string} dirPath 要列出的目录绝对路径
+ * @param {string} [rootPath] 用户显式授权过的根目录（可空：为空时按盘符/用户目录处理）
+ */
+ipcMain.handle('list-directory-for-picker', async (_event, dirPath, rootPath) => {
+  // 盘符列表：Windows 下用于「回到某个盘」的快捷入口。
+  // 注意要在「路径为空」之前算好——空路径时仍需返回盘符，否则弹窗首次打开没有任何入口。
+  const drives = process.platform === 'win32'
+    ? Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i) + ':\\')
+      .filter(d => { try { return fs.existsSync(d) } catch { return false } })
+    : []
+  try {
+    const target = String(dirPath || '')
+    if (!target) return { ok: false, error: '路径为空', entries: [], parent: null, drives }
+    const resolved = path.resolve(target)
+    const root = rootPath ? path.resolve(String(rootPath)) : ''
+    // 若指定了授权根目录，则只允许在其内部浏览（防止被当作任意目录枚举器）
+    if (root && !(resolved === root || resolved.startsWith(root + path.sep))) {
+      return { ok: false, error: '超出已授权目录范围', entries: [], parent: null, drives }
+    }
+    const stat = fs.existsSync(resolved) ? fs.statSync(resolved) : null
+    if (!stat || !stat.isDirectory()) {
+      return { ok: false, error: '目录不存在或不是目录', entries: [], parent: null, drives }
+    }
+    const dirs = []
+    const files = []
+    for (const entry of fs.readdirSync(resolved, { withFileTypes: true })) {
+      // 跳过隐藏项与系统目录噪声，避免列表里全是点文件
+      if (entry.name.startsWith('.')) continue
+      const full = path.join(resolved, entry.name)
+      if (entry.isDirectory()) {
+        dirs.push({ name: entry.name, path: full, isDirectory: true, size: 0 })
+      } else if (entry.isFile()) {
+        let size = 0
+        try { size = fs.statSync(full).size } catch { size = 0 }
+        files.push({ name: entry.name, path: full, isDirectory: false, size })
+      }
+    }
+    const byName = (a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN')
+    dirs.sort(byName)
+    files.sort(byName)
+    const parent = path.dirname(resolved)
+    return {
+      ok: true,
+      // 目录在前、文件在后，便于下钻
+      entries: [...dirs, ...files],
+      // 到盘根时 dirname 会等于自身，此时返回 null 表示没有上一级
+      parent: parent === resolved ? null : parent,
+      drives,
+    }
+  } catch (e) {
+    errorLog('[FilePicker] 列出目录失败：' + e.message)
+    return { ok: false, error: e.message, entries: [], parent: null, drives }
+  }
+})
+
+/** 常用起始位置（桌面/文档/下载/主目录），用于文件选择弹窗的快捷入口 */
+ipcMain.handle('get-picker-roots', async () => {
+  const candidates = [
+    ['主目录', app.getPath('home')],
+    ['桌面', app.getPath('desktop')],
+    ['文档', app.getPath('documents')],
+    ['下载', app.getPath('downloads')],
+  ]
+  try {
+    return candidates
+      .filter(([, p]) => { try { return !!p && fs.existsSync(p) } catch { return false } })
+      .map(([label, p]) => ({ label, path: p }))
+  } catch (e) {
+    errorLog('[FilePicker] 读取常用位置失败：' + e.message)
+    return []
   }
 })
 

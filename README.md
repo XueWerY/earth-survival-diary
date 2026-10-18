@@ -1,11 +1,19 @@
 # 🌍 地球 Online 生存日记
 
-一款将游戏化概念融入日常时间管理的 Windows 桌面应用。版本：`2026.10.12-1`。Electron 桌面端账号和业务数据保存在本机 YAML 文件中。
+一款将游戏化概念融入日常时间管理的 Windows 桌面应用。版本：`2026.10.18-1`。Electron 桌面端账号和业务数据保存在本机 YAML 文件中。
 
 ## ✨ 功能模块
 
 - **足迹与任务**：记录日常事项、完成状态与时间。
 - **笔记**：使用 Milkdown 编辑器整理笔记和标签，清单中的关联笔记预览与编辑器内容样式保持一致。
+  - **富文本格式**：标题、加粗、斜体、下划线、上标、下标、删除线、高亮、文字颜色、行内代码，插入引用块、无序/有序列表、表格、公式与代码块。
+  - **公式**：行内 `\(…\)` 与块级 `\[…\]` 公式由 KaTeX 渲染，存储统一使用反斜杠定界符。
+  - **块锚点链接**：可为引用块与标题生成 `#esd-ref-…` 锚点链接，点击跳转并短暂高亮目标块。
+  - **引用块折叠**：引用块默认收起、只显示首行，点左侧按钮展开；跳转/替换到被收起的引用块时会先自动展开。
+  - **编辑器内搜索替换**：`Ctrl+F` / `Ctrl+H`，随输入实时高亮并可逐个跳转。
+  - **快捷键中心**：24 项动作可自定义组合键，检测笔记模块内部的重复占用；快捷键无效时可自行重新录制。
+  - **临时笔记**：直接打开并原地编辑本机 `.md` 文件，自动轮询外部改动，并记住每篇的阅读位置。
+  - **导出**：导出 Markdown 或自带样式的独立 HTML。
 - **清单与倒数日**：规划待办、课程和重要日期。
 - **专注计时**：记录专注过程与统计。
 - **提醒**：由 Electron 主进程调度，并在本机保存提醒状态。
@@ -62,13 +70,19 @@ data\<用户ID>\list\tasks.yaml
 data\<用户ID>\notes\<笔记ID>.md
 data\<用户ID>\notes\media\<资源ID>.yaml
 data\<用户ID>\notes\tags.yaml
+data\<用户ID>\notes\tempNotes.yaml
+data\<用户ID>\notes\tempReading.yaml
 data\<用户ID>\profile\profile.yaml
 data\<用户ID>\settings\settings.yaml
 data\<用户ID>\system\reminders.yaml
 data\<用户ID>\system\state.yaml
 ```
 
-主进程通过 YAML 解析器读写这些文件。每篇笔记以 Markdown 文件保存，标签保存在 `tags.yaml`；图片和视频资源分别写入 `notes\media\` 下的 YAML 资源文件。程序不会自动迁移旧数据，文件管理器不提供数据导入导出功能。
+主进程通过 YAML 解析器读写这些文件。每篇笔记以 Markdown 文件保存，标签保存在 `tags.yaml`；图片和视频资源分别写入 `notes\media\` 下的 YAML 资源文件。
+
+**临时笔记**（直接编辑本机已有的 `.md` 文件）不复制进笔记库，只在 `tempNotes.yaml` 中保存**文件路径清单**，正文始终以磁盘上的文件为准；每篇的阅读位置单独记录在 `tempReading.yaml`。外部编辑器的改动通过轮询与窗口聚焦自动重读。
+
+程序不会自动迁移旧数据，文件管理器不提供数据导入导出功能。
 
 ## 🏗️ 构建与发布
 
@@ -113,10 +127,29 @@ npm run build:installer           # 已有 win-unpacked 时只重新编译安装
 ```text
 src/
 ├── lib/api.ts                    # 业务 API 适配层，路由到本地实现
-├── services/localApi.ts          # 本地账号与业务请求
-├── services/localDataStore.ts    # 本地数据访问与媒体引用处理
+├── services/                     # 本地账号与业务请求
+│   ├── localApi.ts               # 本地账号与业务请求
+│   ├── localDataStore.ts         # 本地数据访问与媒体引用处理
+│   └── tempNotes.ts              # 临时笔记：路径清单与阅读位置
 ├── stores/                       # Pinia 状态管理
-└── components/                   # Vue 页面与组件
+│   ├── noteStore.ts              # 笔记与标签
+│   ├── shortcutStore.ts          # 快捷键动作、组合键与冲突检测
+│   └── tempNoteStore.ts          # 临时笔记清单与磁盘同步
+├── components/
+│   ├── editor/                   # 编辑器内核扩展
+│   │   ├── blockAnchors.ts       # 块锚点（引用块/标题的链接跳转与高亮）
+│   │   ├── mathSyntax.ts         # 公式定界符 ↔ 编辑器语法的往返转换
+│   │   ├── textStyleMarks.ts     # 高亮/文字颜色/下划线/上标/下标 mark
+│   │   ├── codeGrammar.ts        # 代码块语言描述与语法校验
+│   │   ├── codeLanguages.ts      # 代码语言目录与高亮预览
+│   │   ├── codePreviewBridge.ts  # 链接与行内代码校验
+│   │   └── mathLiveInput.ts      # 公式实时输入插件
+│   ├── notes/                    # 笔记页、编辑器与相关弹窗
+│   └── ...                       # 其它页面与通用组件
+├── styles/                       # 全局样式（代码高亮 token 等）
+└── utils/
+    ├── noteExport.ts             # 导出 Markdown
+    └── noteExportHtml.ts         # 导出独立 HTML
 
 electron/
 ├── main.cjs                      # Electron 主进程及 YAML 文件 IPC

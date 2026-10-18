@@ -15,6 +15,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openDirectory: () => ipcRenderer.invoke('open-directory'),
   readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
   writeFile: (filePath, content) => ipcRenderer.invoke('write-file', filePath, content),
+  readBinaryFile: (filePath) => ipcRenderer.invoke('read-binary-file', filePath),
+  writeBinaryFile: (filePath, base64) => ipcRenderer.invoke('write-binary-file', filePath, base64),
+  ensureDirectory: (dirPath) => ipcRenderer.invoke('ensure-directory', dirPath),
+  statFile: (filePath) => ipcRenderer.invoke('stat-file', filePath),
+  pathExists: (targetPath) => ipcRenderer.invoke('path-exists', targetPath),
   readLocalData: (key) => ipcRenderer.invoke('local-data-read', key),
   writeLocalData: (key, value) => ipcRenderer.invoke('local-data-write', key, value),
   removeLocalData: (key) => ipcRenderer.invoke('local-data-remove', key),
@@ -41,6 +46,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 文件管理器
   getLogDirPath: () => ipcRenderer.invoke('get-log-dir-path'),
   readDirectory: (dirPath) => ipcRenderer.invoke('read-directory', dirPath),
+  // 「选择本地 .md」应用内弹窗用的只读目录浏览（不走 read-directory 的路径白名单）
+  listDirectoryForPicker: (dirPath, rootPath) => ipcRenderer.invoke('list-directory-for-picker', dirPath, rootPath),
+  getPickerRoots: () => ipcRenderer.invoke('get-picker-roots'),
   deleteFilePath: (filePath) => ipcRenderer.invoke('delete-file-path', filePath),
   renameFilePath: (oldPath, newPath) => ipcRenderer.invoke('rename-file-path', oldPath, newPath),
   readTextFilePath: (filePath) => ipcRenderer.invoke('read-text-file-path', filePath),

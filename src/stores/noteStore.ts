@@ -83,7 +83,26 @@ export const extractMdOutline = (markdown: string): MdOutlineItem[] => {
   if (!markdown) return []
   const lines = markdown.split('\n')
   const outline: MdOutlineItem[] = []
+  // 代码围栏状态：``` / ~~~ 之内的「# 注释」不是标题，必须跳过，
+  // 否则大纲会出现伪条目、且跳转行号指向注释行。
+  let fence: { marker: string; length: number } | null = null
   lines.forEach((line, i) => {
+    const fenceMatch = /^ {0,3}(`{3,}|~{3,})/.exec(line)
+    if (fenceMatch) {
+      const marker = fenceMatch[1][0]
+      const length = fenceMatch[1].length
+      if (!fence) {
+        fence = { marker, length }
+        return
+      }
+      // 同种标记且不短于开启长度 → 围栏闭合
+      if (marker === fence.marker && length >= fence.length) {
+        fence = null
+        return
+      }
+      return
+    }
+    if (fence) return
     const match = line.match(/^(#{1,6})\s+(.+)/)
     if (match) {
       outline.push({ level: match[1].length, text: match[2].trim(), line: i })

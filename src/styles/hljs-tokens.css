@@ -1,0 +1,72 @@
+/* highlight.js token 配色（暗色 · 蓝紫星空适配）
+ *
+ * 不引入 highlight.js 自带主题：那些是全局选择器（.hljs{}），会污染
+ * 其它组件里的 <code>。这里只针对 .hljs 下的 token 类上色，
+ * 由编辑器代码块预览（.milkdown-code-block .preview）与插入对话框共用。
+ */
+
+.hljs {
+  color: #d6e2ff;
+  background: transparent;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: #6b7699;
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-type,
+.hljs-symbol,
+.hljs-doctag {
+  color: #c792ea;
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-template-tag {
+  color: #a5e8a0;
+}
+
+.hljs-number,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-link {
+  color: #f7b267;
+}
+
+.hljs-title,
+.hljs-title.class_,
+.hljs-title.function_,
+.hljs-section {
+  color: #82aaff;
+}
+
+.hljs-attr,
+.hljs-attribute,
+.hljs-property,
+.hljs-name,
+.hljs-builtin-name {
+  color: #7dd3fc;
+}
+
+.hljs-built_in,
+.hljs-params {
+  color: #f0abfc;
+}
+
+.hljs-meta,
+.hljs-punctuation {
+  color: #94a3b8;
+}
+
+.hljs-deletion {
+  color: #fca5a5;
+}
+
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }

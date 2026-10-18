@@ -204,6 +204,11 @@ export function attachCustomScrollbar(
     if (!visible) {
       thumb.tabIndex = -1
       state.geometry = { trackStart, trackLength, thumbLength: 0, thumbTravel: 0, maxScroll: 0 }
+      // host 处于 display:none（如全屏编辑隐藏侧栏）时安排恢复复查：
+      // 重新显示不会触发 resize/scroll，若不复查 track 会停留在隐藏前的旧坐标。
+      if (metrics.clientSize === 0 || host.getBoundingClientRect().width === 0) {
+        scheduleHiddenRecovery()
+      }
       return
     }
 
@@ -244,12 +249,55 @@ export function attachCustomScrollbar(
 
   const update = () => {
     updateFrame = 0
+    lastHostRect = host.getBoundingClientRect()
     for (const axis of states.keys()) updateAxis(axis)
   }
 
   const scheduleUpdate = () => {
     if (updateFrame) return
     updateFrame = window.requestAnimationFrame(update)
+  }
+
+  // 位置自检：布局漂移（面板宽度过渡动画、抽屉展开、字体/图片加载、
+  // 缩放变化等）不会触发 scroll/resize/RO，轨道会停留在旧坐标——
+  // 表现为滚动条压在卡片上、离容器右边界一截。这里低成本轮询宿主矩形，
+  // 一旦发现变化就重算，保证轨道始终吸附容器边界。
+  let lastHostRect = host.getBoundingClientRect()
+  const positionWatchTimer = window.setInterval(() => {
+    if (!host.isConnected) return
+    const rect = host.getBoundingClientRect()
+    if (
+      Math.abs(rect.left - lastHostRect.left) > 0.5 ||
+      Math.abs(rect.right - lastHostRect.right) > 0.5 ||
+      Math.abs(rect.top - lastHostRect.top) > 0.5 ||
+      Math.abs(rect.bottom - lastHostRect.bottom) > 0.5 ||
+      Math.abs(rect.width - lastHostRect.width) > 0.5 ||
+      Math.abs(rect.height - lastHostRect.height) > 0.5
+    ) {
+      scheduleUpdate()
+    }
+  }, 200)
+
+  // 隐藏→显示恢复复查：用短轮询探测 host 重新可见（display:none→block
+  // 不触发 resize/scroll，ResizeObserver 在隐藏期间也不回调）。
+  let hiddenRecoveryTimer: ReturnType<typeof setInterval> | null = null
+  const scheduleHiddenRecovery = () => {
+    if (hiddenRecoveryTimer !== null) return
+    hiddenRecoveryTimer = setInterval(() => {
+      const rect = host.getBoundingClientRect()
+      if (rect.width > 0 || rect.height > 0) {
+        clearInterval(hiddenRecoveryTimer as ReturnType<typeof setInterval>)
+        hiddenRecoveryTimer = null
+        scheduleUpdate()
+      }
+    }, 120)
+    // 兜底：最多轮询 3 秒后自动清理（host 被永久移除等场景）
+    setTimeout(() => {
+      if (hiddenRecoveryTimer !== null) {
+        clearInterval(hiddenRecoveryTimer)
+        hiddenRecoveryTimer = null
+      }
+    }, 3000)
   }
 
   const endDrag = () => {
@@ -369,6 +417,11 @@ export function attachCustomScrollbar(
     window.removeEventListener('resize', scheduleUpdate)
     window.removeEventListener('scroll', scheduleUpdate, true)
     if (updateFrame) window.cancelAnimationFrame(updateFrame)
+    clearInterval(positionWatchTimer)
+    if (hiddenRecoveryTimer !== null) {
+      clearInterval(hiddenRecoveryTimer)
+      hiddenRecoveryTimer = null
+    }
     childResizeObserver?.disconnect()
     mutationObserver?.disconnect()
     for (const state of states.values()) state.track.remove()

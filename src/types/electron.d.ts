@@ -18,6 +18,13 @@ declare global {
       openDirectory: () => Promise<string | null>
       readFile: (filePath: string) => Promise<string | null>
       writeFile: (filePath: string, content: string) => Promise<boolean>
+      /** 读取任意本地文件为 base64（临时笔记的图片/音频/视频） */
+      readBinaryFile: (filePath: string) => Promise<string | null>
+      /** 把 base64 写入本地文件（自动创建父目录） */
+      writeBinaryFile: (filePath: string, base64: string) => Promise<boolean>
+      ensureDirectory: (dirPath: string) => Promise<boolean>
+      statFile: (filePath: string) => Promise<{ exists: boolean; size: number; mtimeMs: number; isDirectory: boolean }>
+      pathExists: (targetPath: string) => Promise<boolean>
       readLocalData: (key: string) => Promise<{ found: boolean; value?: unknown }>
       writeLocalData: (key: string, value: unknown) => Promise<boolean>
       removeLocalData: (key: string) => Promise<boolean>
@@ -39,6 +46,10 @@ declare global {
       // 文件管理器
       getLogDirPath: () => Promise<string>
       readDirectory: (dirPath: string) => Promise<FileEntry[]>
+      /** 「选择本地 .md」应用内弹窗的只读目录浏览（可选：旧版本 preload 可能没有） */
+      listDirectoryForPicker?: (dirPath: string, rootPath?: string) => Promise<PickerDirectoryResult>
+      /** 文件选择弹窗的常用起始位置（桌面/文档/下载/主目录） */
+      getPickerRoots?: () => Promise<Array<{ label: string; path: string }>>
       deleteFilePath: (filePath: string) => Promise<boolean>
       renameFilePath: (oldPath: string, newPath: string) => Promise<boolean>
       readTextFilePath: (filePath: string) => Promise<string>
@@ -78,6 +89,18 @@ interface FileEntry {
   path: string
   isDirectory: boolean
   size: number
+}
+
+/** 只读目录浏览的返回结构（文件选择弹窗用） */
+interface PickerDirectoryResult {
+  ok: boolean
+  error?: string
+  /** 目录在前、文件在后 */
+  entries: FileEntry[]
+  /** 上一级目录；已到盘根时为 null */
+  parent: string | null
+  /** Windows 下存在的盘符列表，如 ["C:\\", "D:\\"] */
+  drives?: string[]
 }
 
 interface ReminderItem {
