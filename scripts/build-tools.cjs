@@ -187,12 +187,50 @@ function writeEmptyBuilderOverride() {
 //   1. 自动合并同版本的重复 draft（electron-builder 并发上传竞态产生的拆家 release）；
 //   2. 上传本地缺失的资产（Setup exe、blockmap、latest.yml）；
 //   3. 发布 Release（draft:false），成为 Latest。
+//
+// ⚠️ 令牌解析顺序（2026-10-18 增补）：
+//   1) 环境变量 GH_TOKEN / GITHUB_TOKEN（CI 或用户显式设置）
+//   2) 本机 GitHub CLI 的登录态（`gh auth token`）
+// 为什么要加第 2 条：此前只认环境变量，而手动设置的 PAT 会过期，
+// 一旦过期就报 `401 Bad credentials`，用户很难判断是「令牌过期」还是「脚本出错」。
+// gh 的登录令牌由 keyring 托管、可通过 `gh auth login` 续期，作为兜底更可靠。
+/*
+  读取 GitHub CLI 在 keyring 里的登录令牌。
+
+  ⚠️ 必须**清掉 GH_TOKEN / GITHUB_TOKEN 再调用 gh**：
+  gh CLI 在环境变量存在时会直接回显它（实测：设了失效的 GH_TOKEN 后
+  `gh auth token` 返回的就是那个失效的 ghp_ 令牌，而非 keyring 里的 gho_ 令牌）。
+  这样兜底才真正拿到「另一个」令牌，否则等于原地打转。
+*/
+function readGhToken() {
+  const env = { ...process.env }
+  delete env.GH_TOKEN
+  delete env.GITHUB_TOKEN
+  try {
+    return require('child_process')
+      .execFileSync('gh', ['auth', 'token'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env })
+      .trim()
+  } catch {
+    return ''
+  }
+}
+
+function resolveGithubToken() {
+  const fromEnv = (process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '').trim()
+  if (fromEnv) return { token: fromEnv, source: 'env' }
+  const fromGh = readGhToken()
+  if (fromGh) return { token: fromGh, source: 'gh' }
+  return { token: '', source: 'none' }
+}
+
 function publishRelease() {
   const https = require('https')
   return (async () => {
-    const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN
+    let { token, source } = resolveGithubToken()
     if (!token) {
-      console.error('缺少 GitHub 访问令牌：请设置环境变量 GH_TOKEN（或 GITHUB_TOKEN）后重试')
+      console.error('缺少 GitHub 访问令牌，发布中止。可任选一种方式配置：')
+      console.error('  1) 设置环境变量 GH_TOKEN（需 repo 权限的个人访问令牌）')
+      console.error('  2) 安装 GitHub CLI 并登录：gh auth login')
       process.exit(1)
     }
     const pkg = require(path.join(ROOT, 'package.json'))
@@ -200,6 +238,65 @@ function publishRelease() {
     const repo = pkg.repository
     if (typeof repo !== 'string') { console.error('package.json 缺少仓库地址配置'); process.exit(1) }
     const tag = 'v' + version
+
+    /*
+      发布前先校验令牌可用性。
+      为什么要「先校验」而不是直接发：环境变量里的旧 PAT 可能已过期，
+      若不校验，脚本会先跑完查询/创建 Release 才在后续步骤报 401，
+      甚至留下半成品 draft。这里先探测一次，失败时若 gh 可用则自动切换，
+      实现自愈（用户无需手动清理过期环境变量）。
+    */
+    const probe = () => new Promise(resolve => {
+      const req = https.request({
+        hostname: 'api.github.com',
+        path: `/repos/${repo}`,
+        method: 'GET',
+        headers: {
+          Authorization: 'token ' + token,
+          'User-Agent': 'earth-survival-diary-build',
+          Accept: 'application/vnd.github+json',
+        },
+      }, res => {
+        res.resume()
+        res.on('end', () => resolve(res.statusCode))
+      })
+      req.on('error', () => resolve(-1))
+      req.end()
+    })
+
+    let status = await probe()
+    if (status === 401 || status === 403) {
+      const hintSource = source
+      const ghToken = readGhToken()
+      if (ghToken && ghToken !== token) {
+        console.log(
+          `环境变量里的令牌被 GitHub 拒绝（HTTP ${status}），已自动改用 GitHub CLI 的登录令牌重试。`,
+        )
+        console.log('提示：旧的 GH_TOKEN 已失效，建议用 setx GH_TOKEN "<新令牌>" 更新，或直接删除该变量。')
+        token = ghToken
+        source = 'gh'
+        status = await probe()
+      }
+      if (status === 401 || status === 403) {
+        console.error([
+          '',
+          '────────────────────────────────────────',
+          `GitHub 拒绝了访问令牌（HTTP ${status}，来源：${hintSource}）。常见原因：`,
+          '  · 令牌已过期或被撤销（经典 PAT 有有效期）',
+          '  · 令牌缺少该仓库的 repo 权限（细粒度令牌需显式授权）',
+          '',
+          '处理方式（任选其一）：',
+          '  1) 重新生成 PAT 并更新环境变量：',
+          '       setx GH_TOKEN "<新的令牌>"     （需重新打开终端生效）',
+          '  2) 删除失效变量，改用 GitHub CLI 登录：',
+          '       setx GH_TOKEN ""               （或在系统设置里删除）',
+          '       gh auth login',
+          '────────────────────────────────────────',
+        ].join('\n'))
+        process.exit(1)
+      }
+    }
+    if (source === 'gh') console.log('使用 GitHub CLI 的登录令牌发布。')
 
     const api = (method, urlPath, { body, headers = {}, isBinary = false } = {}) => new Promise((resolve, reject) => {
       // 支持完整 URL（如 GitHub uploads 域名）或相对路径（api.github.com）
@@ -223,6 +320,29 @@ function publishRelease() {
           if (res.statusCode >= 200 && res.statusCode < 300) {
             resolve(text ? JSON.parse(text) : null)
           } else {
+            /*
+              401/403 单独给出可操作的提示：
+              此前只抛出原始 JSON `Bad credentials`，用户无法判断
+              是「令牌过期」还是「脚本有 bug」。这里补上排查方向。
+            */
+            if (res.statusCode === 401 || res.statusCode === 403) {
+              const hint = [
+                '',
+                '────────────────────────────────────────',
+                `GitHub 拒绝了访问令牌（HTTP ${res.statusCode}）。常见原因：`,
+                '  · 令牌已过期或被撤销（经典 PAT 有有效期）',
+                '  · 令牌缺少该仓库的 repo 权限（细粒度令牌需显式授权）',
+                '',
+                '处理方式：',
+                '  1) 重新生成 PAT 并设置为环境变量：',
+                '       setx GH_TOKEN "<新的令牌>"   （重新打开终端生效）',
+                '  2) 或改用 GitHub CLI 登录后重试（脚本会自动读取）：',
+                '       gh auth login',
+                '     然后直接执行 npm run publish-release',
+                '────────────────────────────────────────',
+              ].join('\n')
+              console.error(hint)
+            }
             reject(new Error(`GitHub API ${method} ${urlPath} -> ${res.statusCode}: ${text.slice(0, 300)}`))
           }
         })

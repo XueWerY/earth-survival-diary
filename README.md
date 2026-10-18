@@ -93,6 +93,23 @@ npm run electron:build:win
 
 构建产物输出到 `release/`。配置 GitHub 发布令牌后，`npm run publish-release` 可上传当前发布产物。
 
+发布需要的 GitHub 访问令牌按以下顺序解析：
+
+1. 环境变量 `GH_TOKEN`（或 `GITHUB_TOKEN`）
+2. 本机 GitHub CLI 的登录态（`gh auth token`，令牌由系统 keyring 托管）
+
+```sh
+# 方式一：使用 GitHub CLI（推荐，令牌可续期）
+gh auth login
+npm run publish-release
+
+# 方式二：使用个人访问令牌（需 repo 权限）
+setx GH_TOKEN "<令牌>"     # 设置后需重新打开终端
+npm run publish-release
+```
+
+若环境变量里的令牌已过期，脚本会先探测、失败后**自动改用 GitHub CLI 的令牌**继续发布，并提示更新或删除该变量。`release/` 中已上传的资产会跳过，重复执行是安全的。
+
 ### 安装与卸载（Inno Setup）
 
 安装与卸载程序由 [Inno Setup](https://jrsoftware.org/isinfo.php) 制作，不再使用 NSIS。
