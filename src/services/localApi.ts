@@ -1,4 +1,4 @@
-import { exportLocalDataRecords, listGlobalLocalDataRecords, readLocalData, removeGlobalLocalData, removeLocalData, writeGlobalLocalData, writeLocalData } from './localDataStore'
+import { listGlobalLocalDataRecords, listLocalDataKeys, readLocalData, removeGlobalLocalData, removeLocalData, writeGlobalLocalData, writeLocalData } from './localDataStore'
 
 type LocalRouteResult = { handled: false } | { handled: true; data: any }
 
@@ -470,8 +470,8 @@ async function localAuth(path: string, method: string, body: any, token: string 
     return { success: true }
   }
   if (path === '/auth/account' && method === 'DELETE') {
-    const records = await exportLocalDataRecords()
-    for (const record of records) await removeLocalData(record.key)
+    const keys = await listLocalDataKeys()
+    for (const key of keys) await removeLocalData(key)
     await writeAccounts(accounts.filter(account => account.id !== current.id))
     return { success: true }
   }

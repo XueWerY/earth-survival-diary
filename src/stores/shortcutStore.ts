@@ -9,13 +9,13 @@
 //    【已删除】原先还有「与系统/其它软件保留键冲突」的检测——应用无法探测外部占用，
 //    那张手工清单既不可穷举也无法验证，只会误导；用户要求删除，改为提示
 //    「快捷键无效时请自己录制新的组合键」。
-//  - 持久化到 data/<用户ID>/notes/shortcuts.yaml（与临时笔记路径同目录），
+//  - 持久化到用户数据目录的 notes/shortcuts.yaml，
 //    因此换设备/重装后仍在 data 目录里可迁移。
 
 import { ref } from 'vue'
 import { getData, setData } from '../services/storageService'
 
-// 复用既有的读写通道（与 tempNotes 保持一致）
+// 复用既有的本地数据读写通道。
 const DATA_TYPE = 'notes'
 const DATA_KEY = 'shortcuts'
 

@@ -1,5 +1,5 @@
 <template>
-  <div class="statistics-container" :class="{ 'is-mobile': !isElectron }">
+  <div class="statistics-container" :class="{ 'is-mobile': !isDesktopLayout }">
     <div class="stats-scroll-wrapper">
       <div class="stats-content">
         <div class="date-range-bar">
@@ -279,7 +279,7 @@ import { usePageNav } from '../../composables/usePageNav'
 import { logger } from '../../lib/logger'
 import DateScrollPicker from '../common/picker/DateScrollPicker.vue'
 
-const isElectron = inject<boolean>('isElectron', false)
+const isDesktopLayout = inject<Ref<boolean>>('isDesktopLayout', ref(typeof window !== 'undefined' && window.innerWidth >= 768))
 const pageNav = usePageNav()
 const taskStore = useTaskStore()
 const listStore = useListStore()
@@ -512,7 +512,8 @@ const courseStats = computed(() => {
   courses.forEach((c: any) => {
     const dwList = Array.isArray(c.dayOfWeek) ? c.dayOfWeek : (c.dayOfWeek != null ? [c.dayOfWeek] : [])
     dwList.forEach((d: number) => {
-      if (d >= 0 && d < 7) dayCounts[d]++
+      const normalizedDay = d === 7 ? 0 : d
+      if (normalizedDay >= 0 && normalizedDay < 7) dayCounts[normalizedDay]++
     })
     if (c.periodIds && Array.isArray(c.periodIds)) {
       totalPeriods += c.periodIds.length * dwList.length

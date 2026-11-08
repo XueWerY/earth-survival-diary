@@ -2,6 +2,8 @@ export {}
 
 declare global {
   interface Window {
+    /** True only when rendered inside the legacy Electron shell; browser service shims do not set this. */
+    __ESD_DESKTOP__?: boolean
     electronAPI: {
       resizeWindow: (width: number, height: number) => void
       onUpdateStatus: (callback: (data: UpdateStatus) => void) => void
@@ -16,12 +18,17 @@ declare global {
       saveFileDialog: (options?: any) => Promise<string | null>
       openFileDialog: (options?: any) => Promise<string | null>
       openDirectory: () => Promise<string | null>
+      getNotesLibraryInfo: (scope: string) => Promise<{ configured: boolean; activeLibraryId: string | null; rootPath: string | null; rootExists: boolean; noteCount: number; folders: string[]; libraries: Array<{ id: string; name: string; rootPath: string; rootExists: boolean }>; legacyNoteCount: number }>
+      selectNotesLibraryFolder: (scope: string) => Promise<{ configured: boolean; activeLibraryId: string | null; rootPath: string | null; rootExists: boolean; noteCount: number; folders: string[]; libraries: Array<{ id: string; name: string; rootPath: string; rootExists: boolean }>; legacyNoteCount: number } | null>
+      switchNotesLibrary: (scope: string, libraryId: string) => Promise<{ configured: boolean; activeLibraryId: string | null; rootPath: string | null; rootExists: boolean; noteCount: number; folders: string[]; libraries: Array<{ id: string; name: string; rootPath: string; rootExists: boolean }>; legacyNoteCount: number }>
+      createNotesFolder: (scope: string, folderPath: string) => Promise<{ configured: boolean; activeLibraryId: string | null; rootPath: string | null; rootExists: boolean; noteCount: number; folders: string[]; libraries: Array<{ id: string; name: string; rootPath: string; rootExists: boolean }>; legacyNoteCount: number }>
+      renameNotesFolder: (scope: string, oldPath: string, newPath: string) => Promise<{ configured: boolean; activeLibraryId: string | null; rootPath: string | null; rootExists: boolean; noteCount: number; folders: string[]; libraries: Array<{ id: string; name: string; rootPath: string; rootExists: boolean }>; legacyNoteCount: number }>
+      deleteNotesFolder: (scope: string, folderPath: string) => Promise<{ configured: boolean; activeLibraryId: string | null; rootPath: string | null; rootExists: boolean; noteCount: number; folders: string[]; libraries: Array<{ id: string; name: string; rootPath: string; rootExists: boolean }>; legacyNoteCount: number }>
       readFile: (filePath: string) => Promise<string | null>
       writeFile: (filePath: string, content: string) => Promise<boolean>
-      /** 读取任意本地文件为 base64（临时笔记的图片/音频/视频） */
       readBinaryFile: (filePath: string) => Promise<string | null>
-      /** 把 base64 写入本地文件（自动创建父目录） */
-      writeBinaryFile: (filePath: string, base64: string) => Promise<boolean>
+      /** 把 Base64 或原始二进制字节写入本地文件（自动创建父目录） */
+      writeBinaryFile: (filePath: string, content: string | Uint8Array) => Promise<boolean>
       ensureDirectory: (dirPath: string) => Promise<boolean>
       statFile: (filePath: string) => Promise<{ exists: boolean; size: number; mtimeMs: number; isDirectory: boolean }>
       pathExists: (targetPath: string) => Promise<boolean>
@@ -29,6 +36,16 @@ declare global {
       writeLocalData: (key: string, value: unknown) => Promise<boolean>
       removeLocalData: (key: string) => Promise<boolean>
       listLocalDataRecords: (prefix: string) => Promise<Array<{ key: string; value: unknown }>>
+      listLocalDataKeys: (prefix: string) => Promise<string[]>
+      savePickedMediaFile: (file: File, mimeType: string, fileName: string, scope: string, jobId?: string) => Promise<string | null>
+      onMediaSaveProgress: (callback: (progress: { jobId: string; loaded: number; total: number }) => void) => () => void
+      beginPickedMediaUpload: (options: { mode: 'asset'; scope: string; mimeType: string; fileName: string }) => Promise<string>
+      appendPickedMediaUploadChunk: (uploadId: string, chunk: ArrayBuffer | Uint8Array) => Promise<number>
+      finishPickedMediaUpload: (uploadId: string, callback: (result: { uploadId: string; reference?: string; error?: string }) => void) => () => void
+      reportMediaUploadCheckpoint?: (stage: string, details?: Record<string, unknown>) => void
+      cancelPickedMediaUpload: (uploadId: string) => Promise<boolean>
+      getLocalMediaAssetUrl: (scope: string, assetId: string) => Promise<string | null>
+      updateLocalMediaAssetMetadata: (scope: string, assetId: string, metadata: { mimeType?: string; fileName?: string } | null) => Promise<unknown>
       restartApp: () => void
       getLogFileSize: () => Promise<{ size: number; exists: boolean }>
       getLogDirSize: () => Promise<{ size: number }>

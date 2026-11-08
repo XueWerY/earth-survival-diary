@@ -29,3 +29,12 @@ export function validateInlineCode(source: string): string | null {
 }
 
 export { highlightInnerHtml as renderPreviewHtml } from './codeLanguages'
+
+/** 根据内容选择足够长的反引号分隔符，保留代码里的反引号和首尾空格。 */
+export function buildInlineCodeMarkdown(text: string): string {
+  const tick = String.fromCharCode(96)
+  const runs = text.match(/\x60+/g) || []
+  const fence = tick.repeat(Math.max(0, ...runs.map(run => run.length)) + 1)
+  const pad = text.startsWith(tick) || text.endsWith(tick) || (text.startsWith(' ') && text.endsWith(' ') && /\S/.test(text))
+  return fence + (pad ? ' ' : '') + text + (pad ? ' ' : '') + fence
+}

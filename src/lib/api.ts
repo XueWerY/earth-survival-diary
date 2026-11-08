@@ -26,6 +26,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     }
     const localResult = await routeLocalApiRequest(endpoint, localOptions, token)
     if (!localResult.handled) throw new Error(`不支持的本地数据操作：${endpoint}`)
+    // 笔记正文里的媒体引用要留给编辑器按需加载；展开成 data URL 会让
+    // 不支持 data URL 的音视频节点退化成整段可见的 HTML 源码。
+    if (endpoint === '/notes' || endpoint.startsWith('/notes/')) return localResult.data as T
     return await hydrateMediaPayload(localResult.data) as T
 }
 
@@ -422,7 +425,9 @@ export async function deleteListTask(id: string): Promise<{ success: boolean }> 
 }
 
 export async function fetchNotes(): Promise<{ success: boolean; notes: any[] }> {
-    return request('/notes')
+    const result = await request<{ success: boolean; notes: any[] }>('/notes')
+    // 兼容旧笔记中直接保存的内嵌媒体：转换成短引用后再交给编辑器。
+    return await localizeMediaPayload(result)
 }
 
 export async function createRemoteNote(note: any): Promise<{ success: boolean; note: any }> {

@@ -14,7 +14,7 @@ type StoredRecord<T> = { key: string; value: T }
 
 let databasePromise: Promise<IDBDatabase> | null = null
 
-function getUserScope(): string {
+export function getUserScope(): string {
   const token = typeof localStorage === 'undefined' ? null : localStorage.getItem('auth_token')
   if (!token) return 'anonymous'
   try {
@@ -193,6 +193,41 @@ export async function updateLocalData<T>(key: string, update: (current: T | unde
 export interface LocalDataSnapshotRecord {
   key: string
   value: unknown
+}
+
+/** 仅枚举当前用户的数据键，不读取媒体二进制内容。 */
+export async function listLocalDataKeys(): Promise<string[]> {
+  const prefix = `${getUserScope()}:`
+  const electronStore = typeof window !== 'undefined' ? window.electronAPI : undefined
+  if (electronStore?.listLocalDataKeys) {
+    const keys = await electronStore.listLocalDataKeys(prefix)
+    return keys.map(key => key.startsWith(prefix) ? key.slice(prefix.length) : key)
+  }
+
+  const keys = new Set<string>()
+  try {
+    for (let index = 0; index < localStorage.length; index++) {
+      const storageKey = localStorage.key(index)
+      const fallbackPrefix = FALLBACK_PREFIX + prefix
+      if (storageKey?.startsWith(fallbackPrefix)) keys.add(storageKey.slice(fallbackPrefix.length))
+    }
+  } catch {
+    // IndexedDB remains available when localStorage cannot be enumerated.
+  }
+  try {
+    const db = await openDatabase()
+    const storedKeys = await new Promise<IDBValidKey[]>((resolve, reject) => {
+      const request = db.transaction(OBJECT_STORE, 'readonly').objectStore(OBJECT_STORE).getAllKeys()
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error || new Error('Unable to list local data keys'))
+    })
+    for (const key of storedKeys) {
+      if (typeof key === 'string' && key.startsWith(prefix)) keys.add(key.slice(prefix.length))
+    }
+  } catch {
+    // Use keys collected from the localStorage fallback when IndexedDB is unavailable.
+  }
+  return [...keys]
 }
 
 export async function exportLocalDataRecords(): Promise<LocalDataSnapshotRecord[]> {

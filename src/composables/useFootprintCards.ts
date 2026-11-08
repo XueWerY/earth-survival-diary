@@ -21,7 +21,13 @@ export interface CourseInfo {
   note: string
   weeks: number[]
   periodText: string
-  dayOfWeek: number
+  dayOfWeek: number[]
+}
+
+function normalizeCourseDays(value: unknown): number[] {
+  const rawDays = Array.isArray(value) ? value : [value == null ? 1 : value]
+  return [...new Set(rawDays.map(raw => Number(raw) === 7 ? 0 : Number(raw)))]
+    .filter(day => Number.isInteger(day) && day >= 0 && day <= 6)
 }
 
 interface CountdownCard {
@@ -205,7 +211,7 @@ export function useFootprintCards(
 
         loadedCourses.value = courses
           .filter((c: any) => {
-            const days = Array.isArray(c.dayOfWeek) ? c.dayOfWeek : [c.dayOfWeek]
+            const days = normalizeCourseDays(c.dayOfWeek)
             if (!days.includes(dayOfWeek)) return false
             if (c.weeks && c.weeks.length > 0) {
               return c.weeks.includes(weekNum)
@@ -233,7 +239,7 @@ export function useFootprintCards(
               note: c.note || '',
               weeks: Array.isArray(c.weeks) ? c.weeks : [],
               periodText,
-              dayOfWeek: c.dayOfWeek
+              dayOfWeek: normalizeCourseDays(c.dayOfWeek)
             }
           })
       }

@@ -6,7 +6,7 @@
       class="tt-row"
       :class="{ active: isActive(row.node) }"
       :style="{ paddingLeft: 10 + row.depth * 14 + 'px' }"
-      @click="emit('select', row.node.tagId ?? 'v:' + row.node.path)"
+      @click="emit('select', row.node.tagId ?? tagPathViewId(props.folderPath || '', row.node.path))"
     >
       <span
         class="tt-caret"
@@ -43,7 +43,7 @@ interface TagNode {
   children: TagNode[]
 }
 
-const props = defineProps<{ active: string }>()
+const props = withDefaults(defineProps<{ active: string; folderPath?: string }>(), { folderPath: '' })
 
 const emit = defineEmits<{
   (e: 'select', viewId: string): void
@@ -52,11 +52,12 @@ const emit = defineEmits<{
 
 const store = useNoteStore()
 const collapsed = ref(new Set<string>())
+const tagPathViewId = (folderPath: string, tagPath: string) => `tagpath:${encodeURIComponent(folderPath)}:${encodeURIComponent(tagPath)}`
 
 const tree = computed<TagNode[]>(() => {
   const roots: TagNode[] = []
   // 按路径深度排序，保证父节点先于子节点创建
-  const sorted = [...store.tags].sort((a, b) => {
+  const sorted = store.tags.filter(tag => (tag.folderPath || '') === props.folderPath).sort((a, b) => {
     const da = a.name.split('/').length
     const db = b.name.split('/').length
     return da - db || a.name.localeCompare(b.name, 'zh')
@@ -72,7 +73,7 @@ const tree = computed<TagNode[]>(() => {
       const path = parentPath ? parentPath + '/' + segments[i] : segments[i]
       let node = findChild(list, segments[i])
       if (!node) {
-        node = { key: 'v:' + path, tagId: null, path, label: segments[i], color: 'rgba(255,255,255,0.28)', count: 0, children: [] }
+        node = { key: `v:${encodeURIComponent(props.folderPath)}:${path}`, tagId: null, path, label: segments[i], color: 'rgba(255,255,255,0.28)', count: 0, children: [] }
         list.push(node)
       }
       if (isLeaf) {
@@ -87,7 +88,7 @@ const tree = computed<TagNode[]>(() => {
 
   // 聚合计数自底向上：父节点 = 自身笔记数（若有）+ 后代笔记数
   const walk = (node: TagNode): number => {
-    const own = node.tagId ? store.notes.filter(n => n.tagIds.includes(node.tagId!)).length : 0
+    const own = node.tagId ? store.notes.filter(n => n.folderPath === props.folderPath && n.tagIds.includes(node.tagId!)).length : 0
     node.count = own + node.children.reduce((sum, child) => sum + walk(child), 0)
     return node.count
   }
@@ -123,7 +124,7 @@ const toggle = (key: string) => {
   collapsed.value = next
 }
 
-const isActive = (node: TagNode) => props.active === (node.tagId ?? 'v:' + node.path)
+const isActive = (node: TagNode) => props.active === (node.tagId ?? tagPathViewId(props.folderPath, node.path))
 
 const editTag = (tagId: string) => {
   const tag = store.tags.find(t => t.id === tagId)

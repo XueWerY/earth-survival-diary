@@ -267,8 +267,6 @@ const refreshReminders = inject<() => void>('refreshReminders', () => {})
 const isGuideActive = inject('guideVisible', ref(false))
 const guideRunning = inject('guideRunning', ref(false))
 
-const isElectron = computed(() => typeof window !== 'undefined' && !!(window as any).electronAPI)
-
 // 卡片网格响应式列数：实测内容区宽度 → 1/2/3 列（卡片间距 d = 25px）
 const mainContentRef = ref<HTMLElement | null>(null)
 const entrance = useCardEntrance(mainContentRef, '.folder-card, .list-card, .task-card')

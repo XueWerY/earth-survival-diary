@@ -4,10 +4,11 @@
 //  - 存储键形如 `media:asset:<hash>`，与旧版 `media:asset:<随机ID>` 的区别在于 ID 由内容决定，
 //    因此同一文件重复插入 / 自动保存重复序列化都只会得到同一个键，不会产生新文件。
 //  - 文件名后缀取自 MIME 的真实扩展名（png/jpg/mp4/mp3 等），不再把 base64 塞进 YAML 字符串后
-//    依赖 data: 前缀还原类型；读取时按 MIME 重新拼回 data URL。
+//    依赖 data: 前缀还原类型；读取时按统一元数据清单中的 MIME 重新拼回 data URL。
 //  - 浏览器预览环境没有 Electron IPC，回退到 IndexedDB / localStorage 存 { mimeType, base64 }。
 
-import { readLocalData, writeLocalData, removeLocalData, exportLocalDataRecords } from './localDataStore'
+import { readLocalData, writeLocalData, removeLocalData, listLocalDataKeys } from './localDataStore'
+import { createMediaSaveJobId, shouldUploadMediaInChunks, subscribeToMediaSaveProgress, uploadPickedMediaFileInChunks } from './mediaFileUpload'
 
 /** 媒体资产的 MIME 白名单：决定可插入的类型与落盘扩展名 */
 export const MEDIA_MIME_EXTENSIONS: Record<string, string> = {
@@ -37,6 +38,95 @@ export const MEDIA_REFERENCE_SCHEME = 'esd-local-media'
 
 const HASH_LENGTH = 32
 const KEY_PREFIX = 'media:asset:'
+const MEDIA_METADATA_KEY = 'media:metadata'
+
+interface MediaAssetMetadata {
+  mimeType: string
+  fileName?: string
+}
+
+interface MediaMetadataIndex {
+  version: 1
+  assets: Record<string, MediaAssetMetadata>
+}
+
+let metadataIndex: MediaMetadataIndex | null = null
+let metadataLoadPromise: Promise<MediaMetadataIndex> | null = null
+let metadataWriteQueue: Promise<void> = Promise.resolve()
+
+export function resetMediaAssetMetadataCache(): void {
+  metadataIndex = null
+  metadataLoadPromise = null
+}
+
+function normalizeMetadataIndex(value: unknown): MediaMetadataIndex {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { version: 1, assets: {} }
+  const raw = value as { assets?: unknown }
+  const assets: Record<string, MediaAssetMetadata> = {}
+  if (raw.assets && typeof raw.assets === 'object' && !Array.isArray(raw.assets)) {
+    for (const [id, entry] of Object.entries(raw.assets as Record<string, unknown>)) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue
+      const candidate = entry as { mimeType?: unknown; fileName?: unknown }
+      const mimeType = String(candidate.mimeType || '').toLowerCase()
+      if (!isSupportedMediaMimeType(mimeType)) continue
+      const fileName = typeof candidate.fileName === 'string' ? candidate.fileName.slice(0, 240) : ''
+      assets[id] = { mimeType, ...(fileName ? { fileName } : {}) }
+    }
+  }
+  return { version: 1, assets }
+}
+
+async function loadMetadataIndex(): Promise<MediaMetadataIndex> {
+  if (metadataIndex) return metadataIndex
+  if (metadataLoadPromise) return metadataLoadPromise
+  metadataLoadPromise = (async () => {
+    const stored = await readLocalData<unknown>(MEDIA_METADATA_KEY)
+    const index = normalizeMetadataIndex(stored.found ? stored.value : undefined)
+    const legacyMetaKeys = (await listLocalDataKeys()).filter(key => key.startsWith(KEY_PREFIX) && key.endsWith(':meta'))
+    let migrated = false
+    for (const legacyKey of legacyMetaKeys) {
+      const id = legacyKey.slice(KEY_PREFIX.length, -':meta'.length)
+      const legacy = await readLocalData<unknown>(legacyKey)
+      const value = legacy.value && typeof legacy.value === 'object' ? legacy.value as { mimeType?: unknown; fileName?: unknown } : {}
+      const mimeType = String(value.mimeType || '').toLowerCase()
+      if (id && isSupportedMediaMimeType(mimeType) && !index.assets[id]) {
+        const fileName = typeof value.fileName === 'string' ? value.fileName.slice(0, 240) : ''
+        index.assets[id] = { mimeType, ...(fileName ? { fileName } : {}) }
+        migrated = true
+      }
+    }
+    if (!stored.found || migrated) await writeLocalData(MEDIA_METADATA_KEY, index)
+    for (const legacyKey of legacyMetaKeys) await removeLocalData(legacyKey)
+    metadataIndex = index
+    return index
+  })().finally(() => { metadataLoadPromise = null })
+  return metadataLoadPromise
+}
+
+async function updateAssetMetadata(id: string, patch: Partial<MediaAssetMetadata> | null): Promise<void> {
+  const operation = metadataWriteQueue.catch(() => {}).then(async () => {
+    const electronStore = typeof window !== 'undefined' ? window.electronAPI : undefined
+    if (electronStore?.updateLocalMediaAssetMetadata) {
+      const updated = await electronStore.updateLocalMediaAssetMetadata(currentMediaScope(), id, patch)
+      metadataIndex = normalizeMetadataIndex(updated)
+      return
+    }
+    const index = await loadMetadataIndex()
+    const next = { ...index, assets: { ...index.assets } }
+    const current = next.assets[id]
+    if (patch) {
+      const fileName = patch.fileName || current?.fileName || ''
+      const mimeType = String(patch.mimeType || current?.mimeType || '').toLowerCase()
+      if (!isSupportedMediaMimeType(mimeType)) throw new Error('不支持的本地媒体类型：' + mimeType)
+      next.assets[id] = { mimeType, ...(fileName ? { fileName: fileName.slice(0, 240) } : {}) }
+    }
+    else delete next.assets[id]
+    await writeLocalData(MEDIA_METADATA_KEY, next)
+    metadataIndex = next
+  })
+  metadataWriteQueue = operation.then(() => undefined, () => undefined)
+  await operation
+}
 
 /** data URL 解析结果 */
 export interface ParsedDataUrl {
@@ -117,6 +207,85 @@ function mediaReferenceFor(key: string): string {
   return `${MEDIA_REFERENCE_SCHEME}://${key.slice(KEY_PREFIX.length)}`
 }
 
+function currentMediaScope(): string {
+  const token = typeof localStorage === 'undefined' ? null : localStorage.getItem('auth_token')
+  if (!token) return 'anonymous'
+  try {
+    const encoded = token.split('.')[0].replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(atob(encoded))
+    return typeof payload.sub === 'string' ? payload.sub : 'anonymous'
+  } catch {
+    return 'anonymous'
+  }
+}
+
+/** Electron 直接从用户选中的文件写入二进制资产，避免 renderer 生成、散列和传输 Base64。 */
+export async function saveMediaFile(
+  file: File,
+  mimeType: string,
+  fileName = file.name,
+  onProgress?: (loaded: number, total: number) => void,
+): Promise<string | null> {
+  const normalizedMime = String(mimeType || '').toLowerCase()
+  if (!file || !isSupportedMediaMimeType(normalizedMime) || !file.size) return null
+  if (file.size > 512 * 1024 * 1024) throw new Error('媒体文件不能超过 512 MB')
+  const electronStore = typeof window !== 'undefined' ? window.electronAPI : undefined
+  if (electronStore?.savePickedMediaFile) {
+    const scope = currentMediaScope()
+    if (shouldUploadMediaInChunks(normalizedMime)) {
+      const reference = await uploadPickedMediaFileInChunks(file, {
+        mode: 'asset',
+        scope,
+        mimeType: normalizedMime,
+        fileName: fileName.slice(0, 240),
+      }, onProgress)
+      if (!reference) throw new Error('无法安全读取所选媒体文件，请重新选择文件')
+      metadataIndex = null
+      return reference
+    }
+
+    const jobId = createMediaSaveJobId()
+    const unsubscribe = subscribeToMediaSaveProgress(jobId, onProgress)
+    let reference: string | null
+    try {
+      reference = await electronStore.savePickedMediaFile(file, normalizedMime, fileName.slice(0, 240), scope, jobId)
+    } finally {
+      unsubscribe()
+    }
+    if (reference) {
+      metadataIndex = null
+      return reference
+    }
+    const streamedReference = await uploadPickedMediaFileInChunks(file, {
+      mode: 'asset',
+      scope,
+      mimeType: normalizedMime,
+      fileName: fileName.slice(0, 240),
+    }, onProgress)
+    if (!streamedReference) throw new Error('无法安全读取所选媒体文件，请重新选择文件')
+    metadataIndex = null
+    return streamedReference
+  }
+
+  // 浏览器预览没有 Electron 主进程，沿用 IndexedDB 的 data URL 存储路径。
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error || new Error('媒体文件读取失败'))
+    reader.readAsDataURL(file.slice(0, file.size, normalizedMime))
+  })
+  return await saveMediaAsset(dataUrl, fileName)
+}
+
+/** Electron 下返回可流式读取的本地媒体 URL；浏览器预览回退到 data URL。 */
+export async function getMediaAssetUrl(reference: string): Promise<string | null> {
+  const key = mediaKeyFromReference(reference)
+  if (!key) return null
+  const electronStore = typeof window !== 'undefined' ? window.electronAPI : undefined
+  if (!electronStore?.getLocalMediaAssetUrl) return null
+  return await electronStore.getLocalMediaAssetUrl(currentMediaScope(), key.slice(KEY_PREFIX.length))
+}
+
 /** 由笔记正文中的引用取出资产键 */
 export function mediaKeyFromReference(reference: string): string | null {
   const match = new RegExp(`^${MEDIA_REFERENCE_SCHEME}://([a-z0-9_-]+)$`, 'i').exec(String(reference || '').trim())
@@ -159,7 +328,7 @@ export async function readMediaAsset(key: string): Promise<string | null> {
     const inline = parseDataUrl(stored.value)
     if (inline && isSupportedMediaMimeType(inline.mimeType)) return buildDataUrl(inline.mimeType, inline.base64)
     if (stored.value) {
-      // 新格式：纯 base64 串，MIME 由 :meta 旁路记录提供
+      // 新格式：纯 base64 串，MIME 由媒体元数据清单提供
       const mimeType = await readMediaAssetMimeType(key)
       if (mimeType) return buildDataUrl(mimeType, stored.value)
     }
@@ -171,11 +340,35 @@ export async function readMediaAsset(key: string): Promise<string | null> {
   return null
 }
 
-/** 资产以扩展名后缀存盘；这里反查该资产的 MIME（键本身不含 MIME，需要旁路记录） */
+/** 资产以扩展名后缀存盘；这里反查该资产的 MIME（键本身不含 MIME，需要元数据清单） */
 async function readMediaAssetMimeType(key: string): Promise<string | null> {
-  const meta = await readLocalData<{ mimeType?: string }>(key + ':meta')
-  const mimeType = meta.found && meta.value && typeof meta.value.mimeType === 'string' ? meta.value.mimeType.toLowerCase() : ''
+  const id = key.slice(KEY_PREFIX.length)
+  const index = await loadMetadataIndex()
+  let mimeType = index.assets[id]?.mimeType || ''
+  if (!mimeType) {
+    const legacyMeta = await readLocalData<{ mimeType?: string }>(key + ':meta')
+    mimeType = legacyMeta.found && typeof legacyMeta.value?.mimeType === 'string'
+      ? legacyMeta.value.mimeType.toLowerCase()
+      : ''
+    if (isSupportedMediaMimeType(mimeType)) {
+      const fileName = typeof legacyMeta.value?.fileName === 'string' ? legacyMeta.value.fileName : ''
+      await updateAssetMetadata(id, { mimeType, ...(fileName ? { fileName } : {}) })
+    }
+  }
   return isSupportedMediaMimeType(mimeType) ? mimeType : null
+}
+
+/** 读取导入时的原始文件名，供媒体失败卡片与播放器标题使用。 */
+export async function readMediaAssetFileName(reference: string): Promise<string> {
+  const key = mediaKeyFromReference(reference)
+  if (!key) return ''
+  const index = await loadMetadataIndex()
+  const id = key.slice(KEY_PREFIX.length)
+  const metadata = index.assets[id]
+  if (metadata?.fileName) return metadata.fileName
+  const mimeType = metadata?.mimeType || await readMediaAssetMimeType(key)
+  const extension = mimeType ? mediaExtensionOf(mimeType) : null
+  return extension ? `${id}.${extension}` : ''
 }
 
 /**
@@ -183,7 +376,7 @@ async function readMediaAssetMimeType(key: string): Promise<string | null> {
  * 相同内容重复调用不会新增存储：资产已存在时直接复用同一键，跳过写盘。
  * 返回笔记正文中使用的引用。
  */
-export async function saveMediaAsset(dataUrl: string): Promise<string | null> {
+export async function saveMediaAsset(dataUrl: string, fileName = ''): Promise<string | null> {
   const parsed = parseDataUrl(dataUrl)
   if (!parsed || !isSupportedMediaMimeType(parsed.mimeType)) return null
   const key = await mediaKeyForDataUrl(dataUrl)
@@ -191,8 +384,12 @@ export async function saveMediaAsset(dataUrl: string): Promise<string | null> {
   const existing = await readLocalData<unknown>(key)
   if (!existing.found) {
     await writeLocalData(key, parsed.base64)
-    await writeLocalData(key + ':meta', { mimeType: parsed.mimeType })
   }
+  const id = key.slice(KEY_PREFIX.length)
+  await updateAssetMetadata(id, {
+    mimeType: parsed.mimeType,
+    ...(fileName ? { fileName: fileName.slice(0, 240) } : {}),
+  })
   return mediaReferenceFor(key)
 }
 
@@ -200,15 +397,15 @@ export async function saveMediaAsset(dataUrl: string): Promise<string | null> {
 export async function removeMediaAsset(key: string): Promise<boolean> {
   if (!key.startsWith(KEY_PREFIX)) return false
   await removeLocalData(key)
+  await updateAssetMetadata(key.slice(KEY_PREFIX.length), null)
+  // 删除升级前留下的逐文件 MIME YAML；通常已在首次读取清单时迁移完成。
   await removeLocalData(key + ':meta')
   return true
 }
 
-/** 列出当前用户下的全部媒体资产键（键形如 media:asset:xxx，不含 :meta 旁路记录） */
+/** 列出当前用户下的全部媒体资产键（键形如 media:asset:xxx，不含旧版 :meta 记录） */
 export async function listMediaAssetKeys(): Promise<string[]> {
-  const records = await exportLocalDataRecords()
-  return records
-    .map(record => record.key)
+  return (await listLocalDataKeys())
     .filter(key => key.startsWith(KEY_PREFIX) && !key.endsWith(':meta'))
 }
 

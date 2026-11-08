@@ -29,37 +29,6 @@ const formatBeijingTimestamp = (date: Date) => {
   }).replace(',', '.')
 }
 
-const LOG_CHANNEL_NAMES: Record<string, string> = {
-  'Auth': 'Account',
-  'CountdownList': 'Countdown',
-  'ListPage': 'List',
-  'ListStore': 'List',
-  'PageNav': 'Navigation',
-  'ProdServer': 'Server',
-  'TaskList': 'Footprint',
-  '账号': 'Account',
-  '关于': 'About',
-  '导入': 'Import',
-  '倒数日': 'Countdown',
-  '笔记': 'Notes',
-  '足迹': 'Footprint',
-  '足迹卡片': 'Footprint',
-  '专注': 'Focus',
-  '提醒': 'Reminder',
-  '更新': 'Update',
-  '工具箱': 'Toolbox',
-  '市场': 'Market',
-  '市场面板': 'Market',
-  '课程表': 'Schedule',
-  '清理': 'Cleanup',
-  '设置': 'Settings',
-  '我的': 'Profile',
-  '引导': 'Guide',
-  '预加载': 'Preload',
-  '数据': 'Data',
-  '统计': 'Statistics'
-}
-
 const LOG_META_LABELS: Record<string, string> = {
   id: '编号', userId: '用户编号', userEmail: '用户邮箱', taskId: '记录编号', listId: '清单编号',
   groupId: '分组编号', toolId: '工具编号', toolName: '工具名称', pluginId: '插件编号',
@@ -270,29 +239,36 @@ const formatLogValue = (value: unknown, key = ''): string => {
   return String(value)
 }
 
-const formatLogChannel = (message: string): { channel: string; body: string } => {
+const formatLogContent = (message: string): string => {
   const singleLine = message.replace(/[\r\n\t]+/g, ' ').trim()
   const match = singleLine.match(/^\[([^\]]+)\]\s*(.*)$/)
-  const rawChannel = match?.[1].trim() || 'App'
-  return {
-    channel: LOG_CHANNEL_NAMES[rawChannel] || rawChannel,
-    body: localizeLogText(match ? match[2] : singleLine)
-  }
+  return localizeLogText(match ? match[2] : singleLine)
 }
 
 const formatInlineMessage = (message: string, meta?: Record<string, any>): string => {
-  const { channel, body } = formatLogChannel(message)
+  const body = formatLogContent(message)
   const metaParts = meta
     ? Object.entries(meta).map(([key, value]) => `${LOG_META_LABELS[key] || key}: ${formatLogValue(value, key)}`)
     : []
   const metaText = metaParts.length ? `，${metaParts.join('，')}` : ''
-  return `[${channel}] ${body}${metaText}`
+  return `${body}${metaText}`
 }
 
-const padChannel = (channel: string): string => {
-  const padding = Math.max(0, 12 - channel.length)
-  const left = Math.floor(padding / 2)
-  return `[${' '.repeat(left)}${channel}${' '.repeat(padding - left)}]`
+const LOG_LEVEL_LABELS: Record<string, string> = {
+  TRACE: 'TRC',
+  DEBUG: 'DBG',
+  INFO: 'INF',
+  WARN: 'WRN',
+  ERROR: 'ERR',
+}
+const formatLevelToken = (levelName: string): string => `[ ${LOG_LEVEL_LABELS[levelName] || levelName} ]`
+
+const levelConsoleColor: Record<string, string> = {
+  TRACE: 'color: #94a3b8',
+  DEBUG: 'color: #60a5fa',
+  INFO: 'color: #4ade80',
+  WARN: 'color: #fbbf24',
+  ERROR: 'color: #f87171',
 }
 
 const formatStack = (stack?: string): string => {
@@ -305,16 +281,16 @@ const formatStack = (stack?: string): string => {
 class Logger {
   private logBuffer: string[] = []
   private readonly maxBufferSize = 5000
-  // 交由 Electron 主进程写入桌面端本地滚动日志。
-  private uploadBuffer: LogEntry[] = []
+  // 把浏览器日志批量送回本机服务，便于直接在启动终端查看。
+  private terminalBuffer: LogEntry[] = []
   private uploadTimer: ReturnType<typeof setTimeout> | null = null
   private readonly uploadDebounceMs = 1000
 
   private addToBuffer(entry: LogEntry) {
     const levelName = LogLevel[entry.level].toUpperCase()
     const timestamp = formatBeijingTimestamp(entry.timestamp).split(' ')[1] || formatBeijingTimestamp(entry.timestamp)
-    const { channel, body } = formatLogChannel(entry.message)
-    const line = `[${timestamp}] [${levelName.padEnd(5, ' ')}] ${padChannel(channel)} ${body}`
+    const content = formatLogContent(entry.message)
+    const line = `[${timestamp}] ${formatLevelToken(levelName)} ${content}`
     this.logBuffer.push(line)
     if (this.logBuffer.length > this.maxBufferSize) {
       this.logBuffer.splice(0, this.logBuffer.length - this.maxBufferSize)
@@ -325,9 +301,9 @@ class Logger {
     return [...this.logBuffer]
   }
 
-  // 批量转交主进程（防抖合并）
+  // 批量回传本机服务（防抖合并）
   private scheduleUpload(entry: LogEntry) {
-    this.uploadBuffer.push(entry)
+    this.terminalBuffer.push(entry)
     if (this.uploadTimer) clearTimeout(this.uploadTimer)
     this.uploadTimer = setTimeout(() => {
       this.uploadTimer = null
@@ -336,17 +312,19 @@ class Logger {
   }
 
   private async flushUpload(): Promise<void> {
-    if (this.uploadBuffer.length === 0) return
-    const batch = this.uploadBuffer.splice(0)
+    if (typeof window === 'undefined' || this.terminalBuffer.length === 0) return
+    const batch = this.terminalBuffer.splice(0)
     try {
-      const electronAPI = (window as any).electronAPI
-      if (!electronAPI?.writeRendererLogs) return
-      await electronAPI.writeRendererLogs(batch.map(e => ({
-        level: LogLevel[e.level].toUpperCase(),
-        message: e.message,
-        meta: e.meta,
-        timestamp: e.timestamp.toISOString()
-      })))
+      await fetch('/__esd/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(batch.map(e => ({
+          level: LogLevel[e.level].toUpperCase(),
+          message: e.message,
+          meta: e.meta,
+          timestamp: e.timestamp.toISOString()
+        })))
+      })
     } catch {
       // 静默失败，不影响用户体验
     }
@@ -356,22 +334,27 @@ class Logger {
   private outputToConsole(entry: LogEntry) {
     const levelName = LogLevel[entry.level].toUpperCase()
     const timestamp = formatBeijingTimestamp(entry.timestamp).split(' ')[1] || formatBeijingTimestamp(entry.timestamp)
-    const { channel, body } = formatLogChannel(entry.message)
-    const formattedMessage = `[${timestamp}] [${levelName.padEnd(5, ' ')}] ${padChannel(channel)} ${body}${entry.level === LogLevel.ERROR ? formatStack(entry.stack) : ''}`
-    
+    const body = formatLogContent(entry.message)
+    const levelToken = formatLevelToken(levelName)
+    const content = `${body}${entry.level === LogLevel.ERROR ? formatStack(entry.stack) : ''}`
+    const color = levelConsoleColor[levelName] || 'color: #cbd5e1'
+    const output = (method: 'log' | 'info' | 'warn' | 'error') => {
+      console[method]('%c%s %c%s %c%s', 'color: #22d3ee', `[${timestamp}]`, color, levelToken, 'color: #e2e8f0', content)
+    }
+
     switch (entry.level) {
       case LogLevel.TRACE:
       case LogLevel.DEBUG:
-        console.log(formattedMessage)
+        output('log')
         break;
       case LogLevel.INFO:
-        console.info(formattedMessage)
+        output('info')
         break;
       case LogLevel.WARN:
-        console.warn(formattedMessage)
+        output('warn')
         break;
       case LogLevel.ERROR:
-        console.error(formattedMessage)
+        output('error')
         break;
     }
   }

@@ -15,6 +15,8 @@
 
 import type { Note, Tag } from '../stores/noteStore'
 import { sanitizeFileName, downloadBlob } from './noteExport'
+import { anchorIdForText, blockAnchorText, collectMarkdownAnchors } from '../components/editor/blockAnchors'
+import { mediaKeyFromReference, readMediaAsset } from '../services/mediaAssets'
 
 /** 导出样式里需要保留的选择器特征（对应编辑器与内容排版） */
 const STYLE_SCOPE_MARKERS = [
@@ -39,27 +41,63 @@ interface CapturedStyle {
  *
  * 我们的排版规则写在 .vue 的 scoped 样式里，编译后形如
  *   .md-editor :deep(.markdown-body p)  →  .md-editor[data-v-xxx] .markdown-body p
- * 导出文件没有 .md-editor 这一层祖先，规则会全部失效（实测首行缩进、引用底色、
- * 行内代码底色都丢）。处理分三步：
- *   1) 剥掉 .md-editor[data-v-…] 前缀与残留的 data-v 属性；
- *   2) 导出容器本身就是 .markdown-body，因此把开头的这一节收敛掉；
- *   3) 统一挂到 .note-export-wrap 之下，避免样式泄漏到页面其它元素。
+ * 导出文件没有 .md-editor 这一层祖先，规则会全部失效。不能直接把它删掉：Vue
+ * scoped 规则中的 .md-editor[data-v-…] 有两个 class/attribute 优先级单位，丢掉后
+ * Milkdown 默认标题、列表等规则就可能覆盖笔记样式。导出容器用同等优先级的
+ * .note-export-wrap[data-export-scope] 替代它；正文再保留一个真实的 .markdown-body
+ * 后代。其它不带宿主前缀的规则用 :where() 限定范围，不额外增加选择器优先级。
  */
-const HOST_SCOPE_PATTERN = /^\s*\.md-editor(?:\[data-v-[0-9a-f]+\])?\s*/
+const HOST_SCOPE_PATTERN = /^\s*\.md-editor(\[data-v-[0-9a-f]+\])?\s*/
 const DATA_V_PATTERN = /\[data-v-[0-9a-f]+\]/g
 
+function splitSelectorList(selector: string): string[] {
+  const parts: string[] = []
+  let start = 0
+  let parentheses = 0
+  let brackets = 0
+  let quote = ''
+  let escaped = false
+
+  for (let index = 0; index < selector.length; index++) {
+    const character = selector[index]
+    if (quote) {
+      if (escaped) escaped = false
+      else if (character === '\\') escaped = true
+      else if (character === quote) quote = ''
+      continue
+    }
+    if (character === '"' || character === "'") quote = character
+    else if (character === '(') parentheses++
+    else if (character === ')') parentheses = Math.max(0, parentheses - 1)
+    else if (character === '[') brackets++
+    else if (character === ']') brackets = Math.max(0, brackets - 1)
+    else if (character === ',' && parentheses === 0 && brackets === 0) {
+      parts.push(selector.slice(start, index))
+      start = index + 1
+    }
+  }
+
+  parts.push(selector.slice(start))
+  return parts
+}
+
 function rewriteSelectorForExport(selector: string): string {
-  return selector
-    .split(',')
+  return splitSelectorList(selector)
     .map(part => {
       let trimmed = part.trim()
-      trimmed = trimmed.replace(HOST_SCOPE_PATTERN, '')
+      const hasHostScope = HOST_SCOPE_PATTERN.test(trimmed)
+      if (hasHostScope) {
+        trimmed = trimmed.replace(
+          HOST_SCOPE_PATTERN,
+          (_match, scopeAttribute: string | undefined) =>
+            scopeAttribute ? '.note-export-wrap[data-export-scope] ' : '.note-export-wrap ',
+        )
+      } else if (!trimmed.startsWith('.note-export-wrap')) {
+        // 限定导出范围但不抬高原选择器的优先级，保留 Milkdown 与笔记样式的原始层叠关系。
+        trimmed = `:where(.note-export-wrap) ${trimmed}`
+      }
       trimmed = trimmed.replace(DATA_V_PATTERN, '')
-      // 收敛掉开头的 .markdown-body（article 自带该类）
-      trimmed = trimmed.replace(/^\.markdown-body(?=[\s>+~])/, '').replace(/^\.markdown-body$/, '')
-      if (!trimmed) return '.note-export-wrap'
-      if (trimmed.startsWith('.note-export-wrap')) return trimmed
-      return `.note-export-wrap ${trimmed}`
+      return trimmed.trim()
     })
     .filter(Boolean)
     .join(', ')
@@ -113,11 +151,18 @@ function captureCssVariables(): string {
 }
 function isRelevantRule(selector: string): boolean {
   if (!selector) return false
+  // 编辑器根节点是带边框、背景和固定高度的交互外壳，不能映射到导出的文章根节点。
+  // 正文使用 .markdown-body / .milkdown 等后代规则，这些由后续分支正常采集。
+  if (/^\.md-editor(?:\[data-v-[0-9a-f]+\])?$/.test(selector.trim())) return false
   // 排除明显与预览无关的宿主界面样式
   if (/\.(np-|editor-|outline|menubar|el-|app-scrollbar|guide-)/.test(selector)) {
     return /\.katex|\.hljs|code-preview/.test(selector)
   }
   return STYLE_SCOPE_MARKERS.some(marker => selector.includes(marker))
+}
+
+function relevantSelectorList(selector: string): string[] {
+  return splitSelectorList(selector).filter(part => isRelevantRule(part.trim()))
 }
 
 /**
@@ -147,10 +192,11 @@ function isRelevantRule(selector: string): boolean {
       }
       if (rule.type === CSSRule.STYLE_RULE) {
         const selector = (rule as CSSStyleRule).selectorText || ''
-        if (!isRelevantRule(selector)) continue
+        const relevantSelectors = relevantSelectorList(selector)
+        if (!relevantSelectors.length) continue
         // 保留声明体，只改写选择器前缀
         const body = text.slice(text.indexOf('{'))
-        cssChunks.push(`${rewriteSelectorForExport(selector)}${body}`)
+        cssChunks.push(`${rewriteSelectorForExport(relevantSelectors.join(', '))}${body}`)
         continue
       }
       // 媒体查询 / 支持查询：递归一层，保留内部的相关规则
@@ -161,9 +207,10 @@ function isRelevantRule(selector: string): boolean {
           const childText = child.cssText || ''
           if (child.type === CSSRule.STYLE_RULE) {
             const selector = (child as CSSStyleRule).selectorText || ''
-            if (!isRelevantRule(selector)) continue
+            const relevantSelectors = relevantSelectorList(selector)
+            if (!relevantSelectors.length) continue
             const body = childText.slice(childText.indexOf('{'))
-            inner.push(`${rewriteSelectorForExport(selector)}${body}`)
+            inner.push(`${rewriteSelectorForExport(relevantSelectors.join(', '))}${body}`)
           } else if (child.type === CSSRule.FONT_FACE_RULE && /KaTeX/i.test(childText)) {
             katexFontFaces.push(childText)
           }
@@ -253,25 +300,128 @@ body {
   line-height: 1.85;
 }
 .note-export-wrap {
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 56px 28px 96px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 32px 36px 64px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
+.note-export-wrap > .markdown-body {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.note-export-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin-bottom: 24px;
+}
+.note-export-wrap .note-export-body { padding-inline: 0 !important; }
+.note-export-wrap .note-export-body h1,
+.note-export-wrap .note-export-body h2,
+.note-export-wrap .note-export-body h3,
+.note-export-wrap .note-export-body h4,
+.note-export-wrap .note-export-body h5,
+.note-export-wrap .note-export-body h6 { text-align: left !important; }
 .note-export-wrap img,
 .note-export-wrap video {
+  display: inline-block;
   max-width: 100%;
   height: auto;
+  margin: 16px 10px;
+  vertical-align: top;
   border-radius: 8px;
+}
+.note-export-wrap audio {
+  display: inline-block;
+  width: min(520px, 100%);
+  max-width: 100%;
+  margin: 16px 10px;
+  vertical-align: top;
+  color-scheme: dark;
+  accent-color: #a78bfa;
+}
+.note-export-wrap [data-esd-layout="standalone"] {
+  display: block;
+  margin: 16px auto;
+}
+.note-export-wrap .milkdown span[data-type="math_inline"] {
+  display: inline-block;
+  padding: 0 4px;
+  vertical-align: bottom;
+  color: var(--crepe-color-primary, #a78bfa);
+}
+.note-export-wrap blockquote.esd-quote-collapsed {
+  max-height: 3.4em;
+  overflow: hidden;
+}
+.note-export-wrap blockquote.esd-quote-collapsed > :not(.esd-quote-first):not([data-esd-widget]) {
+  display: none;
+}
+.note-export-wrap blockquote.esd-quote-collapsed > .esd-quote-first,
+.note-export-wrap blockquote.esd-quote-collapsed > .esd-quote-first > li:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-export-wrap .esd-quote-toggle {
+  position: absolute;
+  left: 8px;
+  top: 7px;
+  z-index: 2;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border: 1px solid rgba(129, 140, 248, .55);
+  border-radius: 5px;
+  color: #c7d2fe;
+  background: rgba(102, 126, 234, .28);
+  cursor: pointer;
+}
+.note-export-wrap .esd-quote-toggle::before {
+  content: "";
+  display: block;
+  width: 0;
+  height: 0;
+  margin: auto;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid currentColor;
+}
+.note-export-wrap blockquote:not(.esd-quote-collapsed) .esd-quote-toggle::before {
+  border-top: 5px solid currentColor;
+  border-right: 4px solid transparent;
+  border-bottom: 0;
+  border-left: 4px solid transparent;
+}
+.note-export-wrap blockquote[id],
+.note-export-wrap h1[id], .note-export-wrap h2[id], .note-export-wrap h3[id],
+.note-export-wrap h4[id], .note-export-wrap h5[id], .note-export-wrap h6[id] {
+  scroll-margin-top: 24px;
 }
 .note-export-wrap a { color: #93c5fd; text-decoration: none; }
 .note-export-wrap a:hover { text-decoration: underline; }
-/* 只读预览：隐藏源码编辑区与所有交互控件 */
+/* 只读预览：隐藏源码编辑区和编辑专用手柄，保留可操作的主题化媒体控件 */
 .note-export-wrap .tools,
 .note-export-wrap .tools-button-group,
 .note-export-wrap .language-picker,
 .note-export-wrap .codemirror-host,
 .note-export-wrap .milkdown-latex-inline-edit,
 .note-export-wrap .milkdown-image-block > .image-edit,
+.note-export-wrap .image-resize-handle,
+.note-export-wrap .esd-media-resize-handle,
+.note-export-wrap .milkdown-image-block .operation,
+.note-export-wrap .milkdown-image-block .caption-input,
 .note-export-wrap .prosemirror-virtual-cursor,
 .note-export-wrap .block-handle { display: none !important; }
 
@@ -394,16 +544,12 @@ body {
 `.trim()
 
 /**
- * 需要从导出内容里**整块删除**的交互节点选择器（含其全部子节点与内嵌 SVG）。
+ * 需要从导出内容里**整块删除**的编辑器交互节点选择器。
  *
- * 为什么集中成一张表：这些选择器属于同一类东西——「编辑器交互外壳」。
- * 它们的共同点是「在浏览器里由 JS 驱动、靠绝对定位或图标显示」，导出成静态 HTML 后
- * 既无法交互、又会实打实地画出一堆图标/按钮（真实产物里 <button> 约 55KB、<svg> 约 64KB）。
- * 集中声明后：① 新增控件只要加一行；② 审计时一眼能看出删了什么；③ 不会因为流程里
- * 漏写一条 if 而残留。删除顺序永远是「先删块，再处理剩下的结构」。
+ * 媒体播放器的按钮不在此表中：导出 HTML 会用自带脚本重新绑定它们，外观与笔记一致。
  */
 const STRIP_SELECTORS = [
-  // —— 代码块 / 公式 / 图片的编辑外壳（原有条目） ——
+  // —— 代码块 / 公式 / 图片的编辑外壳 ——
   '.tools',
   '.language-picker',
   '.codemirror-host',
@@ -411,6 +557,10 @@ const STRIP_SELECTORS = [
   '.prosemirror-virtual-cursor',
   '.ProseMirror-virtual-cursor',
   '.image-edit',
+  '.image-resize-handle',
+  '.esd-media-resize-handle',
+  '.milkdown-image-block .operation',
+  '.milkdown-image-block .caption-input',
   '.block-handle',
   '.milkdown-block-handle',
   '.note-media-resize',
@@ -501,15 +651,157 @@ const STRIP_CLASSES = [
   'esd-quote-first',
 ]
 
+function dataUrlFromBlob(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error || new Error('媒体读取失败'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+/** 本地媒体引用在导出文件中改为 data URL，避免依赖应用的自定义协议。 */
+function createExportMediaSourceResolver(): (reference: string, fallback: string) => Promise<string> {
+  const cache = new Map<string, Promise<string>>()
+  return (reference, fallback) => {
+    const source = String(reference || '').trim()
+    const fallbackSource = String(fallback || '').trim()
+    const cacheKey = `${source}\u0000${fallbackSource}`
+    const cached = cache.get(cacheKey)
+    if (cached) return cached
+
+    const pending = (async () => {
+      const key = mediaKeyFromReference(source)
+      if (key) {
+        try {
+          const dataUrl = await readMediaAsset(key)
+          if (dataUrl) return dataUrl
+        } catch {
+          // 资产读取失败时尝试当前 DOM 的 URL；绝不把应用私有协议写入导出文件。
+        }
+      }
+
+      for (const candidate of [fallbackSource, source]) {
+        if (!candidate) continue
+        if (/^esd-local-media:/i.test(candidate)) continue
+        if (/^blob:/i.test(candidate)) {
+          try {
+            const response = await fetch(candidate)
+            if (response.ok) return await dataUrlFromBlob(await response.blob())
+          } catch {
+            // 已失效的 Blob URL 会退回到原引用，避免导出流程整体失败。
+          }
+          continue
+        }
+        return candidate
+      }
+      return ''
+    })()
+    cache.set(cacheKey, pending)
+    return pending
+  }
+}
+
+async function materializeMediaSources(root: HTMLElement): Promise<void> {
+  const resolveSource = createExportMediaSourceResolver()
+
+  // 保留图片/播放器在笔记中的原始 NodeView DOM、样式类、尺寸、布局、标题和播放设置；
+  // 这里只替换 src，避免导出后退化成原生控件或丢失单独成行/比例锁定等属性。
+  for (const media of [...root.querySelectorAll<HTMLImageElement | HTMLMediaElement>('img, video, audio')]) {
+    const reference = media.getAttribute('data-media-ref') || media.getAttribute('src') || ''
+    const source = await resolveSource(reference, media.getAttribute('src') || '')
+    const host = media.closest<HTMLElement>('.milkdown-image-block, .esd-media-block')
+    if (source) {
+      media.setAttribute('src', source)
+      media.hidden = false
+      media.removeAttribute('data-media-missing')
+      host?.removeAttribute('data-media-missing')
+      host?.querySelectorAll<HTMLElement>('.esd-player-shell').forEach(shell => { shell.hidden = false })
+      host?.querySelector('.esd-media-failure')?.remove()
+    } else if (/^(?:esd-local-media|blob):/i.test(reference)) {
+      // 不把私有协议或临时 Blob 地址写进独立 HTML；保留现有失败占位（若存在）。
+      media.removeAttribute('src')
+      media.setAttribute('data-media-missing', 'true')
+      host?.setAttribute('data-media-missing', 'true')
+    }
+    media.removeAttribute('data-media-ref')
+    media.removeAttribute('data-media-resolved')
+  }
+
+  // 画中画与播放状态属于打开笔记后的临时状态；导出从正常的文档布局开始。
+  root.querySelectorAll<HTMLElement>('.esd-player-shell').forEach(shell => {
+    shell.removeAttribute('data-pip')
+    shell.removeAttribute('data-paused')
+    shell.querySelectorAll<HTMLElement>('.esd-player-menu, .esd-player-speed-options').forEach(menu => { menu.hidden = true })
+  })
+  root.querySelectorAll<HTMLElement>('.esd-media-block').forEach(block => block.removeAttribute('data-pip'))
+  root.querySelectorAll<HTMLMediaElement>('video, audio').forEach(media => {
+    // 当前播放进度不是笔记设置；导出页从头开始。
+    try { media.currentTime = 0 } catch { /* 未加载元数据时 currentTime 不可设置 */ }
+  })
+
+}
+
+function restoreQuoteControls(root: HTMLElement): void {
+  root.querySelectorAll('.esd-quote-first').forEach(node => node.classList.remove('esd-quote-first'))
+  root.querySelectorAll<HTMLElement>('blockquote').forEach(quote => {
+    quote.classList.add('esd-quote-collapsed')
+    const toggle = document.createElement('button')
+    toggle.type = 'button'
+    toggle.className = 'esd-quote-toggle'
+    toggle.setAttribute('data-esd-widget', 'quote-toggle')
+    toggle.setAttribute('aria-expanded', 'false')
+    toggle.setAttribute('aria-label', '展开引用')
+    toggle.title = '展开引用（显示全部内容）'
+    const firstContent = [...quote.children].find(child => !child.hasAttribute('data-esd-widget'))
+    firstContent?.classList.add('esd-quote-first')
+    quote.insertBefore(toggle, quote.firstChild)
+  })
+}
+
+function restoreAnchorTargets(root: HTMLElement, markdown: string, pageId: string): void {
+  const validIds = new Set(collectMarkdownAnchors(markdown).map(anchor => anchor.id))
+  const assignedIds = new Set<string>()
+  const targets = root.querySelectorAll<HTMLElement>('blockquote, h1, h2, h3, h4, h5, h6')
+  for (const target of targets) {
+    if (!target.matches('blockquote') && target.closest('blockquote')) continue
+    const id = anchorIdForText(blockAnchorText(target))
+    if (!validIds.has(id) || assignedIds.has(id)) continue
+    target.id = `${pageId}--${id}`
+    assignedIds.add(id)
+  }
+
+  root.querySelectorAll<HTMLAnchorElement>('a[href^="#"]').forEach(anchor => {
+    const id = anchor.getAttribute('href')?.slice(1) || ''
+    if (validIds.has(id)) anchor.setAttribute('href', `#${pageId}--${id}`)
+  })
+}
+
+function normalizeWikiTarget(target: string): string {
+  return String(target || '').trim().toLowerCase()
+}
+
+function restoreWikiLinks(root: HTMLElement, pageId: string, pagesByTitle: Map<string, string>): void {
+  root.querySelectorAll<HTMLElement>('span[data-type="wikiLink"][data-target]').forEach(wikiLink => {
+    const target = normalizeWikiTarget(wikiLink.dataset.target || '')
+    const targetPage = pagesByTitle.get(target)
+    if (!targetPage) return
+    const link = document.createElement('a')
+    link.className = 'wiki-link'
+    link.href = `#${targetPage}`
+    link.dataset.noteTarget = targetPage
+    link.textContent = wikiLink.dataset.label || wikiLink.textContent || wikiLink.dataset.target || ''
+    if (targetPage === pageId) link.setAttribute('aria-current', 'page')
+    wikiLink.replaceWith(link)
+  })
+}
+
 /**
  * 清洗编辑器 DOM：去掉交互控件与编辑属性，保留内容与样式类名。
  * 用 cloneNode 深拷贝，避免影响正在编辑的真实 DOM。
  *
- * 清洗顺序刻意固定为下面的六步，因为步骤之间存在依赖：
- *   ① 删除交互控件 —— 必须先做。手柄/按钮里嵌着 <svg>，它们各自带一份
- *      <clipPath id="clip0_…">；只要一个 SVG 还在，重复 id 就还在。
- *      把控件整块删掉，SVG 与重复 id 一次性消失，比逐个去重可靠得多。
- *      正文里没有用户图片（img = 0），KaTeX 也不用 SVG，所以删除是安全的。
+ * 清洗顺序刻意固定，因为步骤之间存在依赖：
+ *   ① 删除编辑器专用交互控件；媒体播放器控件保留并由导出脚本接管；
  *   ② 剥壳非法结构 —— 必须在 ① 之后，否则手柄包裹层会跟着一起被误判。
  *   ③ 删除空表格 —— 必须在 ② 之后：空占位 <table><tbody></tbody></table>
  *      是包在表格区块 div 里的，只有等结构稳定后才能判定。
@@ -521,18 +813,34 @@ const STRIP_CLASSES = [
  * `.markdown-body` 不在其中，而不少规则写成 `.milkdown .milkdown-code-block …`。
  * 因此最后给代码块补一层 `.milkdown` 包裹容器，让这些规则也能命中。
  */
-function sanitizeContentForExport(source: HTMLElement): string {
+async function sanitizeContentForExport(
+  source: HTMLElement,
+  markdown: string,
+  pageId: string,
+  pagesByTitle: Map<string, string>,
+): Promise<string> {
   const clone = source.cloneNode(true) as HTMLElement
+  await materializeMediaSources(clone)
 
-  // ① 删除交互控件（含内嵌 svg；顺带解决 clip* 重复 id）
+  // 公式和排版规则依赖 `.milkdown` / `.note-export-body` 祖先；给正文统一包一层，
+  // 这样行内 math_inline、段落首行缩进和代码块样式在独立 HTML 里仍能命中。
+  const markdownBodyWrapper = document.createElement('div')
+  markdownBodyWrapper.className = 'markdown-body'
+  const milkdownWrapper = document.createElement('div')
+  milkdownWrapper.className = 'milkdown'
+  const bodyWrapper = document.createElement('div')
+  bodyWrapper.className = 'ProseMirror note-export-body'
+  while (clone.firstChild) bodyWrapper.appendChild(clone.firstChild)
+  milkdownWrapper.appendChild(bodyWrapper)
+  markdownBodyWrapper.appendChild(milkdownWrapper)
+  clone.appendChild(markdownBodyWrapper)
+
+  // ① 删除编辑器专用控件；主题化媒体控件留在 DOM 中并在导出页重新绑定事件。
   for (const selector of STRIP_SELECTORS) {
     clone.querySelectorAll(selector).forEach(node => node.remove())
   }
-  // 兜底：正文没有用户图片，KaTeX 也不用 svg，因此任何残留 SVG 都是控件图标。
-  // 单独再扫一遍，防止未来新增控件类名没进 STRIP_SELECTORS 而漏删。
-  clone.querySelectorAll('svg').forEach(node => node.remove())
-  // 兜底：clipPath 的 id 一律清掉（即便节点残留也不会造成重复 id）
-  clone.querySelectorAll('[id^="clip"]').forEach(node => node.removeAttribute('id'))
+  // 导出 HTML 会启用自己的引用块切换脚本，因此清掉笔记原始 HTML 中的脚本与事件属性。
+  clone.querySelectorAll('script').forEach(node => node.remove())
 
   // ② 剥壳：把非法/多余的容器去掉，内容提升到父级（删容器不删内容）
   for (const selector of UNWRAP_SELECTORS) {
@@ -566,9 +874,13 @@ function sanitizeContentForExport(source: HTMLElement): string {
     // Vue/Milkdown 的运行时标记，离线后没有任何意义
     for (const attr of [...node.getAttributeNames()]) {
       if (attr.startsWith('data-v-') || attr === 'data-v-app') node.removeAttribute(attr)
+      else if (/^on/i.test(attr)) node.removeAttribute(attr)
     }
     // 链接保留 href 即可（导出的是只读预览）
-    if (node instanceof HTMLAnchorElement) node.removeAttribute('target')
+    if (node instanceof HTMLAnchorElement) {
+      node.removeAttribute('target')
+      if (/^\s*javascript:/i.test(node.getAttribute('href') || '')) node.removeAttribute('href')
+    }
     // 状态类名只剥类、不删节点——节点里装着用户内容
     for (const cls of STRIP_CLASSES) node.classList.remove(cls)
     // 清到没有类名时把空壳属性也去掉，输出更干净
@@ -591,7 +903,7 @@ function sanitizeContentForExport(source: HTMLElement): string {
     }
   })
 
-  // ⑥ 给每个代码块补 `.milkdown` 祖先（原选择器依赖它）
+  // ⑥ 正文统一包了 `.milkdown`，代码块样式依赖的祖先现已存在。
   clone.querySelectorAll('.milkdown-code-block').forEach(block => {
     if (block.closest('.milkdown')) return
     const wrapper = document.createElement('div')
@@ -616,6 +928,12 @@ function sanitizeContentForExport(source: HTMLElement): string {
     scroller.appendChild(table)
   })
 
+  // 导出引用块统一默认收起，并重建独立 HTML 内可用的切换按钮；
+  // 锚点 ID 从 Markdown 与 DOM 的同一套文本哈希中恢复。
+  restoreQuoteControls(clone)
+  restoreAnchorTargets(clone, markdown, pageId)
+  restoreWikiLinks(clone, pageId, pagesByTitle)
+
   return clone.innerHTML
 }
 
@@ -624,6 +942,12 @@ export interface ExportHtmlPayload {
   tags: Tag[]
   /** 编辑器渲染根（.ProseMirror） */
   contentEl: HTMLElement
+  /** 主笔记当前编辑器内容；避免防抖保存前遗漏新链接或锚点 */
+  markdown?: string
+  /** 通过 wiki 链接递归收集到的其它笔记，内容由当前 Milkdown parser 渲染 */
+  linkedNotes?: Array<{ note: Note; tags: Tag[]; contentEl: HTMLElement; markdown?: string }>
+  /** wiki 标题解析到的笔记 id，用于同名笔记时保持与笔记内跳转一致 */
+  wikiTargets?: Record<string, string>
 }
 
 /** 转义 HTML 文本（标题等） */
@@ -639,18 +963,47 @@ function escapeHtml(text: string): string {
  * 导出为自包含 HTML 文件并触发下载。
  * @returns 生成的 HTML 文本（便于测试断言）
  */
-export async function exportNoteHtml({ note, tags, contentEl }: ExportHtmlPayload): Promise<string> {
+export async function exportNoteHtml({ note, tags, contentEl, markdown, linkedNotes = [], wikiTargets = {} }: ExportHtmlPayload): Promise<string> {
   const { css, katexFontFaces } = captureEditorStyles()
   const cssVariables = captureCssVariables()
   const katexFonts = await inlineKatexFonts(katexFontFaces)
-  const body = sanitizeContentForExport(contentEl)
   const title = (note.title || '无标题').trim()
-  const tagNames = tags.map(t => t.name).filter(Boolean)
-
-  const tagHtml = tagNames.length
-    ? `<div class="note-export-tags">${tagNames.map(name => `<span>${escapeHtml(name)}</span>`).join('')}</div>`
-    : ''
-  const metaHtml = `<div class="note-export-meta">导出于 ${escapeHtml(new Date().toLocaleString())}</div>`
+  const pages = [{ note, tags, contentEl, markdown }, ...linkedNotes]
+  const pageIds = pages.map((_page, index) => `note-export-page-${index}`)
+  const pagesByTitle = new Map<string, string>()
+  const pageIdByNoteId = new Map<string, string>()
+  pages.forEach((page, index) => {
+    pageIdByNoteId.set(page.note.id, pageIds[index])
+    const key = normalizeWikiTarget(page.note.title)
+    if (key && !pagesByTitle.has(key)) pagesByTitle.set(key, pageIds[index])
+  })
+  for (const [target, noteId] of Object.entries(wikiTargets)) {
+    const pageId = pageIdByNoteId.get(noteId)
+    if (pageId) pagesByTitle.set(normalizeWikiTarget(target), pageId)
+  }
+  const exportedAt = new Date().toLocaleString()
+  const renderTagHtml = (pageTags: Tag[]) => {
+    const names = pageTags.map(tag => tag.name).filter(Boolean)
+    return names.length
+      ? `<div class="note-export-tags">${names.map(name => `<span>${escapeHtml(name)}</span>`).join('')}</div>`
+      : ''
+  }
+  const articleHtml: string[] = []
+  for (let index = 0; index < pages.length; index++) {
+    const page = pages[index]
+    const pageId = pageIds[index]
+    const body = await sanitizeContentForExport(page.contentEl, page.markdown ?? page.note.content, pageId, pagesByTitle)
+    const pageTitle = (page.note.title || '无标题').trim()
+    const metaHtml = `<div class="note-export-meta">导出于 ${escapeHtml(exportedAt)}</div>`
+    articleHtml.push(`<article class="note-export-wrap" data-export-scope="" data-note-page="${pageId}" id="${pageId}"${index === 0 ? '' : ' hidden'}>
+<header class="note-export-header">
+<h1 class="note-export-title">${escapeHtml(pageTitle)}</h1>
+${renderTagHtml(page.tags)}
+${metaHtml}
+</header>
+${body}
+</article>`)
+  }
 
   const html = `<!doctype html>
 <html lang="zh-CN">
@@ -662,26 +1015,254 @@ export async function exportNoteHtml({ note, tags, contentEl }: ExportHtmlPayloa
 ${EXPORT_BASE_CSS}
 /* ===== 编辑器当前实际生效的 CSS 变量（代码块/引用/行内代码依赖） ===== */
 ${cssVariables}
-.note-export-title { font-size: 26px; font-weight: 700; color: #bfdbfe; margin: 0 0 10px; line-height: 1.4; }
-.note-export-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.note-export-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 65%;
+  overflow: hidden;
+  color: #bfdbfe;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.4;
+  margin: 0;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-export-tags { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 6px; margin: 0; }
 .note-export-tags span {
   padding: 2px 8px; border-radius: 999px; font-size: 12px;
   background: rgba(102, 126, 234, 0.16); border: 1px solid rgba(102, 126, 234, 0.35); color: #93c5fd;
 }
-.note-export-meta { font-size: 12px; color: rgba(148, 163, 184, 0.65); margin-bottom: 24px; }
+.note-export-meta { flex: 0 0 auto; margin: 0; font-size: 12px; color: rgba(148, 163, 184, 0.65); white-space: nowrap; }
+.note-export-wrap[hidden] { display: none !important; }
+.note-export-navigation { margin: 0 36px; }
+.note-export-back {
+  margin: 16px 0;
+  padding: 7px 12px; border: 1px solid rgba(102,126,234,.42); border-radius: 9px;
+  color: #bfdbfe; background: rgba(102,126,234,.14); font: inherit; cursor: pointer;
+}
+.note-export-back:hover { background: rgba(102,126,234,.25); }
+.note-export-wrap a[data-note-target] { cursor: pointer; }
+@media (max-width: 640px) {
+  .note-export-header { flex-wrap: wrap; }
+  .note-export-title { max-width: 100%; }
+  .note-export-meta { margin-left: 0; }
+  .note-export-navigation { margin-inline: 20px; }
+}
 /* ===== 运行时抓取的编辑器排版与代码着色样式 ===== */
 ${css}
+.note-export-wrap a.wiki-link {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: rgba(102, 126, 234, 0.14);
+  color: #93c5fd;
+  text-decoration: none;
+}
+.note-export-wrap a.wiki-link:hover { background: rgba(102, 126, 234, 0.28); color: #c7d2fe; }
 /* ===== KaTeX 字体（base64 内联，离线一致） ===== */
 ${katexFonts}
 </style>
 </head>
 <body>
-<article class="note-export-wrap markdown-body">
-<h1 class="note-export-title">${escapeHtml(title)}</h1>
-${tagHtml}
-${metaHtml}
-${body}
-</article>
+<nav class="note-export-navigation" aria-label="笔记页面导航">
+<button type="button" class="note-export-back" hidden>← 返回</button>
+</nav>
+${articleHtml.join('\n')}
+<script>
+(() => {
+  const pages = Array.from(document.querySelectorAll('[data-note-page]'));
+  const backButton = document.querySelector('.note-export-back');
+  const pageHistory = [];
+  let activePage = pages.find(page => !page.hidden) || pages[0] || null;
+  const showPage = (page, remember = true) => {
+    if (!page || page === activePage) return;
+    if (remember && activePage) pageHistory.push(activePage);
+    pages.forEach(item => { item.hidden = item !== page; });
+    activePage = page;
+    if (backButton) backButton.hidden = pageHistory.length === 0;
+    mediaElements.forEach(item => {
+      item.media.pause();
+    });
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  };
+  if (backButton) backButton.addEventListener('click', () => {
+    const previous = pageHistory.pop();
+    if (previous) showPage(previous, false);
+    if (backButton) backButton.hidden = pageHistory.length === 0;
+  });
+  document.addEventListener('click', event => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const link = target.closest('a[data-note-target]');
+    if (!link) return;
+    const pageId = link.getAttribute('data-note-target');
+    const page = pages.find(item => item.getAttribute('data-note-page') === pageId);
+    if (!page || page === activePage) return;
+    event.preventDefault();
+    showPage(page);
+  });
+
+  document.addEventListener('click', event => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const button = target.closest('.esd-quote-toggle');
+    if (!button) return;
+    const quote = button.closest('blockquote');
+    if (!quote) return;
+    const collapsed = quote.classList.toggle('esd-quote-collapsed');
+    button.setAttribute('aria-expanded', String(!collapsed));
+    button.setAttribute('aria-label', collapsed ? '展开引用' : '收起引用');
+    button.title = collapsed ? '展开引用（显示全部内容）' : '收起引用（只显示第一行）';
+  });
+
+  const mediaNodes = Array.from(document.querySelectorAll('.esd-media-block'));
+  const mediaElements = mediaNodes.map(block => ({
+    block: block,
+    shell: block.querySelector('.esd-player-shell'),
+    media: block.querySelector('video, audio')
+  })).filter(item => item.shell && item.media);
+  const formatTime = value => {
+    if (!Number.isFinite(value) || value < 0) return '0:00';
+    const seconds = Math.floor(value);
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainder = String(seconds % 60).padStart(2, '0');
+    return hours ? hours + ':' + String(minutes).padStart(2, '0') + ':' + remainder : minutes + ':' + remainder;
+  };
+
+  mediaElements.forEach(item => {
+    const block = item.block;
+    const shell = item.shell;
+    const media = item.media;
+    const play = shell.querySelector('.esd-player-play');
+    const time = shell.querySelector('.esd-player-time');
+    const progress = shell.querySelector('.esd-player-progress');
+    const volumeButton = shell.querySelector('.esd-player-volume-button');
+    const volume = shell.querySelector('.esd-player-volume');
+    const fullscreen = shell.querySelector('.esd-player-fullscreen, button[aria-label="全屏播放"], button[aria-label="最大化音频播放器"]');
+    const menuButton = shell.querySelector('.esd-player-menu-toggle');
+    const menu = shell.querySelector('.esd-player-menu');
+    const speedToggle = shell.querySelector('.esd-player-menu-item');
+    const speedOptions = shell.querySelector('.esd-player-speed-options');
+    const pip = shell.querySelector('.esd-player-menu-item[aria-label="在应用右下角显示画中画"]');
+    const closePip = shell.querySelector('.esd-player-pip-close');
+    if (!play || !progress || !volumeButton || !volume || !fullscreen || !menuButton || !menu || !speedToggle || !speedOptions) return;
+
+    const sync = () => {
+      const paths = play.querySelectorAll('svg path');
+      if (paths[0]) paths[0].setAttribute('d', media.paused ? 'M8 5v14l11-7z' : 'M7 5h4v14H7zM13 5h4v14h-4z');
+      play.setAttribute('aria-label', (media.paused ? '播放' : '暂停') + (media.tagName.toLowerCase() === 'video' ? '视频' : '音频'));
+      shell.dataset.paused = String(media.paused);
+
+      const duration = Number.isFinite(media.duration) ? media.duration : 0;
+      progress.max = String(duration);
+      progress.value = String(Math.min(media.currentTime || 0, duration));
+      if (time) time.textContent = formatTime(media.currentTime) + ' / ' + formatTime(duration);
+
+      const muted = media.muted || media.volume === 0;
+      const volumePaths = volumeButton.querySelectorAll('svg path');
+      if (volumePaths[1]) {
+        volumePaths[1].setAttribute('d', muted ? 'm17 9 4 6m0-6-4 6' : 'M16 9a4 4 0 0 1 0 6m2-9a7 7 0 0 1 0 12');
+        volumePaths[1].setAttribute('fill', 'none');
+        volumePaths[1].setAttribute('stroke', 'currentColor');
+      }
+      volumeButton.setAttribute('aria-label', muted ? '取消静音' : '静音');
+      volume.value = String(media.muted ? 0 : media.volume);
+
+      const speed = String(media.playbackRate) + '×';
+      const speedText = speedToggle.firstChild;
+      if (speedText && speedText.nodeType === Node.TEXT_NODE) speedText.nodeValue = '播放速度　' + speed + '　›';
+      speedOptions.querySelectorAll('.esd-player-speed-option').forEach(option => {
+        option.classList.toggle('active', Number(option.dataset.speed) === media.playbackRate);
+      });
+      fullscreen.setAttribute('aria-label', document.fullscreenElement === shell
+        ? (media.tagName.toLowerCase() === 'video' ? '退出全屏' : '退出最大化')
+        : (media.tagName.toLowerCase() === 'video' ? '全屏播放' : '最大化音频播放器'));
+    };
+
+    const closeMenus = () => {
+      menu.hidden = true;
+      speedOptions.hidden = true;
+      menuButton.setAttribute('aria-expanded', 'false');
+    };
+    const positionMenuAboveButton = () => {
+      const shellRect = shell.getBoundingClientRect();
+      const triggerRect = menuButton.getBoundingClientRect();
+      const triggerRight = triggerRect.right - shellRect.left - shell.clientLeft;
+      const triggerTop = triggerRect.top - shellRect.top - shell.clientTop;
+      menu.style.right = Math.max(0, shell.clientWidth - triggerRight) + 'px';
+      menu.style.bottom = Math.max(0, shell.clientHeight - triggerTop + 6) + 'px';
+    };
+    const playMedia = () => {
+      if (media.paused) void media.play().catch(() => {});
+      else media.pause();
+    };
+
+    play.addEventListener('click', event => { event.preventDefault(); playMedia(); });
+    progress.addEventListener('input', () => {
+      if (Number.isFinite(media.duration)) media.currentTime = Number(progress.value);
+    });
+    volumeButton.addEventListener('click', () => {
+      if (media.muted || media.volume === 0) {
+        if (media.volume === 0) media.volume = 0.5;
+        media.muted = false;
+      } else media.muted = true;
+    });
+    volume.addEventListener('input', () => {
+      media.volume = Number(volume.value);
+      media.muted = media.volume === 0;
+    });
+    fullscreen.addEventListener('click', () => {
+      if (document.fullscreenElement === shell) void document.exitFullscreen().catch(() => {});
+      else if (shell.requestFullscreen) void shell.requestFullscreen().catch(() => {});
+    });
+    menuButton.addEventListener('click', () => {
+      if (menu.hidden) positionMenuAboveButton();
+      menu.hidden = !menu.hidden;
+      speedOptions.hidden = true;
+      menuButton.setAttribute('aria-expanded', String(!menu.hidden));
+    });
+    speedToggle.addEventListener('click', () => { speedOptions.hidden = !speedOptions.hidden; });
+    speedOptions.querySelectorAll('.esd-player-speed-option').forEach(option => {
+      option.addEventListener('click', () => {
+        media.playbackRate = Number(option.dataset.speed);
+        speedOptions.hidden = true;
+        sync();
+      });
+    });
+    if (pip && closePip) {
+      const togglePip = () => {
+        const enabled = shell.dataset.pip !== 'true';
+        shell.dataset.pip = String(enabled);
+        block.dataset.pip = String(enabled);
+        closeMenus();
+      };
+      pip.addEventListener('click', togglePip);
+      closePip.addEventListener('click', togglePip);
+    }
+    if (media.tagName.toLowerCase() === 'video') {
+      media.addEventListener('click', playMedia);
+      media.addEventListener('contextmenu', event => event.preventDefault());
+    }
+    media.addEventListener('play', () => {
+      mediaElements.forEach(other => { if (other.media !== media) other.media.pause(); });
+      sync();
+    });
+    ['timeupdate', 'durationchange', 'loadedmetadata', 'play', 'pause', 'volumechange', 'ratechange', 'ended'].forEach(name => {
+      media.addEventListener(name, sync);
+    });
+    document.addEventListener('fullscreenchange', sync);
+    document.addEventListener('click', event => {
+      if (!shell.contains(event.target)) closeMenus();
+    });
+    window.addEventListener('resize', () => { if (!menu.hidden) positionMenuAboveButton(); });
+    sync();
+  });
+
+})();
+</script>
 </body>
 </html>
 `

@@ -27,67 +27,57 @@ export interface PluginExport {
 
 const plugins: PluginExport[] = []
 
-// 开发模式：从独立文件加载 Vite glob（生产构建会 tree-shake 整个 import）
-let _devLoaded: Promise<void> | null = null
-if (import.meta.env.DEV) {
-  _devLoaded = import('./pluginLoader.dev').then(m => {
-    plugins.push(...m.devPlugins)
-  })
+// 项目内插件随 Vite 构建；用户安装的插件由本机 Node 服务编译后交给浏览器运行。
+const pluginModules = import.meta.glob<{ default: PluginExport }>('../plugins/*/index.ts', { eager: true })
+for (const [path, module] of Object.entries(pluginModules)) {
+  const plugin = module.default
+  if (!plugin?.manifest) {
+    logger.warn(`[Plugin] ${path} 缺少插件清单，跳过`)
+    continue
+  }
+  plugins.push(plugin)
 }
+if (plugins.length) logger.info(`[Plugin] 已加载 ${plugins.length} 个内置插件`)
 
-// 生产模式：从运行时编译产物加载
 let runtimeLoaded = false
 
 export async function loadRuntimePlugins(): Promise<void> {
   if (runtimeLoaded) return
-
-  if (import.meta.env.DEV) {
-    await _devLoaded
+  const bridge = typeof window !== 'undefined' ? window.electronAPI : undefined
+  if (!bridge?.getRuntimePluginManifests || !bridge.getRuntimePluginSource) {
     runtimeLoaded = true
     return
   }
 
-  const electronAPI = (window as any).electronAPI
-  if (!electronAPI?.getRuntimePluginManifests) return
-
   try {
-    const manifests: PluginManifest[] = await electronAPI.getRuntimePluginManifests()
-    const existingIds = new Set(plugins.map((p) => p.manifest.id))
-    for (const m of manifests) {
-      // 本地优先：已加载过同 id 插件（如 dev 模式已加载的本地插件）则跳过远程版本
-      if (existingIds.has(m.id)) {
-        logger.info(`[Plugin] 跳过重复插件 ${m.id}（已优先加载本地版本）`)
-        continue
-      }
-      existingIds.add(m.id)
-      const plugin: PluginExport = { manifest: m, tools: [] }
-      const toolsMeta = (m as any).tools || {}
-
-      for (const [toolId, meta] of Object.entries(toolsMeta) as [string, any][]) {
-        plugin.tools!.push({
-          id: `${m.id}/${toolId}`,
-          pluginId: m.id,
-          name: meta.name || toolId,
-          description: meta.description || '',
-          icon: meta.icon || '🔧',
-          component: async () => {
-            const source = await electronAPI.getRuntimePluginSource(m.id, toolId)
-            const moduleUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }))
-            try {
-              return await import(/* @vite-ignore */ moduleUrl)
-            } finally {
-              URL.revokeObjectURL(moduleUrl)
-            }
-          },
-        })
-      }
-
-      plugins.push(plugin)
-      logger.info(`[Plugin] 运行时加载: ${m.name} v${m.version} (工具${plugin.tools!.length})`)
+    const manifests = await bridge.getRuntimePluginManifests() as Array<PluginManifest & { tools?: Record<string, { name?: string; description?: string; icon?: string }> }>
+    const existingIds = new Set(plugins.map(plugin => plugin.manifest.id))
+    for (const manifest of manifests) {
+      if (!manifest?.id || existingIds.has(manifest.id)) continue
+      existingIds.add(manifest.id)
+      const tools: ToolInfo[] = Object.entries(manifest.tools || {}).map(([toolId, meta]) => ({
+        id: `${manifest.id}/${toolId}`,
+        pluginId: manifest.id,
+        name: meta.name || toolId,
+        description: meta.description || '',
+        icon: meta.icon || '🔧',
+        component: async () => {
+          const source = await bridge.getRuntimePluginSource(manifest.id, toolId)
+          const moduleUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }))
+          try {
+            return await import(/* @vite-ignore */ moduleUrl)
+          } finally {
+            URL.revokeObjectURL(moduleUrl)
+          }
+        },
+      }))
+      plugins.push({ manifest, tools })
+      logger.info(`[Plugin] 已加载本机插件 ${manifest.name} v${manifest.version}（${tools.length} 个工具）`)
     }
+  } catch (error) {
+    logger.warn('[Plugin] 加载本机插件失败', { error: error instanceof Error ? error.message : String(error) })
+  } finally {
     runtimeLoaded = true
-  } catch (e) {
-    logger.warn('[Plugin] 运行时加载失败', { error: e instanceof Error ? e.message : String(e) })
   }
 }
 

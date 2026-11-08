@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import dayjs from 'dayjs'
+import { Lunar, Solar } from 'lunar-javascript'
 import * as api from '../lib/api'
 import {
   authorizeTaskCompletion,
@@ -646,8 +647,7 @@ export const useListStore = defineStore('list', () => {
         return current.add(1, 'month').endOf('month').format('YYYY-MM-DD')
       case 'lunar_date': {
         try {
-          const { Lunar } = require('lunar-javascript') as any
-          const solar = require('lunar-javascript').Solar.fromYmd(current.year(), current.month() + 1, current.date())
+          const solar = Solar.fromYmd(current.year(), current.month() + 1, current.date())
           const currentLunar = solar.getLunar()
           let lunarYear = currentLunar.getYear()
           for (let attempt = 0; attempt < 3; attempt++) {

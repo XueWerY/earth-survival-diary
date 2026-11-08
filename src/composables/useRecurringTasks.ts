@@ -1,5 +1,6 @@
 import { computed } from 'vue'
 import dayjs from 'dayjs'
+import { Lunar, Solar } from 'lunar-javascript'
 import { useListStore, type Task, type RepeatStrategy } from '../stores/listStore'
 
 export function useRecurringTasks() {
@@ -23,8 +24,7 @@ export function useRecurringTasks() {
         return current.add(1, 'month').format('YYYY-MM-DD')
       case 'lunar_date': {
         try {
-          const { Lunar } = require('lunar-javascript') as any
-          const solar = require('lunar-javascript').Solar.fromYmd(current.year(), current.month() + 1, current.date())
+          const solar = Solar.fromYmd(current.year(), current.month() + 1, current.date())
           const currentLunar = solar.getLunar()
           const lunarYear = currentLunar.getYear()
           for (let attempt = 0; attempt < 3; attempt++) {

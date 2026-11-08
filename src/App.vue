@@ -5,7 +5,7 @@
     :nickname="birthdayCelebrationNickname"
     @close="birthdayCelebrationVisible = false"
   />
-  <div v-if="isElectron" class="app-container desktop-layout">
+  <div class="app-container desktop-layout">
     <!-- Canvas 2D 流星背景 -->
     <canvas ref="starCanvas" class="star-canvas" :class="{ 'canvas-hidden': !showStarCanvas }"></canvas>
 
@@ -147,7 +147,7 @@ import GuideOverlay from './components/common/overlay/GuideOverlay.vue'
 import BirthdayCelebration from './components/common/overlay/BirthdayCelebration.vue'
 import { guideSteps } from './data/guideSteps'
 import { ElMessage } from 'element-plus'
-import { LunarMonth as BirthdayLunarMonth, LunarYear as BirthdayLunarYear, Solar as BirthdaySolar } from 'lunar-javascript'
+import { Lunar as BirthdayLunar, LunarMonth as BirthdayLunarMonth, LunarYear as BirthdayLunarYear, Solar as BirthdaySolar } from 'lunar-javascript'
 
 const router = useRouter()
 const route = useRoute()
@@ -157,7 +157,11 @@ const MAX_SCHEDULE_DELAY = 20 * 24 * 3600 * 1000
 
 const pageNav = usePageNav()
 
-const isElectron = computed(() => typeof window !== 'undefined' && !!(window as any).electronAPI)
+const isElectron = computed(() => typeof window !== 'undefined' && window.__ESD_DESKTOP__ === true)
+const isDesktopLayout = ref(typeof window !== 'undefined' && window.innerWidth >= 768)
+const syncDesktopLayout = () => {
+  isDesktopLayout.value = window.innerWidth >= 768
+}
 
 const navigateTo = (module: string) => {
   if (module === pageNav.currentModule.value) {
@@ -741,6 +745,10 @@ provide('refreshReminders', (reason?: string) => {
   return scheduleListReminders(reason || '外部模块主动刷新')
 })
 provide('isElectron', isElectron)
+provide('isDesktopLayout', isDesktopLayout)
+
+onMounted(() => window.addEventListener('resize', syncDesktopLayout, { passive: true }))
+onUnmounted(() => window.removeEventListener('resize', syncDesktopLayout))
 
 const countdownMilestones = ref<any[]>([])
 const countdownCategories = ref<any[]>([])
@@ -926,8 +934,7 @@ const ensureDefaultData = async () => {
     }
 
     // 3. 创建默认课程（日期为今日对应的周几）
-    const todayWeekday = dayjs().day() // 0=周日, 1=周一, ..., 6=周六
-    const courseDayOfWeek = todayWeekday === 0 ? 7 : todayWeekday // 转为课程系统：1=周一...7=周日
+    const courseDayOfWeek = dayjs().day() // 0=周日, 1=周一, ..., 6=周六
     const courses = (await getData<any[]>('course', 'courses')) || []
     courses.push({
       id: Date.now().toString(),
@@ -1182,8 +1189,7 @@ const DEFAULT_COUNTDOWN_CATEGORIES = [
 
 const lunarToSolar = (year: number, month: number, day: number): string | null => {
   try {
-    const { Lunar } = require('lunar-javascript')
-    const lunar = Lunar.fromYmd(year, month, day)
+    const lunar = BirthdayLunar.fromYmd(year, month, day)
     const solar = lunar.getSolar()
     return `${solar.getYear()}-${String(solar.getMonth()).padStart(2, '0')}-${String(solar.getDay()).padStart(2, '0')}`
   } catch {
@@ -1193,9 +1199,8 @@ const lunarToSolar = (year: number, month: number, day: number): string | null =
 
 const getJieQiDate = (year: number, jieQi: string): string | null => {
   try {
-    const { Solar } = require('lunar-javascript')
     for (let day = 4; day <= 6; day++) {
-      const solar = Solar.fromYmd(year, 4, day)
+      const solar = BirthdaySolar.fromYmd(year, 4, day)
       const lunar = solar.getLunar()
       if (lunar.getJieQi() === jieQi) {
         return `${year}-04-${String(day).padStart(2, '0')}`
@@ -1216,10 +1221,9 @@ const getNthWeekday = (year: number, month: number, weekday: number, nth: number
 
 const getLastLunarDayOfMonth = (year: number): number => {
   try {
-    const { Lunar } = require('lunar-javascript')
     let day = 30
     while (day >= 29) {
-      try { Lunar.fromYmd(year, 12, day); return day } catch { day-- }
+      try { BirthdayLunar.fromYmd(year, 12, day); return day } catch { day-- }
     }
     return 30
   } catch { return 30 }

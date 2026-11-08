@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body" :disabled="!teleport">
     <div v-if="visible" class="dialog-overlay" :class="{ 'dialog-overlay-fullscreen': fullscreen }" :style="{ zIndex }" @click.self="!noOverlayClose && $emit('update:visible', false)">
-      <div class="dialog-container" :class="{ 'dialog-container-fullscreen': fullscreen }" :style="width && !fullscreen ? { width: width + 'px' } : {}">
+      <div class="dialog-container" :class="{ 'dialog-container-fullscreen': fullscreen }" :style="!fullscreen ? { ...(width ? { width: width + 'px' } : {}), ...(aspectRatio ? { aspectRatio } : {}) } : {}">
         <div class="dialog-header">
           <span class="dialog-header-title">{{ title }}</span>
         </div>
@@ -27,6 +27,7 @@ withDefaults(defineProps<{
   visible: boolean
   title: string
   width?: number
+  aspectRatio?: string
   teleport?: boolean
   noOverlayClose?: boolean
   fullscreen?: boolean

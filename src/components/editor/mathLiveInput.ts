@@ -53,7 +53,7 @@ export const mathLiveInputPlugin = $prose(() =>
 
       const { selection } = newState
       const $from = selection.$from
-      if (!$from.parent.isTextblock) return null
+      if (!$from.parent.isTextblock || $from.parent.type.spec.code) return null
       const textBefore = $from.parent.textBetween(0, $from.parentOffset, undefined, '\ufffc')
       const pending = findPendingMath(textBefore)
       if (!pending) return null
@@ -64,6 +64,11 @@ export const mathLiveInputPlugin = $prose(() =>
       const blockStart = $from.start()
       const from = blockStart + pending.start
       const to = blockStart + pending.end
+      let insideCode = false
+      newState.doc.nodesBetween(from, to, node => {
+        if (node.marks.some(mark => mark.type.spec.code || mark.type.name === 'inlineCode')) insideCode = true
+      })
+      if (insideCode) return null
 
       const tr = newState.tr
       const node = nodeType.create({ value: pending.inner })

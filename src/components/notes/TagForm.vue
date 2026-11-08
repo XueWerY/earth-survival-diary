@@ -13,7 +13,7 @@
       @keyup.enter="submit"
     />
     <div class="tag-form-hint">
-      用 / 分隔层级，缺失的父级标签会自动创建；点击父级标签可汇总查看其下所有笔记
+      标签只用于当前文件夹。用 / 分隔层级，缺失的父级标签会自动创建；点击父级标签可汇总查看其下所有笔记
     </div>
 
     <span class="tag-form-label">颜色</span>

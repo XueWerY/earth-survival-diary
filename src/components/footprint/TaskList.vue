@@ -1,5 +1,5 @@
 <template>
-  <div class="footprint-container" ref="containerRef" :class="{ 'is-mobile': !isElectron }">
+  <div class="footprint-container" ref="containerRef" :class="{ 'is-mobile': !isDesktopLayout }">
     <div class="page-header">
       <div class="date-nav-area">
         <button class="header-nav-btn" @click="shiftDate(-1)" title="前一天">
@@ -224,6 +224,7 @@ import ConfirmDialog from '../common/overlay/ConfirmDialog.vue'
 import DiaryForm from './DiaryForm.vue'
 import RecordForm from './RecordForm.vue'
 import { logger } from '../../lib/logger'
+import type { Ref } from 'vue'
 
 dayjs.locale('zh-cn')
 
@@ -232,7 +233,7 @@ const emit = defineEmits<{
 }>()
 
 const isGuideActive = inject('guideVisible', ref(false))
-const isElectron = inject<boolean>('isElectron', false)
+const isDesktopLayout = inject<Ref<boolean>>('isDesktopLayout', ref(typeof window !== 'undefined' && window.innerWidth >= 768))
 
 const taskStore = useTaskStore()
 const pageNav = usePageNav()

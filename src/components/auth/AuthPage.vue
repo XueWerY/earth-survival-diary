@@ -1,5 +1,5 @@
 <template>
-  <div class="auth-page" :class="{ 'is-mobile': !isElectron }">
+  <div class="auth-page" :class="{ 'is-mobile': !isDesktopLayout }">
     <div class="auth-container">
       <div class="auth-header">
         <h1 class="auth-title">地球 Online 生存日记</h1>
@@ -101,6 +101,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, inject } from 'vue'
+import type { Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { MessageSquare, Lock, User } from '@lucide/vue'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -113,7 +114,7 @@ const emit = defineEmits<{
 
 const authStore = useAuthStore()
 
-const isElectron = inject<boolean>('isElectron', false)
+const isDesktopLayout = inject<Ref<boolean>>('isDesktopLayout', ref(typeof window !== 'undefined' && window.innerWidth >= 768))
 
 const mode = ref<'login' | 'register'>('login')
 const formRef = ref<FormInstance>()

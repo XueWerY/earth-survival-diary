@@ -48,7 +48,7 @@ const SRC_BRIDGE = new Set([
   'lib/logger', 'lib/api', 'services/storageService',
   'stores/settingsStore', 'stores/focusStore', 'stores/listStore',
   'components/ui/BaseDialog.vue', 'components/common/overlay/ConfirmDialog.vue',
-  'components/ui/ErrorDialog.vue',
+  'components/ui/ErrorDialog.vue', 'components/plugins/CharacterGrowthPanel.vue',
 ])
 
 function genPlaceholderToolJs(toolName) {

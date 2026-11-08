@@ -20,6 +20,7 @@ export interface Tag {
   name: string        // 支持嵌套路径名，如 "项目/子项目"
   color: string
   order: number
+  folderPath: string  // 标签只属于一个笔记文件夹
 }
 
 export interface Note {
@@ -27,6 +28,7 @@ export interface Note {
   title: string
   content: string
   tagIds: string[]
+  folderPath: string
   pinned: boolean
   trashedAt: string | null
   createdAt: string
@@ -144,6 +146,14 @@ export const useNoteStore = defineStore('note', () => {
   const tags = ref<Tag[]>([])
   const isLoaded = ref(false)
 
+  const normalizeTagFolderPath = (value: string | undefined) => String(value || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+  const outermostFolderPath = (value: string | undefined) => normalizeTagFolderPath(value).split('/')[0] || ''
+  const withScopedTags = (note: NoteRecord): Note => {
+    const folderPath = normalizeTagFolderPath(note.folderPath)
+    const tagIds = (note.tagIds || []).filter(id => tags.value.some(tag => tag.id === id && normalizeTagFolderPath(tag.folderPath) === folderPath))
+    return withDerived({ ...note, folderPath, tagIds })
+  }
+
   /** @deprecated 过渡期兼容视图：把标签映射为旧分类形状，供尚未重写的旧界面读取 */
   const categories = computed<NoteCategory[]>(() =>
     tags.value.map(t => ({
@@ -166,15 +176,18 @@ export const useNoteStore = defineStore('note', () => {
       // 首次使用且没有标签时初始化默认标签。
       if (!savedTags || savedTags.length === 0) {
         tags.value = DEFAULT_NOTE_CATEGORIES.map((c, i) => ({
-          id: c.id, name: c.name, color: c.color, order: i
+          id: c.id, name: c.name, color: c.color, order: i, folderPath: ''
         }))
         await saveTags()
       } else {
-        tags.value = savedTags
+        tags.value = savedTags.map(tag => ({ ...tag, folderPath: String(tag.folderPath || '').replace(/\\/g, '/') }))
         // 补齐缺失的内置标签
-        const missing = DEFAULT_NOTE_CATEGORIES.filter(c => !tags.value.some(t => t.id === c.id))
+        const missing = DEFAULT_NOTE_CATEGORIES.filter(c => !tags.value.some(t => !t.folderPath && (t.id === c.id || t.name === c.name)))
         if (missing.length > 0) {
-          missing.forEach(c => tags.value.push({ id: c.id, name: c.name, color: c.color, order: tags.value.length }))
+          missing.forEach(c => {
+            const id = tags.value.some(t => t.id === c.id) ? `tag_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` : c.id
+            tags.value.push({ id, name: c.name, color: c.color, order: tags.value.filter(t => !t.folderPath).length, folderPath: '' })
+          })
           await saveTags()
         }
       }
@@ -183,7 +196,7 @@ export const useNoteStore = defineStore('note', () => {
       const activeList: Note[] = []
       const trashList: Note[] = []
       for (const n of savedNotes) {
-        const note = withDerived(n)
+        const note = withScopedTags(n)
         if (note.trashedAt) trashList.push(note)
         else activeList.push(note)
       }
@@ -218,16 +231,28 @@ export const useNoteStore = defineStore('note', () => {
   const syncFromRemote = async () => {
     if (!isLoaded.value) return
     try {
+      const remoteTags = await getData<Tag[]>('notes', 'tags')
+      if (Array.isArray(remoteTags)) tags.value = remoteTags.map(tag => ({ ...tag, folderPath: normalizeTagFolderPath(tag.folderPath) }))
       const remote = await listNotes()
       const activeList: Note[] = []
       const trashList: Note[] = []
       for (const n of remote) {
-        const note = withDerived(n)
+        const note = withScopedTags(n)
         if (note.trashedAt) trashList.push(note)
         else activeList.push(note)
       }
       notes.value = activeList
       trashedNotes.value = trashList
+      if (Array.isArray(remoteTags)) {
+        const missing = DEFAULT_NOTE_CATEGORIES.filter(category => !tags.value.some(tag => !tag.folderPath && (tag.id === category.id || tag.name === category.name)))
+        if (missing.length) {
+          missing.forEach(category => {
+            const id = tags.value.some(tag => tag.id === category.id) ? `tag_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` : category.id
+            tags.value.push({ id, name: category.name, color: category.color, order: tags.value.filter(tag => !tag.folderPath).length, folderPath: '' })
+          })
+          await saveTags()
+        }
+      }
     } catch (e) {
       logger.error('[笔记] 远程同步失败', { error: e instanceof Error ? e.message : String(e) })
     }
@@ -244,18 +269,21 @@ export const useNoteStore = defineStore('note', () => {
   // ========== 笔记操作（记录级读写，不做整份数组写回） ==========
 
   const addNote = async (
-    data: { title: string; content?: string; pinned?: boolean; tagIds?: string[]; categoryId?: string }
+    data: { title: string; content?: string; pinned?: boolean; tagIds?: string[]; categoryId?: string; folderPath?: string }
   ): Promise<Note | null> => {
     try {
-      const tagIds = data.tagIds ?? (data.categoryId ? [data.categoryId] : [])
+      const folderPath = normalizeTagFolderPath(data.folderPath)
+      const requestedTagIds = data.tagIds ?? (data.categoryId ? [data.categoryId] : [])
+      const tagIds = requestedTagIds.filter(id => tags.value.some(tag => tag.id === id && tag.folderPath === folderPath))
       const created = await createNote({
         title: data.title,
         content: data.content || '',
         tagIds,
+        folderPath,
         pinned: !!data.pinned
       })
       if (!created) return null
-      const note = withDerived(created)
+      const note = withScopedTags(created)
       notes.value.unshift(note)
       logger.info('[笔记] 新增笔记', { id: note.id, title: note.title })
       return note
@@ -267,22 +295,39 @@ export const useNoteStore = defineStore('note', () => {
 
   const updateNote = async (
     id: string,
-    data: Partial<{ title: string; content: string; pinned: boolean; tagIds: string[]; categoryId: string; trashedAt: string | null }>
+    data: Partial<{ title: string; content: string; pinned: boolean; tagIds: string[]; categoryId: string; folderPath: string; trashedAt: string | null }>
   ): Promise<boolean> => {
     try {
+      const current = [...notes.value, ...trashedNotes.value].find(note => note.id === id)
+      if (!current) return false
+      const sourceFolderPath = normalizeTagFolderPath(current.folderPath)
+      const targetFolderPath = normalizeTagFolderPath(data.folderPath !== undefined ? data.folderPath : sourceFolderPath)
+      if (data.folderPath !== undefined && outermostFolderPath(sourceFolderPath) !== outermostFolderPath(targetFolderPath)) {
+        logger.warn('[笔记] 拒绝跨最外层文件夹移动笔记', { id, from: sourceFolderPath, to: targetFolderPath })
+        return false
+      }
+      if (data.folderPath !== undefined && targetFolderPath !== normalizeTagFolderPath(current.folderPath) && data.tagIds === undefined) {
+        logger.warn('[笔记] 拒绝直接跨文件夹移动笔记，必须先迁移标签', { id })
+        return false
+      }
       const patch: Partial<NoteRecord> = {}
       if (data.title !== undefined) patch.title = data.title
       if (data.content !== undefined) patch.content = data.content
       if (data.pinned !== undefined) patch.pinned = data.pinned
+      if (data.folderPath !== undefined) patch.folderPath = targetFolderPath
       if (data.trashedAt !== undefined) patch.trashedAt = data.trashedAt
-      if (data.tagIds !== undefined) patch.tagIds = data.tagIds
-      else if (data.categoryId !== undefined) patch.tagIds = data.categoryId ? [data.categoryId] : []
+      if (data.tagIds !== undefined) {
+        patch.tagIds = data.tagIds.filter(tagId => tags.value.some(tag => tag.id === tagId && tag.folderPath === targetFolderPath))
+      } else if (data.categoryId !== undefined) {
+        const tag = tags.value.find(item => item.id === data.categoryId && item.folderPath === targetFolderPath)
+        patch.tagIds = tag ? [tag.id] : []
+      }
 
       const saved = await patchNote(id, patch)
       if (!saved) return false
 
       const idx = notes.value.findIndex(n => n.id === id)
-      if (idx !== -1) notes.value[idx] = withDerived(saved)
+      if (idx !== -1) notes.value[idx] = withScopedTags(saved)
       const updatedTitle = [...notes.value, ...trashedNotes.value].find(note => note.id === id)?.title || '无标题'
       logger.info(`[笔记] 更新笔记，笔记名称: ${updatedTitle}，编号: ${id}`)
       return true
@@ -363,29 +408,31 @@ export const useNoteStore = defineStore('note', () => {
 
   const genTagId = () => 'tag_' + Date.now().toString() + Math.random().toString(36).slice(2, 6)
 
-  const newTag = (name: string): Tag => ({
+  const newTag = (name: string, folderPath: string): Tag => ({
     id: genTagId(),
     name,
-    color: DEFAULT_NOTE_COLORS[tags.value.length % DEFAULT_NOTE_COLORS.length],
-    order: tags.value.length
+    color: DEFAULT_NOTE_COLORS[tags.value.filter(tag => tag.folderPath === folderPath).length % DEFAULT_NOTE_COLORS.length],
+    order: tags.value.filter(tag => tag.folderPath === folderPath).length,
+    folderPath,
   })
 
-  const addTag = async (data: { name: string; color?: string }): Promise<Tag | null> => {
+  const addTag = async (data: { name: string; color?: string; folderPath?: string }): Promise<Tag | null> => {
     try {
       const name = normalizeTagName(data.name)
       if (!name) return null
+      const folderPath = normalizeTagFolderPath(data.folderPath)
       // 同名标签已存在：直接返回既有标签（供属性栏"输入即关联"复用）
-      const existing = tags.value.find(t => t.name === name)
+      const existing = tags.value.find(t => t.folderPath === folderPath && t.name === name)
       if (existing) return existing
       // 自动创建缺失的祖先标签，保证树中父节点真实存在（如建 "项目/子项目" 时先建 "项目"）
       const segments = name.split('/')
       for (let i = 1; i < segments.length; i++) {
         const ancestorPath = segments.slice(0, i).join('/')
-        if (!tags.value.some(t => t.name === ancestorPath)) {
-          tags.value.push(newTag(ancestorPath))
+        if (!tags.value.some(t => t.folderPath === folderPath && t.name === ancestorPath)) {
+          tags.value.push(newTag(ancestorPath, folderPath))
         }
       }
-      const tag: Tag = { ...newTag(name), ...(data.color ? { color: data.color } : {}) }
+      const tag: Tag = { ...newTag(name, folderPath), ...(data.color ? { color: data.color } : {}) }
       tags.value.push(tag)
       await saveTags()
       logger.info('[笔记] 新增标签', { id: tag.id, name: tag.name })
@@ -396,7 +443,7 @@ export const useNoteStore = defineStore('note', () => {
     }
   }
 
-  const updateTag = async (id: string, data: Partial<Omit<Tag, 'id'>>): Promise<boolean> => {
+  const updateTag = async (id: string, data: Partial<Omit<Tag, 'id' | 'folderPath'>>): Promise<boolean> => {
     try {
       const idx = tags.value.findIndex(t => t.id === id)
       if (idx === -1) return false
@@ -404,13 +451,14 @@ export const useNoteStore = defineStore('note', () => {
         const newName = normalizeTagName(data.name)
         if (!newName) return false
         const oldName = tags.value[idx].name
+        const folderPath = tags.value[idx].folderPath
         if (newName !== oldName) {
           // 与其他标签重名视为冲突（重命名后聚合路径会混乱），交由调用方提示
-          if (tags.value.some(t => t.id !== id && t.name === newName)) return false
+          if (tags.value.some(t => t.id !== id && t.folderPath === folderPath && t.name === newName)) return false
           // 重命名级联：后代标签的路径前缀同步更新，避免树断链
           const prefix = oldName + '/'
           tags.value.forEach((t, i) => {
-            if (t.name.startsWith(prefix)) {
+            if (t.folderPath === folderPath && t.name.startsWith(prefix)) {
               tags.value[i] = { ...t, name: newName + t.name.slice(oldName.length) }
             }
           })
@@ -431,10 +479,11 @@ export const useNoteStore = defineStore('note', () => {
   // 不级联删除后代标签——后代会在树中重挂到虚拟父节点下
   const deleteTag = async (id: string): Promise<boolean> => {
     try {
-      const affected = notes.value.filter(n => n.tagIds.includes(id))
-      await Promise.all(affected.map(n =>
-        patchNote(n.id, { tagIds: n.tagIds.filter(t => t !== id) })
-      ))
+      const affected = [...notes.value, ...trashedNotes.value].filter(n => n.tagIds.includes(id))
+      for (const note of affected) {
+        const saved = await patchNote(note.id, { tagIds: note.tagIds.filter(tagId => tagId !== id) })
+        if (!saved) return false
+      }
       affected.forEach(n => { n.tagIds = n.tagIds.filter(t => t !== id); n.categoryId = n.tagIds[0] || '' })
 
       tags.value = tags.value.filter(t => t.id !== id)
@@ -445,6 +494,25 @@ export const useNoteStore = defineStore('note', () => {
       logger.error('[笔记] 删除标签失败', { error: e instanceof Error ? e.message : String(e) })
       return false
     }
+  }
+
+  const moveNoteToFolder = async (id: string, folderPath: string): Promise<boolean> => {
+    const note = notes.value.find(item => item.id === id)
+    if (!note) return false
+    const destination = normalizeTagFolderPath(folderPath)
+    if (destination === normalizeTagFolderPath(note.folderPath)) return true
+    if (outermostFolderPath(destination) !== outermostFolderPath(note.folderPath)) {
+      logger.warn('[笔记] 拒绝跨最外层文件夹移动笔记', { id, from: note.folderPath, to: destination })
+      return false
+    }
+    const nextTagIds: string[] = []
+    for (const tagId of note.tagIds) {
+      const sourceTag = tags.value.find(tag => tag.id === tagId && tag.folderPath === normalizeTagFolderPath(note.folderPath))
+      if (!sourceTag) continue
+      const destinationTag = await addTag({ name: sourceTag.name, color: sourceTag.color, folderPath: destination })
+      if (destinationTag) nextTagIds.push(destinationTag.id)
+    }
+    return await updateNote(id, { folderPath: destination, tagIds: nextTagIds })
   }
 
   return {
@@ -466,6 +534,7 @@ export const useNoteStore = defineStore('note', () => {
     addTag,
     updateTag,
     deleteTag,
+    moveNoteToFolder,
   }
 })
 

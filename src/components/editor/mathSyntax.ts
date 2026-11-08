@@ -22,6 +22,7 @@
 // 表达式内部的反斜杠（\leq 等）原样保留。
 
 import { $remark } from '@milkdown/kit/utils'
+import { parse, postprocess, preprocess } from 'micromark'
 
 /**
  * 归一化：把序列化产生的双重转义折算回单反斜杠形态。
@@ -157,17 +158,38 @@ export function convertBlockDollarsToDelimiters(markdown: string): string {
   return out
 }
 
+/** 用 Markdown 词法范围隔离代码和原始 HTML，避免公式转换改写代码示例或媒体属性。 */
+function outsideLiteralMarkdown(markdown: string, transform: (text: string) => string): string {
+  if (!markdown) return ''
+  const events = postprocess(parse().document().write(preprocess()(markdown, undefined, true)))
+  const ranges: Array<{ start: number; end: number }> = []
+  const literals = new Set(['codeFenced', 'codeIndented', 'codeText', 'htmlFlow', 'htmlText'])
+  for (const [event, token] of events) {
+    if (event !== 'enter' || !literals.has(token.type)) continue
+    const start = token.start.offset
+    const end = token.end.offset
+    if (typeof start === 'number' && typeof end === 'number') ranges.push({ start, end })
+  }
+  ranges.sort((a, b) => a.start - b.start || b.end - a.end)
+  let cursor = 0
+  let output = ''
+  for (const range of ranges) {
+    if (range.end <= cursor) continue
+    output += transform(markdown.slice(cursor, Math.max(cursor, range.start)))
+    output += markdown.slice(Math.max(cursor, range.start), range.end)
+    cursor = range.end
+  }
+  return output + transform(markdown.slice(cursor))
+}
+
 /** 进编辑器前的完整转换（历史损坏修复 + 行内 + 块级） */
 export function mathDelimitersToEditor(markdown: string): string {
-  return convertBlockDelimitersToDollars(convertInlineDelimitersToDollars(repairLegacyBrokenBlocks(markdown || '')))
+  return outsideLiteralMarkdown(markdown || '', text => convertBlockDelimitersToDollars(convertInlineDelimitersToDollars(repairLegacyBrokenBlocks(text))))
 }
 
 /** 出编辑器后的完整还原（行内 + 块级） */
 export function mathEditorToDelimiters(markdown: string): string {
-  const restored = convertBlockDollarsToDelimiters(convertInlineDollarsToDelimiters(markdown))
-  // Cream 序列化会把 \( 里的 \ 再转义成 \\（见上「双重转义」说明），
-  // 输出/落库前归一化回单反斜杠，保证存储格式始终是 \( \)。
-  return normalizeDoubleEscapes(restored)
+  return outsideLiteralMarkdown(markdown || '', text => normalizeDoubleEscapes(convertBlockDollarsToDelimiters(convertInlineDollarsToDelimiters(text))))
 }
 
 // Milkdown 包装（保持与 wikiLink/editorSearch 一致的注册形态）：

@@ -1,212 +1,59 @@
-# 🌍 地球 Online 生存日记
+# 地球 Online 生存日记
 
-一款将游戏化概念融入日常时间管理的 Windows 桌面应用。版本：`2026.10.18-1`。Electron 桌面端账号和业务数据保存在本机 YAML 文件中。
+一款 Vue 3 本地应用。页面在浏览器中显示；Vite 的 Node 进程同时承接本机文件、媒体、插件和 YAML 数据操作，并把前端日志输出到启动终端。
 
-## ✨ 功能模块
+## 功能
 
-- **足迹与任务**：记录日常事项、完成状态与时间。
-- **笔记**：使用 Milkdown 编辑器整理笔记和标签，清单中的关联笔记预览与编辑器内容样式保持一致。
-  - **富文本格式**：标题、加粗、斜体、下划线、上标、下标、删除线、高亮、文字颜色、行内代码，插入引用块、无序/有序列表、表格、公式与代码块。
-  - **公式**：行内 `\(…\)` 与块级 `\[…\]` 公式由 KaTeX 渲染，存储统一使用反斜杠定界符。
-  - **块锚点链接**：可为引用块与标题生成 `#esd-ref-…` 锚点链接，点击跳转并短暂高亮目标块。
-  - **引用块折叠**：引用块默认收起、只显示首行，点左侧按钮展开；跳转/替换到被收起的引用块时会先自动展开。
-  - **编辑器内搜索替换**：`Ctrl+F` / `Ctrl+H`，随输入实时高亮并可逐个跳转。
-  - **快捷键中心**：24 项动作可自定义组合键，检测笔记模块内部的重复占用；快捷键无效时可自行重新录制。
-  - **临时笔记**：直接打开并原地编辑本机 `.md` 文件，自动轮询外部改动，并记住每篇的阅读位置。
-  - **导出**：导出 Markdown 或自带样式的独立 HTML。
-- **清单与倒数日**：规划待办、课程和重要日期。
-- **专注计时**：记录专注过程与统计。
-- **提醒**：由 Electron 主进程调度，并在本机保存提醒状态。
-- **插件系统**：管理手动安装的插件。
-- **全局滚动条**：统一使用自绘滚动条，覆盖页面中的滚动区域及原本隐藏滚动条的区域；需要保持无滚动条外观的滚动容器（如滚轮选择器）添加 `data-app-scrollbar-off` 属性即可跳过。
+- 足迹、任务、清单、倒数日、课程表、专注计时和提醒。
+- 笔记编辑、标签、媒体附件、公式、搜索替换、临时 Markdown 文件，以及 Markdown/HTML 导出。
+- 插件市场、随项目构建的内置插件，以及保存在本机的外部插件。
+- 用户数据按账号保存为 YAML 文件；笔记正文、标签、媒体附件及其索引由用户选择的文件夹库管理。
 
-## 🛠️ 技术栈
+## 开发
 
-- Vue 3、TypeScript、Vite、Pinia、Vue Router
-- Electron；渲染进程通过 preload IPC 使用受控的主进程能力
-- Electron 桌面端使用本地 YAML 文件；浏览器预览使用 localStorage
-
-## 🚀 开发
-
-需要安装 Node.js 和 npm。
+需要 Node.js 与 pnpm。
 
 ```sh
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
-浏览器调试可直接启动 Vite：
+`pnpm dev` 启动本机 Vite/Node 服务，在默认浏览器打开 `http://127.0.0.1:5173`。关闭终端会停止服务。浏览器中的应用日志会转发到这个终端，并保存在本机日志目录。
+
+构建静态前端并通过带本机服务的预览服务器运行：
 
 ```sh
-npx vite
+pnpm build
+pnpm preview
 ```
 
-浏览器预览没有 Electron 文件访问能力时，数据保存在浏览器 localStorage 中。
+请通过 `pnpm dev` 或 `pnpm preview` 打开应用；单独打开 `dist/index.html` 不会启用本机数据与文件服务。
 
-## 💾 本地数据
+## 本机数据
 
-Electron 桌面端使用 YAML 文件保存账号与模块数据，根目录为：
+默认位置为：
 
 ```text
 %APPDATA%\earth-survival-diary\data\
 ```
 
-账号信息按用户 ID 分文件保存；模块数据按用户 ID 和模块分目录保存。账号密码以派生哈希保存，不以明文写入。登录会话令牌由 Chromium 本地存储管理。
+用户业务数据按用户 ID 分目录。笔记库由笔记模块通过系统文件夹选择器添加；首次设置时会把旧笔记和媒体附件迁入所选目录。之后可以从笔记模块侧栏的“笔记库”入口切换已添加的笔记库，或添加新库；切换不会合并或搬动其他笔记库的数据。应用数据目录保存笔记库清单和插件养成记录：
 
 ```text
-data\users\<用户ID>.yaml
-data\<用户ID>\countdown\categories.yaml
-data\<用户ID>\countdown\countdowns.yaml
-data\<用户ID>\course\courses.yaml
-data\<用户ID>\focus\favorites.yaml
-data\<用户ID>\focus\records.yaml
-data\<用户ID>\footprint\diary.yaml
-data\<用户ID>\footprint\footprint.yaml
-data\<用户ID>\list\completed.yaml
-data\<用户ID>\list\favorites.yaml
-data\<用户ID>\list\folders.yaml
-data\<用户ID>\list\lists.yaml
-data\<用户ID>\list\tasks.yaml
-data\<用户ID>\notes\<笔记ID>.md
-data\<用户ID>\notes\media\<资源ID>.yaml
-data\<用户ID>\notes\tags.yaml
-data\<用户ID>\notes\tempNotes.yaml
-data\<用户ID>\notes\tempReading.yaml
-data\<用户ID>\profile\profile.yaml
-data\<用户ID>\settings\settings.yaml
-data\<用户ID>\system\reminders.yaml
-data\<用户ID>\system\state.yaml
+data\<用户ID>\star-rail-character-growth\records.yaml
+data\<用户ID>\genshin-character-growth\records.yaml
 ```
 
-主进程通过 YAML 解析器读写这些文件。每篇笔记以 Markdown 文件保存，标签保存在 `tags.yaml`；图片和视频资源分别写入 `notes\media\` 下的 YAML 资源文件。
-
-**临时笔记**（直接编辑本机已有的 `.md` 文件）不复制进笔记库，只在 `tempNotes.yaml` 中保存**文件路径清单**，正文始终以磁盘上的文件为准；每篇的阅读位置单独记录在 `tempReading.yaml`。外部编辑器的改动通过轮询与窗口聚焦自动重读。
-
-程序不会自动迁移旧数据，文件管理器不提供数据导入导出功能。
-
-## 🏗️ 构建与发布
-
-```sh
-npm run build
-npm run electron:build:win
-```
-
-构建产物输出到 `release/`。配置 GitHub 发布令牌后，`npm run publish-release` 可上传当前发布产物。
-
-发布需要的 GitHub 访问令牌按以下顺序解析：
-
-1. 环境变量 `GH_TOKEN`（或 `GITHUB_TOKEN`）
-2. 本机 GitHub CLI 的登录态（`gh auth token`，令牌由系统 keyring 托管）
-
-```sh
-# 方式一：使用 GitHub CLI（推荐，令牌可续期）
-gh auth login
-npm run publish-release
-
-# 方式二：使用个人访问令牌（需 repo 权限）
-setx GH_TOKEN "<令牌>"     # 设置后需重新打开终端
-npm run publish-release
-```
-
-若环境变量里的令牌已过期，脚本会先探测、失败后**自动改用 GitHub CLI 的令牌**继续发布，并提示更新或删除该变量。`release/` 中已上传的资产会跳过，重复执行是安全的。
-
-### 安装与卸载（Inno Setup）
-
-安装与卸载程序由 [Inno Setup](https://jrsoftware.org/isinfo.php) 制作，不再使用 NSIS。
-
-- 安装脚本模板：[`build/installer.iss`](build/installer.iss)（构建时由脚本替换变量生成 `build/installer.generated.iss`）
-- 安装器图形：[`scripts/generate-installer-images.js`](scripts/generate-installer-images.js) 生成左侧星空大图（240×459，星空 + 居中地球）与备用小图（PNG）
-- 简体中文语言文件：[`build/languages/ChineseSimplified.isl`](build/languages/ChineseSimplified.isl)（Inno Setup 未官方提供简体中文翻译，由项目维护）
-- 中文许可协议：[`build/installer-license.txt`](build/installer-license.txt)（安装器展示用，仓库根目录的 MIT 原文保持不变）
-- 编译器获取：[`scripts/setup-inno.cjs`](scripts/setup-inno.cjs) 优先使用本机已装的 Inno Setup，否则自动下载官方安装器并静默安装到 `build/tools/`
-- 安装包构建：[`scripts/build-installer.cjs`](scripts/build-installer.cjs) 生成 `.iss` 并调用 `ISCC.exe` 编译，同时产出 `.blockmap` 与 `latest.yml`
-
-```sh
-npm run electron:build:win        # electron-builder 产出 win-unpacked + 编译 Inno Setup 安装包
-npm run setup:inno                # 只准备 Inno Setup 编译器
-npm run build:installer           # 已有 win-unpacked 时只重新编译安装包
-```
-
-安装行为：
-
-- **界面全部中文化**：使用项目自带的简体中文语言文件，不显示语言选择对话框；卸载界面同为中文
-- **左侧星空**：星空直接画在左侧大图 `installer-sidebar.png` 内（240×459），只覆盖左侧面板；`[Code]` 段的 `CurPageChanged` 控制显示范围为**欢迎页与安装完成页**，内页（许可协议、选择安装位置等）保持空白
-- **安装路径全英文**：默认装到 `%LOCALAPPDATA%\Programs\Earth-Survival-Diary`（与主程序文件名一致），磁盘路径中不出现中文；界面与开始菜单仍显示中文产品名"地球 Online 生存日记"
-- 默认每用户安装（免管理员）；可在"选择安装位置"页切换到管理员模式（所有用户，装到 `%ProgramFiles%\Earth-Survival-Diary`）
-- 安装与卸载过程中自动检测应用是否正在运行（调用系统 `tasklist` 查询主程序进程）；应用运行时卸载会被拦截提示，静默卸载直接中止，避免文件占用导致残留
-- 卸载详情实时显示：删除前统计文件规模，删除后枚举残留，被占用无法删除的文件逐个列出
-- 卸载默认**保留** `%APPDATA%\earth-survival-diary` 下的笔记、设置与日志；卸载时会询问是否一并删除
-- 静默安装：`Earth-Survival-Diary-Setup-<version>.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART`
-- 静默卸载：`<安装目录>\unins000.exe /VERYSILENT`
-
-## 📁 项目结构
+每个笔记库中的 Markdown 文件按文件夹实际存放，笔记 frontmatter 记录文件夹路径。笔记只允许在同一最外层文件夹内移动。标签按文件夹隔离；标签索引和媒体附件存放在各笔记库根目录的 `.earth-survival-diary` 中。
 
 ```text
-src/
-├── lib/api.ts                    # 业务 API 适配层，路由到本地实现
-├── services/                     # 本地账号与业务请求
-│   ├── localApi.ts               # 本地账号与业务请求
-│   ├── localDataStore.ts         # 本地数据访问与媒体引用处理
-│   └── tempNotes.ts              # 临时笔记：路径清单与阅读位置
-├── stores/                       # Pinia 状态管理
-│   ├── noteStore.ts              # 笔记与标签
-│   ├── shortcutStore.ts          # 快捷键动作、组合键与冲突检测
-│   └── tempNoteStore.ts          # 临时笔记清单与磁盘同步
-├── components/
-│   ├── editor/                   # 编辑器内核扩展
-│   │   ├── blockAnchors.ts       # 块锚点（引用块/标题的链接跳转与高亮）
-│   │   ├── mathSyntax.ts         # 公式定界符 ↔ 编辑器语法的往返转换
-│   │   ├── textStyleMarks.ts     # 高亮/文字颜色/下划线/上标/下标 mark
-│   │   ├── codeGrammar.ts        # 代码块语言描述与语法校验
-│   │   ├── codeLanguages.ts      # 代码语言目录与高亮预览
-│   │   ├── codePreviewBridge.ts  # 链接与行内代码校验
-│   │   └── mathLiveInput.ts      # 公式实时输入插件
-│   ├── notes/                    # 笔记页、编辑器与相关弹窗
-│   └── ...                       # 其它页面与通用组件
-├── styles/                       # 全局样式（代码高亮 token 等）
-└── utils/
-    ├── noteExport.ts             # 导出 Markdown
-    └── noteExportHtml.ts         # 导出独立 HTML
-
-electron/
-├── main.cjs                      # Electron 主进程及 YAML 文件 IPC
-├── preload.cjs                   # 受限 renderer IPC
-└── lib/                          # 日志等桌面端工具
-
-build/
-├── installer.iss                 # Inno Setup 安装/卸载脚本模板
-├── installer-license.txt         # 安装器展示的中文许可协议
-├── languages/                    # 安装器语言文件
-│   └── ChineseSimplified.isl     # 简体中文翻译（项目维护）
-└── images/                       # 应用图标与安装器图形（PNG/ICO）
-
-scripts/
-├── dev.cjs                       # 启动 Vite 和 Electron
-├── build-tools.cjs               # 构建、清理与发布工具
-├── build-installer.cjs           # 生成 .iss 并用 ISCC 编译安装包
-├── setup-inno.cjs                # 获取/安装 Inno Setup 编译器
-├── generate-icons.js             # 生成应用图标
-└── generate-installer-images.js  # 生成安装器图形
+<笔记库>/工作/*.md
+<笔记库>/学习/*.md
+<笔记库>/.earth-survival-diary/tags.yaml
+<笔记库>/.earth-survival-diary/media/metadata.yaml
+<笔记库>/.earth-survival-diary/media/<媒体资产>
 ```
 
-`src/plugins/file-manager` 是独立 Git 仓库，供本地开发模式使用；父项目不跟踪该目录，也不会把它打进安装包。既有用户插件副本会继续保留并加载。
+临时 Markdown 文件由浏览器文件选择器授权。支持 File System Access API 的浏览器可以直接保存回原文件；其他浏览器会将内容保存在当前浏览器的本地副本中。浏览器窗口大小由浏览器自身调整。
 
-## 📐 数据访问流程
-
-```text
-Vue 页面和 Pinia stores
-        ↓
-src/lib/api.ts
-        ↓
-src/services/localApi.ts
-        ↓
-src/services/localDataStore.ts
-        ↓
-preload IPC → Electron main process → 用户与模块 YAML 文件
-```
-
-桌面端数据文件通过主进程写入，渲染进程不直接访问 Node.js 文件系统。账号文件保存在 `data\users\<用户ID>.yaml`，各模块文件保存在对应用户目录下。
-
-## 📄 许可
-
-详见仓库中的 LICENSE 文件。
+账号密码使用派生哈希保存。普通模块数据由本机服务写入应用数据目录，不依赖浏览器 IndexedDB。

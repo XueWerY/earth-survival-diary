@@ -4,12 +4,24 @@
     :title="title"
     :width="kind === 'block-code' ? 560 : 440"
     teleport
-    auto-height
+    :no-overlay-close="confirming"
     @update:visible="(v) => !v && close()"
   >
     <div class="insert-dialog">
       <!-- ====== 行内代码 ====== -->
       <template v-if="kind === 'inline-code'">
+        <!-- 语言仅用于本片段的语法审查与着色预览，绝不会写入正文/落盘 -->
+        <div class="insert-row">
+          <span class="insert-label">语言</span>
+          <EsdSelect
+            v-model="languageDraft"
+            class="insert-select-custom"
+            :options="languageOptions"
+            searchable
+            search-placeholder="搜索语言…"
+            empty-text="没有匹配的语言"
+          />
+        </div>
         <div class="insert-field">
           <span class="insert-label">
             代码内容
@@ -27,7 +39,15 @@
           />
         </div>
         <p v-if="error" class="insert-error">{{ error }}</p>
-        <p v-else-if="inlineDraft.trim()" class="insert-preview-line"><code>{{ inlineDraft }}</code></p>
+        <p v-else-if="grammarChecking" class="insert-hint" role="status">正在检查语法…</p>
+        <p v-else-if="inlineReviewHint" class="insert-warn" role="status">{{ inlineReviewHint }}。行内代码可能是语法片段，仍可插入。</p>
+        <p v-else-if="inlineDraft.trim()" class="insert-ok">{{ reviewCaption }}</p>
+        <p class="insert-hint">语言用于本次语法检查和着色预览；插入正文后使用标准行内代码样式。</p>
+        <div v-if="inlinePreviewHtml" class="insert-preview">
+          <div class="insert-preview-head">预览</div>
+          <pre class="insert-preview-body"><code class="hljs" v-html="inlinePreviewHtml"></code></pre>
+        </div>
+        <p v-else-if="inlineDraft.trim() && isLatex" class="insert-hint">LaTeX 将作为行内代码插入；需要渲染公式时，请使用「行内公式」。</p>
       </template>
 
       <!-- ====== 块级代码 ====== -->
@@ -63,12 +83,41 @@
         </div>
         <p v-if="error" class="insert-error">{{ error }}</p>
         <p v-else-if="grammarChecking" class="insert-hint">正在语法解析…</p>
-        <p v-else-if="codeDraft.trim()" class="insert-ok">审查通过 · 插入后默认显示预览，点「编辑」可改源码</p>
+        <p v-else-if="codeDraft.trim()" class="insert-ok">{{ reviewCaption }} · 插入后可继续编辑</p>
         <div v-if="previewHtml" class="insert-preview">
           <div class="insert-preview-head">预览</div>
           <pre class="insert-preview-body"><code class="hljs" v-html="previewHtml"></code></pre>
         </div>
         <p v-else-if="codeDraft.trim() && isLatex" class="insert-hint">LaTeX 公式将在插入后由公式引擎渲染</p>
+      </template>
+
+      <!-- ====== 行内公式 ====== -->
+      <template v-else-if="kind === 'inline-math'">
+        <div class="insert-math-examples" aria-label="常用公式">
+          <button v-for="example in mathExamples" :key="example.label" type="button" @click="mathDraft = example.value; mathRef?.focus()">{{ example.label }}</button>
+        </div>
+        <div class="insert-field">
+          <span class="insert-label">
+            公式（LaTeX）
+            <span class="insert-label-hint">输入后实时预览，确认插入到光标处</span>
+          </span>
+          <input
+            ref="mathRef"
+            v-model="mathDraft"
+            class="insert-input insert-input-mono"
+            type="text"
+            spellcheck="false"
+            placeholder="如 \frac{a}{b} 或 x^2"
+            @keydown.enter.prevent="confirm"
+            @keydown.esc.prevent="close"
+          />
+        </div>
+        <p v-if="error" class="insert-error">{{ error }}</p>
+        <div v-if="mathPreviewHtml" class="insert-preview">
+          <div class="insert-preview-head">预览</div>
+          <div class="insert-preview-body insert-math-body" v-html="mathPreviewHtml"></div>
+        </div>
+        <p v-else-if="mathUnavailable && mathDraft.trim()" class="insert-hint">暂时无法预览，插入后可在正文查看</p>
       </template>
 
       <!-- ====== 链接 ====== -->
@@ -162,28 +211,29 @@
     </div>
 
     <template #footer>
-      <button class="ins-btn" @click="close">
+      <button type="button" class="ins-btn" :disabled="confirming" @click="close">
         <svg class="ins-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         <span>取消</span>
       </button>
-      <button class="ins-btn ins-btn-primary" :disabled="!canSubmit" @click="confirm">
+      <button type="button" class="ins-btn ins-btn-primary" :disabled="!canSubmit" @click="confirm">
         <svg class="ins-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg>
-        <span>插入</span>
+        <span>{{ confirming ? '正在检查…' : '插入' }}</span>
       </button>
     </template>
   </BaseDialog>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import BaseDialog from '../ui/BaseDialog.vue'
 import EsdSelect, { type EsdSelectOption } from './EsdSelect.vue'
 import { CODE_LANGUAGES, resolveLanguage, validateCode } from '../editor/codeLanguages'
 import { validateLinkUrl, validateInlineCode, renderPreviewHtml } from '../editor/codePreviewBridge'
 // 编辑器自带的语言全集（与代码容器工具栏下拉同源，约 140 种）+ 真语法解析
 import { languageCatalog, checkWithGrammar, hasStrictGrammar } from '../editor/codeGrammar'
+import { renderMathPreview } from '../editor/mathPreview'
 
-export type InsertKind = 'inline-code' | 'block-code' | 'link'
+export type InsertKind = 'inline-code' | 'block-code' | 'link' | 'inline-math'
 
 const props = withDefaults(defineProps<{
   visible: boolean
@@ -194,6 +244,11 @@ const props = withDefaults(defineProps<{
   hasSelection?: boolean
   /** 块级代码：默认语言 */
   initialLanguage?: string
+  /** 行内代码：默认语言（默认「纯文本」，避免默认触发严格审查误报） */
+  initialInlineLanguage?: string
+  initialInlineText?: string
+  /** 行内公式：预填 LaTeX（不含定界符） */
+  initialMathLatex?: string
   /** 链接：本笔记内可作为跳转目标的块（引用块/标题） */
   anchors?: Array<{ id: string; kind: 'quote' | 'heading'; text: string; firstLine?: string; level?: number }>
   /** 链接：可跳转的其它笔记名 */
@@ -202,15 +257,19 @@ const props = withDefaults(defineProps<{
   initialLinkText: '',
   hasSelection: false,
   initialLanguage: 'JavaScript',
+  initialInlineLanguage: 'Plain Text',
+  initialInlineText: '',
+  initialMathLatex: '',
   anchors: () => [],
   noteOptions: () => []
 })
 
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void
-  (e: 'confirm-inline-code', payload: { text: string }): void
+  (e: 'confirm-inline-code', payload: { text: string; language: string }): void
   (e: 'confirm-block-code', payload: { language: string; code: string }): void
   (e: 'confirm-link', payload: { url: string; text: string }): void
+  (e: 'confirm-inline-math', payload: { latex: string }): void
 }>()
 
 /** 链接目标类型 */
@@ -228,22 +287,31 @@ const noteDraft = ref('')
 const inlineRef = ref<HTMLInputElement | null>(null)
 const codeRef = ref<HTMLTextAreaElement | null>(null)
 const urlRef = ref<HTMLInputElement | null>(null)
+const mathRef = ref<HTMLInputElement | null>(null)
 
 const inlineDraft = ref('')
 const codeDraft = ref('')
+const mathDraft = ref('')
 const languageDraft = ref(props.initialLanguage)
 const urlDraft = ref('https://')
 const textDraft = ref('')
 const touched = ref(false)
+const confirming = ref(false)
+let resetting = false
 
 /**
  * 语言下拉项：优先用编辑器注册进来的全集（与代码容器工具栏一致）；
  * 编辑器尚未就绪时退回内置目录，避免下拉为空。
  */
 const languageOptions = computed<EsdSelectOption[]>(() => {
-  const fromEditor = languageCatalog.value
-  if (fromEditor.length) return fromEditor.map(item => ({ label: item.label, value: item.id }))
-  return CODE_LANGUAGES.map(item => ({ label: item.label, value: item.id }))
+  const options = CODE_LANGUAGES.map(item => ({ label: item.label, value: item.id }))
+  const knownAliases = new Set(CODE_LANGUAGES.flatMap(item => [item.id.toLowerCase(), ...item.aliases]))
+  for (const item of languageCatalog.value) {
+    if (!knownAliases.has(item.id.toLowerCase()) && !item.aliases.some(alias => knownAliases.has(alias))) {
+      options.push({ label: item.label, value: item.id })
+    }
+  }
+  return options
 })
 
 /**
@@ -280,9 +348,39 @@ const grammarAvailable = computed(() => hasStrictGrammar(languageDraft.value))
 
 const title = computed(() => {
   if (props.kind === 'link') return '插入链接'
+  if (props.kind === 'inline-math') return '插入行内公式'
   return props.kind === 'block-code' ? '插入块级代码' : '插入行内代码'
 })
 const isLatex = computed(() => resolveLanguage(languageDraft.value).aliases.includes('latex'))
+
+/** 行内代码是否为「纯文本」：纯文本跳过严格语法审查（行内常用于命令片段，避免误报） */
+const isPlainText = computed(() => ['plain text', 'plaintext', 'text', 'txt', ''].includes(languageDraft.value.trim().toLowerCase()))
+
+/** 结构检查与语言解析共同给出提示；行内代码允许不完整的语法片段。 */
+const inlineReviewHint = computed<string | null>(() => {
+  if (props.kind !== 'inline-code') return null
+  if (!inlineDraft.value.trim() || isPlainText.value) return null
+  return validateCode(languageDraft.value, inlineDraft.value) || grammarError.value || null
+})
+
+/** 语法提示与着色预览并列显示，方便修改片段。 */
+const inlinePreviewHtml = computed(() => {
+  if (props.kind !== 'inline-code') return ''
+  if (isLatex.value) return ''
+  return renderPreviewHtml(languageDraft.value, inlineDraft.value)
+})
+
+/**
+ * 行内公式的实时预览结果（KaTeX 渲染 + 校验）。
+ * 校验规则与 mathLiveInput / mathSyntax 一致：空 → 含 `$` → KaTeX 解析。
+ */
+const mathResult = computed(() => (props.kind === 'inline-math'
+  ? renderMathPreview(mathDraft.value)
+  : { html: '', error: null as string | null, unavailable: false }))
+/** KaTeX 渲染结果 HTML（空表示无预览：空输入/含 $/语法错误/不可用） */
+const mathPreviewHtml = computed(() => mathResult.value.html)
+/** KaTeX 不可用：弹窗降级为「插入后由公式引擎渲染」提示，不阻塞插入 */
+const mathUnavailable = computed(() => mathResult.value.unavailable)
 
 /**
  * 真语法解析的结果（异步，仅对有 Lezer 解析器的语言）：
@@ -312,14 +410,16 @@ const error = computed(() => {
   if (!touched.value) return null
   if (props.kind === 'inline-code') return validateInlineCode(inlineDraft.value)
   if (props.kind === 'block-code') return blockCodeError.value ?? null
+  if (props.kind === 'inline-math') return mathResult.value.error
   return linkError.value
 })
 
 const canSubmit = computed(() => {
+  if (confirming.value) return false
   if (props.kind === 'inline-code') return !validateInlineCode(inlineDraft.value)
+  if (props.kind === 'inline-math') return !mathResult.value.error
   if (props.kind === 'block-code') {
-    // 解析中或待解析时先不禁用（避免抖动），点插入会再做一次同步确认
-    if (grammarChecking.value) return true
+    if (grammarChecking.value) return false
     return !blockCodeError.value
   }
   return !linkError.value
@@ -329,36 +429,46 @@ const canSubmit = computed(() => {
  * 触发真语法解析（语言或代码变化后防抖）。
  * 解析结果只认最后一次（用 token 丢弃过期结果）。
  */
+const reviewCaption = computed(() => {
+  if (isPlainText.value) return '纯文本预览，不进行语法检查'
+  if (grammarAvailable.value && grammarError.value !== undefined) return '语法检查通过（未执行代码）'
+  return '基础结构检查通过（该语言暂无完整语法检查）'
+})
+const mathExamples = [
+  { label: '分式', value: '\\frac{a}{b}' },
+  { label: '平方', value: 'x^2 + y^2 = z^2' },
+  { label: '根式', value: '\\sqrt{x}' },
+  { label: '求和', value: '\\sum_{i=1}^{n} i' },
+]
 let grammarTimer: ReturnType<typeof setTimeout> | null = null
-const scheduleGrammarCheck = () => {
+const cancelGrammarCheck = () => {
+  grammarToken += 1
   if (grammarTimer) clearTimeout(grammarTimer)
+  grammarTimer = null
+  grammarChecking.value = false
+  grammarError.value = undefined
+}
+const scheduleGrammarCheck = () => {
+  cancelGrammarCheck()
+  if (!props.visible || (props.kind !== 'block-code' && props.kind !== 'inline-code')) return
+  const source = props.kind === 'inline-code' ? inlineDraft.value : codeDraft.value
+  if (!source.trim() || !grammarAvailable.value || isPlainText.value) return
+  const token = grammarToken
+  const language = languageDraft.value
+  grammarChecking.value = true
   grammarTimer = setTimeout(async () => {
     grammarTimer = null
-    if (props.kind !== 'block-code' || !codeDraft.value.trim()) {
-      grammarError.value = undefined
-      grammarChecking.value = false
-      return
-    }
-    // 该语言没有 Lezer 解析器 → 不必等待，直接置为「无解析器」
-    // （LaTeX 走专项检查；若不提前返回，提示会一直停在「正在语法解析…」）
-    if (!grammarAvailable.value) {
-      grammarError.value = undefined
-      grammarChecking.value = false
-      return
-    }
-    const token = ++grammarToken
-    grammarChecking.value = true
     try {
-      const result = await checkWithGrammar(languageDraft.value, codeDraft.value)
-      if (token !== grammarToken) return
-      grammarError.value = result
+      const result = await checkWithGrammar(language, source)
+      if (token === grammarToken) grammarError.value = result
     } catch {
       if (token === grammarToken) grammarError.value = undefined
     } finally {
       if (token === grammarToken) grammarChecking.value = false
     }
-  }, 250)
+  }, 200)
 }
+onBeforeUnmount(cancelGrammarCheck)
 
 /** 块级代码的着色预览（LaTeX 除外——由编辑器 katex 管线渲染） */
 const previewHtml = computed(() => {
@@ -391,12 +501,17 @@ const linkHint = computed(() => {
   return selected
 })
 
-watch(() => props.visible, (visible) => {
+watch(() => [props.visible, props.kind] as const, ([visible]) => {
+  cancelGrammarCheck()
   if (!visible) return
+  resetting = true
   touched.value = false
-  inlineDraft.value = ''
+  inlineDraft.value = props.initialInlineText || ''
   codeDraft.value = ''
-  languageDraft.value = props.initialLanguage || 'JavaScript'
+  mathDraft.value = props.initialMathLatex || ''
+  languageDraft.value = props.kind === 'inline-code'
+    ? (props.initialInlineLanguage || 'Plain Text')
+    : (props.initialLanguage || 'JavaScript')
   urlDraft.value = 'https://'
   textDraft.value = props.initialLinkText
   // 链接目标默认外部地址；笔记有锚点时也默认外部，避免误插
@@ -404,31 +519,57 @@ watch(() => props.visible, (visible) => {
   anchorDraft.value = props.anchors?.[0]?.id || ''
   noteDraft.value = props.noteOptions?.[0] || ''
   void nextTick(() => {
+    resetting = false
+    scheduleGrammarCheck()
     if (props.kind === 'inline-code') inlineRef.value?.focus()
     else if (props.kind === 'block-code') codeRef.value?.focus()
+    else if (props.kind === 'inline-math') mathRef.value?.focus()
     else if (linkTarget.value === 'url') {
       urlRef.value?.focus()
       urlRef.value?.setSelectionRange(urlDraft.value.length, urlDraft.value.length)
     }
   })
-})
+}, { immediate: true })
 
-watch([inlineDraft, codeDraft, urlDraft, languageDraft, linkTarget, anchorDraft, noteDraft], () => {
+watch([inlineDraft, codeDraft, mathDraft, urlDraft, languageDraft, linkTarget, anchorDraft, noteDraft], () => {
+  if (!props.visible || resetting) return
   touched.value = true
-  if (props.kind === 'block-code') scheduleGrammarCheck()
 })
+watch([inlineDraft, codeDraft, languageDraft, grammarAvailable], scheduleGrammarCheck, { flush: 'sync' })
 
-const close = () => emit('update:visible', false)
+const close = () => {
+  if (!confirming.value) emit('update:visible', false)
+}
 
-const confirm = () => {
+const confirm = async () => {
   if (!canSubmit.value) {
     touched.value = true
     return
   }
+  // 确认时重新检查当前快照，防止输入事件和防抖检查之间的时间窗口绕过校验。
+  if ((props.kind === 'block-code' || props.kind === 'inline-code') && grammarAvailable.value && !isPlainText.value) {
+    const kind = props.kind
+    const language = languageDraft.value
+    const source = kind === 'inline-code' ? inlineDraft.value : codeDraft.value
+    const token = ++grammarToken
+    confirming.value = true
+    try {
+      const result = await checkWithGrammar(language, source)
+      if (token !== grammarToken || !props.visible || props.kind !== kind || languageDraft.value !== language || (kind === 'inline-code' ? inlineDraft.value : codeDraft.value) !== source) return
+      grammarError.value = result
+      if (kind === 'block-code' && result) return
+    } finally {
+      confirming.value = false
+    }
+  }
   if (props.kind === 'inline-code') {
-    emit('confirm-inline-code', { text: inlineDraft.value })
+    // language 仅供弹窗内审查/预览；父组件只取 text，绝不写入正文（AC-4.4）
+    emit('confirm-inline-code', { text: inlineDraft.value, language: languageDraft.value })
   } else if (props.kind === 'block-code') {
     emit('confirm-block-code', { language: languageDraft.value, code: codeDraft.value.replace(/\s+$/, '') })
+  } else if (props.kind === 'inline-math') {
+    // 只 emit 纯 LaTeX，不含定界符；`\( … \)` 由父组件拼接，保证落盘形态统一（design 2.6.3）
+    emit('confirm-inline-math', { latex: mathDraft.value.trim() })
   } else {
     let url = urlDraft.value.trim()
     let fallbackText = url
@@ -454,11 +595,21 @@ const syncGutter = () => {
 </script>
 
 <style scoped>
+.insert-preview-body :deep(.hljs-keyword), .insert-preview-body :deep(.hljs-selector-tag) { color: #c4b5fd; }
+.insert-preview-body :deep(.hljs-string), .insert-preview-body :deep(.hljs-attr) { color: #86efac; }
+.insert-preview-body :deep(.hljs-number), .insert-preview-body :deep(.hljs-literal) { color: #fbbf24; }
+.insert-preview-body :deep(.hljs-title), .insert-preview-body :deep(.hljs-built_in) { color: #93c5fd; }
+.insert-preview-body :deep(.hljs-comment) { color: #94a3b8; font-style: italic; }
+
+.insert-math-examples { display: flex; flex-wrap: wrap; gap: 8px; }
+.insert-math-examples button { padding: 5px 10px; border: 1px solid rgba(167,139,250,.25); border-radius: 7px; color: #c4b5fd; background: rgba(139,92,246,.08); font: inherit; font-size: 12px; cursor: pointer; }
+.insert-math-examples button:hover { background: rgba(139,92,246,.2); }
+
 .insert-dialog {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-width: 340px;
+  min-width: 0;
 }
 
 .insert-row {
@@ -584,6 +735,18 @@ const syncGutter = () => {
   color: rgba(134, 239, 172, 0.85);
 }
 
+/* 行内代码的提示级审查结果：灰色/暖色提示，不阻断插入（与红色 insert-error 区分） */
+.insert-warn {
+  margin: 0;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: rgba(250, 204, 21, 0.1);
+  border: 1px solid rgba(250, 204, 21, 0.24);
+  color: #fcd34d;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .insert-preview-line code {
   padding: 2px 6px;
   border-radius: 5px;
@@ -621,6 +784,16 @@ const syncGutter = () => {
   line-height: 1.65;
   color: #d6e2ff;
   white-space: pre;
+}
+
+/* 行内公式预览：KaTeX 自带结构，沿用正文排版而非等宽字体 */
+.insert-math-body {
+  max-height: 160px;
+  font-family: inherit;
+  font-size: 15px;
+  white-space: normal;
+  overflow-x: auto;
+  color: #e2e8f0;
 }
 
 .ins-btn {

@@ -1,7 +1,6 @@
-// 业务数据、图片和视频媒体均保存在本机应用数据目录。
+// 普通业务数据保存在本机应用数据目录；笔记正文与媒体库保存在用户选择的笔记库中。
 import { deleteData as deleteRemoteData, deleteRemoteNote, fetchNotes, getData as getRemoteData, setData as setRemoteData, createRemoteNote, updateRemoteNote } from '../lib/api'
 import { logger } from '../lib/logger'
-import { hydrateMediaPayload } from './localDataStore'
 
 const cache = new Map<string, any>()
 const pendingRequests = new Map<string, Promise<any>>()
@@ -93,6 +92,7 @@ export interface NoteRecord {
   title: string
   content: string
   tagIds: string[]
+  folderPath: string
   pinned: boolean
   trashedAt: string | null
   createdAt: string
@@ -107,6 +107,7 @@ export function normalizeNoteRecord(raw: any): NoteRecord {
     title: r.title !== undefined ? String(r.title) : '新笔记',
     content: r.content !== undefined ? String(r.content) : '',
     tagIds: Array.isArray(r.tagIds) ? r.tagIds.map(String) : [],
+    folderPath: r.folderPath ? String(r.folderPath).replace(/\\/g, '/') : '',
     pinned: !!r.pinned,
     trashedAt: r.trashedAt || null,
     createdAt: r.createdAt || now,
@@ -118,7 +119,7 @@ async function loadLocalNotes(): Promise<{ notes: NoteRecord[]; ready: boolean }
   try {
     const result = await fetchNotes()
     if (!result.success || !Array.isArray(result.notes)) return { notes: [], ready: false }
-    const notes = await Promise.all(result.notes.map(async note => normalizeNoteRecord(await hydrateMediaPayload(note))))
+    const notes = result.notes.map(normalizeNoteRecord)
     return { notes, ready: true }
   } catch (err) {
     logger.error('[Storage] 本地读取笔记失败', { error: err instanceof Error ? err.message : String(err) })

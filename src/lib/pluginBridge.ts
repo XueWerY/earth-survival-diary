@@ -1,7 +1,7 @@
 /**
  * 插件运行时桥（生产环境）
  *
- * 运行时打包的插件工具（electron/build-plugin.cjs 产物）不自带共享依赖，
+ * 运行时打包的插件工具（scripts/build-plugin.cjs 产物）不自带共享依赖，
  * 而是通过 window.__ESD_BRIDGE__ 引用主应用的模块实例，
  * 保证插件与主应用共用同一个 Vue/Pinia/Element Plus 实例。
  *
@@ -25,6 +25,7 @@ import { useListStore } from '../stores/listStore'
 import BaseDialog from '../components/ui/BaseDialog.vue'
 import ConfirmDialog from '../components/common/overlay/ConfirmDialog.vue'
 import ErrorDialog from '../components/ui/ErrorDialog.vue'
+import CharacterGrowthPanel from '../components/plugins/CharacterGrowthPanel.vue'
 
 ;(window as any).__ESD_BRIDGE__ = {
   // npm 依赖
@@ -48,4 +49,5 @@ import ErrorDialog from '../components/ui/ErrorDialog.vue'
   'components/common/BaseDialog.vue': BaseDialog,
   'components/common/overlay/ConfirmDialog.vue': ConfirmDialog,
   'components/ui/ErrorDialog.vue': ErrorDialog,
+  'components/plugins/CharacterGrowthPanel.vue': CharacterGrowthPanel,
 }

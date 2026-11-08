@@ -1,5 +1,5 @@
 <template>
-  <div class="course-container" :class="{ 'is-electron': isElectron }" ref="containerRef" :style="{ '--card-cols': cardCols }">
+  <div class="course-container" :class="{ 'is-desktop-layout': isDesktopLayout }" ref="containerRef" :style="{ '--card-cols': cardCols }">
     <div class="course-inner">
       <div v-if="viewMode === 'schedule'" class="week-area">
         <el-button :icon="ArrowLeft" circle size="small" class="week-nav-btn" @click="prevWeek" :disabled="displayWeekNumber <= 1" />
@@ -107,7 +107,8 @@
   <BaseDialog
     :visible="dialogVisible"
     :title="editingCourse ? '编辑课程' : '添加课程'"
-    :width="1080"
+    :width="960"
+    aspect-ratio="16 / 9"
     teleport
     @update:visible="dialogVisible = $event"
   >
@@ -115,12 +116,12 @@
       <el-form-item label="课程名称" prop="name" class="course-grid-field course-name-item">
         <el-input v-model="courseForm.name" placeholder="输入课程名称" maxlength="30" show-word-limit />
       </el-form-item>
-      <el-form-item label="上课时间" class="course-grid-field course-time-item">
+      <el-form-item label="上课时间" prop="dayOfWeek" class="course-grid-field course-time-item">
         <div class="time-area">
           <div class="time-day-row">
-            <el-radio-group v-model="courseForm.dayOfWeek">
-              <el-radio v-for="d in DAY_OPTIONS" :key="d.value" :value="d.value" class="day-radio">{{ d.label }}</el-radio>
-            </el-radio-group>
+            <el-checkbox-group v-model="courseForm.dayOfWeek" class="day-checkbox-group">
+              <el-checkbox v-for="d in DAY_OPTIONS" :key="d.value" :value="d.value" class="day-checkbox">{{ d.label }}</el-checkbox>
+            </el-checkbox-group>
           </div>
           <div class="time-periods-row">
             <el-checkbox v-for="p in periods" :key="p.id" :model-value="courseForm.periodIds.includes(p.id)" @change="(val: boolean) => togglePeriod(p.id, val)" class="period-checkbox">{{ p.name }}</el-checkbox>
@@ -449,6 +450,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch, inject } from 'vue'
+import type { Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowRight } from '@lucide/vue'
 import dayjs from 'dayjs'
@@ -465,7 +467,7 @@ import ColorGrid from '../ui/ColorGrid.vue'
 interface Course {
   id: string
   name: string
-  dayOfWeek: number
+  dayOfWeek: number[]
   periodIds: number[]
   location: string
   teacher: string
@@ -510,6 +512,16 @@ const DAY_OPTIONS = [
   { value: 4, label: '周四' }, { value: 5, label: '周五' }, { value: 6, label: '周六' }, { value: 0, label: '周日' }
 ]
 
+function normalizeCourseDays(value: unknown): number[] {
+  const rawDays = Array.isArray(value) ? value : [value == null ? 1 : value]
+  const normalized = new Set<number>()
+  for (const rawDay of rawDays) {
+    const day = Number(rawDay) === 7 ? 0 : Number(rawDay)
+    if (Number.isInteger(day) && day >= 0 && day <= 6) normalized.add(day)
+  }
+  return DAY_OPTIONS.map(option => option.value).filter(day => normalized.has(day))
+}
+
 const DAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
 function formatWeeks(weeks: number[]): string {
@@ -540,7 +552,7 @@ const settingsStore = useSettingsStore()
 const pageNav = usePageNav()
 const refreshReminders = inject<(reason?: string) => void>('refreshReminders', () => {})
 
-const isElectron = computed(() => typeof window !== 'undefined' && !!(window as any).electronAPI)
+const isDesktopLayout = inject<Ref<boolean>>('isDesktopLayout', ref(typeof window !== 'undefined' && window.innerWidth >= 768))
 
 // ===== 课程列表视图 =====
 const viewMode = ref<'schedule' | 'list'>('schedule')
@@ -735,7 +747,7 @@ function getPeriodById(id: number): Period | undefined {
 
 const gridColumns = computed(() => {
   const dayCount = showWeekend.value ? 7 : 5
-  if (isElectron.value) {
+  if (isDesktopLayout.value) {
     return `70px repeat(${dayCount}, 1fr)`
   }
   const totalCols = 1 + dayCount
@@ -759,15 +771,45 @@ const gridCells = computed<GridCellItem[]>(() => {
     isCurrentWeek: boolean
   }
   const layouts: CourseLayout[] = []
+  const morningCount = morningRowCount.value
+  const afternoonCount = afternoonRowCount.value
+  const sectionIndexForPeriod = (periodIndex: number) => {
+    if (periodIndex < morningCount) return 0
+    if (periodIndex < morningCount + afternoonCount) return 1
+    return 2
+  }
+
   for (const course of courses.value) {
     if (!showNonCurrentWeekCourses.value && course.weeks && course.weeks.length > 0 && !course.weeks.includes(weekNum)) continue
-    if (course.dayOfWeek == null) continue
     const pIds = (course.periodIds || []).slice().sort((a, b) => a - b)
     if (pIds.length === 0) continue
-    const dayIndex = course.dayOfWeek === 0 ? 6 : course.dayOfWeek - 1
-    if (dayIndex >= dayCount) continue
     const isCurrentWeek = !course.weeks || course.weeks.length === 0 || course.weeks.includes(weekNum)
-    layouts.push({ course, periods: pIds, dayIndex, isCurrentWeek })
+
+    // 网格每个时段单独渲染。把非连续节次和午休/晚休边界切开，
+    // 否则一个跨时段的大 row-span 会把当前 section 撑出多余的隐式网格行。
+    const periodIndexes = [...new Set(pIds.map(id => ps.findIndex(period => period.id === id)).filter(index => index >= 0))]
+      .sort((a, b) => a - b)
+    const dayIndexes = normalizeCourseDays(course.dayOfWeek)
+      .map(dayOfWeek => dayOfWeek === 0 ? 6 : dayOfWeek - 1)
+      .filter(dayIndex => dayIndex < dayCount)
+    let currentRun: number[] = []
+    let currentSection = -1
+
+    const pushRun = () => {
+      if (!currentRun.length) return
+      const periods = currentRun.map(index => ps[index].id)
+      for (const dayIndex of dayIndexes) layouts.push({ course, periods, dayIndex, isCurrentWeek })
+      currentRun = []
+    }
+
+    for (const periodIndex of periodIndexes) {
+      const section = sectionIndexForPeriod(periodIndex)
+      const previous = currentRun[currentRun.length - 1] ?? -1
+      if (currentRun.length && (periodIndex !== previous + 1 || section !== currentSection)) pushRun()
+      if (!currentRun.length) currentSection = section
+      currentRun.push(periodIndex)
+    }
+    pushRun()
   }
 
   layouts.sort((a, b) => {
@@ -899,7 +941,7 @@ const editingCourse = ref<Course | null>(null)
 const courseFormRef = ref()
 const courseForm = ref({
   name: '',
-  dayOfWeek: 1,
+  dayOfWeek: [1] as number[],
   periodIds: [] as number[],
   location: '',
   teacher: '',
@@ -926,7 +968,10 @@ function togglePeriod(periodId: number, checked: boolean) {
   }
 }
 
-const courseRules = { name: [{ required: true, message: '请输入课程名称', trigger: 'blur' }] }
+const courseRules = {
+  name: [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
+  dayOfWeek: [{ type: 'array', required: true, min: 1, message: '至少选择一个上课日', trigger: 'change' }],
+}
 const maxWeeks = computed(() => totalWeeks.value || 25)
 
 function handleCellClick(dayIndex: number, period: Period) {
@@ -934,7 +979,7 @@ function handleCellClick(dayIndex: number, period: Period) {
   editingCourse.value = null
   courseForm.value = {
     name: '',
-    dayOfWeek,
+    dayOfWeek: [dayOfWeek],
     periodIds: [period.id],
     location: '',
     teacher: '',
@@ -950,7 +995,7 @@ function handleEditCourse(course: Course) {
   editingCourse.value = { ...course }
   courseForm.value = {
     name: course.name,
-    dayOfWeek: course.dayOfWeek,
+    dayOfWeek: normalizeCourseDays(course.dayOfWeek),
     periodIds: [...(course.periodIds || [])],
     location: course.location,
     teacher: course.teacher,
@@ -988,11 +1033,11 @@ function openEditFromDetail() {
 
 function getCourseDaysText(course: Course): string {
   const names = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
-  return names[course.dayOfWeek]
+  return normalizeCourseDays(course.dayOfWeek).map(day => names[day]).join('、')
 }
 
 function getCoursePeriodsText(course: Course): string {
-  return course.periodIds.map(id => {
+  return [...course.periodIds].sort((a, b) => a - b).map(id => {
     const p = getPeriodById(id)
     return p ? `${p.name}(${p.start}-${p.end})` : ''
   }).filter(Boolean).join('、')
@@ -1065,8 +1110,8 @@ async function handleCourseFormSubmit() {
         const updated = {
           ...courses.value[idx],
           name: courseForm.value.name,
-          dayOfWeek: courseForm.value.dayOfWeek,
-          periodIds: [...courseForm.value.periodIds],
+          dayOfWeek: [...courseForm.value.dayOfWeek],
+          periodIds: [...courseForm.value.periodIds].sort((a, b) => a - b),
           location: courseForm.value.location,
           teacher: courseForm.value.teacher,
           color: courseForm.value.color,
@@ -1082,8 +1127,8 @@ async function handleCourseFormSubmit() {
       const newCourse: Course = {
         id: Date.now().toString(),
         name: courseForm.value.name,
-        dayOfWeek: courseForm.value.dayOfWeek,
-        periodIds: [...courseForm.value.periodIds],
+        dayOfWeek: [...courseForm.value.dayOfWeek],
+        periodIds: [...courseForm.value.periodIds].sort((a, b) => a - b),
         location: courseForm.value.location,
         teacher: courseForm.value.teacher,
         color: getNextCourseColor(),
@@ -1254,7 +1299,7 @@ async function loadCourses() {
       courses.value = saved.map(c => ({
         id: c.id || Date.now().toString(),
         name: c.name || '未命名课程',
-        dayOfWeek: Array.isArray(c.dayOfWeek) ? (c.dayOfWeek[0] ?? 1) : (c.dayOfWeek ?? 1),
+        dayOfWeek: normalizeCourseDays((c as any).dayOfWeek),
         periodIds: Array.isArray((c as any).periodIds) && (c as any).periodIds.length > 0
           ? (c as any).periodIds
           : ((c as any).startTime && (c as any).endTime ? findPeriodsForTimeRange((c as any).startTime, (c as any).endTime) : []),
@@ -1310,17 +1355,17 @@ onUnmounted(() => {
 .course-inner { display: flex; flex-direction: column; align-items: center; padding: 16px 24px; gap: 16px; height: 100%; }
 
 .week-area { display: flex; align-items: center; justify-content: center; gap: 16px; width: 100%; flex-shrink: 0; }
-.is-electron .week-area { width: 500px; }
+.is-desktop-layout .week-area { width: 500px; }
 .week-nav-btn { flex-shrink: 0; }
 .week-nav-btn:deep(.el-icon) { color: var(--chalk-white-75); }
 .week-info { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .week-number { font-size: 13px; font-weight: 600; color: var(--chalk-white); }
-.is-electron .week-number { font-size: 16px; }
+.is-desktop-layout .week-number { font-size: 16px; }
 .week-date { font-size: 11px; color: var(--chalk-muted); }
-.is-electron .week-date { font-size: 13px; }
+.is-desktop-layout .week-date { font-size: 13px; }
 
 .course-grid-wrapper { width: 100%; flex: 1; overflow: auto; scrollbar-width: none; -ms-overflow-style: none; }
-.is-electron .course-grid-wrapper { width: 100%; }
+.is-desktop-layout .course-grid-wrapper { width: 100%; }
 .course-grid-wrapper::-webkit-scrollbar { display: none; }
 .course-grid { display: grid; gap: 2px; min-width: 0; grid-auto-rows: 64px; }
 
@@ -1370,7 +1415,7 @@ onUnmounted(() => {
 .period-label-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px 6px; background: rgba(255,255,255,0.02); border-radius: 4px; cursor: default; transition: background 0.15s; }
 .period-label-cell:hover { background: rgba(255,255,255,0.06); }
 .pl-name { font-size: 10px; color: var(--chalk-white-75); font-weight: 500; }
-.is-electron .pl-name { font-size: 13px; }
+.is-desktop-layout .pl-name { font-size: 13px; }
 .pl-start, .pl-end { font-size: 10px; color: var(--chalk-subtle); }
 
 .grid-cell { border-radius: 4px; background: rgba(255,255,255,0.02); cursor: pointer; transition: background 0.15s; padding: 2px; display: flex; align-items: stretch; min-height: 0; }
@@ -1445,8 +1490,9 @@ onUnmounted(() => {
 
 .time-area { display: flex; flex-direction: column; gap: 6px; }
 .time-day-row { display: flex; flex-wrap: wrap; gap: 2px; }
-.day-radio { margin-right: 0; }
-.day-radio :deep(.el-radio__label) { font-size: 12px; }
+.day-checkbox-group { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.day-checkbox { margin-right: 0; }
+.day-checkbox :deep(.el-checkbox__label) { font-size: 12px; }
 .time-periods-row { display: flex; flex-wrap: wrap; gap: 4px; }
 .period-checkbox { margin-right: 0; }
 .period-checkbox :deep(.el-checkbox__label) { font-size: 12px; }

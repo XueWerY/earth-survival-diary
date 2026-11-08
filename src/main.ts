@@ -15,7 +15,10 @@ import App from './App.vue'
 import router from './router'
 import { logger } from './lib/logger'
 import './lib/pluginBridge'
+import { installBrowserBridge } from './services/browserBridge'
 
+
+installBrowserBridge()
 
 const app = createApp(App)
 const pinia = createPinia()

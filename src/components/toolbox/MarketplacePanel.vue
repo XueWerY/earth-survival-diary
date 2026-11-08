@@ -43,7 +43,7 @@
             <button
               v-if="!p.installed"
               class="mp-install-btn"
-              :disabled="p.installing || !isElectron"
+              :disabled="p.installing || !supportsRuntimePlugins"
               @click="handleInstall(p)"
             >
               {{ p.installing ? '安装中...' : '安装' }}
@@ -51,14 +51,14 @@
             <button
               v-else
               class="mp-uninstall-btn"
-              :disabled="p.installing || !isElectron"
+              :disabled="p.installing || !supportsRuntimePlugins"
               @click="handleUninstall(p)"
             >
               {{ p.installing ? '卸载中...' : '卸载' }}
             </button>
           </div>
         </div>
-        <p v-if="!isElectron" class="mp-card-hint">安装/卸载需在桌面端进行</p>
+        <p v-if="!supportsRuntimePlugins" class="mp-card-hint">当前运行环境不支持本机插件安装</p>
       </div>
     </div>
 
@@ -69,24 +69,24 @@
       teleport
       @update:visible="restartDialogVisible = $event"
     >
-      <p class="restart-dialog-text">插件已变更，请重启应用使更改生效。</p>
+      <p class="restart-dialog-text">插件已变更，重新加载浏览器页面后生效。</p>
       <template #footer>
-        <el-button v-if="isElectron" type="primary" @click="confirmRestart">立即重启</el-button>
-        <el-button @click="restartDialogVisible = false">{{ isElectron ? '稍后' : '知道了' }}</el-button>
+        <el-button type="primary" @click="confirmRestart">立即重新加载</el-button>
+        <el-button @click="restartDialogVisible = false">稍后</el-button>
       </template>
     </BaseDialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, inject } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { RefreshCw } from '@lucide/vue'
 import { fetchMarketplacePlugins, installPlugin, deletePlugin, type MarketplacePlugin } from '../../lib/marketplace'
 import { logger } from '../../lib/logger'
 import BaseDialog from '../ui/BaseDialog.vue'
 
-const isElectron = inject<boolean>('isElectron', false)
+const supportsRuntimePlugins = computed(() => !!window.electronAPI?.getRuntimePluginManifests)
 const plugins = ref<MarketplacePlugin[]>([])
 const restartDialogVisible = ref(false)
 
@@ -107,8 +107,8 @@ async function updatePlugin(p: MarketplacePlugin) {
 }
 
 async function handleInstall(p: MarketplacePlugin) {
-  if (!window.electronAPI) {
-    ElMessage.info('插件安装需要在桌面端进行操作')
+  if (!supportsRuntimePlugins.value) {
+    ElMessage.info('当前运行环境不支持本机插件安装')
     return
   }
   p.installing = true
@@ -135,8 +135,8 @@ async function handleInstall(p: MarketplacePlugin) {
 }
 
 async function handleUninstall(p: MarketplacePlugin) {
-  if (!window.electronAPI) {
-    ElMessage.info('插件卸载需要在桌面端进行操作')
+  if (!supportsRuntimePlugins.value) {
+    ElMessage.info('当前运行环境不支持本机插件卸载')
     return
   }
   p.installing = true
@@ -162,8 +162,8 @@ async function handleUninstall(p: MarketplacePlugin) {
 }
 
 async function handleUpdate(p: MarketplacePlugin) {
-  if (!window.electronAPI) {
-    ElMessage.info('插件更新需要在桌面端进行操作')
+  if (!supportsRuntimePlugins.value) {
+    ElMessage.info('当前运行环境不支持本机插件更新')
     return
   }
   p.installing = true
@@ -196,7 +196,7 @@ function openRepo(url: string) {
 
 function confirmRestart() {
   restartDialogVisible.value = false
-  window.electronAPI?.restartApp()
+  window.location.reload()
 }
 </script>
 

@@ -31,22 +31,6 @@
       <div v-if="!sugNotes.length && !sugCreateLabel" class="wiki-sug-empty">继续输入以匹配笔记</div>
     </div>
 
-    <!-- 媒体尺寸编辑浮层 -->
-    <div
-      v-if="mediaResize?.visible"
-      class="media-resize-panel"
-      :style="{ top: `${mediaResize.top}px`, left: `${mediaResize.left}px` }"
-      @mousedown.prevent
-    >
-      <span class="media-resize-title">尺寸</span>
-      <input v-model="mediaResize.width" type="number" min="0" max="4096" placeholder="宽" @keyup.enter="applyMediaResize">
-      <span class="media-resize-sep">×</span>
-      <input v-model="mediaResize.height" type="number" min="0" max="4096" placeholder="高" @keyup.enter="applyMediaResize">
-      <button type="button" class="media-resize-btn" @click="applyMediaResize">应用</button>
-      <button type="button" class="media-resize-btn ghost" @click="resetMediaResize">重置</button>
-      <button type="button" class="media-resize-btn ghost" @click="closeMediaResize">关闭</button>
-    </div>
-
   </div>
 </template>
 
@@ -54,10 +38,12 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { Crepe } from '@milkdown/crepe'
 import { replaceAll } from '@milkdown/kit/utils'
-import { editorViewCtx } from '@milkdown/kit/core'
+import { editorViewCtx, parserCtx } from '@milkdown/kit/core'
 import type { EditorView } from '@milkdown/kit/prose/view'
 import { Decoration, DecorationSet } from '@milkdown/kit/prose/view'
 import { TextSelection, NodeSelection } from '@milkdown/kit/prose/state'
+import { GapCursor } from '@milkdown/kit/prose/gapcursor'
+import { DOMSerializer, type Node as ProseMirrorNode, type ResolvedPos } from '@milkdown/kit/prose/model'
 import { wrapIn } from '@milkdown/kit/prose/commands'
 import '@milkdown/crepe/theme/common/style.css'
 import '@milkdown/crepe/theme/frame-dark.css'
@@ -72,11 +58,13 @@ import {
   insertWikiLink,
   type WikiSuggestion,
 } from './wikiLink'
-import { readMediaAsset } from '../../services/mediaAssets'
-import { useTempNoteStore } from '../../stores/tempNoteStore'
-import { storeMediaAsset } from '../../composables/useNoteMedia'
+import { ESD_MEDIA_NODE, remarkMediaHtml, esdMediaSchema, esdMediaView, MediaNodeView } from './mediaNodes'
+import { toPositiveInt } from './mediaMarkdown'
+import { getMediaAssetUrl, readMediaAsset, readMediaAssetFileName } from '../../services/mediaAssets'
+import { mediaMimeTypeOfFile, storeMediaFile } from '../../composables/useNoteMedia'
 import type { SearchMatch } from '../../composables/useNoteSearch'
 import { remarkMathSyntax, mathDelimitersToEditor, mathEditorToDelimiters } from './mathSyntax'
+import { renderMathPreview } from './mathPreview'
 import {
   remarkTextStyle, textStyleStringify, highlightMark, textColorMark, underlineMark,
   superscriptMark, subscriptMark,
@@ -102,36 +90,43 @@ import {
 //  - markdownUpdated（对外输出）：用 imageSizes 把后缀拼回 URL，保证存储带尺寸。
 
 /** 「引用 → 尺寸」，进入编辑器时填充，输出时用于还原后缀 */
-const imageSizes = new Map<string, { width?: number; height?: number }>()
+const imageSizes = new Map<string, { width?: number; height?: number; aspectLocked?: boolean; fileName?: string; layout?: 'flow' | 'standalone' }>()
 
-/** 剥掉图片 URL 上的尺寸后缀，并把尺寸记录到 imageSizes */
-function stripImageSizeSuffixes(md: string): string {
-  imageSizes.clear()
-  const stripped = (md || '').replace(
-    /(!\[[^\]]*\]\()([^)\s]+?)\s*\{w=(\d*),h=(\d*)\}\)/g,
-    (_full, prefix: string, url: string, width: string, height: string) => {
-      const parsedWidth = width ? Number(width) : undefined
-      const parsedHeight = height ? Number(height) : undefined
-      imageSizes.set(url, {
-        width: parsedWidth && parsedWidth > 0 ? parsedWidth : undefined,
-        height: parsedHeight && parsedHeight > 0 ? parsedHeight : undefined,
-      })
-      return prefix + url + ')'
-    },
-  )
-  return stripped
+function encodeImageFileName(name: string): string {
+  return encodeURIComponent(name.slice(0, 240)).replace(/[!'()*]/g, character => '%' + character.charCodeAt(0).toString(16).toUpperCase())
 }
 
-/** 按 imageSizes 把尺寸后缀拼回图片 URL（对外输出/存储前调用） */
+/** 剥掉图片 URL 上的尺寸后缀，并把尺寸记录到 imageSizes */
+function stripImageSizeSuffixes(md: string, reset = true): string {
+  if (reset) imageSizes.clear()
+  return (md || '').replace(
+    /(!\[[^\]]*\]\()([^)\s]+?)\{w=(\d*),h=(\d*)(?:,lock=(1))?(?:,name=([^,}]+))?(?:,row=(single))?\}(?=\s|\))/g,
+    (_full, prefix: string, url: string, width: string, height: string, lock: string | undefined, encodedName: string | undefined, row: string | undefined) => {
+      let fileName = ''
+      try { fileName = encodedName ? decodeURIComponent(encodedName) : '' } catch { fileName = encodedName || '' }
+      imageSizes.set(url, {
+        width: width ? Number(width) : undefined,
+        height: height ? Number(height) : undefined,
+        aspectLocked: lock === '1',
+        fileName,
+        layout: row === 'single' ? 'standalone' : 'flow',
+      })
+      return prefix + url
+    },
+  )
+}
+
+/** 只替换图片的 URL，保留 Markdown title 中的说明文字。 */
 function restoreImageSizeSuffixes(md: string): string {
   if (!imageSizes.size) return md
-  return (md || '').replace(/(!\[[^\]]*\]\()([^)\s]+?)(\))/g, (full, prefix: string, url: string, suffix: string) => {
+  return (md || '').replace(/(!\[[^\]]*\]\()([^)\s]+?)(?=\s|\))/g, (full, prefix: string, url: string) => {
     const size = imageSizes.get(url)
-    if (!size) return full
-    const width = size.width ?? ''
-    const height = size.height ?? ''
-    if (!width && !height) return full
-    return `${prefix}${url}{w=${width},h=${height}}${suffix}`
+    if (!size || (!size.width && !size.height && !size.aspectLocked && !size.fileName && size.layout !== 'standalone')) return full
+    const parts = ['w=' + (size.width ?? ''), 'h=' + (size.height ?? '')]
+    if (size.aspectLocked) parts.push('lock=1')
+    if (size.fileName) parts.push('name=' + encodeImageFileName(size.fileName))
+    if (size.layout === 'standalone') parts.push('row=single')
+    return prefix + url + '{' + parts.join(',') + '}'
   })
 }
 
@@ -140,18 +135,25 @@ const props = withDefaults(defineProps<{
   placeholder?: string
   /** 当前笔记 id：联想列表排除自身链接 */
   currentNoteId?: string
-  /** 临时笔记 id：非空时把正文里的 `media/...` 相对引用按原 .md 同级目录解析 */
-  tempNoteId?: string
 }>(), {
   placeholder: '开始编写 Markdown 笔记...',
   currentNoteId: '',
-  tempNoteId: '',
 })
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'input', value: string): void
   (e: 'open-wiki-link', payload: { target: string }): void
+  (e: 'reinsert-media', payload: { kind: 'image' | 'video' | 'audio'; from: number; to: number; name: string }): void
+  (e: 'edit-media', payload: {
+    kind: 'image' | 'video' | 'audio'
+    from: number
+    to: number
+    reference: string
+    name: string
+    previewUrl: string
+    settings: { width: number | null; height: number | null; alt: string; aspectLocked: boolean; layout: 'flow' | 'standalone' }
+  }): void
 }>()
 
 const noteStore = useNoteStore()
@@ -184,84 +186,220 @@ const normalize = (md: string): string =>
 // 因此这里不再注入；normalize 仍会剥离旧数据中残留的零宽字符。
 const prepareMarkdown = (md: string): string => mathDelimitersToEditor(stripImageSizeSuffixes(normalize(md)))
 
-const toDataUrl = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(file)
-  })
-
 // 浏览器无法直接加载 esd-local-media:// 引用。正文与存储里一律保存引用，
-// 编辑器渲染层（DOM）在节点出现后把 src 换成 data URL，因此：
+// 编辑器渲染层（DOM）在节点出现后把 src 换成可流式 URL，因此：
 //  - 对外输出的 markdown 始终只含引用，自动保存重复序列化不会复制媒体；
 //  - 相同内容的文件在保存时由内容寻址复用同一资产，只保留一份。
-// 尺寸不走 PM 节点（Milkdown 图片节点只有 src/alt），而是从正文的 <img> 属性
-// 同步到 DOM，因此渲染尺寸与正文始终一致。
+// 尺寸来源按媒体类型严格隔离（design 集成点 1）：
+//  - 图片：Milkdown 图片节点只有 src/alt，尺寸在正文 `{w=,h=}` 后缀里，进编辑器时
+//    记入 imageSizes，这里按 imageSizes 覆写 <img> 的 width/height；
+//  - 视频/音频：尺寸在自定义 esdMedia 节点 attrs 里，由 NodeView/toDOM 写入 DOM。
+//    imageSizes 只由图片后缀填充、不含音视频引用，若沿用旧逻辑（无 size 就 removeAttribute）
+//    会把节点写入的尺寸误清除 —— 因此 video/audio 分支不覆写、不清除。
+const pendingMediaReads = new Map<string, Promise<string | null>>()
+const pendingMediaNodes = new WeakMap<HTMLElement, string>()
+
+function mediaFileNameFromReference(reference: string): string {
+  if (/^esd-local-media:\/\//i.test(reference)) return ''
+  const cleanReference = String(reference || '').split(/[?#]/, 1)[0]
+  const finalSegment = cleanReference.split(/[\\/]/).pop() || ''
+  try { return decodeURIComponent(finalSegment) } catch { return finalSegment }
+}
+
+function mediaFailureHost(node: HTMLElement): HTMLElement | null {
+  if (node.tagName === 'IMG') return node.closest<HTMLElement>('.milkdown-image-block') || node.parentElement
+  return node.closest<HTMLElement>('.esd-media-block') || node.parentElement
+}
+
+function clearMediaFailure(node: HTMLElement): void {
+  node.hidden = false
+  const playerShell = node.closest<HTMLElement>('.esd-player-shell')
+  if (playerShell) playerShell.hidden = false
+  node.removeAttribute('data-media-missing')
+  const host = mediaFailureHost(node)
+  if (!host) return
+  host.removeAttribute('data-media-missing')
+  host.querySelector('.esd-media-failure')?.remove()
+}
+
+function showMediaFailure(node: HTMLElement, kind: 'image' | 'video' | 'audio', reference: string, fileName: string): void {
+  const host = mediaFailureHost(node)
+  if (!host) return
+  node.hidden = true
+  const playerShell = node.closest<HTMLElement>('.esd-player-shell')
+  if (playerShell) playerShell.hidden = true
+  node.setAttribute('data-media-missing', 'true')
+  host.dataset.mediaMissing = 'true'
+  let card = host.querySelector<HTMLElement>('.esd-media-failure')
+  if (!card) {
+    card = document.createElement('div')
+    card.className = 'esd-media-failure'
+    card.setAttribute('role', 'alert')
+    const icon = document.createElement('span')
+    icon.className = 'esd-media-failure-icon'
+    icon.setAttribute('aria-hidden', 'true')
+    const text = document.createElement('span')
+    text.className = 'esd-media-failure-text'
+    const button = document.createElement('button')
+    button.className = 'esd-media-reinsert'
+    button.type = 'button'
+    button.textContent = '重新插入'
+    button.addEventListener('click', event => {
+      event.preventDefault()
+      event.stopPropagation()
+      const cardKind = (card?.dataset.kind || kind) as 'image' | 'video' | 'audio'
+      const cardReference = card?.dataset.reference || reference
+      const cardName = card?.dataset.name || fileName
+      node.dispatchEvent(new CustomEvent('esd-media-reinsert', {
+        bubbles: true,
+        detail: { kind: cardKind, reference: cardReference, name: cardName, mediaElement: node },
+      }))
+    })
+    card.append(icon, text, button)
+    host.append(card)
+  }
+  card.dataset.kind = kind
+  card.dataset.reference = reference
+  card.dataset.name = fileName
+  const icon = card.querySelector<HTMLElement>('.esd-media-failure-icon')
+  if (icon) icon.textContent = kind === 'image' ? '▧' : kind === 'video' ? '▶' : '♫'
+  const text = card.querySelector<HTMLElement>('.esd-media-failure-text')
+  if (text) text.textContent = (kind === 'image' ? '图片' : kind === 'video' ? '视频' : '音频') + '加载失败'
+}
+
 async function resolveMediaReferencesInDom(root: HTMLElement): Promise<void> {
   if (!root) return
-
-  // 临时笔记：正文里的 media/xxx 是相对原 .md 同级 media 目录的路径，
-  // 浏览器不能直接加载文件，需读盘转成 data URL。
-  if (props.tempNoteId) {
-    const tempStore = useTempNoteStore()
-    const tempNodes = root.querySelectorAll<HTMLElement>(
-      'img[src^="media/"], video[src^="media/"], audio[src^="media/"], img[src^="./media/"], video[src^="./media/"], audio[src^="./media/"]'
-    )
-    if (tempNodes.length) {
-      const tempCache = new Map<string, string>()
-      await Promise.all([...tempNodes].map(async node => {
-        const src = node.getAttribute('src') || ''
-        node.setAttribute('data-media-ref', src)
-        const size = imageSizes.get(src)
+  const nodes = root.querySelectorAll<HTMLElement>('img, video, audio')
+  await Promise.all([...nodes].map(async node => {
+    const reference = node.getAttribute('data-media-ref') || node.getAttribute('src') || ''
+    const match = /^esd-local-media:\/\/([a-z0-9_-]+)$/i.exec(reference)
+    if (match) node.setAttribute('data-media-ref', reference)
+    if (node.tagName === 'IMG') {
+      const size = imageSizes.get(reference)
+      const imageBlock = node.closest<HTMLElement>('.milkdown-image-block')
+      if (imageBlock) {
+        if (size?.layout === 'standalone') imageBlock.dataset.esdLayout = 'standalone'
+        else imageBlock.removeAttribute('data-esd-layout')
+      }
+      if (size || match) {
         if (size?.width) node.setAttribute('width', String(size.width))
         else node.removeAttribute('width')
         if (size?.height) node.setAttribute('height', String(size.height))
         else node.removeAttribute('height')
-        let dataUrl = tempCache.get(src)
-        if (!dataUrl) {
-          dataUrl = (await tempStore.resolveMedia(props.tempNoteId, src)) || ''
-          tempCache.set(src, dataUrl)
-        }
-        if (dataUrl) node.setAttribute('src', dataUrl)
-        else node.setAttribute('data-media-missing', 'true')
-      }))
+        if (size?.aspectLocked) node.setAttribute('data-esd-aspect-locked', 'true')
+        else node.removeAttribute('data-esd-aspect-locked')
+      }
     }
-  }
-
-  const nodes = root.querySelectorAll<HTMLElement>('img[src^="esd-local-media://"], video[src^="esd-local-media://"], audio[src^="esd-local-media://"]')
-  if (!nodes.length) return
-
-  // 尺寸来自进入编辑器时记录下来的 imageSizes（引用 → width/height）
-  const cache = new Map<string, string>()
-  await Promise.all([...nodes].map(async node => {
-    const src = node.getAttribute('src') || ''
-    const match = /^esd-local-media:\/\/([a-z0-9_-]+)$/.exec(src)
+    let fileName = imageSizes.get(reference)?.fileName || node.getAttribute('data-esd-name')
+      || (node.tagName === 'IMG' ? (node as HTMLImageElement).alt : '') || ''
+    if (!fileName) fileName = await readMediaAssetFileName(reference)
+    if (!fileName) fileName = mediaFileNameFromReference(reference)
+    if (node.tagName !== 'IMG') {
+      node.setAttribute('data-esd-display-name', fileName)
+    }
     if (!match) return
-    // 保留原始引用，供尺寸编辑反查 markdown 源
-    node.setAttribute('data-media-ref', src)
-    // 同步正文中记录的尺寸
-    const size = imageSizes.get(src)
-    if (size?.width) node.setAttribute('width', String(size.width))
-    else node.removeAttribute('width')
-    if (size?.height) node.setAttribute('height', String(size.height))
-    else node.removeAttribute('height')
-
-    let dataUrl = cache.get(src)
-    if (!dataUrl) {
-      dataUrl = await readMediaAsset('media:asset:' + match[1]) || ''
-      cache.set(src, dataUrl)
+    const key = 'asset:' + reference
+    if (node.getAttribute('data-media-resolved') === key || pendingMediaNodes.get(node) === key) return
+    pendingMediaNodes.set(node, key)
+    let read = pendingMediaReads.get(key)
+    if (!read) {
+      read = (async () => {
+        const mediaUrl = await getMediaAssetUrl(reference)
+        return mediaUrl || await readMediaAsset('media:asset:' + match![1])
+      })().catch(error => {
+        logger.warn('[编辑器] 读取媒体失败', { reference, error: String(error) })
+        return null
+      })
+      pendingMediaReads.set(key, read)
+      void read.finally(() => { if (pendingMediaReads.get(key) === read) pendingMediaReads.delete(key) })
     }
-    if (dataUrl) node.setAttribute('src', dataUrl)
-    else node.setAttribute('data-media-missing', 'true')
+    try {
+      const mediaUrl = await read
+      if (!root.contains(node) || node.getAttribute('data-media-ref') !== reference) return
+      node.setAttribute('data-media-resolved', key)
+      if (mediaUrl) {
+        clearMediaFailure(node)
+        node.setAttribute('src', mediaUrl)
+      } else {
+        node.removeAttribute('src')
+        const kind = node.tagName === 'IMG' ? 'image' : node.tagName.toLowerCase() as 'video' | 'audio'
+        showMediaFailure(node, kind, reference, fileName)
+      }
+    } finally {
+      if (pendingMediaNodes.get(node) === key) pendingMediaNodes.delete(node)
+    }
   }))
+  scheduleAudioVerticalAlignment()
+}
+
+function onMediaElementError(event: Event): void {
+  const node = event.target
+  if (!(node instanceof HTMLElement) || !['IMG', 'VIDEO', 'AUDIO'].includes(node.tagName)) return
+  if (!crepeRootRef.value?.contains(node)) return
+  const kind = node.tagName === 'IMG' ? 'image' : node.tagName.toLowerCase() as 'video' | 'audio'
+  const reference = node.getAttribute('data-media-ref') || node.getAttribute('src') || ''
+  const name = node.getAttribute('data-esd-name') || node.getAttribute('data-esd-display-name')
+    || (node.tagName === 'IMG' ? (node as HTMLImageElement).alt : '') || mediaFileNameFromReference(reference)
+  showMediaFailure(node, kind, reference, name)
+  scheduleAudioVerticalAlignment()
+}
+
+function onMediaElementLoad(event: Event): void {
+  const node = event.target
+  if (!(node instanceof HTMLElement) || !['IMG', 'VIDEO', 'AUDIO'].includes(node.tagName)) return
+  if (!crepeRootRef.value?.contains(node)) return
+  clearMediaFailure(node)
+  scheduleAudioVerticalAlignment()
+}
+
+const audioRowOffsets = new WeakMap<HTMLElement, number>()
+let audioAlignmentFrame = 0
+
+function alignAudioVerticallyToLeftMedia(): void {
+  const root = crepeRootRef.value
+  if (!root) return
+  const entries = [...root.querySelectorAll<HTMLElement>('.milkdown-image-block, .esd-media-block')]
+    .filter(element => !element.hidden && element.dataset.pip !== 'true' && getComputedStyle(element).display !== 'none')
+    .map(element => {
+      const rect = element.getBoundingClientRect()
+      const offset = audioRowOffsets.get(element) ?? 0
+      return { element, rect, top: rect.top - offset }
+    })
+
+  for (const audio of entries.filter(entry => entry.element.classList.contains('esd-media-block') && entry.element.dataset.kind === 'audio')) {
+    const element = audio.element
+    if (element.dataset.esdLayout === 'standalone') {
+      element.style.removeProperty('--esd-audio-row-offset')
+      audioRowOffsets.delete(element)
+      continue
+    }
+    const leftMedia = entries
+      .filter(entry => entry !== audio && Math.abs(entry.top - audio.top) <= 3 && entry.rect.left < audio.rect.left - 2)
+      .sort((a, b) => b.rect.left - a.rect.left)[0]
+    if (!leftMedia) {
+      element.style.removeProperty('--esd-audio-row-offset')
+      audioRowOffsets.delete(element)
+      continue
+    }
+    const offset = leftMedia.top + leftMedia.rect.height / 2 - (audio.top + audio.rect.height / 2)
+    audioRowOffsets.set(element, offset)
+    element.style.setProperty('--esd-audio-row-offset', offset.toFixed(2) + 'px')
+  }
+}
+
+function scheduleAudioVerticalAlignment(): void {
+  if (audioAlignmentFrame) return
+  audioAlignmentFrame = window.requestAnimationFrame(() => {
+    audioAlignmentFrame = 0
+    alignAudioVerticallyToLeftMedia()
+  })
 }
 
 // Milkdown 内建图片上传：落库为内容寻址资产后返回 esd-local-media:// 引用，
 // 避免 data URL 进入正文（否则每次自动保存都会重新序列化同一张大图）。
 const uploadEditorImage = async (file: File): Promise<string> => {
-  const dataUrl = await toDataUrl(file)
-  const reference = await storeMediaAsset(dataUrl)
+  const mimeType = mediaMimeTypeOfFile(file)
+  const reference = mimeType ? await storeMediaFile(file, mimeType) : null
   if (!reference) throw new Error('不支持的图片格式')
   return reference
 }
@@ -276,7 +414,7 @@ const createEditor = async () => {
 
   const instance = new Crepe({
     root,
-    defaultValue: prepareMarkdown(initial),
+    defaultValue: initial,
     features: {
       // Latex 启用：行内 \(…\) 公式渲染 + 点击出现 CodeMirror 编辑气泡
       //（定界符适配见 mathSyntax.ts，Crepe 原生只认 $…$）
@@ -316,6 +454,11 @@ const createEditor = async () => {
 
   // 自建 wiki-link：必须在 create() 之前注册（remark 解析 → schema → 输入规则）
   instance.editor.use(remarkWikiLink).use(wikiLinkSchema).use(wikiLinkInputRule)
+
+  // 自定义音视频节点：同样在 create() 之前注册。
+  // remark 把 <video>/<audio> html 节点转 esdMedia → schema 双向序列化 → NodeView 渲染控件。
+  // 与 mathLiveInputPlugin / remarkMathSyntax 互不干扰（只处理 html 节点）。
+  instance.editor.use(remarkMediaHtml).use(esdMediaSchema).use(esdMediaView)
 
   // 编辑器内搜索：装饰器插件，同样要在 create() 前注册
   instance.editor.use(editorSearchPlugin)
@@ -372,7 +515,7 @@ const createEditor = async () => {
     }
   }
 
-  // 渲染层解析媒体引用：把 DOM 里的 esd-local-media:// src 换成 data URL
+  // 渲染层解析媒体引用：把 DOM 里的 esd-local-media:// src 换成流式 URL
   void resolveMediaReferencesInDom(crepeRootRef.value as HTMLElement)
 
   // 取 ProseMirror 视图并包装 dispatch：每次事务后重算 [[ 联想状态
@@ -383,6 +526,7 @@ const createEditor = async () => {
     const rawDispatch = view.dispatch.bind(view)
     view.dispatch = (tr: Parameters<EditorView['dispatch']>[0]) => {
       rawDispatch(tr)
+      syncImageNodeSelectionVisual(view)
       updateWikiSuggestion()
       /*
         文档变化后必须**同步**重建引用折叠装饰器：
@@ -393,7 +537,21 @@ const createEditor = async () => {
         （旧的 120ms 防抖会让装饰器在防抖窗口内保持陈旧，反而每次都整篇重绘。）
         这里只改装饰器、不动文档，不会触发新事务，不存在递归。
       */
-      if (tr.docChanged) scheduleRebuildQuoteDecorations(true)
+      if (tr.docChanged) {
+        scheduleRebuildQuoteDecorations(true)
+        void resolveMediaReferencesInDom(root)
+      }
+    }
+
+    // Selection.atStart() can initialize directly on a selectable media node when a note
+    // starts with media. That is editor state, not a user selection; clear it so the first
+    // click performs the visible select action instead of being interpreted as a deselect.
+    const initialSelection = view.state.selection
+    if (initialSelection instanceof NodeSelection
+      && (isImageNode(initialSelection.node) || initialSelection.node.type.name === ESD_MEDIA_NODE)) {
+      view.dispatch(view.state.tr.setSelection(selectionAfterMediaDeselect(view.state.doc, initialSelection.from, -1)))
+    } else {
+      syncImageNodeSelectionVisual(view)
     }
   }
   updateWikiSuggestion()
@@ -731,6 +889,198 @@ const scheduleRebuildQuoteDecorations = (immediate = false) => {
   }, 120)
 }
 
+interface MediaNodeLocation {
+  node: ProseMirrorNode
+  position: number
+  kind: 'image' | 'video' | 'audio'
+  host: HTMLElement
+  mediaElement: HTMLElement
+}
+
+function isImageNode(node: ProseMirrorNode): boolean {
+  const typeName = node.type.name.toLowerCase()
+  const attrs = node.attrs as Record<string, unknown>
+  return typeName.includes('image') && !!(attrs.src || attrs.url)
+}
+
+let selectedImageDom: HTMLElement | null = null
+let pendingImagePointerDown: { position: number; wasSelected: boolean; timeStamp: number } | null = null
+
+function syncImageNodeSelectionVisual(editorView: EditorView | null = view): void {
+  selectedImageDom?.classList.remove('esd-image-node-selected')
+  selectedImageDom = null
+  if (!editorView || !(editorView.state.selection instanceof NodeSelection)) return
+  const selection = editorView.state.selection
+  if (!isImageNode(selection.node)) return
+  const dom = editorView.nodeDOM(selection.from)
+  if (!(dom instanceof HTMLElement)) return
+  const image = dom.matches('img') ? dom : dom.querySelector<HTMLElement>('img')
+  if (!image) return
+  image.classList.add('esd-image-node-selected')
+  selectedImageDom = image
+}
+
+function selectionAfterMediaDeselect(doc: ProseMirrorNode, position: number, bias: -1 | 1): TextSelection | GapCursor {
+  const $position = doc.resolve(position)
+  const textSelection = TextSelection.findFrom($position, bias, true)
+    || TextSelection.findFrom($position, bias === -1 ? 1 : -1, true)
+  if (textSelection instanceof TextSelection) return textSelection
+
+  // TextSelection.near() may fall back to a neighboring NodeSelection when a note contains
+  // only adjacent media blocks. Search for a valid gap cursor instead of selecting that media.
+  const gapCursorApi = GapCursor as typeof GapCursor & { valid?: (position: ResolvedPos) => boolean }
+  const candidates = new Set<number>([position, 0, doc.content.size])
+  doc.descendants((node, nodePosition) => {
+    candidates.add(nodePosition)
+    candidates.add(nodePosition + node.nodeSize)
+  })
+  const orderedCandidates = [...candidates].sort((left, right) => {
+    const distance = Math.abs(left - position) - Math.abs(right - position)
+    return distance || (bias < 0 ? right - left : left - right)
+  })
+  if (gapCursorApi.valid) {
+    for (const candidate of orderedCandidates) {
+      const resolved = doc.resolve(candidate)
+      if (gapCursorApi.valid(resolved)) return new GapCursor(resolved)
+    }
+  }
+  return new GapCursor($position)
+}
+
+function findMediaNodeAtElement(target: Element): MediaNodeLocation | null {
+  if (!view || !crepeRootRef.value) return null
+  // Crepe/Milkdown 的图片有两种 DOM：块级 ImageBlock 使用 .milkdown-image-block，
+  // 普通 Markdown 图片则直接渲染为 <img>（常见于与音视频混排的行内布局）。
+  const imageElement = target.closest<HTMLImageElement>('img')
+  const host = target.closest<HTMLElement>('.milkdown-image-block, .esd-media-block')
+    || imageElement
+  if (!host || !crepeRootRef.value.contains(host)) return null
+
+  let best: MediaNodeLocation | null = null
+  let bestScore = -1
+  view.state.doc.descendants((node, position) => {
+    const attrs = node.attrs as Record<string, unknown>
+    const isMediaNode = node.type.name === ESD_MEDIA_NODE
+    const imageNode = isImageNode(node)
+    if (!isMediaNode && !imageNode) return
+
+    const dom = view!.nodeDOM(position)
+    if (!(dom instanceof HTMLElement)) return
+    let score = -1
+    if (dom === host) score = 4
+    else if (host.contains(dom)) score = 3
+    else if (dom.contains(host)) score = 2
+    else if (dom.contains(target)) score = 1
+    // 行内图片的 NodeView DOM 就是 <img>，此时 host/imageElement 相同；
+    // 用节点 DOM 精确对应，避免把周围段落误当成媒体节点。
+    if (!isMediaNode && imageNode && imageElement && (dom === imageElement || dom.contains(imageElement))) {
+      score = Math.max(score, dom === imageElement ? 5 : 4)
+    }
+    if (score <= bestScore) return
+
+    const mediaElement = isMediaNode
+      ? host.querySelector<HTMLElement>('video, audio') || dom
+      : (host.matches('img') ? host : host.querySelector<HTMLElement>('img')) || dom
+    best = {
+      node,
+      position,
+      kind: isMediaNode ? (attrs.kind === 'audio' ? 'audio' : 'video') : 'image',
+      host,
+      mediaElement,
+    }
+    bestScore = score
+  })
+  return best
+}
+
+function toggleMediaNodeSelection(location: MediaNodeLocation, wasSelectedBeforePointerDown?: boolean): void {
+  if (!view) return
+  try {
+    const { node, position } = location
+    const tr = view.state.tr
+    const isSelected = wasSelectedBeforePointerDown
+      ?? (view.state.selection instanceof NodeSelection && view.state.selection.from === position)
+    if (isSelected) {
+      const deselectPosition = location.kind === 'image'
+        ? position
+        : Math.min(position + node.nodeSize, tr.doc.content.size)
+      tr.setSelection(selectionAfterMediaDeselect(tr.doc, deselectPosition, location.kind === 'image' ? -1 : 1))
+    } else {
+      tr.setSelection(NodeSelection.create(tr.doc, position))
+    }
+    view.dispatch(tr)
+    view.focus()
+  } catch (error) {
+    logger.warn('[编辑器] 媒体选区切换失败', { error: error instanceof Error ? error.message : String(error) })
+  }
+}
+
+function mediaEditPayload(location: MediaNodeLocation) {
+  const attrs = location.node.attrs as Record<string, unknown>
+  const reference = String(attrs.src ?? attrs.url ?? '')
+  const savedImageSize = location.kind === 'image' ? imageSizes.get(reference) : undefined
+  const image = location.kind === 'image' ? location.mediaElement as HTMLImageElement : null
+  const player = location.kind !== 'image' ? location.mediaElement as HTMLMediaElement : null
+  const name = String(savedImageSize?.fileName || attrs.name || location.mediaElement.getAttribute('data-esd-display-name')
+    || image?.alt || mediaFileNameFromReference(reference))
+  return {
+    kind: location.kind,
+    from: location.position,
+    to: location.position + location.node.nodeSize,
+    reference,
+    name,
+    previewUrl: image?.currentSrc || image?.getAttribute('src') || player?.currentSrc || player?.getAttribute('src') || '',
+    settings: {
+      width: savedImageSize?.width ?? toPositiveInt(attrs.width),
+      height: savedImageSize?.height ?? toPositiveInt(attrs.height),
+      alt: String(attrs.alt ?? image?.alt ?? ''),
+      aspectLocked: savedImageSize?.aspectLocked ?? (attrs.aspectLocked === true
+        || image?.getAttribute('data-esd-aspect-locked') === 'true'),
+      layout: savedImageSize?.layout ?? (attrs.layout === 'standalone' || location.host.dataset.esdLayout === 'standalone' ? 'standalone' : 'flow'),
+    },
+  }
+}
+
+function onRootContextMenu(event: MouseEvent): void {
+  const target = event.target
+  if (!(target instanceof Element) || target.closest('.esd-player-controls, .esd-player-menu, .esd-player-pip-close, .esd-media-resize-handle, .image-resize-handle, .esd-media-reinsert')) return
+  const location = findMediaNodeAtElement(target)
+  if (!location) return
+  event.preventDefault()
+  event.stopPropagation()
+  if (!(view?.state.selection instanceof NodeSelection && view.state.selection.from === location.position)) {
+    try {
+      view?.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, location.position)))
+    } catch (error) {
+      logger.warn('[编辑器] 右键媒体选区失败', { error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+  const payload = mediaEditPayload(location)
+  emit('edit-media', payload)
+}
+
+function onRootPointerDown(event: PointerEvent): void {
+  const target = event.target
+  if (!(target instanceof Element)
+    || target.closest('.esd-player-controls, .esd-player-menu, .esd-player-pip-close, .esd-media-resize-handle, .image-resize-handle, .image-edit, .operation, .caption-input')
+    || !target.closest('img, .milkdown-image-block')) {
+    pendingImagePointerDown = null
+    return
+  }
+  const location = findMediaNodeAtElement(target)
+  if (!location || location.kind !== 'image' || !view) {
+    pendingImagePointerDown = null
+    return
+  }
+  // ProseMirror 可能在 mousedown 阶段已经选中图片；记录此前状态，避免 click 阶段
+  // 把首次点击的选择立即当成“再次点击”取消。
+  pendingImagePointerDown = {
+    position: location.position,
+    wasSelected: view.state.selection instanceof NodeSelection && view.state.selection.from === location.position,
+    timeStamp: event.timeStamp,
+  }
+}
+
 const onRootClick = (e: MouseEvent) => {
   // 引用块「收起/展开」按钮：优先级最高，避免被下方的 wiki/链接/媒体分支吃掉
   const quoteToggle = (e.target as HTMLElement | null)?.closest?.('.esd-quote-toggle') as HTMLElement | null
@@ -758,6 +1108,34 @@ const onRootClick = (e: MouseEvent) => {
     if (block) removeCodeBlock(block)
     return
   }
+  const clickTarget = e.target
+  if (clickTarget instanceof Element && clickTarget.closest('.esd-media-reinsert')) return
+  if (clickTarget instanceof Element && clickTarget.closest('.esd-player-controls, .esd-player-menu, .esd-player-pip-close, .esd-media-resize-handle, .image-resize-handle, .image-edit, .operation, .caption-input')) return
+  if (clickTarget instanceof Element) {
+    const media = findMediaNodeAtElement(clickTarget)
+    if (media) {
+      e.preventDefault()
+      e.stopPropagation()
+      const pointerDown = pendingImagePointerDown
+      const wasSelectedBeforePointerDown = media.kind === 'image'
+        && pointerDown
+        && pointerDown.position === media.position
+        && e.timeStamp >= pointerDown.timeStamp
+        && e.timeStamp - pointerDown.timeStamp < 1500
+        ? pointerDown.wasSelected
+        : undefined
+      pendingImagePointerDown = null
+      toggleMediaNodeSelection(media, wasSelectedBeforePointerDown)
+      // 视频画面本身仍同时承担播放/暂停；按钮、进度条等控件由各自事件处理。
+      if (media.kind === 'video' && clickTarget.closest('video')) {
+        const player = media.mediaElement as HTMLVideoElement
+        if (player.paused) void player.play().catch(() => undefined)
+        else player.pause()
+      }
+      return
+    }
+  }
+  pendingImagePointerDown = null
   const el = (e.target as HTMLElement).closest?.(`span[data-type="${WIKI_LINK_NODE}"]`) as HTMLElement | null
   if (el) {
     e.preventDefault()
@@ -788,121 +1166,104 @@ const onRootClick = (e: MouseEvent) => {
     }
     return
   }
-  // 点击媒体节点：打开尺寸编辑浮层
-  const mediaEl = (e.target as HTMLElement).closest?.('img, video, audio') as HTMLElement | null
-  if (mediaEl && crepeRootRef.value?.contains(mediaEl)) {
-    e.preventDefault()
-    e.stopPropagation()
-    openMediaResize(mediaEl)
-  }
 }
 
-// ====== 媒体尺寸编辑 ======
-// DOM 解析引用时会把原始 esd-local-media:// 引用写到 data-media-ref 属性上，
-// 因此这里能稳定反查到该节点对应的 markdown 源，改尺寸后可精确回写。
-const mediaResize = ref<{
-  visible: boolean
-  kind: 'img' | 'video' | 'audio'
-  width: string
-  height: string
-  reference: string
-  top: number
-  left: number
-} | null>(null)
-
-let mediaResizeAnchor: HTMLElement | null = null
-
-function openMediaResize(node: HTMLElement) {
-  const reference = node.getAttribute('data-media-ref') || ''
-  if (!reference || !crepe?.getMarkdown) return
-  const rect = node.getBoundingClientRect()
-  const hostRect = rootRef.value?.getBoundingClientRect()
-  mediaResizeAnchor = node
-  mediaResize.value = {
-    visible: true,
-    kind: node.tagName.toLowerCase() as 'img' | 'video' | 'audio',
-    width: node.getAttribute('width') || '',
-    height: node.getAttribute('height') || '',
-    reference,
-    top: Math.max(8, rect.bottom - (hostRect?.top || 0) + 6),
-    left: Math.max(8, rect.left - (hostRect?.left || 0)),
+function updateMediaProperties(position: number, settings: {
+  width: number | null
+  height: number | null
+  alt: string
+  aspectLocked: boolean
+  layout: 'flow' | 'standalone'
+}): boolean {
+  if (!view) return false
+  const node = view.state.doc.nodeAt(position)
+  if (!node) return false
+  const nodeName = node.type.name.toLowerCase()
+  const attrs = node.attrs as Record<string, unknown>
+  if (node.type.name === ESD_MEDIA_NODE) {
+    view.dispatch(view.state.tr.setNodeMarkup(position, undefined, {
+      ...attrs,
+      width: settings.width,
+      height: settings.height,
+      aspectLocked: settings.aspectLocked,
+      layout: settings.layout,
+    }))
+    publishCurrentEditorMarkdown()
+    scheduleAudioVerticalAlignment()
+    return true
   }
+  if (!nodeName.includes('image')) return false
+  const reference = String(attrs.src ?? attrs.url ?? '')
+  if (!reference) return false
+  const previous = imageSizes.get(reference) || {}
+  imageSizes.set(reference, {
+    ...previous,
+    width: settings.width ?? undefined,
+    height: settings.height ?? undefined,
+    aspectLocked: settings.aspectLocked,
+    layout: settings.layout,
+  })
+  view.dispatch(view.state.tr.setNodeMarkup(position, undefined, { ...attrs, alt: settings.alt }))
+  publishCurrentEditorMarkdown()
+  requestAnimationFrame(() => {
+    if (crepeRootRef.value) void resolveMediaReferencesInDom(crepeRootRef.value)
+  })
+  return true
 }
 
-const closeMediaResize = () => {
-  mediaResize.value = null
-  mediaResizeAnchor = null
+function publishCurrentEditorMarkdown(): void {
+  if (!crepe || !ready) return
+  const next = normalizeStored(restoreImageSizeSuffixes(crepe.getMarkdown()))
+  if (next === syncedValue) return
+  syncedValue = next
+  emit('update:modelValue', next)
+  emit('input', next)
 }
 
-/**
- * 应用尺寸：同步回 markdown。
- * 图片：有尺寸写 `<img alt src width height>`，无尺寸写回 `![alt](src)`；
- * 音视频：改 HTML 标签上的 width/height 属性。
- */
-/**
- * 应用尺寸：同步回 markdown。
- * 图片：改 `![alt](ref){w=W,h=H}` 后缀（Cream 只认这个语法）；
- * 音视频：改 HTML 标签上的 width/height 属性。
- */
-function applyMediaResize() {
-  const state = mediaResize.value
-  if (!state || !mediaResizeAnchor) return
-  const width = Number.parseInt(state.width, 10)
-  const height = Number.parseInt(state.height, 10)
-  const hasWidth = Number.isFinite(width) && width > 0
-  const hasHeight = Number.isFinite(height) && height > 0
-
-  const reference = state.reference
-  const escapedReference = reference.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  // Cream 序列化结果里图片是不带后缀的，音视频是 HTML 标签
-  const current = normalize(crepe?.getMarkdown() || '')
-  const altMatch = new RegExp(`!\\[([^\\]]*)\\]\\(${escapedReference}\\)`).exec(current)
-  const alt = altMatch ? altMatch[1] : ''
-
-  let nextSource: string
-  if (state.kind === 'img') {
-    const suffix = hasWidth || hasHeight ? `{w=${hasWidth ? width : ''},h=${hasHeight ? height : ''}}` : ''
-    nextSource = `![${alt}](${reference}${suffix})`
-  } else {
-    const sizeAttributes = `${hasWidth ? ` width="${width}"` : ''}${hasHeight ? ` height="${height}"` : ''}`
-    nextSource = `<${state.kind} controls${state.kind === 'video' ? ' preload="metadata"' : ''}${sizeAttributes} src="${reference}"></${state.kind}>`
-  }
-
-  // 替换目标：图片用 markdown 语法（可带旧后缀），音视频用 HTML 标签
-  const imagePattern = new RegExp(`!\\[[^\\]]*\\]\\(${escapedReference}(?:\\{w=\\d*,h=\\d*\\})?\\)`)
-  const htmlPattern = new RegExp(`<(?:img|video|audio)\\b[^>]*src="${escapedReference}"[^>]*>`, 'i')
-
-  let next = current
-  if (state.kind === 'img' && imagePattern.test(current)) next = current.replace(imagePattern, nextSource)
-  else if (htmlPattern.test(current)) next = current.replace(htmlPattern, nextSource)
-  else if (imagePattern.test(current)) next = current.replace(imagePattern, nextSource)
-  else { closeMediaResize(); return }
-
-  // 更新尺寸表并重新进入编辑器：剥后缀 → replaceAll → 输出时拼回
-  if (hasWidth || hasHeight) {
-    imageSizes.set(reference, {
-      width: hasWidth ? width : undefined,
-      height: hasHeight ? height : undefined,
-    })
-  } else {
-    imageSizes.delete(reference)
-  }
-
-  syncedValue = normalizeStored(restoreImageSizeSuffixes(next))
-  crepe?.editor.action(replaceAll(prepareMarkdown(next), true))
-  emit('update:modelValue', syncedValue)
-  emit('input', syncedValue)
-  void resolveMediaReferencesInDom(crepeRootRef.value as HTMLElement)
-  closeMediaResize()
+/** 媒体下方横条直接更新对应节点，保留当前播放器和播放状态。 */
+function onMediaSliderResize(event: Event) {
+  const handle = (event.target as HTMLElement | null)?.closest?.('.esd-media-resize-handle')
+  const payload = (event as CustomEvent<{ width?: number; height?: number }>).detail
+  if (!handle || !payload || !view || !Number.isInteger(payload.width)) return
+  const width = Number(payload.width)
+  const height = Number.isInteger(payload.height) ? Number(payload.height) : null
+  if (width < 1 || width > 4096 || (height !== null && (height < 1 || height > 4096))) return
+  const wrapper = handle.closest('.esd-media-block')
+  if (!wrapper) return
+  let position: number | null = null
+  view.state.doc.descendants((node, pos) => {
+    if (position !== null || node.type.name !== ESD_MEDIA_NODE) return
+    const dom = view!.nodeDOM(pos)
+    if (dom === wrapper || (dom instanceof HTMLElement && dom.contains(wrapper))) position = pos
+  })
+  if (position === null) return
+  const node = view.state.doc.nodeAt(position)
+  if (!node || node.type.name !== ESD_MEDIA_NODE || (node.attrs.kind === 'video' && node.attrs.aspectLocked)) return
+  view.dispatch(view.state.tr.setNodeMarkup(position, undefined, { ...node.attrs, width, ...(height !== null ? { height } : {}) }))
+  scheduleAudioVerticalAlignment()
 }
 
-/** 清除尺寸，恢复默认比例 */
-function resetMediaResize() {
-  const state = mediaResize.value
-  if (!state) return
-  state.width = ''
-  state.height = ''
-  applyMediaResize()
+function onMediaReinsertRequest(event: Event): void {
+  const detail = (event as CustomEvent<{ kind?: 'image' | 'video' | 'audio'; name?: string; reference?: string; mediaElement?: HTMLElement }>).detail
+  const target = detail?.mediaElement
+  if (!target || !view || !detail.kind) return
+  let position: number | null = null
+  let size = 0
+  view.state.doc.descendants((node, pos) => {
+    if (position !== null) return
+    const typeName = node.type.name.toLowerCase()
+    const expectedType = node.type.name === ESD_MEDIA_NODE || (detail.kind === 'image' && typeName.includes('image'))
+    if (!expectedType) return
+    const nodeReference = String(node.attrs.src ?? node.attrs.url ?? '')
+    if (detail.reference && nodeReference && nodeReference !== detail.reference) return
+    const dom = view!.nodeDOM(pos)
+    if (dom instanceof HTMLElement && (dom === target || dom.contains(target))) {
+      position = pos
+      size = node.nodeSize
+    }
+  })
+  if (position === null) return
+  emit('reinsert-media', { kind: detail.kind, from: position, to: position + size, name: detail.name || '' })
 }
 
 // ====== 已解析/未解析样式标记 ======
@@ -918,6 +1279,7 @@ const refreshResolvedLinks = () => {
 }
 
 let domObserver: MutationObserver | null = null
+let mediaLayoutObserver: ResizeObserver | null = null
 
 watch(resolvedTitleSet, () => refreshResolvedLinks())
 
@@ -940,10 +1302,79 @@ const injectListStyle = () => {
     '.md-editor .ProseMirror li { margin-left: 0 !important; }',
     '.md-editor .ProseMirror ul li::marker { color: #e9d5ff !important; }',
     '.md-editor .ProseMirror ul li::before { color: #e9d5ff !important; }',
-    // 媒体块：图片/视频/音频默认独占一行、左对齐，宽度可由 width 属性覆盖
+    // 图片、音频、视频节点使用同一行内布局；普通文本块仍保持左对齐。
+    '.md-editor .ProseMirror { text-align: center; }',
+    '.md-editor .ProseMirror > p, .md-editor .ProseMirror > h1, .md-editor .ProseMirror > h2, .md-editor .ProseMirror > h3, .md-editor .ProseMirror > h4, .md-editor .ProseMirror > h5, .md-editor .ProseMirror > h6, .md-editor .ProseMirror > blockquote, .md-editor .ProseMirror > ul, .md-editor .ProseMirror > ol, .md-editor .ProseMirror > pre, .md-editor .ProseMirror > table { text-align: left; }',
     '.md-editor .ProseMirror img { display: block; max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0; }',
-    '.md-editor .ProseMirror video { display: block; max-width: 100%; border-radius: 8px; margin: 8px 0; background: rgba(0,0,0,.3); }',
-    '.md-editor .ProseMirror audio { display: block; width: 100%; max-width: 420px; margin: 8px 0; }',
+    '.md-editor .ProseMirror > .milkdown-image-block, .md-editor .ProseMirror > .esd-media-block { display: inline-flex; vertical-align: top; flex-direction: column; align-items: center; width: fit-content; max-width: 100%; margin: 16px 10px; text-align: center; }',
+    '.md-editor .ProseMirror .esd-media-block[data-kind="audio"] { transform: translateY(var(--esd-audio-row-offset, 0px)); }',
+    '.md-editor .ProseMirror .milkdown-image-block[data-esd-layout="standalone"], .md-editor .ProseMirror .esd-media-block[data-esd-layout="standalone"] { display: flex; flex-direction: column; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; max-width: 100%; margin: 16px 0; }',
+    '.md-editor .ProseMirror .esd-media-block[data-kind="video"][data-esd-layout="standalone"] > .esd-media-player-wrap { align-self: stretch; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; width: 100%; max-width: 100%; margin-inline: auto; }',
+    '.md-editor .ProseMirror .esd-media-block[data-kind="audio"][data-esd-layout="standalone"] { width: fit-content; max-width: 100%; margin: 16px auto; background: transparent; }',
+    '.md-editor .ProseMirror > .milkdown-image-block > .image-wrapper { max-width: 100%; margin: 0; }',
+    '.md-editor .ProseMirror .milkdown-image-block > .image-wrapper > .operation, .md-editor .ProseMirror .milkdown-image-block > .caption-input { display: none !important; }',
+    '.md-editor .ProseMirror .esd-media-player-wrap { position: relative; display: flex; flex-direction: column; align-items: center; width: fit-content; max-width: 100%; }',
+    '.md-editor .ProseMirror .esd-player-shell { --esd-media-accent: var(--crepe-color-primary, var(--chalk-primary, #667eea)); --esd-media-surface: var(--crepe-color-surface, rgba(23,22,48,.96)); --esd-media-text: var(--crepe-color-on-surface, #cbd5e1); --esd-media-outline: var(--crepe-color-outline, rgba(102,126,234,.28)); --esd-media-hover: var(--crepe-color-hover, rgba(102,126,234,.15)); position: relative; display: block; max-width: 100%; overflow: visible; isolation: isolate; border-radius: 12px; background: var(--esd-media-surface); box-shadow: 0 10px 28px rgba(0,0,0,.22); }',
+    '.md-editor .ProseMirror .esd-player-shell[hidden] { display: none !important; }',
+    '.md-editor .ProseMirror .esd-video-shell { box-sizing: border-box; display: inline-block; width: fit-content; max-width: min(100%, 720px); }',
+    '.md-editor .ProseMirror .esd-video-shell > video { display: block; width: auto; max-width: min(100%, 720px); height: auto; margin: 8px 0 0; border: 1px solid var(--esd-media-outline); border-radius: 12px; color-scheme: dark; background: var(--esd-media-surface); }',
+    '.md-editor .ProseMirror .esd-player-shell:fullscreen { display: flex; align-items: center; justify-content: center; width: 100vw; height: 100vh; max-width: none; border-radius: 0; background: var(--esd-media-surface); }',
+    '.md-editor .ProseMirror .esd-video-shell:fullscreen > video { width: auto; max-width: 100%; max-height: 100%; height: auto; margin: 0; object-fit: contain; }',
+    '.md-editor .ProseMirror .esd-audio-shell { display: flex; flex-direction: column; box-sizing: border-box; width: min(520px, 80vw); min-height: 58px; margin: 8px 0 0; border: 1px solid color-mix(in srgb, var(--esd-media-accent) 38%, var(--esd-media-outline)); border-radius: 14px; background: linear-gradient(135deg, color-mix(in srgb, var(--esd-media-surface) 88%, var(--esd-media-accent) 12%), var(--esd-media-surface)); box-shadow: 0 12px 30px rgba(0,0,0,.24), inset 0 1px 0 color-mix(in srgb, var(--esd-media-text) 9%, transparent); }',
+    '.md-editor .ProseMirror .esd-audio-title { box-sizing: border-box; width: 100%; overflow: hidden; padding: 12px 12px 1px; color: var(--esd-media-text); font: inherit; font-size: 13px; font-weight: 650; line-height: 1.4; text-align: center; text-overflow: ellipsis; white-space: nowrap; }',
+    '.md-editor .ProseMirror .esd-audio-shell > audio { position: absolute !important; left: 0; top: 0; width: 1px !important; height: 1px !important; opacity: 0; pointer-events: none; }',
+    '.md-editor .ProseMirror .esd-audio-shell:fullscreen { width: 100vw !important; height: 100vh; }',
+    '.md-editor .ProseMirror .esd-audio-shell:fullscreen .esd-player-controls { width: min(680px, calc(100vw - 48px)); box-sizing: border-box; border: 1px solid var(--esd-media-outline); border-radius: 16px; background: var(--esd-media-surface); box-shadow: 0 16px 48px rgba(0,0,0,.4); }',
+    '.md-editor .ProseMirror .esd-player-controls { box-sizing: border-box; min-width: 0; position: absolute; inset: auto 0 0; display: flex; flex-direction: column; gap: 6px; padding: 30px 12px 8px; border-radius: 0 0 12px 12px; color: var(--esd-media-text); background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--esd-media-surface) 96%, transparent)); font: inherit; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .18s ease; }',
+    '.md-editor .ProseMirror .esd-video-shell .esd-player-controls { box-sizing: border-box; left: 0; right: 0; width: 100%; max-width: 100%; min-width: 0; overflow: hidden; }',
+    '.md-editor .ProseMirror .esd-audio-shell .esd-player-controls { position: relative; inset: auto; padding: 9px 2px 9px 12px; border-radius: 11px; background: transparent; opacity: 1; pointer-events: auto; }',
+    '.md-editor .ProseMirror .esd-player-shell:hover .esd-player-controls, .md-editor .ProseMirror .esd-player-shell:focus-within .esd-player-controls { opacity: 1; pointer-events: auto; }',
+    '.md-editor .ProseMirror .esd-player-progress, .md-editor .ProseMirror .esd-player-volume { min-width: 0; margin: 0; accent-color: var(--esd-media-accent); cursor: pointer; appearance: none; -webkit-appearance: none; height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--esd-media-text) 32%, transparent); }',
+    '.md-editor .ProseMirror .esd-player-progress { width: 100%; }',
+    '.md-editor .ProseMirror .esd-player-progress::-webkit-slider-thumb, .md-editor .ProseMirror .esd-player-volume::-webkit-slider-thumb { width: 10px; height: 10px; border: 1px solid var(--crepe-color-on-background, rgba(255,255,255,.85)); border-radius: 50%; background: var(--esd-media-accent); appearance: none; -webkit-appearance: none; }',
+    '.md-editor .ProseMirror .esd-player-progress::-moz-range-thumb, .md-editor .ProseMirror .esd-player-volume::-moz-range-thumb { width: 9px; height: 9px; border: 1px solid var(--crepe-color-on-background, rgba(255,255,255,.85)); border-radius: 50%; background: var(--esd-media-accent); }',
+    '.md-editor .ProseMirror .esd-player-toolbar { box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; width: 100%; min-height: 28px; }',
+    '.md-editor .ProseMirror .esd-audio-shell .esd-player-toolbar { box-sizing: border-box; width: 100%; justify-content: flex-start; align-self: stretch; }',
+    '.md-editor .ProseMirror .esd-player-controls-left, .md-editor .ProseMirror .esd-player-controls-right { display: flex; align-items: center; gap: 10px; min-width: 0; }',
+    '.md-editor .ProseMirror .esd-player-controls-right { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; max-width: 100%; margin-left: auto; }',
+    '.md-editor .ProseMirror .esd-player-volume-button { margin-left: 0; }',
+    '.md-editor .ProseMirror .esd-player-button { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 4px; border: 0; border-radius: 6px; color: var(--esd-media-text); background: transparent; cursor: pointer; font: inherit; font-size: 17px; line-height: 1; }',
+    '.md-editor .ProseMirror .esd-player-button:hover, .md-editor .ProseMirror .esd-player-button:focus-visible { outline: none; color: var(--crepe-color-on-background, #fff); background: var(--esd-media-hover); }',
+    '.md-editor .ProseMirror .esd-player-play { font-size: 15px; }',
+    '.md-editor .ProseMirror .esd-player-button > svg { display: block; flex: none; }',
+    '.md-editor .ProseMirror .esd-player-time { min-width: 88px; color: var(--crepe-color-on-background, rgba(255,255,255,.92)); font-variant-numeric: tabular-nums; white-space: nowrap; }',
+    '.md-editor .ProseMirror .esd-player-volume { width: 72px; }',
+    '.md-editor .ProseMirror .esd-player-menu { position: absolute; right: 10px; bottom: auto; z-index: 4; display: flex; flex-direction: column; gap: 3px; min-width: 208px; padding: 6px; border: 1px solid var(--esd-media-outline); border-radius: 10px; color: var(--esd-media-text); background: var(--esd-media-surface); box-shadow: 0 12px 32px rgba(0,0,0,.42); font: inherit; font-size: 13px; }',
+    '.md-editor .ProseMirror .esd-player-menu[hidden], .md-editor .ProseMirror .esd-player-speed-options[hidden] { display: none !important; }',
+    '.md-editor .ProseMirror .esd-player-menu-item, .md-editor .ProseMirror .esd-player-speed-option { min-height: 34px; padding: 7px 10px; border: 0; border-radius: 7px; color: inherit; background: transparent; cursor: pointer; font: inherit; text-align: left; }',
+    '.md-editor .ProseMirror .esd-player-menu-item:hover, .md-editor .ProseMirror .esd-player-speed-option:hover, .md-editor .ProseMirror .esd-player-speed-option.active { color: var(--crepe-color-on-background, #fff); background: var(--esd-media-hover); }',
+    '.md-editor .ProseMirror .esd-player-speed-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; padding: 3px; border-radius: 8px; background: color-mix(in srgb, var(--esd-media-surface) 65%, #000); }',
+    '.md-editor .ProseMirror .esd-player-speed-option { padding: 6px; text-align: center; }',
+    '.md-editor .ProseMirror .esd-player-pip-close { display: none; position: absolute; top: 8px; right: 8px; z-index: 5; width: 28px; height: 28px; border: 1px solid var(--esd-media-outline); border-radius: 50%; color: var(--esd-media-text); background: color-mix(in srgb, var(--esd-media-surface) 86%, transparent); cursor: pointer; font-size: 20px; line-height: 1; }',
+    '.md-editor .ProseMirror .esd-video-shell[data-pip="true"] { position: fixed !important; right: 24px !important; bottom: 24px !important; z-index: 10000 !important; box-sizing: border-box; width: min(420px, calc(100vw - 48px)) !important; max-width: 420px !important; border: 1px solid color-mix(in srgb, var(--esd-media-accent) 55%, transparent); box-shadow: 0 16px 48px rgba(0,0,0,.55); }',
+    '.md-editor .ProseMirror .esd-video-shell[data-pip="true"] > video { width: 100% !important; max-width: 100% !important; max-height: 42vh; height: auto !important; margin: 0; border: 0; }',
+    '.md-editor .ProseMirror .esd-video-shell[data-pip="true"] .esd-player-controls { opacity: 1; pointer-events: auto; }',
+    '.md-editor .ProseMirror .esd-video-shell[data-pip="true"] .esd-player-pip-close { display: block; }',
+    '.md-editor .ProseMirror .esd-media-block.ProseMirror-selectednode { outline: none !important; box-shadow: none !important; border-color: transparent !important; background: transparent !important; background-color: transparent !important; }',
+    '.md-editor .ProseMirror .esd-media-block[data-kind="audio"][data-esd-layout="standalone"].ProseMirror-selectednode { width: fit-content !important; margin-inline: auto !important; }',
+    '.md-editor .ProseMirror .esd-media-block[data-pip="true"] { width: 0 !important; height: 0 !important; margin: 0 !important; }',
+    '.md-editor .ProseMirror .esd-media-block[data-pip="true"] .esd-media-player-wrap { width: 0 !important; height: 0 !important; }',
+    '.md-editor .ProseMirror .esd-media-block[data-pip="true"] .esd-media-resize-handle { display: none !important; }',
+    '.md-editor .ProseMirror .esd-media-block video[hidden], .md-editor .ProseMirror .esd-media-block audio[hidden] { display: none !important; }',
+    '.md-editor .ProseMirror .esd-media-name { display: none !important; }',
+    '.md-editor .ProseMirror .esd-media-resize-handle { position: absolute; left: 50%; bottom: -10px; transform: translateX(-50%); width: 100%; max-width: 160px; height: 4px; margin: 0; border: 0; border-radius: 4px; background: var(--crepe-color-outline); opacity: 0; touch-action: none; transition: all .2s; z-index: 1; }',
+    '.md-editor .ProseMirror .esd-media-block:hover .esd-media-resize-handle { opacity: 1; }',
+    '.md-editor .ProseMirror .esd-media-resize-handle:hover { cursor: row-resize; background: var(--crepe-color-primary, var(--chalk-primary, #667eea)); }',
+    '.md-editor .ProseMirror .esd-media-resize-handle[hidden] { display: none; }',
+    '.md-editor .ProseMirror .esd-media-block[data-media-missing="true"] .esd-media-name, .md-editor .ProseMirror .esd-media-block[data-media-missing="true"] .esd-media-resize-handle { display: none !important; }',
+    '.md-editor .ProseMirror .milkdown-image-block[data-media-missing=\"true\"] .image-resize-handle { display: none !important; }',
+    '.md-editor .ProseMirror .milkdown-image-block[data-media-missing=\"true\"] .image-wrapper { display: none !important; }',
+    '.md-editor .ProseMirror .esd-media-failure { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 72px; box-sizing: border-box; padding: 14px 18px; border: 1px dashed rgba(248,113,113,.5); border-radius: 12px; color: #fecaca; background: rgba(248,113,113,.08); }',
+    '.md-editor .ProseMirror .esd-media-failure-icon { color: #fca5a5; font-size: 20px; }',
+    '.md-editor .ProseMirror .esd-media-failure-text { max-width: 300px; overflow-wrap: anywhere; font-size: 12px; }',
+    '.md-editor .ProseMirror .esd-media-reinsert { padding: 6px 10px; border: 1px solid rgba(167,139,250,.35); border-radius: 7px; color: #ede9fe; background: rgba(109,40,217,.24); cursor: pointer; font: inherit; font-size: 12px; }',
+    '.md-editor .ProseMirror .esd-media-reinsert:hover { background: rgba(139,92,246,.4); }',
+    '@media (max-width: 640px) { .md-editor .ProseMirror .esd-video-shell[data-pip="true"] { right: 12px !important; bottom: 12px !important; width: calc(100vw - 24px) !important; } .md-editor .ProseMirror .esd-player-volume { width: 48px; } .md-editor .ProseMirror .esd-player-toolbar { gap: 6px; } }',
     '.md-editor .ProseMirror figure { margin: 8px 0; }',
     '.md-editor .ProseMirror figcaption { color: rgba(245,243,255,.55); font-size: 12px; text-align: center; margin-top: 4px; }',
   ].join('\n')
@@ -957,13 +1388,30 @@ onMounted(() => {
   createEditor()
   // 键盘导航（捕获阶段，先于 ProseMirror 处理）与链接点击跳转
   rootRef.value?.addEventListener('keydown', onRootKeydown, true)
+  rootRef.value?.addEventListener('pointerdown', onRootPointerDown, true)
   rootRef.value?.addEventListener('click', onRootClick, true)
+  rootRef.value?.addEventListener('contextmenu', onRootContextMenu, true)
+  rootRef.value?.addEventListener('esd-media-resize', onMediaSliderResize, true)
+  rootRef.value?.addEventListener('esd-media-reinsert', onMediaReinsertRequest, true)
+  rootRef.value?.addEventListener('error', onMediaElementError, true)
+  rootRef.value?.addEventListener('load', onMediaElementLoad, true)
+  rootRef.value?.addEventListener('loadedmetadata', onMediaElementLoad, true)
+  window.addEventListener('resize', scheduleAudioVerticalAlignment)
+  if (typeof ResizeObserver !== 'undefined' && crepeRootRef.value) {
+    mediaLayoutObserver = new ResizeObserver(scheduleAudioVerticalAlignment)
+    mediaLayoutObserver.observe(crepeRootRef.value)
+    crepeRootRef.value.querySelectorAll<HTMLElement>('.milkdown-image-block, .esd-media-block')
+      .forEach(element => mediaLayoutObserver?.observe(element))
+  }
   // wiki-link chip 由 ProseMirror 增删重建，用 MutationObserver 维护已解析标记；
   // 媒体节点同样会被重建，这里一并刷新 DOM 里的引用解析
   if (crepeRootRef.value) {
     domObserver = new MutationObserver(() => {
       refreshResolvedLinks()
       syncCodeBlockDeleteButtons()
+      scheduleAudioVerticalAlignment()
+      crepeRootRef.value?.querySelectorAll<HTMLElement>('.milkdown-image-block, .esd-media-block')
+        .forEach(element => mediaLayoutObserver?.observe(element))
       void resolveMediaReferencesInDom(crepeRootRef.value as HTMLElement)
     })
     domObserver.observe(crepeRootRef.value, { childList: true, subtree: true })
@@ -974,7 +1422,22 @@ onBeforeUnmount(async () => {
   removeListStyle()
   ready = false
   rootRef.value?.removeEventListener('keydown', onRootKeydown, true)
+  rootRef.value?.removeEventListener('pointerdown', onRootPointerDown, true)
   rootRef.value?.removeEventListener('click', onRootClick, true)
+  rootRef.value?.removeEventListener('contextmenu', onRootContextMenu, true)
+  rootRef.value?.removeEventListener('esd-media-resize', onMediaSliderResize, true)
+  rootRef.value?.removeEventListener('esd-media-reinsert', onMediaReinsertRequest, true)
+  rootRef.value?.removeEventListener('error', onMediaElementError, true)
+  rootRef.value?.removeEventListener('load', onMediaElementLoad, true)
+  rootRef.value?.removeEventListener('loadedmetadata', onMediaElementLoad, true)
+  window.removeEventListener('resize', scheduleAudioVerticalAlignment)
+  if (audioAlignmentFrame) window.cancelAnimationFrame(audioAlignmentFrame)
+  audioAlignmentFrame = 0
+  selectedImageDom?.classList.remove('esd-image-node-selected')
+  selectedImageDom = null
+  pendingImagePointerDown = null
+  mediaLayoutObserver?.disconnect()
+  mediaLayoutObserver = null
   domObserver?.disconnect()
   domObserver = null
   view = null
@@ -1698,11 +2161,44 @@ const insertInlineCodeAtCursor = (text: string): boolean => {
       tr.addMark(from, from + value.length, codeMark.create())
       tr.setSelection(TextSelection.create(tr.doc, from + value.length))
     }
+    tr.removeStoredMark(codeMark)
     view.dispatch(tr.scrollIntoView())
     view.focus()
     return true
   } catch (error) {
     logger.error('[编辑器] 插入行内代码失败', { error: error instanceof Error ? error.message : String(error) })
+    return false
+  }
+}
+
+/**
+ * 在光标/选区处插入行内公式节点（Crepe Latex feature 提供的 `math_inline`）。
+ *
+ * - `latex` 为纯 LaTeX 源码（**不含** `\( \)` 定界符），与 design 2.6.6 冻结签名一致；
+ * - 节点类型在运行期从 `schema.nodes['math_inline']` 动态获取（不通过 Milkdown slice
+ *   引用，兼容 Crepe 升级导致节点名/attr 变化，design R11）；
+ * - 直接构造节点替换选区，不依赖 `mathLiveInputPlugin` 的 appendTransaction
+ *   （程序化插入不一定触发该转换，design R8 的主路径）；
+ * - 走 PM 事务，可 Ctrl+Z 撤销；失败返回 false 供调用方回退到文本插入路径。
+ */
+const insertInlineMathAtCursor = (latex: string): boolean => {
+  if (!view || !ready) return false
+  const value = String(latex ?? '')
+  if (!value.trim()) return false
+  const nodeType = view.state.schema.nodes['math_inline']
+  if (!nodeType || view.state.selection.$from.parent.type.spec.code) return false
+  const { from, to } = view.state.selection
+  try {
+    const node = nodeType.create({ value })
+    const tr = view.state.tr.replaceWith(from, to, node)
+    // 光标落到公式节点之后（节点为行内原子，nodeSize 即其占位长度）
+    const after = from + node.nodeSize
+    tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(after, tr.doc.content.size))))
+    view.dispatch(tr.scrollIntoView())
+    view.focus()
+    return true
+  } catch (error) {
+    logger.error('[编辑器] 插入行内公式失败', { error: error instanceof Error ? error.message : String(error) })
     return false
   }
 }
@@ -1990,6 +2486,102 @@ const getSelectionRange = () => view
   ? { from: view.state.selection.from, to: view.state.selection.to }
   : null
 
+/**
+ * 用当前编辑器的 Markdown parser 渲染另一篇笔记，供离线 HTML 导出使用。
+ * 只创建 detached DOM，不替换当前文档，因此不会触发自动保存或打乱编辑器选区。
+ */
+const renderMarkdownForExport = (markdown: string): HTMLElement | null => {
+  if (!crepe || !view || !ready) return null
+  try {
+    const imageSizesForExport = new Map<string, {
+      width?: number; height?: number; aspectLocked?: boolean; fileName?: string; layout?: 'flow' | 'standalone'
+    }>()
+    const sizePattern = /(!\[[^\]]*\]\()([^\s)]+?)\{w=(\d*),h=(\d*)(?:,lock=(1))?(?:,name=([^,}]+))?(?:,row=(single))?\}(?=\s|\))/g
+    const withoutImageSuffixes = normalize(markdown).replace(
+      sizePattern,
+      (_full, prefix: string, source: string, width: string, height: string, locked: string | undefined, encodedName: string | undefined, row: string | undefined) => {
+        let fileName = ''
+        try { fileName = encodedName ? decodeURIComponent(encodedName) : '' } catch { fileName = encodedName || '' }
+        imageSizesForExport.set(source, {
+          width: width ? Number(width) : undefined,
+          height: height ? Number(height) : undefined,
+          aspectLocked: locked === '1',
+          fileName,
+          layout: row === 'single' ? 'standalone' : 'flow',
+        })
+        return prefix + source
+      },
+    )
+    const parsed = crepe.editor.action(ctx => ctx.get(parserCtx)(mathDelimitersToEditor(withoutImageSuffixes)))
+    if (!parsed) return null
+    const rendered = document.createElement('div')
+    rendered.className = 'ProseMirror'
+    rendered.appendChild(DOMSerializer.fromSchema(view.state.schema).serializeFragment(parsed.content))
+
+    rendered.querySelectorAll<HTMLElement>('[data-type="math_inline"], [data-type="math_block"], [data-type="math_display"]').forEach(mathNode => {
+      const displayMode = mathNode.dataset.type !== 'math_inline'
+      const latex = mathNode.getAttribute('data-latex') || mathNode.textContent || ''
+      const math = renderMathPreview(latex, { displayMode })
+      if (math.html) mathNode.innerHTML = math.html
+    })
+
+    rendered.querySelectorAll<HTMLPreElement>('pre').forEach(pre => {
+      const code = pre.querySelector('code')
+      if (!code) return
+      const languageClass = [...code.classList].find(className => className.startsWith('language-')) || ''
+      const language = languageClass.slice('language-'.length)
+      const previewHtml = renderCodePreview(language, code.textContent || '')
+      if (!previewHtml) return
+      const block = document.createElement('div')
+      block.className = 'milkdown-code-block'
+      const previewPanel = document.createElement('div')
+      previewPanel.className = 'preview-panel'
+      const previewLabel = document.createElement('div')
+      previewLabel.className = 'preview-label'
+      previewLabel.textContent = '预览'
+      const preview = document.createElement('div')
+      preview.className = 'preview'
+      preview.innerHTML = previewHtml
+      previewPanel.append(previewLabel, preview)
+      block.append(previewPanel)
+      pre.replaceWith(block)
+    })
+
+    rendered.querySelectorAll<HTMLImageElement>('img').forEach(image => {
+      const reference = image.getAttribute('data-media-ref') || image.getAttribute('src') || ''
+      const size = imageSizesForExport.get(reference)
+      if (size?.width) image.setAttribute('width', String(size.width))
+      if (size?.height) image.setAttribute('height', String(size.height))
+      if (size?.aspectLocked) image.setAttribute('data-esd-aspect-locked', 'true')
+      if (size?.layout === 'standalone') image.setAttribute('data-esd-layout', 'standalone')
+      if (size?.fileName) image.setAttribute('data-esd-name', size.fileName)
+    })
+
+    const mediaType = view.state.schema.nodes[ESD_MEDIA_NODE]
+    rendered.querySelectorAll<HTMLMediaElement>('video, audio').forEach(media => {
+      if (!mediaType) return
+      const source = media.getAttribute('data-media-ref') || media.getAttribute('src') || ''
+      const mediaNode = mediaType.create({
+        kind: media.tagName.toLowerCase() === 'audio' ? 'audio' : 'video',
+        src: source,
+        width: media.getAttribute('width'),
+        height: media.getAttribute('height'),
+        name: media.getAttribute('data-esd-name') || '',
+        aspectLocked: media.getAttribute('data-esd-aspect-locked') === 'true',
+        layout: media.getAttribute('data-esd-layout') === 'standalone' ? 'standalone' : 'flow',
+      })
+      const nodeView = new MediaNodeView(mediaNode)
+      const player = nodeView.dom.cloneNode(true)
+      nodeView.destroy()
+      media.replaceWith(player)
+    })
+    return rendered
+  } catch (error) {
+    logger.warn('[编辑器] 渲染关联笔记导出内容失败', { error: error instanceof Error ? error.message : String(error) })
+    return null
+  }
+}
+
 /** 恢复选区（用于文件对话框夺走焦点后回到原落点） */
 const setSelectionRange = (from: number, to: number = from): boolean => {
   if (!view) return false
@@ -2002,57 +2594,54 @@ const setSelectionRange = (from: number, to: number = from): boolean => {
   return true
 }
 
-/**
- * 在光标处插入媒体块（自成一段）。
- *
- * 直接用 `tr.insertText` 只会插入纯文本，Milkdown 的图片输入规则不会触发，
- * 媒体 markdown 会原样显示成文字。因此这里改用「改全文 → replaceAll」：
- * 调用方通过 getSelectionOffsetInMarkdown() 取到光标对应的文本偏移，
- * 我们在该偏移处插入片段并保证前后各有一个空行，再整体重建文档。
- */
+/** 解析媒体片段后用 PM 事务替换当前选区，保留精确落点和撤销历史。 */
 const insertMediaBlock = (markdown: string): boolean => {
-  if (!ready) return false
-  const trimmed = markdown.trim()
-  if (!trimmed) return false
-
-  const offset = getSelectionOffsetInMarkdown()
-  if (offset === null) return false
-
-  // current 取 Cream 的干净 markdown（无尺寸后缀），插入的片段自带后缀，
-  // 拼出的 next 就是「带后缀」的完整形态；syncedValue 与之保持一致。
-  const current = normalize(crepe?.getMarkdown() || '')
-  const start = Math.max(0, Math.min(offset, current.length))
-  const before = current.slice(0, start)
-  const after = current.slice(start)
-  // 媒体前后补空行，保证渲染时独占一段
-  const prefix = before && !before.endsWith('\n\n') ? (before.endsWith('\n') ? '\n' : '\n\n') : ''
-  const suffix = after && !after.startsWith('\n\n') ? (after.startsWith('\n') ? '\n' : '\n\n') : ''
-  const next = normalize(restoreImageSizeSuffixes(before + prefix + trimmed + suffix + after))
-
-  // prepareMarkdown 会重新填充 imageSizes（含本次插入的尺寸）
-  syncedValue = next
-  crepe?.editor.action(replaceAll(prepareMarkdown(next), true))
-  emit('update:modelValue', next)
-  emit('input', next)
-  void resolveMediaReferencesInDom(crepeRootRef.value as HTMLElement)
-  return true
+  if (!view || !crepe || !ready || !markdown.trim()) return false
+  try {
+    const source = mathDelimitersToEditor(stripImageSizeSuffixes(normalize(markdown.trim()), false))
+    const parsed = crepe.editor.action(ctx => ctx.get(parserCtx)(source))
+    const block = parsed?.firstChild
+    if (!block || parsed?.childCount !== 1 || !block.isBlock) return false
+    const tr = view.state.tr.replaceSelectionWith(block, false)
+    if (!tr.docChanged) return false
+    // 文末媒体块后提供正文落点，用户可以直接继续输入。
+    if (tr.selection instanceof NodeSelection && !tr.doc.nodeAt(tr.selection.to)) {
+      const after = tr.selection.to
+      tr.insert(after, view.state.schema.nodes.paragraph.create())
+      tr.setSelection(TextSelection.create(tr.doc, after + 1))
+    }
+    view.dispatch(tr.scrollIntoView())
+    view.focus()
+    return true
+  } catch (error) {
+    logger.error('[编辑器] 插入媒体节点失败', { error: error instanceof Error ? error.message : String(error) })
+    return false
+  }
 }
 
-/**
- * 估算光标在 markdown 文本中的偏移。
- * ProseMirror 的 pos 与 markdown 偏移没有线性关系，这里用「光标前的纯文本」
- * 在 markdown 中就近定位：找到该片段首次出现处，偏移即其末尾；
- * 找不到时退化为文末。
- */
-function getSelectionOffsetInMarkdown(): number | null {
-  if (!view || !ready) return null
-  const markdown = normalize(crepe?.getMarkdown() || '')
-  const { $from } = view.state.selection
-  const textBefore = $from.parent.textBetween(0, $from.parentOffset, '\n', '\n')
-  if (!textBefore) return markdown.length
-  const index = markdown.indexOf(textBefore)
-  if (index < 0) return markdown.length
-  return index + textBefore.length
+/** 用新选择的媒体替换加载失败节点，保留其位置和文档撤销历史。 */
+const replaceMediaBlock = (from: number, to: number, markdown: string): boolean => {
+  if (!view || !crepe || !ready || !markdown.trim()) return false
+  try {
+    const source = mathDelimitersToEditor(stripImageSizeSuffixes(normalize(markdown.trim()), false))
+    const parsed = crepe.editor.action(ctx => ctx.get(parserCtx)(source))
+    const replacement = parsed?.firstChild
+    if (!replacement || parsed?.childCount !== 1 || !replacement.isBlock) return false
+    const start = Math.max(0, Math.min(Math.round(from), view.state.doc.content.size))
+    const end = Math.max(start, Math.min(Math.round(to), view.state.doc.content.size))
+    if (end === start + replacement.nodeSize && view.state.doc.nodeAt(start)?.eq(replacement)) {
+      view.focus()
+      return true
+    }
+    const tr = view.state.tr.replaceWith(start, end, replacement)
+    if (!tr.docChanged) return false
+    view.dispatch(tr.scrollIntoView())
+    view.focus()
+    return true
+  } catch (error) {
+    logger.error('[编辑器] 替换媒体节点失败', { error: error instanceof Error ? error.message : String(error) })
+    return false
+  }
 }
 
 defineExpose({
@@ -2061,8 +2650,11 @@ defineExpose({
   focus,
   getSelectionRange,
   setSelectionRange,
+  renderMarkdownForExport,
   blocksContainerRef,
   insertMediaBlock,
+  replaceMediaBlock,
+  updateMediaProperties,
   scrollToBlockAnchor,
   insertWikiLinkAtPositions,
   setSearchMatches,
@@ -2087,6 +2679,7 @@ defineExpose({
   insertLinkAtPositions,
   insertInlineCodeAtCursor,
   insertCodeBlockAtCursor,
+  insertInlineMathAtCursor,
   getTextStyleColor,
   getActiveFormats,
   toggleUnderlineMark,
@@ -2442,81 +3035,103 @@ onBeforeUnmount(() => {
   min-height: 100%;
 }
 
-/* 媒体尺寸编辑浮层 */
-.media-resize-panel {
-  position: absolute;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border: 1px solid rgba(196, 181, 253, 0.22);
-  border-radius: 10px;
-  background: rgba(28, 25, 54, 0.97);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(14px);
+.md-editor :deep(.ProseMirror) { text-align: center; }
+.md-editor :deep(.ProseMirror > p, .ProseMirror > h1, .ProseMirror > h2, .ProseMirror > h3, .ProseMirror > h4, .ProseMirror > h5, .ProseMirror > h6, .ProseMirror > blockquote, .ProseMirror > ul, .ProseMirror > ol, .ProseMirror > pre, .ProseMirror > table) { text-align: left; }
+.md-editor :deep(.ProseMirror > .milkdown-image-block),
+.md-editor :deep(.ProseMirror > .esd-media-block) { display: inline-flex; vertical-align: top; flex-direction: column; align-items: center; width: fit-content; max-width: 100%; margin: 16px 10px; text-align: center; }
+.md-editor :deep(.esd-media-block[data-kind='audio']) { transform: translateY(var(--esd-audio-row-offset, 0px)); }
+.md-editor :deep(.ProseMirror .milkdown-image-block[data-esd-layout='standalone']),
+.md-editor :deep(.ProseMirror .esd-media-block[data-esd-layout='standalone']) { display: flex; flex-direction: column; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; max-width: 100%; margin: 16px 0; }
+.md-editor :deep(.ProseMirror .esd-media-block[data-kind='video'][data-esd-layout='standalone'] > .esd-media-player-wrap) { align-self: stretch; display: flex; flex-direction: column; align-items: center; box-sizing: border-box; width: 100%; max-width: 100%; margin-inline: auto; }
+.md-editor :deep(.ProseMirror .esd-media-block[data-kind='audio'][data-esd-layout='standalone']) { width: fit-content; max-width: 100%; margin: 16px auto; background: transparent; }
+.md-editor :deep(.ProseMirror > .milkdown-image-block > .image-wrapper) { max-width: 100%; margin: 0; }
+.md-editor :deep(.ProseMirror .milkdown-image-block > .image-wrapper > .operation),
+.md-editor :deep(.ProseMirror .milkdown-image-block > .caption-input) { display: none !important; }
+.md-editor :deep(.esd-media-block) { display: inline-flex; vertical-align: top; flex-direction: column; align-items: center; width: fit-content; max-width: 100%; margin: 16px 10px; }
+.md-editor :deep(.esd-media-player-wrap) { position: relative; display: flex; flex-direction: column; align-items: center; width: fit-content; max-width: 100%; }
+.md-editor :deep(.esd-player-shell) { --esd-media-accent: var(--crepe-color-primary, var(--chalk-primary, #667eea)); --esd-media-surface: var(--crepe-color-surface, rgba(23,22,48,.96)); --esd-media-text: var(--crepe-color-on-surface, #cbd5e1); --esd-media-outline: var(--crepe-color-outline, rgba(102,126,234,.28)); --esd-media-hover: var(--crepe-color-hover, rgba(102,126,234,.15)); position: relative; display: block; max-width: 100%; overflow: visible; isolation: isolate; border-radius: 12px; background: var(--esd-media-surface); box-shadow: 0 10px 28px rgba(0,0,0,.22); }
+.md-editor :deep(.esd-player-shell[hidden]) { display: none !important; }
+.md-editor :deep(.esd-video-shell) { box-sizing: border-box; display: inline-block; width: fit-content; max-width: min(100%, 720px); }
+.md-editor :deep(.esd-video-shell > video) { display: block; width: auto; max-width: min(100%, 720px); height: auto; margin: 8px 0 0; border: 1px solid var(--esd-media-outline); border-radius: 12px; color-scheme: dark; background: var(--esd-media-surface); }
+.md-editor :deep(.esd-player-shell:fullscreen) { display: flex; align-items: center; justify-content: center; width: 100vw; height: 100vh; max-width: none; border-radius: 0; background: var(--esd-media-surface); }
+.md-editor :deep(.esd-video-shell:fullscreen > video) { width: auto; max-width: 100%; max-height: 100%; height: auto; margin: 0; object-fit: contain; }
+.md-editor :deep(.esd-audio-shell) { display: flex; flex-direction: column; box-sizing: border-box; width: min(520px, 80vw); min-height: 58px; margin: 8px 0 0; border: 1px solid color-mix(in srgb, var(--esd-media-accent) 38%, var(--esd-media-outline)); border-radius: 14px; background: linear-gradient(135deg, color-mix(in srgb, var(--esd-media-surface) 88%, var(--esd-media-accent) 12%), var(--esd-media-surface)); box-shadow: 0 12px 30px rgba(0,0,0,.24), inset 0 1px 0 color-mix(in srgb, var(--esd-media-text) 9%, transparent); }
+.md-editor :deep(.esd-audio-title) { box-sizing: border-box; width: 100%; overflow: hidden; padding: 12px 12px 1px; color: var(--esd-media-text); font: inherit; font-size: 13px; font-weight: 650; line-height: 1.4; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.md-editor :deep(.esd-audio-shell > audio) { position: absolute !important; left: 0; top: 0; width: 1px !important; height: 1px !important; opacity: 0; pointer-events: none; }
+.md-editor :deep(.esd-audio-shell:fullscreen) { width: 100vw !important; height: 100vh; }
+.md-editor :deep(.esd-audio-shell:fullscreen .esd-player-controls) { width: min(680px, calc(100vw - 48px)); box-sizing: border-box; border: 1px solid var(--esd-media-outline); border-radius: 16px; background: var(--esd-media-surface); box-shadow: 0 16px 48px rgba(0,0,0,.4); }
+.md-editor :deep(.esd-player-controls) { box-sizing: border-box; min-width: 0; position: absolute; inset: auto 0 0; display: flex; flex-direction: column; gap: 6px; padding: 30px 12px 8px; border-radius: 0 0 12px 12px; color: var(--esd-media-text); background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--esd-media-surface) 96%, transparent)); font: inherit; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .18s ease; }
+.md-editor :deep(.esd-video-shell .esd-player-controls) { box-sizing: border-box; left: 0; right: 0; width: 100%; max-width: 100%; min-width: 0; overflow: hidden; }
+.md-editor :deep(.esd-audio-shell .esd-player-controls) { position: relative; inset: auto; padding: 9px 2px 9px 12px; border-radius: 11px; background: transparent; opacity: 1; pointer-events: auto; }
+.md-editor :deep(.esd-player-shell:hover .esd-player-controls),
+.md-editor :deep(.esd-player-shell:focus-within .esd-player-controls) { opacity: 1; pointer-events: auto; }
+.md-editor :deep(.esd-player-progress), .md-editor :deep(.esd-player-volume) { min-width: 0; margin: 0; accent-color: var(--esd-media-accent); cursor: pointer; appearance: none; -webkit-appearance: none; height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--esd-media-text) 32%, transparent); }
+.md-editor :deep(.esd-player-progress) { width: 100%; }
+.md-editor :deep(.esd-player-progress::-webkit-slider-thumb), .md-editor :deep(.esd-player-volume::-webkit-slider-thumb) { width: 10px; height: 10px; border: 1px solid var(--crepe-color-on-background, rgba(255,255,255,.85)); border-radius: 50%; background: var(--esd-media-accent); appearance: none; -webkit-appearance: none; }
+.md-editor :deep(.esd-player-progress::-moz-range-thumb), .md-editor :deep(.esd-player-volume::-moz-range-thumb) { width: 9px; height: 9px; border: 1px solid var(--crepe-color-on-background, rgba(255,255,255,.85)); border-radius: 50%; background: var(--esd-media-accent); }
+.md-editor :deep(.esd-player-toolbar) { box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; width: 100%; min-height: 28px; }
+.md-editor :deep(.esd-audio-shell .esd-player-toolbar) { box-sizing: border-box; width: 100%; justify-content: flex-start; align-self: stretch; }
+.md-editor :deep(.esd-player-controls-left), .md-editor :deep(.esd-player-controls-right) { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.md-editor :deep(.esd-player-controls-right) { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; max-width: 100%; margin-left: auto; }
+.md-editor :deep(.esd-player-volume-button) { margin-left: 0; }
+.md-editor :deep(.esd-player-button) { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 4px; border: 0; border-radius: 6px; color: var(--esd-media-text); background: transparent; cursor: pointer; font: inherit; font-size: 17px; line-height: 1; }
+.md-editor :deep(.esd-player-button:hover), .md-editor :deep(.esd-player-button:focus-visible) { outline: none; color: var(--crepe-color-on-background, #fff); background: var(--esd-media-hover); }
+.md-editor :deep(.esd-player-play) { font-size: 15px; }
+.md-editor :deep(.esd-player-button > svg) { display: block; flex: none; }
+.md-editor :deep(.esd-player-time) { min-width: 88px; color: var(--crepe-color-on-background, rgba(255,255,255,.92)); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.md-editor :deep(.esd-player-volume) { width: 72px; }
+.md-editor :deep(.esd-player-menu) { position: absolute; right: 10px; bottom: auto; z-index: 4; display: flex; flex-direction: column; gap: 3px; min-width: 208px; padding: 6px; border: 1px solid var(--esd-media-outline); border-radius: 10px; color: var(--esd-media-text); background: var(--esd-media-surface); box-shadow: 0 12px 32px rgba(0,0,0,.42); font: inherit; font-size: 13px; }
+.md-editor :deep(.esd-player-menu[hidden]), .md-editor :deep(.esd-player-speed-options[hidden]) { display: none !important; }
+.md-editor :deep(.esd-player-menu-item), .md-editor :deep(.esd-player-speed-option) { min-height: 34px; padding: 7px 10px; border: 0; border-radius: 7px; color: inherit; background: transparent; cursor: pointer; font: inherit; text-align: left; }
+.md-editor :deep(.esd-player-menu-item:hover), .md-editor :deep(.esd-player-speed-option:hover), .md-editor :deep(.esd-player-speed-option.active) { color: var(--crepe-color-on-background, #fff); background: var(--esd-media-hover); }
+.md-editor :deep(.esd-player-speed-options) { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; padding: 3px; border-radius: 8px; background: color-mix(in srgb, var(--esd-media-surface) 65%, #000); }
+.md-editor :deep(.esd-player-speed-option) { padding: 6px; text-align: center; }
+.md-editor :deep(.esd-player-pip-close) { display: none; position: absolute; top: 8px; right: 8px; z-index: 5; width: 28px; height: 28px; border: 1px solid var(--esd-media-outline); border-radius: 50%; color: var(--esd-media-text); background: color-mix(in srgb, var(--esd-media-surface) 86%, transparent); cursor: pointer; font-size: 20px; line-height: 1; }
+.md-editor :deep(.esd-video-shell[data-pip='true']) { position: fixed !important; right: 24px !important; bottom: 24px !important; z-index: 10000 !important; box-sizing: border-box; width: min(420px, calc(100vw - 48px)) !important; max-width: 420px !important; border: 1px solid color-mix(in srgb, var(--esd-media-accent) 55%, transparent); box-shadow: 0 16px 48px rgba(0,0,0,.55); }
+.md-editor :deep(.esd-video-shell[data-pip='true'] > video) { width: 100% !important; max-width: 100% !important; max-height: 42vh; height: auto !important; margin: 0; border: 0; }
+.md-editor :deep(.esd-video-shell[data-pip='true'] .esd-player-controls) { opacity: 1; pointer-events: auto; }
+.md-editor :deep(.esd-video-shell[data-pip='true'] .esd-player-pip-close) { display: block; }
+.md-editor :deep(.esd-media-block[data-pip='true']) { width: 0 !important; height: 0 !important; margin: 0 !important; }
+.md-editor :deep(.esd-media-block[data-pip='true'] .esd-media-player-wrap) { width: 0 !important; height: 0 !important; }
+.md-editor :deep(.esd-media-block[data-pip='true'] .esd-media-resize-handle) { display: none !important; }
+.md-editor :deep(.esd-media-block video[hidden]), .md-editor :deep(.esd-media-block audio[hidden]) { display: none !important; }
+.md-editor :deep(.esd-media-name) { display: none !important; }
+.md-editor :deep(.esd-media-resize-handle) { position: absolute; left: 50%; bottom: -10px; transform: translateX(-50%); width: 100%; max-width: 160px; height: 4px; margin: 0; border: 0; border-radius: 4px; background: var(--crepe-color-outline); opacity: 0; touch-action: none; transition: all .2s; z-index: 1; }
+.md-editor :deep(.esd-media-block:hover .esd-media-resize-handle) { opacity: 1; }
+.md-editor :deep(.esd-media-resize-handle:hover) { cursor: row-resize; background: var(--crepe-color-primary, var(--chalk-primary, #667eea)); }
+.md-editor :deep(.esd-media-resize-handle[hidden]) { display: none; }
+.md-editor :deep(.esd-media-block[data-media-missing='true'] .esd-media-name),
+.md-editor :deep(.esd-media-block[data-media-missing='true'] .esd-media-resize-handle) { display: none !important; }
+.md-editor :deep(.milkdown-image-block[data-media-missing='true'] .image-resize-handle),
+.md-editor :deep(.milkdown-image-block[data-media-missing='true'] .image-wrapper) { display: none !important; }
+.md-editor :deep(.esd-media-failure) { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 72px; box-sizing: border-box; padding: 14px 18px; border: 1px dashed rgba(248,113,113,.5); border-radius: 12px; color: #fecaca; background: rgba(248,113,113,.08); }
+.md-editor :deep(.esd-media-failure-icon) { color: #fca5a5; font-size: 20px; }
+.md-editor :deep(.esd-media-failure-text) { max-width: 300px; overflow-wrap: anywhere; font-size: 12px; }
+.md-editor :deep(.esd-media-reinsert) { padding: 6px 10px; border: 1px solid rgba(167,139,250,.35); border-radius: 7px; color: #ede9fe; background: rgba(109,40,217,.24); cursor: pointer; font: inherit; font-size: 12px; }
+.md-editor :deep(.esd-media-reinsert:hover) { background: rgba(139,92,246,.4); }
+@media (max-width: 640px) {
+  .md-editor :deep(.esd-video-shell[data-pip='true']) { right: 12px !important; bottom: 12px !important; width: calc(100vw - 24px) !important; }
+  .md-editor :deep(.esd-player-volume) { width: 48px; }
+  .md-editor :deep(.esd-player-toolbar) { gap: 6px; }
 }
+.md-editor :deep(.milkdown-image-block.ProseMirror-selectednode),
+.md-editor :deep(.milkdown-image-block.esd-image-node-selected),
+.md-editor :deep(.milkdown-image-block:has(img.ProseMirror-selectednode)) { outline: none !important; }
+.md-editor :deep(.milkdown-image-block > .image-wrapper > img.ProseMirror-selectednode),
+.md-editor :deep(.milkdown-image-block > .image-wrapper > img.esd-image-node-selected),
+.md-editor :deep(img.ProseMirror-selectednode),
+.md-editor :deep(img.esd-image-node-selected) { outline: 2px solid var(--crepe-color-primary, var(--chalk-primary, #667eea)); outline-offset: 0; border-radius: 8px; }
+.md-editor :deep(.esd-media-block.ProseMirror-selectednode) { outline: none !important; box-shadow: none !important; border-color: transparent !important; background: transparent !important; background-color: transparent !important; }
+.md-editor :deep(.esd-media-block[data-kind='audio'][data-esd-layout='standalone'].ProseMirror-selectednode) { width: fit-content !important; margin-inline: auto !important; }
+.md-editor :deep(.esd-media-block[data-kind='video'].ProseMirror-selectednode > .esd-media-player-wrap > .esd-video-shell > video) { outline: 2px solid var(--crepe-color-primary, var(--chalk-primary, #667eea)); outline-offset: 0; }
+.md-editor :deep(.esd-media-block[data-kind='audio'].ProseMirror-selectednode > .esd-media-player-wrap > .esd-audio-shell) { outline: 2px solid var(--crepe-color-primary, var(--chalk-primary, #667eea)); outline-offset: 0; }
 
-.media-resize-title {
-  color: rgba(245, 243, 255, 0.6);
-  font-size: 11px;
-}
-
-.media-resize-panel input {
-  width: 62px;
-  height: 24px;
-  padding: 0 6px;
-  border: 1px solid rgba(196, 181, 253, 0.2);
-  border-radius: 6px;
-  color: #f4f1ff;
-  background: rgba(255, 255, 255, 0.05);
-  font-size: 12px;
-}
-
-.media-resize-panel input:focus {
-  border-color: rgba(167, 139, 250, 0.6);
-  outline: none;
-}
-
-.media-resize-sep {
-  color: rgba(245, 243, 255, 0.4);
-  font-size: 11px;
-}
-
-.media-resize-btn {
-  height: 24px;
-  padding: 0 8px;
-  border: none;
-  border-radius: 6px;
-  color: #c4b5fd;
-  background: rgba(139, 92, 246, 0.22);
-  font-size: 11px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.media-resize-btn:hover {
-  background: rgba(139, 92, 246, 0.38);
-  color: #fff;
-}
-
-.media-resize-btn.ghost {
-  color: rgba(245, 243, 255, 0.6);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.media-resize-btn.ghost:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.12);
-}
+/* 音视频原生控件使用暗色配色，并限制在编辑区宽度内。 */
+.md-editor :deep(video), .md-editor :deep(audio) { color-scheme: dark; accent-color: var(--crepe-color-primary, var(--chalk-primary, #667eea)); }
+.md-editor :deep(video.ProseMirror-selectednode), .md-editor :deep(audio.ProseMirror-selectednode) { outline: 2px solid var(--crepe-color-primary, var(--chalk-primary, #667eea)); outline-offset: 0; }
 
 /* 编辑器内媒体节点：缺失资产时给出提示样式 */
-.md-editor :deep(img[data-media-missing='true']),
-.md-editor :deep(video[data-media-missing='true']) {
-  min-height: 48px;
-  border: 1px dashed rgba(248, 113, 113, 0.5);
-  background: rgba(248, 113, 113, 0.08);
-}
+.md-editor :deep(.milkdown-image-block:has(img[data-esd-aspect-locked='true']) .image-resize-handle) { display: none !important; pointer-events: none !important; }
 
 /* 媒体只通过笔记右键菜单插入，保留已有图片的显示与尺寸操作。 */
 .md-editor :deep(.milkdown .milkdown-image-inline .empty-image-inline),

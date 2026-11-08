@@ -67,8 +67,8 @@
           <button type="button" class="menubar-btn" :class="{ on: activeFormats.strike }" :disabled="inHeadingNow" :title="withShortcut(inHeadingNow ? '标题内不能设置删除线（标题样式由级别决定）' : '删除线', 'strike')" @mousedown.prevent @click="menubarFormat('strike')"><del>S</del><span>删除线</span></button>
           <button type="button" class="menubar-btn" :class="{ on: activeFormats.quote }" :disabled="inHeadingNow" :title="withShortcut(inHeadingNow ? '标题内不能转为引用（标题样式由级别决定）' : (inQuoteNow ? '取消引用' : '引用'), 'quote')" @mousedown.prevent @click="menubarFormat('quote')"><span class="format-symbol">{{ inQuoteNow ? '❞' : '❝' }}</span><span>{{ inQuoteNow ? '取消引用' : '引用' }}</span></button>
           <span class="menubar-sep"></span>
-          <button type="button" class="menubar-btn" :class="{ on: activeFormats.bullet }" :disabled="inHeadingNow" :title="withShortcut(inHeadingNow ? '标题内不能转为列表（标题样式由级别决定）' : '无序列表', 'unordered')" @mousedown.prevent @click="menubarFormat('unordered')"><span class="format-symbol">☷</span><span>无序</span></button>
-          <button type="button" class="menubar-btn" :class="{ on: activeFormats.ordered }" :disabled="inHeadingNow" :title="withShortcut(inHeadingNow ? '标题内不能转为列表（标题样式由级别决定）' : '有序列表', 'ordered')" @mousedown.prevent @click="menubarFormat('ordered')"><span class="format-symbol">1.</span><span>有序</span></button>
+          <button type="button" class="menubar-btn" :class="{ on: activeFormats.bullet }" :disabled="inHeadingNow" :title="withShortcut(inHeadingNow ? '标题内不能转为列表（标题样式由级别决定）' : '无序列表', 'unordered')" @mousedown.prevent @click="menubarFormat('unordered')"><span class="format-symbol">☷</span><span>无序列表</span></button>
+          <button type="button" class="menubar-btn" :class="{ on: activeFormats.ordered }" :disabled="inHeadingNow" :title="withShortcut(inHeadingNow ? '标题内不能转为列表（标题样式由级别决定）' : '有序列表', 'ordered')" @mousedown.prevent @click="menubarFormat('ordered')"><span class="format-symbol">1.</span><span>有序列表</span></button>
           <span class="menubar-sep"></span>
           <button
             v-for="level in [1, 2, 3, 4, 5, 6]"
@@ -159,13 +159,13 @@
 
         <!-- 插入页 -->
         <div v-else-if="menubarTab === 'insert'" class="editor-menubar-page">
-          <button type="button" class="menubar-btn" title="插入图片" @click="chooseMediaInsert('image')">
+          <button type="button" class="menubar-btn" title="插入图片" @mousedown.prevent @click="chooseMediaInsert('image')">
             <el-icon><ImagePlus /></el-icon><span>图片</span>
           </button>
-          <button type="button" class="menubar-btn" title="插入视频" @click="chooseMediaInsert('video')">
+          <button type="button" class="menubar-btn" title="插入视频" @mousedown.prevent @click="chooseMediaInsert('video')">
             <el-icon><Clapperboard /></el-icon><span>视频</span>
           </button>
-          <button type="button" class="menubar-btn" title="插入音频" @click="chooseMediaInsert('audio')">
+          <button type="button" class="menubar-btn" title="插入音频" @mousedown.prevent @click="chooseMediaInsert('audio')">
             <el-icon><Music /></el-icon><span>音频</span>
           </button>
           <button type="button" class="menubar-btn" :title="withShortcut('插入链接（弹窗输入地址）', 'link')" @mousedown.prevent @click="openInsertDialog('link')">
@@ -177,6 +177,9 @@
           </button>
           <button type="button" class="menubar-btn" title="插入块级代码（独占一块，弹窗选语言并做语法审查）" @mousedown.prevent @click="openInsertDialog('block-code')">
             <span class="menubar-formula-block">{ }</span><span>块级代码</span>
+          </button>
+          <button type="button" class="menubar-btn" title="插入行内公式（弹窗输入 LaTeX，实时预览，嵌在文字中）" @mousedown.prevent @click="openInsertDialog('inline-math')">
+            <span class="menubar-formula-inline">Σ</span><span>行内公式</span>
           </button>
         </div>
 
@@ -237,10 +240,11 @@
             ref="mdEditorRef"
             v-model="editorContent"
             :current-note-id="note?.id ?? ''"
-            :temp-note-id="props.tempNoteId"
             placeholder="开始编写 Markdown 笔记...（输入 [[ 链接其他笔记）"
             @input="refreshOutline"
             @open-wiki-link="(p) => emit('openWikiLink', p)"
+            @reinsert-media="onReinsertMedia"
+            @edit-media="onEditMedia"
           />
           <div v-else class="source-wrap">
             <!-- 隐形镜像：与 textarea 同宽/同字体/同换行规则，用于量出每个逻辑行的
@@ -264,11 +268,11 @@
             </div>
             <textarea
               ref="sourceEditorRef"
-              v-model="editorContent"
+              v-model="sourceDisplayModel"
               class="editor-source"
               spellcheck="false"
               placeholder="Markdown 源码"
-              @input="refreshOutline"
+              @input="onSourceInput"
               @keydown="onSourceKeydown"
               @scroll="syncSourceGutter"
               @click="updateSourceCaretLine"
@@ -341,46 +345,39 @@
       </div>
     </div>
 
-    <input ref="imageFileInput" type="file" accept="image/*" hidden @change="onMediaFileSelected('image', $event)">
-    <input ref="videoFileInput" type="file" accept="video/*" hidden @change="onMediaFileSelected('video', $event)">
-    <input ref="audioFileInput" type="file" accept="audio/*" hidden @change="onMediaFileSelected('audio', $event)">
-
-    <!-- 媒体插入确认（可选尺寸） -->
-    <Teleport to="body">
-      <div v-if="mediaSizeDialog.visible" class="note-media-size-backdrop" @mousedown.self="cancelMediaSize">
-        <section class="note-media-size-dialog" @mousedown.stop>
-          <header class="note-media-size-header">
-            <span>插入{{ mediaKindLabels[mediaSizeDialog.kind] }}</span>
-            <span class="note-media-size-meta">{{ mediaSizeDialog.fileName }}</span>
-          </header>
-          <div class="note-media-size-row">
-            <label>宽度（px）</label>/label>
-            <input v-model.number="mediaSizeDialog.width" type="number" min="0" max="4096" placeholder="默认" @keyup.enter="confirmMediaSize">
-          </div>
-          <div class="note-media-size-row">
-            <label>高度（px）</label>/label>
-            <input v-model.number="mediaSizeDialog.height" type="number" min="0" max="4096" placeholder="默认" @keyup.enter="confirmMediaSize">
-          </div>
-          <p class="note-media-size-hint">留空则按默认比例显示；只填一项时另一项按比例缩放。</p>
-          <footer class="note-media-size-actions">
-            <button type="button" class="capsule-btn" @click="cancelMediaSize">取消</button>
-            <button type="button" class="capsule-btn capsule-btn-primary" @click="confirmMediaSize">插入</button>
-          </footer>
-        </section>
-      </div>
-    </Teleport>
+    <!-- 媒体插入弹窗（图片/视频/音频共用一套尺寸校验 + 比例锁定 + 预览） -->
+    <MediaInsertDialog
+      :visible="mediaSizeDialog.visible"
+      :kind="mediaSizeDialog.kind"
+      :edit-mode="mediaSizeDialog.mode === 'edit'"
+      :initial-settings="mediaSizeDialog.initialSettings"
+      :file-name="mediaSizeDialog.fileName"
+      :preview-url="mediaSizeDialog.previewUrl"
+      :file-size="mediaSizeDialog.fileSize"
+      :mime-type="mediaSizeDialog.mimeType"
+      :error="mediaSizeDialog.error"
+      :busy="mediaSizeDialog.busy"
+      :progress="mediaSizeDialog.progress"
+      :phase="mediaSizeDialog.phase"
+      @select-file="onMediaFileSelected"
+      @confirm="onMediaInsertConfirm"
+      @update:visible="onMediaDialogVisibleChange"
+    />
 
     <!-- 插入对话框：链接 / 行内代码 / 块级代码（统一弹窗输入 + 格式审查，落在光标处） -->
     <NoteInsertDialog
       v-model:visible="insertDialogVisible"
       :kind="insertDialogKind"
       :initial-link-text="insertLinkInitialText"
+      :initial-inline-text="insertLinkInitialText"
+      :initial-math-latex="insertMathInitialLatex"
       :has-selection="insertLinkHasSelection"
       :anchors="insertLinkAnchors"
       :note-options="insertLinkNoteOptions"
       @confirm-inline-code="onInsertInlineCodeConfirm"
       @confirm-block-code="onInsertBlockCodeConfirm"
       @confirm-link="onInsertLinkConfirm"
+      @confirm-inline-math="onInsertInlineMathConfirm"
     />
 
     <!-- 快捷键设置：录制绑定 + 冲突检测 + 恢复默认 -->
@@ -415,15 +412,16 @@ import { logger } from '../../lib/logger'
 import {
   buildMediaSnippet,
   containsInlineMedia,
-  describeMedia,
+  mediaMimeTypeOfFile,
   mediaKindLabels,
-  readFileAsDataUrl,
-  storeMediaAsset,
+  storeMediaFile,
   type MediaKind,
 } from '../../composables/useNoteMedia'
 import { findMatches, nextMatchIndex, MAX_MATCHES } from '../../composables/useNoteSearch'
-import { useTempNoteStore } from '../../stores/tempNoteStore'
 import NoteInsertDialog, { type InsertKind } from './NoteInsertDialog.vue'
+import MediaInsertDialog from './MediaInsertDialog.vue'
+import { buildInlineCodeMarkdown } from '../editor/codePreviewBridge'
+import { applyMediaSourceEdit, mediaDisplayRangeToMarkdown, mediaMarkdownOffsetToDisplay, projectMediaPaths } from '../editor/mediaSourceProjection'
 import ShortcutSettingsDialog from './ShortcutSettingsDialog.vue'
 import { collectMarkdownAnchors } from '../editor/blockAnchors'
 import {
@@ -442,21 +440,14 @@ const props = withDefaults(defineProps<{
   note: Note | null
   sourceMode?: boolean
   fullscreenEdit?: boolean
-  /** 临时笔记：被原地编辑的 .md 文件绝对路径（为空表示普通笔记） */
-  tempFilePath?: string
-  /** 临时笔记 id：媒体插入/渲染时用于定位同级 media 目录 */
-  tempNoteId?: string
   /** 可跳转的其它笔记标题（用于「链接到其它笔记」） */
   noteTitles?: string[]
 }>(), {
   sourceMode: false,
   fullscreenEdit: false,
-  tempFilePath: '',
-  tempNoteId: '',
   noteTitles: () => []
 })
 
-const tempNoteStore = useTempNoteStore()
 
 const emit = defineEmits<{
   (e: 'save', data: { id: string; title: string; content: string; pinned: boolean }): void
@@ -469,32 +460,58 @@ const emit = defineEmits<{
 
 const noteTitle = ref('')
 const editorContent = ref('')
+const sourceProjection = computed(() => {
+  const markdown = editorContent.value || ''
+  return props.sourceMode ? projectMediaPaths(markdown) : { text: markdown, tokens: [] }
+})
+const applySourceDisplay = (text: string) => {
+  editorContent.value = applyMediaSourceEdit(editorContent.value, sourceProjection.value, text)
+}
+const sourceDisplayModel = computed({
+  get: () => sourceProjection.value.text,
+  set: (text: string) => applySourceDisplay(text),
+})
+const replaceSourceDisplayRange = (start: number, end: number, replacement: string) => {
+  const content = editorContent.value
+  const range = mediaDisplayRangeToMarkdown(sourceProjection.value, start, end)
+  editorContent.value = content.slice(0, range.start) + replacement + content.slice(range.end)
+  return mediaMarkdownOffsetToDisplay(sourceProjection.value, range.start + replacement.length, 'end')
+}
+const onSourceInput = () => { void nextTick(() => refreshOutline()) }
 const mdEditorRef = ref<InstanceType<typeof MilkdownEditor> | null>(null)
 const sourceEditorRef = ref<HTMLTextAreaElement | null>(null)
-const imageFileInput = ref<HTMLInputElement | null>(null)
-const videoFileInput = ref<HTMLInputElement | null>(null)
-const audioFileInput = ref<HTMLInputElement | null>(null)
 const selectionContextMenu = ref({ visible: false, text: '', x: 0, y: 0 })
 /** 打开菜单时检测选区是否已在引用内（菜单项据此显示「引用/取消引用」） */
 const selectionInQuote = ref(false)
 const mediaContextMenu = ref({ visible: false, x: 0, y: 0 })
-// 媒体插入确认面板：选择文件后先问尺寸，再落到光标处
+type MediaDialogSettings = { width: number | null; height: number | null; alt: string; aspectLocked: boolean; layout: 'flow' | 'standalone' }
+const defaultMediaDialogSettings = (): MediaDialogSettings => ({ width: null, height: null, alt: '', aspectLocked: false, layout: 'flow' })
+// 媒体插入弹窗状态：选择文件后先问尺寸/说明，再落到光标处（弹窗负责展示与校验）
 const mediaSizeDialog = ref({
   visible: false,
   kind: 'image' as MediaKind,
+  mode: 'insert' as 'insert' | 'edit',
+  initialSettings: defaultMediaDialogSettings(),
   fileName: '',
-  dataUrl: '',
-  width: null as number | null,
-  height: null as number | null,
+  previewUrl: '',
+  fileSize: 0,
+  mimeType: '',
+  error: '',
+  busy: false,
+  progress: null as number | null,
+  phase: 'saving' as 'saving' | 'finalizing' | 'inserting',
 })
+let pendingMediaFile: File | null = null
+let mediaRequestId = 0
 type ActiveTextSelection =
   | { kind: 'source'; element: HTMLTextAreaElement; start: number; end: number }
   | { kind: 'visual'; element: HTMLElement; range: Range; from?: number; to?: number }
 type MediaInsertionSelection =
   | { kind: 'source'; start: number; end: number }
-  | { kind: 'visual'; from: number; to: number }
+  | { kind: 'visual'; from: number; to: number; replace?: boolean }
 let activeTextSelection: ActiveTextSelection | null = null
 let mediaInsertionSelection: MediaInsertionSelection | null = null
+let mediaEditTarget: { from: number; to: number; reference: string; name: string } | null = null
 const headingOptionsOpen = ref(false)
 let lastNoteId: string | null = null
 
@@ -561,16 +578,17 @@ const openSelectionContextMenu = (event: MouseEvent) => {
 }
 
 const chooseMediaInsert = (kind: MediaKind) => {
+  if (mediaSizeDialog.value.busy) return
   closeSelectionContextMenu()
   closeMediaContextMenu()
-  // 打开文件选择器会夺走编辑器焦点，先记录落点点?
+  cancelMediaSize(true)
   captureInsertionPoint()
-  if (kind === 'image') imageFileInput.value?.click()
-  else if (kind === 'video') videoFileInput.value?.click()
-  else audioFileInput.value?.click()
+  mediaSizeDialog.value.kind = kind
+  mediaSizeDialog.value.mode = 'insert'
+  mediaSizeDialog.value.initialSettings = defaultMediaDialogSettings()
+  mediaSizeDialog.value.visible = true
 }
 
-/** 记录当前光标/选区作为媒体插入落点（源码与富文本两种模式） */
 const captureInsertionPoint = () => {
   const textarea = sourceEditorRef.value
   if (textarea) {
@@ -581,124 +599,204 @@ const captureInsertionPoint = () => {
   mediaInsertionSelection = selection ? { kind: 'visual', from: selection.from, to: selection.to } : null
 }
 
-/** 插入前恢复富文本编辑器的落点选区（文件对话框/尺寸面板会夺走焦点） */
+const onReinsertMedia = (payload: { kind: MediaKind; from: number; to: number }) => {
+  if (mediaSizeDialog.value.busy) return
+  cancelMediaSize(true)
+  mediaInsertionSelection = { kind: 'visual', from: payload.from, to: payload.to, replace: true }
+  mediaSizeDialog.value.kind = payload.kind
+  mediaSizeDialog.value.mode = 'insert'
+  mediaSizeDialog.value.initialSettings = defaultMediaDialogSettings()
+  mediaSizeDialog.value.visible = true
+}
+
+const onEditMedia = (payload: {
+  kind: MediaKind
+  from: number
+  to: number
+  reference: string
+  name: string
+  previewUrl: string
+  settings: MediaDialogSettings
+}) => {
+  if (mediaSizeDialog.value.busy) return
+  cancelMediaSize(true)
+  mediaEditTarget = { from: payload.from, to: payload.to, reference: payload.reference, name: payload.name }
+  const dialog = mediaSizeDialog.value
+  dialog.kind = payload.kind
+  dialog.mode = 'edit'
+  dialog.initialSettings = { ...payload.settings }
+  dialog.fileName = payload.name
+  dialog.previewUrl = payload.previewUrl
+  dialog.fileSize = 0
+  dialog.mimeType = ''
+  dialog.error = ''
+  dialog.visible = true
+}
+
 const restoreInsertionPoint = () => {
   const selection = mediaInsertionSelection
-  if (!selection || selection.kind !== 'visual') return
+  if (!selection || selection.kind !== 'visual' || selection.replace) return
   mdEditorRef.value?.setSelectionRange(selection.from, selection.to)
 }
 
-const onMediaFileSelected = async (kind: MediaKind, event: Event) => {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
-  if (!file.type.startsWith(`${kind}/`)) {
-    ElMessage.error(`请选择${mediaKindLabels[kind]}文件`)
+const onMediaFileSelected = (file: File) => {
+  const dialog = mediaSizeDialog.value
+  if (dialog.busy) return
+  const previousPreviewUrl = dialog.previewUrl
+  if (previousPreviewUrl.startsWith('blob:')) window.setTimeout(() => URL.revokeObjectURL(previousPreviewUrl), 0)
+  dialog.previewUrl = ''
+  pendingMediaFile = null
+  const mimeType = mediaMimeTypeOfFile(file)
+  if (!mimeType || !mimeType.startsWith(dialog.kind + '/')) {
+    dialog.error = '请选择受支持的' + mediaKindLabels[dialog.kind] + '文件'
     return
   }
-
-  try {
-    const dataUrl = await readFileAsDataUrl(file)
-    const described = describeMedia(dataUrl)
-    if (!described) {
-      ElMessage.error('不支持的媒体格式')
-      return
-    }
-    mediaSizeDialog.value = {
-      visible: true,
-      kind,
-      fileName: file.name,
-      dataUrl,
-      width: null,
-      height: null,
-    }
-  } catch (error) {
-    logger.error('[笔记] 读取媒体文件失败', { error: error instanceof Error ? error.message : String(error) })
-    ElMessage.error('媒体读取失败')
+  if (!file.size) {
+    dialog.error = '文件为空，请重新选择'
+    return
   }
+  if (file.size > 512 * 1024 * 1024) {
+    dialog.error = '媒体文件不能超过 512 MB'
+    return
+  }
+  pendingMediaFile = file
+  dialog.fileName = file.name
+  dialog.fileSize = file.size
+  dialog.mimeType = mimeType
+  dialog.previewUrl = URL.createObjectURL(file.slice(0, file.size, mimeType))
+  dialog.error = ''
+  dialog.progress = null
+  dialog.phase = 'saving'
 }
 
-const cancelMediaSize = () => {
-  mediaSizeDialog.value.visible = false
-  mediaSizeDialog.value.dataUrl = ''
-}
-
-const confirmMediaSize = async () => {
+const cancelMediaSize = (force = false) => {
   const dialog = mediaSizeDialog.value
-  const dataUrl = dialog.dataUrl
-  const kind = dialog.kind
+  if (dialog.busy && !force) return
+  const previewUrl = dialog.previewUrl
+  mediaRequestId += 1
   dialog.visible = false
-  dialog.dataUrl = ''
-  if (!dataUrl) return
+  dialog.previewUrl = ''
+  dialog.fileName = ''
+  dialog.fileSize = 0
+  dialog.mimeType = ''
+  dialog.error = ''
+  dialog.busy = false
+  dialog.progress = null
+  dialog.phase = 'saving'
+  pendingMediaFile = null
+  mediaInsertionSelection = null
+  mediaEditTarget = null
+  dialog.mode = 'insert'
+  dialog.initialSettings = defaultMediaDialogSettings()
+  if (previewUrl.startsWith('blob:')) window.setTimeout(() => URL.revokeObjectURL(previewUrl), 0)
+}
 
+const onMediaDialogVisibleChange = (value: boolean) => {
+  if (!value) cancelMediaSize()
+}
+
+// 编辑现有媒体时，未更换文件只写回属性；明确更换文件时先保存资产，再替换节点。
+// 插入与替换失败都保留弹窗和文件，允许重试。
+const onMediaInsertConfirm = async (payload: { width: number | null; height: number | null; alt: string; aspectLocked: boolean; layout: 'flow' | 'standalone' }) => {
+  const dialog = mediaSizeDialog.value
+  const file = pendingMediaFile
+  const editTarget = mediaEditTarget ? { ...mediaEditTarget } : null
+  if ((!file && !editTarget) || dialog.busy) return
+  const requestId = ++mediaRequestId
+  const noteId = props.note?.id
+  dialog.busy = true
+  dialog.error = ''
+  dialog.progress = file ? 0 : 100
+  dialog.phase = file ? 'saving' : 'inserting'
   try {
-    // 文件对话框与尺寸面板都会夺走编辑器焦点，插入前先恢复落点选区
-    restoreInsertionPoint()
-
-    // 临时笔记：媒体写到 .md 同级 media/ 目录，正文保存相对引用（可随文件搬移）
-    // 普通笔记：落库为内容寻址资产，正文里只留 esd-local-media:// 引用
-    let reference: string | null = null
-    if (props.tempNoteId) {
-      reference = await tempNoteStore.attachMedia(props.tempNoteId, dataUrl)
+    if (editTarget && !file) {
+      await nextTick()
+      if (requestId !== mediaRequestId || props.note?.id !== noteId) return
+      if (!mdEditorRef.value?.updateMediaProperties(editTarget.from, payload)) throw new Error('媒体设置保存失败，请重新打开设置后重试')
     } else {
-      reference = await storeMediaAsset(dataUrl)
+      if (!file) throw new Error('请先选择媒体文件')
+      const reference = await storeMediaFile(file, dialog.mimeType, (loaded, total) => {
+        const percent = total > 0 ? Math.min(100, Math.round(loaded / total * 100)) : null
+        dialog.progress = percent === null ? null : Math.min(99, percent)
+        if (percent === 100) dialog.phase = 'finalizing'
+      })
+      window.electronAPI?.reportMediaUploadCheckpoint?.('note-store-returned')
+      if (requestId !== mediaRequestId || props.note?.id !== noteId) return
+      if (!reference) throw new Error('媒体保存失败，请重试')
+      dialog.phase = 'inserting'
+      dialog.progress = 100
+      await nextTick()
+      window.electronAPI?.reportMediaUploadCheckpoint?.('insert-phase-rendered')
+      const snippet = buildMediaSnippet({
+        kind: dialog.kind,
+        reference,
+        alt: payload.alt,
+        fileName: file.name,
+        aspectLocked: payload.aspectLocked,
+        layout: payload.layout,
+        size: { width: payload.width || undefined, height: payload.height || undefined },
+      })
+      restoreInsertionPoint()
+      const inserted = editTarget
+        ? mdEditorRef.value?.replaceMediaBlock(editTarget.from, editTarget.to, snippet) ?? false
+        : await insertMediaSnippet(snippet)
+      if (!inserted) throw new Error('媒体插入失败，请重新放置光标后重试')
     }
-    if (!reference) {
-      ElMessage.error('媒体保存失败')
-      return
-    }
-    const size = dialog.width || dialog.height ? { width: dialog.width || undefined, height: dialog.height || undefined } : undefined
-    const snippet = buildMediaSnippet({
-      kind,
-      reference,
-      alt: dialog.fileName,
-      size,
+    window.electronAPI?.reportMediaUploadCheckpoint?.('editor-insert-returned')
+    window.electronAPI?.reportMediaUploadCheckpoint?.('dialog-reset-start')
+    cancelMediaSize(true)
+    window.electronAPI?.reportMediaUploadCheckpoint?.('dialog-reset-returned', {
+      visible: mediaSizeDialog.value.visible,
+      busy: mediaSizeDialog.value.busy,
+      phase: mediaSizeDialog.value.phase,
     })
-    const inserted = await insertMediaSnippet(snippet)
-    if (!inserted) {
-      ElMessage.error('媒体插入失败')
-      return
-    }
-    ElMessage.success(`${mediaKindLabels[kind]}已插入笔记`)
+    await nextTick()
+    window.electronAPI?.reportMediaUploadCheckpoint?.('dialog-nexttick')
+    // Vue 已按 visible=false 更新并移除弹窗；不要再等待动画帧，避免媒体管线收尾
+    // 抢占下一帧时把关闭流程和成功提示一起挂住。
+    window.electronAPI?.reportMediaUploadCheckpoint?.('dialog-closed', {
+      visible: mediaSizeDialog.value.visible,
+      busy: mediaSizeDialog.value.busy,
+      phase: mediaSizeDialog.value.phase,
+    })
+    ElMessage.success(editTarget ? (file ? mediaKindLabels[dialog.kind] + '已替换' : mediaKindLabels[dialog.kind] + '设置已保存') : mediaKindLabels[dialog.kind] + '已插入笔记')
+    window.electronAPI?.reportMediaUploadCheckpoint?.('dialog-success-notified')
   } catch (error) {
-    logger.error('[笔记] 插入媒体失败', { error: error instanceof Error ? error.message : String(error) })
-    ElMessage.error('媒体插入失败')
+    if (requestId !== mediaRequestId) return
+    dialog.error = error instanceof Error ? error.message : '媒体插入失败，请重试'
+    logger.error('[笔记] 插入媒体失败', { error: dialog.error })
+  } finally {
+    if (requestId === mediaRequestId) dialog.busy = false
+    window.electronAPI?.reportMediaUploadCheckpoint?.('insert-handler-finally', {
+      visible: mediaSizeDialog.value.visible,
+      busy: mediaSizeDialog.value.busy,
+    })
   }
 }
 
-/** 把媒体片段插入到记录好的落点；富文本模式走 ProseMirror，源码模式走 textarea */
 const insertMediaSnippet = async (snippet: string): Promise<boolean> => {
   const selection = mediaInsertionSelection
-  mediaInsertionSelection = null
-
+  if (selection?.kind === 'visual' && selection.replace) {
+    return mdEditorRef.value?.replaceMediaBlock(selection.from, selection.to, snippet) ?? false
+  }
   if (selection?.kind === 'source' && sourceEditorRef.value) {
-    const source = editorContent.value
+    const source = sourceProjection.value.text
     const start = Math.max(0, Math.min(selection.start, source.length))
     const end = Math.max(start, Math.min(selection.end, source.length))
     const before = source.slice(0, start)
     const after = source.slice(end)
-    const prefix = before && !before.endsWith('\n') ? '\n\n' : ''
-    const suffix = after && !after.startsWith('\n') ? '\n\n' : '\n'
-    editorContent.value = before + prefix + snippet + suffix + after
+    const prefix = before && !before.endsWith('\n\n') ? (before.endsWith('\n') ? '\n' : '\n\n') : ''
+    const suffix = after && !after.startsWith('\n\n') ? (after.startsWith('\n') ? '\n' : '\n\n') : '\n'
+    const caret = replaceSourceDisplayRange(start, end, prefix + snippet + suffix)
     await nextTick()
-    const caret = before.length + prefix.length + snippet.length + suffix.length
     sourceEditorRef.value?.focus()
     sourceEditorRef.value?.setSelectionRange(caret, caret)
     return true
   }
-
-  if (mdEditorRef.value?.insertMediaBlock(snippet)) {
-    return true
-  }
-
-  // 兜底：追加到末尾并保证自成一段段?
-  const current = editorContent.value.trimEnd()
-  editorContent.value = current ? `${current}\n\n${snippet}` : snippet
-  await nextTick()
-  mdEditorRef.value?.focus()
-  return true
+  return mdEditorRef.value?.insertMediaBlock(snippet) ?? false
 }
+
+watch([() => props.note?.id, () => props.sourceMode], () => cancelMediaSize(true))
 
 const containsEmbeddedMediaText = (text: string) => containsInlineMedia(text)
 
@@ -801,6 +899,7 @@ const replaceSourceSelection = (transform: (text: string) => string) => {
 const insertDialogVisible = ref(false)
 const insertDialogKind = ref<InsertKind>('inline-code')
 const insertLinkInitialText = ref('')
+const insertMathInitialLatex = ref('')
 const insertLinkHasSelection = ref(false)
 const insertLinkAnchors = ref<Array<{ id: string; kind: 'quote' | 'heading'; text: string; firstLine?: string; level?: number }>>([])
 const insertLinkNoteOptions = ref<string[]>([])
@@ -811,11 +910,16 @@ let insertTarget:
   | { kind: 'source'; start: number; end: number }
   | null = null
 
+watch([() => props.note?.id, () => props.sourceMode], () => {
+  insertDialogVisible.value = false
+  insertTarget = null
+})
+
 /** 读取当前选中的纯文本（用于链接文字预填） */
 const getSelectedPlainText = (): string => {
   const target = insertTarget
   if (target?.kind === 'source') {
-    return editorContent.value.slice(target.start, target.end).trim()
+    return sourceProjection.value.text.slice(target.start, target.end).trim()
   }
   try {
     return String(window.getSelection()?.toString() || '').trim()
@@ -842,6 +946,7 @@ const openInsertDialog = (kind: InsertKind) => {
     : insertTarget.from !== insertTarget.to)
   insertLinkHasSelection.value = hasSelection
   insertLinkInitialText.value = hasSelection ? getSelectedPlainText() : ''
+  insertMathInitialLatex.value = insertLinkInitialText.value.replace(/^\\\(([\s\S]*)\\\)$/, '$1')
   // 链接目标候选：本笔记内的块（锚点）+ 可跳转的其它笔记
   if (kind === 'link') {
     insertLinkAnchors.value = collectMarkdownAnchors(editorContent.value).map(a => ({
@@ -863,17 +968,15 @@ const insertIntoSource = async (snippet: string, blockLevel: boolean) => {
   const target = insertTarget
   const textarea = sourceEditorRef.value
   if (!textarea) return false
-  const source = editorContent.value
+  const source = sourceProjection.value.text
   const start = target?.kind === 'source' ? Math.max(0, Math.min(target.start, source.length)) : source.length
   const end = target?.kind === 'source' ? Math.max(start, Math.min(target.end, source.length)) : start
   const before = source.slice(0, start)
   const after = source.slice(end)
   const prefix = blockLevel && before && !before.endsWith('\n') ? '\n\n' : ''
   const suffix = blockLevel && after && !after.startsWith('\n') ? '\n\n' : ''
-  const next = before + prefix + snippet + suffix + after
-  editorContent.value = next
+  const caret = replaceSourceDisplayRange(start, end, prefix + snippet + suffix)
   await nextTick()
-  const caret = before.length + prefix.length + snippet.length
   textarea.focus()
   textarea.setSelectionRange(caret, caret)
   return true
@@ -892,14 +995,13 @@ const onInsertInlineCodeConfirm = async ({ text }: { text: string }) => {
   try {
     if (sourceEditorRef.value) {
       const target = insertTarget
-      const source = editorContent.value
+      const source = sourceProjection.value.text
       const start = target?.kind === 'source' ? Math.max(0, Math.min(target.start, source.length)) : source.length
       const end = target?.kind === 'source' ? Math.max(start, Math.min(target.end, source.length)) : start
       const inner = text || source.slice(start, end)
-      const replacement = '`' + inner + '`'
-      editorContent.value = source.slice(0, start) + replacement + source.slice(end)
+      const replacement = buildInlineCodeMarkdown(inner)
+      const caret = replaceSourceDisplayRange(start, end, replacement)
       await nextTick()
-      const caret = start + replacement.length
       sourceEditorRef.value?.focus()
       sourceEditorRef.value?.setSelectionRange(caret, caret)
     } else {
@@ -936,6 +1038,35 @@ const onInsertBlockCodeConfirm = async ({ language, code }: { language: string; 
   }
 }
 
+/**
+ * 行内公式：源码模式插入 `\( … \)`；富文本优先走 math_inline 节点，失败回退为
+ * 「插入 `\(…\)` 文本 + mathLiveInputPlugin 自动转换」。定界符由父组件拼接，
+ * 保证落盘形态为 `\( … \)`（design 2.6.3 / AC-5.3）。
+ */
+const onInsertInlineMathConfirm = async ({ latex }: { latex: string }) => {
+  const body = String(latex || '').trim()
+  if (!body) return
+  try {
+    if (sourceEditorRef.value) {
+      const ok = await insertIntoSource(`\\(${body}\\)`, false)
+      if (!ok) {
+        ElMessage.error('行内公式插入失败')
+        return
+      }
+    } else {
+      restoreInsertTarget()
+      const ok = mdEditorRef.value?.insertInlineMathAtCursor(body) ?? false
+      if (!ok) {
+        ElMessage.error('请在正文段落中插入行内公式')
+        return
+      }
+    }
+    ElMessage.success('行内公式已插入')
+  } finally {
+    insertTarget = null
+  }
+}
+
 const onInsertLinkConfirm = async ({ url, text }: { url: string; text: string }) => {
   try {
     // 「链接到其它笔记」：url 形如 [[笔记名]]，插成 wiki 链接节点（点击跳转）
@@ -943,7 +1074,7 @@ const onInsertLinkConfirm = async ({ url, text }: { url: string; text: string })
 
     if (sourceEditorRef.value) {
       const target = insertTarget
-      const source = editorContent.value
+      const source = sourceProjection.value.text
       const start = target?.kind === 'source' ? Math.max(0, Math.min(target.start, source.length)) : source.length
       const end = target?.kind === 'source' ? Math.max(start, Math.min(target.end, source.length)) : start
       const selected = source.slice(start, end)
@@ -951,9 +1082,8 @@ const onInsertLinkConfirm = async ({ url, text }: { url: string; text: string })
       const replacement = wikiName
         ? (text && text !== wikiName ? `[[${wikiName}|${text}]]` : `[[${wikiName}]]`)
         : `[${text || selected || url}](${url})`
-      editorContent.value = source.slice(0, start) + replacement + source.slice(end)
+      const caret = replaceSourceDisplayRange(start, end, replacement)
       await nextTick()
-      const caret = start + replacement.length
       sourceEditorRef.value?.focus()
       sourceEditorRef.value?.setSelectionRange(caret, caret)
       return
@@ -1208,9 +1338,10 @@ const inHeadingNow = computed(() => {
   const textarea = sourceEditorRef.value
   if (!textarea) return false
   const pos = textarea.selectionStart ?? 0
-  const lineStart = (editorContent.value || '').lastIndexOf('\n', Math.max(0, pos - 1)) + 1
-  const lineEnd = (editorContent.value || '').indexOf('\n', pos)
-  const line = (editorContent.value || '').slice(lineStart, lineEnd < 0 ? undefined : lineEnd)
+  const source = sourceProjection.value.text
+  const lineStart = source.lastIndexOf('\n', Math.max(0, pos - 1)) + 1
+  const lineEnd = source.indexOf('\n', pos)
+  const line = source.slice(lineStart, lineEnd < 0 ? undefined : lineEnd)
   return /^#{1,6}\s+/.test(line)
 })
 
@@ -1971,14 +2102,11 @@ const onGlobalShortcutKeydownCapture = (event: KeyboardEvent) => {
 }
 
 const onSelectionMenuKeydown = (event: KeyboardEvent) => {
-  // 媒体尺寸面板：Enter 确认 / Esc 取消（优先级最高，与搜索栏互不重叠）?
+  // 媒体插入弹窗：Esc 取消（Enter 由弹窗输入框自行处理，这里不再重复触发确认）
   if (mediaSizeDialog.value.visible) {
     if (event.key === 'Escape') {
       event.preventDefault()
       cancelMediaSize()
-    } else if (event.key === 'Enter') {
-      event.preventDefault()
-      void confirmMediaSize()
     }
     return
   }
@@ -2141,7 +2269,7 @@ const scrollToHeading = (item: MdOutlineItem) => {
 const sourceGutterRef = ref<HTMLDivElement | null>(null)
 const sourceMirrorRef = ref<HTMLDivElement | null>(null)
 const sourceCaretLine = ref(0)
-const sourceLines = computed<string[]>(() => (editorContent.value || '').split('\n'))
+const sourceLines = computed<string[]>(() => sourceProjection.value.text.split('\n'))
 /** 每个逻辑行的实际渲染高度（软换行后可能占多个屏行） */
 const sourceLineHeights = ref<number[]>([])
 /** 每个逻辑行在内容中的起始字符偏移（跳转用） */
@@ -2295,85 +2423,6 @@ const formatTime = (date?: string): string => {
   return d.isValid() ? d.format('YYYY-MM-DD HH:mm') : ''
 }
 
-/**
- * 从外部重新载入当前笔记正文。
- * 用途：临时笔记「重新从磁盘读取」——文件被其它编辑器改动后，把磁盘内容灌回编辑器。
- * 注意：watch(props.note) 只在「切换笔记」时重置内容（避免自动保存回写把自己覆盖），
- * 所以同一篇笔记的外部变更需要显式调用本方法。
- */
-const reloadFromNote = () => {
-  const note = props.note
-  if (!note) return
-  editorContent.value = note.content || ''
-  savedContent = note.content || ''
-  savedTitle = note.title
-  lastNoteId = note.id
-  noteTitle.value = note.title
-  flushPending(note)
-  void nextTick(() => {
-    refreshOutline()
-    if (!props.sourceMode) mdEditorRef.value?.setValue(editorContent.value)
-  })
-}
-
-/** 是否有未落盘的编辑（自动重读前必须确认，否则会吃掉用户正在输入的字符） */
-const hasPendingEdits = (): boolean => editorContent.value !== savedContent
-
-/** 当前阅读位置：滚动偏移 + 光标所在逻辑行（源码模式） */
-const getReadingPosition = (): { scrollTop: number; caretLine: number } => {
-  const textarea = sourceEditorRef.value
-  if (textarea) {
-    return { scrollTop: Math.round(textarea.scrollTop), caretLine: sourceCaretLine.value }
-  }
-  const container = mdEditorRef.value?.blocksContainerRef
-  return { scrollTop: Math.round(container?.scrollTop || 0), caretLine: 0 }
-}
-
-/**
- * 恢复阅读位置（自动重读/重新打开后回到原来看的地方）。
- *
- * 不用固定延时：切换笔记时「NoteEditor 灌内容 → MilkdownEditor 重建文档」是异步链，
- * 固定 260ms 只是"看起来够用"。这里轮询确认两件事：
- *  1) 编辑器内容已经是目标笔记（否则滚动位置是针对旧文档的，恢复无意义）；
- *  2) 容器真的能滚到目标位置（渲染完成前 scrollTop 会被夹住）。
- * 最多等 ~1.5s，超时放弃（宁可位置不对，不可卡住）。
- */
-const restoreReadingPosition = async (
-  position: { scrollTop: number; caretLine: number },
-  expectedContent?: string,
-) => {
-  const deadline = Date.now() + 1500
-  for (;;) {
-    await nextTick()
-    const contentReady = expectedContent === undefined || editorContent.value === expectedContent
-    const textarea = sourceEditorRef.value
-    if (textarea) {
-      if (!contentReady) {
-        if (Date.now() > deadline) return
-        await new Promise(resolve => setTimeout(resolve, 80))
-        continue
-      }
-      measureSourceLines()
-      const targetLine = Math.max(0, Math.min(position.caretLine, sourceLines.value.length - 1))
-      const offset = sourceLineOffsets.value[targetLine] ?? 0
-      textarea.scrollTop = position.scrollTop
-      syncSourceGutter()
-      textarea.setSelectionRange(offset, offset)
-      sourceCaretLine.value = targetLine
-      return
-    }
-    const container = mdEditorRef.value?.blocksContainerRef
-    if (container && contentReady) {
-      container.scrollTop = position.scrollTop
-      const settled = position.scrollTop <= 2 || Math.abs(container.scrollTop - position.scrollTop) <= 2
-      if (settled || Date.now() > deadline) return
-    } else if (Date.now() > deadline) {
-      return
-    }
-    await new Promise(resolve => setTimeout(resolve, 80))
-  }
-}
-
 const forwardExportCommand = (command: string | number | object) => emit('export', command)
 
   // 父组件调用以更新笔记标题（属性栏标题输入）
@@ -2387,7 +2436,7 @@ const onSourceKeydown = (e: KeyboardEvent) => {
   e.preventDefault()
   const el = e.currentTarget as HTMLTextAreaElement
   const { selectionStart, selectionEnd, value } = el
-  editorContent.value = value.slice(0, selectionStart) + '  ' + value.slice(selectionEnd)
+  applySourceDisplay(value.slice(0, selectionStart) + '  ' + value.slice(selectionEnd))
   nextTick(() => {
     el.selectionStart = el.selectionEnd = selectionStart + 2
   })
@@ -2639,16 +2688,15 @@ const replaceCurrent = () => {
   if (props.sourceMode) {
     const textarea = sourceEditorRef.value
     if (!textarea) return
-    const source = textarea.value
-    const next = source.slice(0, match.start) + replaceText.value + source.slice(match.end)
-    editorContent.value = next
+    const next = textarea.value.slice(0, match.start) + replaceText.value + textarea.value.slice(match.end)
+    applySourceDisplay(next)
+    const caret = Math.min(match.start + replaceText.value.length, sourceProjection.value.text.length)
     nextTick(() => {
       if (searchTotal.value > 0) {
         // 交给 runSearch 从替换位置之后定位（minStart 过滤）
-        runSearch(advanceFrom, advanceFrom)
+        runSearch(caret, caret)
       } else {
         // 没有剩余匹配：光标落在替换文本之后
-        const caret = match.start + replaceText.value.length
         textarea.setSelectionRange(caret, caret)
       }
     })
@@ -2682,14 +2730,12 @@ const replaceAll = () => {
   if (props.sourceMode) {
     const textarea = sourceEditorRef.value
     if (!textarea) return
-    const source = textarea.value
     // 从后往前替换，避免前面的替换影响后面 match 的下标
-    let next = source
     for (let i = searchMatches.value.length - 1; i >= 0; i--) {
       const m = searchMatches.value[i]
-      next = next.slice(0, m.start) + replaceText.value + next.slice(m.end)
+      const source = sourceProjection.value.text
+      applySourceDisplay(source.slice(0, m.start) + replaceText.value + source.slice(m.end))
     }
-    editorContent.value = next
     nextTick(() => runSearch())
   } else {
     const ok = mdEditorRef.value?.replaceSearchMatches(searchMatches.value, replaceText.value) ?? false
@@ -2827,6 +2873,7 @@ onMounted(() => {
   void loadShortcuts()
 })
 onBeforeUnmount(() => {
+  cancelMediaSize(true)
   flushOnLeave()
   document.removeEventListener('visibilitychange', onVisibilityChange)
   // 注册在 window 捕获阶段（见 onMounted），移除时必须用同一个目标，否则监听器会泄漏
@@ -2857,7 +2904,12 @@ const onDocumentSelectionChange = (event: Event) => {
   }
 }
 
-defineExpose({ setNoteTitle, sidebarCollapsed, toggleSidebar, reloadFromNote, hasPendingEdits, getReadingPosition, restoreReadingPosition })
+const renderMarkdownForExport = (markdown: string): HTMLElement | null =>
+  mdEditorRef.value?.renderMarkdownForExport(markdown) ?? null
+
+const getMarkdownForExport = (): string => mdEditorRef.value?.getValue() ?? editorContent.value
+
+defineExpose({ setNoteTitle, sidebarCollapsed, toggleSidebar, renderMarkdownForExport, getMarkdownForExport })
 
 let lastFallbackNoteId: unknown = Symbol('initial-note')
 watchNoteTitleFallback(
@@ -3648,90 +3700,6 @@ watchNoteTitleFallback(
   width: min(240px, calc(100vw - 24px));
 }
 
-/* 媒体插入尺寸面板 */
-.note-media-size-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 10001;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(8, 6, 20, 0.55);
-  backdrop-filter: blur(2px);
-}
-
-.note-media-size-dialog {
-  width: min(320px, calc(100vw - 32px));
-  padding: 16px;
-  border: 1px solid rgba(196, 181, 253, 0.22);
-  border-radius: 14px;
-  background: rgba(28, 25, 54, 0.98);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
-}
-
-.note-media-size-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 12px;
-  color: #f4f1ff;
-  font-size: 14px;
-  font-weight: 650;
-}
-
-.note-media-size-meta {
-  overflow: hidden;
-  max-width: 55%;
-  color: rgba(245, 243, 255, 0.5);
-  font-size: 11px;
-  font-weight: 400;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.note-media-size-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.note-media-size-row label {
-  flex: 0 0 76px;
-  color: rgba(245, 243, 255, 0.75);
-  font-size: 12px;
-}
-
-.note-media-size-row input {
-  flex: 1;
-  min-width: 0;
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid rgba(196, 181, 253, 0.2);
-  border-radius: 8px;
-  color: #f4f1ff;
-  background: rgba(255, 255, 255, 0.05);
-  font-size: 13px;
-}
-
-.note-media-size-row input:focus {
-  border-color: rgba(167, 139, 250, 0.6);
-  outline: none;
-}
-
-.note-media-size-hint {
-  margin: 2px 0 14px;
-  color: rgba(245, 243, 255, 0.45);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.note-media-size-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
 
 .note-text-menu-header {
   display: flex;
@@ -4220,6 +4188,19 @@ watchNoteTitleFallback(
   width: 16px;
   height: 16px;
   font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  color: inherit;
+}
+
+/* 行内公式按钮的 Σ 符号：与块级公式的 { } 图标区分 */
+.menubar-formula-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 14px;
   font-weight: 700;
   line-height: 1;
   color: inherit;
