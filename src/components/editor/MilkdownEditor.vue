@@ -2557,23 +2557,8 @@ const renderMarkdownForExport = (markdown: string): HTMLElement | null => {
       if (size?.fileName) image.setAttribute('data-esd-name', size.fileName)
     })
 
-    const mediaType = view.state.schema.nodes[ESD_MEDIA_NODE]
     rendered.querySelectorAll<HTMLMediaElement>('video, audio').forEach(media => {
-      if (!mediaType) return
-      const source = media.getAttribute('data-media-ref') || media.getAttribute('src') || ''
-      const mediaNode = mediaType.create({
-        kind: media.tagName.toLowerCase() === 'audio' ? 'audio' : 'video',
-        src: source,
-        width: media.getAttribute('width'),
-        height: media.getAttribute('height'),
-        name: media.getAttribute('data-esd-name') || '',
-        aspectLocked: media.getAttribute('data-esd-aspect-locked') === 'true',
-        layout: media.getAttribute('data-esd-layout') === 'standalone' ? 'standalone' : 'flow',
-      })
-      const nodeView = new MediaNodeView(mediaNode)
-      const player = nodeView.dom.cloneNode(true)
-      nodeView.destroy()
-      media.replaceWith(player)
+      media.remove()
     })
     return rendered
   } catch (error) {

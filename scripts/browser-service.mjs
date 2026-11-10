@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import YAML from 'yaml'
 
@@ -98,7 +98,17 @@ function legacyMediaDirectory(scope) {
 }
 
 function notesLibraryMetadataDirectory(root, create = false) {
-  const directory = path.join(root, '.earth-survival-diary')
+  const resolvedRoot = assertNotesLibraryRoot(path.resolve(root))
+  if (!isUsableNotesLibraryRoot(resolvedRoot)) fail('笔记库文件夹已不可用，请重新选择笔记库位置')
+
+  // Windows 和常见 macOS 文件系统不区分大小写，但部分 Linux / WSL
+  // 笔记库会保留目录名大小写。按库根目录中的实际名称定位，避免所有
+  // 库级元数据都误读成“目录不存在”并在另一个拼写下新建空目录。
+  const matchingEntries = fs.readdirSync(resolvedRoot, { withFileTypes: true })
+    .filter(entry => entry.name.toLowerCase() === '.earth-survival-diary')
+  if (matchingEntries.length > 1) fail('笔记库中存在多个大小写不同的索引目录，请保留一个 .earth-survival-diary 目录')
+  const directoryName = matchingEntries[0]?.name || '.earth-survival-diary'
+  const directory = path.join(resolvedRoot, directoryName)
   try {
     const stat = fs.lstatSync(directory)
     if (stat.isSymbolicLink() || !stat.isDirectory()) fail('笔记库索引目录必须是普通文件夹')
@@ -229,6 +239,98 @@ function isUsableNotesLibraryRoot(root) {
   }
 }
 
+function pinnedNoteTabsPath(scope, libraryId, create = false) {
+  validateNoteScope(scope)
+  if (typeof libraryId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(libraryId)) fail('笔记库编号无效')
+  const library = readNotesLibraryConfig(scope)?.libraries.find(item => item.id === libraryId)
+  if (!library) fail('找不到要读取的笔记库')
+  const root = assertNotesLibraryRoot(library.rootPath)
+  if (!isUsableNotesLibraryRoot(root)) return null
+  const directory = notesLibraryMetadataDirectory(root, create)
+  const filePath = path.join(directory, 'tabs.yaml')
+  try {
+    const stat = fs.lstatSync(filePath)
+    if (stat.isSymbolicLink() || !stat.isFile()) fail('笔记标签状态文件必须是普通文件')
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+    if (!create) return null
+  }
+  return filePath
+}
+
+function favoriteFoldersPath(scope, libraryId, create = false) {
+  validateNoteScope(scope)
+  if (typeof libraryId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(libraryId)) fail('笔记库编号无效')
+  const library = readNotesLibraryConfig(scope)?.libraries.find(item => item.id === libraryId)
+  if (!library) fail('找不到要读取的笔记库')
+  const root = assertNotesLibraryRoot(library.rootPath)
+  if (!isUsableNotesLibraryRoot(root)) return null
+  const directory = notesLibraryMetadataDirectory(root, create)
+  const filePath = path.join(directory, 'folders.yaml')
+  try {
+    const stat = fs.lstatSync(filePath)
+    if (stat.isSymbolicLink() || !stat.isFile()) fail('文件夹收藏状态文件必须是普通文件')
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+    if (!create) return null
+  }
+  return filePath
+}
+
+function normalizeFavoriteFolderPaths(value) {
+  const paths = Array.isArray(value) ? value : value?.folderPaths
+  if (!Array.isArray(paths)) return []
+  return [...new Set(paths.filter(item => typeof item === 'string').map(normalizeFolderPath).filter(Boolean))]
+}
+
+function readFavoriteFolderPaths(scope, libraryId) {
+  const filePath = favoriteFoldersPath(scope, libraryId)
+  if (!filePath) return []
+  try { return normalizeFavoriteFolderPaths(YAML.parse(fs.readFileSync(filePath, 'utf8'))) }
+  catch (error) { if (error.code === 'ENOENT') return []; throw error }
+}
+
+function writeFavoriteFolderPaths(scope, libraryId, folderPaths) {
+  const normalized = normalizeFavoriteFolderPaths(folderPaths)
+  const filePath = favoriteFoldersPath(scope, libraryId, true)
+  if (!filePath) fail('笔记库文件夹不可用')
+  atomicWrite(filePath, YAML.stringify({ version: 1, folderPaths: normalized }, { lineWidth: 0 }), 'utf8')
+  return true
+}
+
+function normalizePinnedNoteIds(value) {
+  if (!Array.isArray(value)) fail('固定笔记标签状态无效')
+  const ids = []
+  const seen = new Set()
+  for (const id of value) {
+    if (typeof id !== 'string' || !id.trim() || id.length > 512 || /[\u0000-\u001f]/.test(id)) continue
+    if (seen.has(id)) continue
+    seen.add(id)
+    ids.push(id)
+  }
+  return ids
+}
+
+function readPinnedNoteTabIds(scope, libraryId) {
+  const filePath = pinnedNoteTabsPath(scope, libraryId)
+  if (!filePath) return []
+  try {
+    const value = YAML.parse(fs.readFileSync(filePath, 'utf8'))
+    return normalizePinnedNoteIds(Array.isArray(value) ? value : value?.pinnedNoteIds || [])
+  } catch (error) {
+    if (error.code === 'ENOENT') return []
+    throw error
+  }
+}
+
+function writePinnedNoteTabIds(scope, libraryId, pinnedNoteIds) {
+  const normalized = normalizePinnedNoteIds(pinnedNoteIds)
+  const filePath = pinnedNoteTabsPath(scope, libraryId, true)
+  if (!filePath) fail('笔记库文件夹不可用')
+  atomicWrite(filePath, YAML.stringify({ version: 1, pinnedNoteIds: normalized }, { lineWidth: 0 }), 'utf8')
+  return true
+}
+
 function normalizeFolderPath(folderPath) {
   if (folderPath == null || folderPath === '') return ''
   if (typeof folderPath !== 'string' || folderPath.length > 1024) fail('笔记文件夹路径无效')
@@ -241,10 +343,6 @@ function normalizeFolderPath(folderPath) {
     if (segment.toLowerCase() === '.earth-survival-diary') fail('此名称保留给笔记库索引目录')
   }
   return segments.join('/')
-}
-
-function topLevelFolderPath(folderPath) {
-  return normalizeFolderPath(folderPath).split('/')[0] || ''
 }
 
 function resolveLibraryDirectory(root, folderPath, create = false) {
@@ -292,6 +390,239 @@ function atomicWrite(filePath, content, encoding) {
   } catch (error) {
     try { fs.unlinkSync(temporary) } catch {}
     throw error
+  }
+}
+
+function notesTrashManifestPath(root) {
+  return path.join(notesLibraryMetadataDirectory(root), 'trash.yaml')
+}
+
+function readNotesTrashState(root) {
+  const filePath = notesTrashManifestPath(root)
+  try {
+    const stat = fs.lstatSync(filePath)
+    if (stat.isSymbolicLink() || !stat.isFile()) fail('笔记回收站索引必须是普通文件')
+    const value = YAML.parse(fs.readFileSync(filePath, 'utf8'))
+    const notes = Array.isArray(value) ? value : value && typeof value === 'object' && Array.isArray(value.notes) ? value.notes : []
+    const systemItems = new Map()
+    for (const item of Array.isArray(value?.systemItems) ? value.systemItems : []) {
+      if (!item || typeof item.noteId !== 'string' || !item.noteId || typeof item.originalPath !== 'string' || !path.isAbsolute(item.originalPath)) continue
+      const originalPath = path.resolve(item.originalPath)
+      if (!isPathWithin(root, originalPath)) continue
+      systemItems.set(item.noteId, originalPath)
+    }
+    return {
+      notes: notes.filter(note => note && typeof note === 'object' && typeof note.id === 'string' && note.id),
+      systemItems,
+    }
+  } catch (error) {
+    if (error.code === 'ENOENT') return { notes: [], systemItems: new Map() }
+    throw error
+  }
+}
+
+function readNotesTrash(root) {
+  return readNotesTrashState(root).notes
+}
+
+function writeNotesTrash(root, notes, systemItems = new Map()) {
+  const directory = notesLibraryMetadataDirectory(root, true)
+  const entries = systemItems instanceof Map ? [...systemItems].map(([noteId, originalPath]) => ({ noteId, originalPath })) : systemItems
+  atomicWrite(path.join(directory, 'trash.yaml'), YAML.stringify({ version: 2, notes, systemItems: entries }, { lineWidth: 0 }), 'utf8')
+}
+
+let cachedWindowsUserSid
+function getCurrentWindowsUserSid() {
+  if (cachedWindowsUserSid !== undefined) return cachedWindowsUserSid
+  const identity = spawnSync('whoami.exe', ['/user', '/fo', 'csv', '/nh'], { encoding: 'utf8', windowsHide: true, timeout: 5000 })
+  const match = identity.status === 0 ? String(identity.stdout || '').match(/S-1-\d+(?:-\d+)+/i) : null
+  cachedWindowsUserSid = match ? match[0] : null
+  return cachedWindowsUserSid
+}
+
+function scanSystemRecycleBin(volumeRoot) {
+  if (process.platform !== 'win32') return { status: 'missing', items: new Map() }
+  const userSid = getCurrentWindowsUserSid()
+  if (!userSid) return { status: 'unavailable', items: new Map() }
+  const recycleRoot = path.join(volumeRoot, '$Recycle.Bin')
+  const directory = path.join(recycleRoot, userSid)
+  let items
+  try {
+    // Inspect only the current Windows user's bin. Other SID directories may be
+    // inaccessible and must not make an incomplete scan look authoritative.
+    items = fs.readdirSync(directory, { withFileTypes: true }).filter(item => item.isFile() && item.name.startsWith('$I'))
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      try {
+        fs.accessSync(volumeRoot, fs.constants.R_OK)
+        return { status: 'available', items: new Map() }
+      } catch { return { status: 'unavailable', items: new Map() } }
+    }
+    return { status: 'unavailable', items: new Map() }
+  }
+  const itemsByOriginalPath = new Map()
+  let incomplete = false
+  for (const item of items) {
+    const infoPath = path.join(directory, item.name)
+    try {
+      const bytes = fs.readFileSync(infoPath)
+      if (bytes.length < 28) { incomplete = true; continue }
+      const pathLength = bytes.readUInt32LE(24)
+      if (!pathLength || pathLength > 32767 || 28 + pathLength * 2 > bytes.length) { incomplete = true; continue }
+      const pathStart = 28
+      const pathEnd = pathStart + pathLength * 2
+      const sourcePath = bytes.subarray(pathStart, pathEnd).toString('utf16le').replace(/\u0000+$/g, '')
+      if (!path.isAbsolute(sourcePath)) { incomplete = true; continue }
+      const payloadPath = path.join(directory, '$R' + item.name.slice(2))
+      const key = noteFilePathKey(sourcePath)
+      const match = { status: 'found', originalPath: path.resolve(sourcePath), infoPath, payloadPath, payloadExists: fs.existsSync(payloadPath) }
+      const previous = itemsByOriginalPath.get(key)
+      if (!previous || (!previous.payloadExists && match.payloadExists)) itemsByOriginalPath.set(key, match)
+    } catch { incomplete = true }
+  }
+  return { status: incomplete ? 'unavailable' : 'available', items: itemsByOriginalPath }
+}
+
+function findSystemRecycleBinItem(originalPath, index = null) {
+  if (process.platform !== 'win32') return { status: 'missing' }
+  const expectedPath = path.resolve(originalPath)
+  const scan = index || scanSystemRecycleBin(path.parse(expectedPath).root)
+  return scan.items.get(noteFilePathKey(expectedPath)) || { status: scan.status === 'available' ? 'missing' : 'unavailable' }
+}
+
+function findSystemRecycleBinItemForNote(root, note, index = null) {
+  if (process.platform !== 'win32') return { status: 'missing' }
+  const folderPath = normalizeFolderPath(note.folderPath)
+  const directory = path.resolve(root, ...folderPath.split('/').filter(Boolean))
+  const titleBase = noteFilenameBase(note.title)
+  const candidates = [
+    ...Array.from({ length: 8 }, (_, index) => `${titleBase}${index ? ` (${index + 1})` : ''}.md`),
+    `${encodeSegment(note.id)}.md`,
+  ]
+  for (const filename of candidates) {
+    const originalPath = path.join(directory, filename)
+    const item = findSystemRecycleBinItem(originalPath, index)
+    if (item.status === 'found') return { ...item, originalPath }
+  }
+  return { status: index?.status === 'available' ? 'missing' : 'unavailable' }
+}
+
+function removeSystemRecycleBinItem(originalPath) {
+  const item = findSystemRecycleBinItem(originalPath)
+  if (item.status === 'unavailable') fail('无法读取系统回收站，笔记暂未彻底删除')
+  if (item.status !== 'found') return false
+  try {
+    if (item.payloadExists) fs.rmSync(item.payloadPath, { recursive: true, force: true })
+    fs.rmSync(item.infoPath, { force: true })
+  } catch (error) {
+    fail(`无法从系统回收站彻底删除笔记：${error.message || error}`)
+  }
+  return true
+}
+
+function reconcileNotesTrashWithSystem(root, activeEntries, state) {
+  if (process.platform !== 'win32') return state.notes
+  const activeIds = new Set(activeEntries.map(entry => entry.note.id))
+  const remaining = []
+  const systemItems = new Map(state.systemItems)
+  const recycleBinIndex = scanSystemRecycleBin(path.parse(root).root)
+  let changed = false
+  for (const note of state.notes) {
+    let originalPath = systemItems.get(note.id)
+    let item = originalPath ? findSystemRecycleBinItem(originalPath, recycleBinIndex) : findSystemRecycleBinItemForNote(root, note, recycleBinIndex)
+    if (!originalPath && item.status === 'found') {
+      originalPath = item.originalPath
+      systemItems.set(note.id, originalPath)
+      changed = true
+    }
+    if (!originalPath) {
+      if (item.status === 'unavailable') remaining.push(note)
+      else changed = true
+      continue
+    }
+    if (activeIds.has(note.id)) {
+      if (item.status === 'found') {
+        try { removeSystemRecycleBinItem(originalPath) }
+        catch (error) {
+          console.warn(`[笔记回收站] 恢复笔记后未能清理系统回收站副本：${originalPath}`, error.message || error)
+          remaining.push(note)
+          continue
+        }
+      } else if (item.status === 'unavailable') {
+        remaining.push(note)
+        continue
+      }
+      systemItems.delete(note.id)
+      changed = true
+      continue
+    }
+    if (item.status === 'unavailable' || (item.status === 'found' && item.payloadExists)) {
+      remaining.push(note)
+      continue
+    }
+    if (item.status === 'found') {
+      try { fs.rmSync(item.infoPath, { force: true }) } catch {}
+    }
+    systemItems.delete(note.id)
+    changed = true
+  }
+  if (changed) writeNotesTrash(root, remaining, systemItems)
+  return remaining
+}
+
+function moveFileToSystemRecycleBin(filePath) {
+  if (!fs.existsSync(filePath)) return
+  let command
+  let args
+  if (process.platform === 'win32') {
+    const encodedPath = Buffer.from(filePath, 'utf8').toString('base64')
+    command = 'powershell.exe'
+    const recycleScript = `
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$filePath = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encodedPath}'))
+$source = @'
+using System;
+using System.Runtime.InteropServices;
+public static class EsdRecycleFile {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct SHFILEOPSTRUCT {
+        public IntPtr hwnd;
+        public uint wFunc;
+        [MarshalAs(UnmanagedType.LPWStr)] public string pFrom;
+        [MarshalAs(UnmanagedType.LPWStr)] public string pTo;
+        public ushort fFlags;
+        [MarshalAs(UnmanagedType.Bool)] public bool fAnyOperationsAborted;
+        public IntPtr hNameMappings;
+        [MarshalAs(UnmanagedType.LPWStr)] public string lpszProgressTitle;
+    }
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern int SHFileOperation(ref SHFILEOPSTRUCT operation);
+}
+'@
+Add-Type -TypeDefinition $source -ErrorAction Stop
+$operation = New-Object 'EsdRecycleFile+SHFILEOPSTRUCT'
+$operation.wFunc = 3
+$operation.pFrom = $filePath + [char]0 + [char]0
+$operation.fFlags = 0x454
+$result = [EsdRecycleFile]::SHFileOperation([ref]$operation)
+if ($result -ne 0) { throw "系统回收站操作失败，错误码：$result" }
+if ($operation.fAnyOperationsAborted) { throw '系统回收站操作已取消' }
+if (Test-Path -LiteralPath $filePath) { throw '文件仍在原位置，未能移入系统回收站' }
+`
+    args = ['-NoProfile', '-NonInteractive', '-Command', `try { ${recycleScript}; exit 0 } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }`]
+  } else if (process.platform === 'darwin') {
+    const escaped = filePath.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+    command = 'osascript'
+    args = ['-e', `tell application "Finder" to delete POSIX file "${escaped}"`]
+  } else {
+    command = 'gio'
+    args = ['trash', filePath]
+  }
+  const result = spawnSync(command, args, { encoding: 'utf8', windowsHide: true, timeout: 30000 })
+  if (result.error || result.status !== 0) {
+    const detail = result.error?.message || String(result.stderr || '').trim()
+    fail(`无法将笔记文件移入系统回收站${detail ? `：${detail}` : ''}`)
   }
 }
 
@@ -383,7 +714,7 @@ function normalizeStoredTags(tags) {
   for (const tag of normalized) {
     if (!tag.id || !tag.name.trim() || ids.has(tag.id)) fail('笔记标签编号无效或重复')
     const nameKey = `${tag.folderPath}\u0000${tag.name}`
-    if (names.has(nameKey)) fail(`文件夹「${tag.folderPath || '未分类'}」中存在同名标签「${tag.name}」`)
+    if (names.has(nameKey)) fail(`文件夹「${tag.folderPath || '笔记库根目录'}」中存在同名标签「${tag.name}」`)
     ids.add(tag.id)
     names.add(nameKey)
   }
@@ -456,6 +787,40 @@ function serializeMarkdownNote(filePath, note, order) {
   atomicWrite(filePath, `---\n${YAML.stringify(metadata, { lineWidth: 0 })}---\n${content}`, 'utf8')
 }
 
+function noteFilenameBase(title) {
+  let value = String(title || '新笔记').normalize('NFC')
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/[. ]+$/g, '')
+    .trim()
+    .slice(0, 140)
+  if (!value) value = '新笔记'
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(value)) value = `_${value}`
+  return value
+}
+
+function noteFilePathKey(filePath) {
+  const resolved = path.resolve(filePath)
+  return process.platform === 'win32' ? resolved.toLocaleLowerCase('en-US') : resolved
+}
+
+function titleBasedNoteFilePath(directory, note, previousPathById, previousPathOwners, allocatedPaths) {
+  const oldPath = previousPathById.get(note.id)
+  const base = noteFilenameBase(note.title)
+  for (let suffix = 1; suffix < 10000; suffix++) {
+    const filename = `${base}${suffix === 1 ? '' : ` (${suffix})`}.md`
+    const candidate = path.join(directory, filename)
+    const key = noteFilePathKey(candidate)
+    const owner = previousPathOwners.get(key)
+    const sameOldPath = !!oldPath && samePath(candidate, oldPath)
+    if (allocatedPaths.has(key) || (owner && owner !== note.id)) continue
+    if (fs.existsSync(candidate) && !sameOldPath) continue
+    allocatedPaths.add(key)
+    return candidate
+  }
+  fail(`无法为笔记「${note.title || note.id}」生成不重复的文件名`)
+}
+
 function collectNoteFilesFromRoot(root) {
   const entries = []
   const folders = new Set()
@@ -517,7 +882,13 @@ function currentNoteFiles(scope) {
 }
 
 function readNotes(scope) {
-  const notes = currentNoteFiles(scope).map(entry => entry.note)
+  const activeEntries = currentNoteFiles(scope)
+  const activeNotes = activeEntries.map(entry => entry.note)
+  const root = libraryRoot(scope)
+  const trashState = isUsableNotesLibraryRoot(root) ? readNotesTrashState(root) : { notes: [], systemItems: new Map() }
+  const trashedNotes = isUsableNotesLibraryRoot(root) ? reconcileNotesTrashWithSystem(root, activeEntries, trashState) : []
+  const trashIds = new Set(trashedNotes.map(note => note.id))
+  const notes = [...activeNotes.filter(note => !trashIds.has(note.id)), ...trashedNotes]
   return notes.sort((a, b) => Number(a._storageOrder ?? Infinity) - Number(b._storageOrder ?? Infinity) || String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
 }
 
@@ -551,30 +922,179 @@ function writeNotes(scope, notes) {
   if (!isUsableNotesLibraryRoot(root)) fail('笔记库文件夹已不可用，请重新选择笔记库位置')
   const tagIndex = readTags(scope)
   const tags = normalizeStoredTags(tagIndex.value || [])
+  const tagsById = new Map(tags.map(tag => [tag.id, tag]))
+  const tagsByScopeName = new Map(tags.map(tag => [`${tag.folderPath}\u0000${tag.name}`, tag]))
   const previous = collectNoteFilesFromRoot(root).entries
-  const previousById = new Map(previous.map(entry => [entry.note.id, entry.note]))
+  const previousPathById = new Map(previous.map(item => [item.note.id, item.filePath]))
+  const previousPathOwners = new Map(previous.map(item => [noteFilePathKey(item.filePath), item.note.id]))
+  const previousTrashState = readNotesTrashState(root)
+  const previousTrashNotes = previousTrashState.notes
+  const previousSystemItems = previousTrashState.systemItems
   const retained = new Set()
   const ids = new Set()
+  const serializedNotes = []
+  const trashNotes = []
+  let tagsChanged = false
   notes.forEach((note, index) => {
     if (!note || typeof note.id !== 'string' || !note.id) fail('本地笔记编号无效')
     if (ids.has(note.id)) fail(`笔记列表中存在重复编号「${note.id}」`)
     ids.add(note.id)
     const folderPath = normalizeFolderPath(note.folderPath)
-    const previousNote = previousById.get(note.id)
-    if (previousNote && topLevelFolderPath(previousNote.folderPath) !== topLevelFolderPath(folderPath)) {
-      fail(`不能跨最外层文件夹移动笔记「${note.title || note.id}」；请在当前笔记库内的同一最外层文件夹中移动`)
-    }
     if (note.tagIds != null && !Array.isArray(note.tagIds)) fail('笔记标签编号列表无效')
-    const noteTagIds = Array.isArray(note.tagIds) ? note.tagIds.map(String) : []
-    const scopedTagIds = new Set(tags.filter(tag => tag.folderPath === folderPath).map(tag => tag.id))
-    if (noteTagIds.some(tagId => !scopedTagIds.has(tagId))) fail(`笔记「${note.title || note.id}」包含不属于当前文件夹的标签`)
-    const directory = resolveLibraryDirectory(root, folderPath, true)
-    const filePath = path.join(directory, encodeSegment(note.id) + '.md')
-    retained.add(path.resolve(filePath))
-    serializeMarkdownNote(filePath, { ...note, folderPath, tagIds: noteTagIds }, index)
+    const noteTagIds = []
+    for (const rawTagId of Array.isArray(note.tagIds) ? note.tagIds : []) {
+      const tagId = String(rawTagId)
+      const sourceTag = tagsById.get(tagId)
+      if (!sourceTag) fail(`笔记「${note.title || note.id}」引用了不存在的标签`)
+      if (sourceTag.folderPath === folderPath) {
+        if (!noteTagIds.includes(sourceTag.id)) noteTagIds.push(sourceTag.id)
+        continue
+      }
+      const nameKey = `${folderPath}\u0000${sourceTag.name}`
+      let destinationTag = tagsByScopeName.get(nameKey)
+      if (!destinationTag) {
+        let destinationId = `tag_${Date.now()}${crypto.randomBytes(4).toString('hex')}`
+        while (tagsById.has(destinationId)) destinationId = `tag_${Date.now()}${crypto.randomBytes(4).toString('hex')}`
+        destinationTag = { ...sourceTag, id: destinationId, folderPath, order: tags.filter(tag => tag.folderPath === folderPath).length }
+        tags.push(destinationTag)
+        tagsById.set(destinationId, destinationTag)
+        tagsByScopeName.set(nameKey, destinationTag)
+        tagsChanged = true
+      }
+      if (!noteTagIds.includes(destinationTag.id)) noteTagIds.push(destinationTag.id)
+    }
+    const normalizedNote = { ...note, folderPath, tagIds: noteTagIds }
+    if (normalizedNote.trashedAt) trashNotes.push(normalizedNote)
+    else serializedNotes.push({ note: normalizedNote, index })
   })
-  for (const item of previous) if (!retained.has(path.resolve(item.filePath))) fs.unlinkSync(item.filePath)
+  if (tagsChanged) writeTags(scope, tags)
+  const allocatedPaths = new Set()
+  for (const { note, index } of serializedNotes) {
+    const directory = resolveLibraryDirectory(root, note.folderPath, true)
+    const filePath = titleBasedNoteFilePath(directory, note, previousPathById, previousPathOwners, allocatedPaths)
+    retained.add(path.resolve(filePath))
+    serializeMarkdownNote(filePath, note, index)
+  }
+  const trashedIds = new Set(trashNotes.map(note => note.id))
+  const previousTrashIds = new Set(previousTrashNotes.map(note => note.id))
+  const nextSystemItems = new Map([...previousSystemItems].filter(([noteId]) => trashedIds.has(noteId)))
+  for (const item of previous) {
+    if (trashedIds.has(item.note.id) && !nextSystemItems.has(item.note.id)) nextSystemItems.set(item.note.id, item.filePath)
+  }
+  for (const [noteId, originalPath] of previousSystemItems) {
+    if (trashedIds.has(noteId)) continue
+    removeSystemRecycleBinItem(originalPath)
+    nextSystemItems.delete(noteId)
+  }
+  writeNotesTrash(root, trashNotes, nextSystemItems)
+  const movedToSystemTrash = new Set()
+  for (const item of previous) {
+    if (retained.has(path.resolve(item.filePath))) continue
+    if (trashedIds.has(item.note.id)) {
+      // A previously archived note may still have a physical Markdown file
+      // after an earlier recycle-bin failure. Keep its manifest snapshot and
+      // make a best-effort cleanup so an unrelated create/duplicate operation
+      // cannot fail because of this stale file.
+      if (previousTrashIds.has(item.note.id)) {
+        try {
+          moveFileToSystemRecycleBin(item.filePath)
+          movedToSystemTrash.add(item.note.id)
+          nextSystemItems.set(item.note.id, item.filePath)
+        } catch (error) {
+          console.warn(`[笔记回收站] 归档文件仍在磁盘上，稍后可再次清理：${item.filePath}`, error.message || error)
+        }
+        continue
+      }
+      try {
+        moveFileToSystemRecycleBin(item.filePath)
+        movedToSystemTrash.add(item.note.id)
+        nextSystemItems.set(item.note.id, item.filePath)
+      } catch (error) {
+        // If the OS recycle operation fails, keep successful prior moves in the
+        // app trash manifest while restoring failed entries to their on-disk
+        // active files. This avoids reporting a failed soft-delete while the
+        // manifest silently hides a still-present Markdown file.
+        const recoverableTrash = [
+          ...previousTrashNotes,
+          ...trashNotes.filter(note => movedToSystemTrash.has(note.id) && !previousTrashIds.has(note.id)),
+        ]
+        const recoverableIds = new Set(recoverableTrash.map(note => note.id))
+        const recoverableSystemItems = new Map([...nextSystemItems].filter(([noteId]) => recoverableIds.has(noteId)))
+        try { writeNotesTrash(root, recoverableTrash, recoverableSystemItems) } catch {}
+        throw error
+      }
+    } else fs.unlinkSync(item.filePath)
+  }
+  writeNotesTrash(root, trashNotes, nextSystemItems)
   pruneUnreferencedMedia(scope)
+}
+
+function findPdfBrowserExecutable() {
+  const configured = [process.env.PUPPETEER_EXECUTABLE_PATH, process.env.CHROME_PATH, process.env.ESD_CHROME_PATH]
+    .filter(Boolean)
+    .map(value => String(value).replace(/^"|"$/g, ''))
+  const candidates = process.platform === 'win32'
+    ? [
+      ...configured,
+      path.join(process.env.PROGRAMFILES || 'C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      path.join(process.env.PROGRAMFILES || 'C:\\Program Files', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+      path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+      path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    ]
+    : [
+      ...configured,
+      '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    ]
+  return candidates.find(candidate => fs.existsSync(candidate)) || null
+}
+
+async function exportNotesPdf(title, html, settings = {}) {
+  const executablePath = findPdfBrowserExecutable()
+  if (!executablePath) fail('找不到可用于生成 PDF 的 Chrome 或 Edge，请安装浏览器或设置 CHROME_PATH')
+  const puppeteer = require('puppeteer-core')
+  const downloads = path.join(process.env.USERPROFILE || os.homedir(), 'Downloads')
+  fs.mkdirSync(downloads, { recursive: true })
+  const safeName = String(title || '笔记').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').trim().slice(0, 160) || '笔记'
+  let outputPath = path.join(downloads, `${safeName}.pdf`)
+  let index = 2
+  while (fs.existsSync(outputPath)) outputPath = path.join(downloads, `${safeName} (${index++}).pdf`)
+  const browser = await puppeteer.launch({
+    executablePath,
+    headless: true,
+    args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
+  })
+  try {
+    const page = await browser.newPage()
+    page.setDefaultTimeout(15000)
+    await page.setContent(String(html || ''), { waitUntil: 'domcontentloaded', timeout: 30000 })
+    await page.evaluate(async () => {
+      await Promise.race([document.fonts?.ready || Promise.resolve(), new Promise(resolve => setTimeout(resolve, 5000))])
+      await Promise.all(Array.from(document.images).map(image => image.complete
+        ? Promise.resolve()
+        : new Promise(resolve => {
+          image.addEventListener('load', resolve, { once: true })
+          image.addEventListener('error', resolve, { once: true })
+          setTimeout(resolve, 5000)
+        })))
+    })
+    const margin = Math.max(0, Math.min(40, Number(settings.margin) || 0))
+    const scale = Math.max(0.6, Math.min(1.2, (Number(settings.scale) || 100) / 100))
+    const format = ['A4', 'Letter', 'Legal'].includes(String(settings.pageSize)) ? String(settings.pageSize) : 'Letter'
+    await page.pdf({
+      path: outputPath,
+      format,
+      landscape: !!settings.landscape,
+      printBackground: true,
+      scale,
+      margin: { top: `${margin}mm`, right: `${margin}mm`, bottom: `${margin}mm`, left: `${margin}mm` },
+    })
+    return outputPath
+  } finally {
+    await browser.close()
+  }
 }
 
 function validateNoteScope(scope) {
@@ -614,7 +1134,25 @@ function notesLibraryInfo(scope) {
   const activeLibrary = config?.libraries.find(library => library.id === config.activeId) || null
   const rootPath = activeLibrary ? assertNotesLibraryRoot(activeLibrary.rootPath) : null
   const rootExists = isUsableNotesLibraryRoot(rootPath)
-  const collection = rootExists ? collectNoteFilesFromRoot(rootPath) : { entries: [], folders: [] }
+  let collection = rootExists ? collectNoteFilesFromRoot(rootPath) : { entries: [], folders: [] }
+  if (rootExists) {
+    const storedNotes = readNotes(scope)
+    const activeNotes = storedNotes.filter(note => !note.trashedAt)
+    const previousPathById = new Map(collection.entries.map(item => [item.note.id, item.filePath]))
+    const previousPathOwners = new Map(collection.entries.map(item => [noteFilePathKey(item.filePath), item.note.id]))
+    const allocatedPaths = new Set()
+    const currentPathById = new Map(collection.entries.map(item => [item.note.id, item.filePath]))
+    const needsFilenameMigration = activeNotes.some(note => {
+      const directory = resolveLibraryDirectory(rootPath, normalizeFolderPath(note.folderPath), true)
+      const expectedPath = titleBasedNoteFilePath(directory, note, previousPathById, previousPathOwners, allocatedPaths)
+      const currentPath = currentPathById.get(note.id)
+      return !currentPath || !samePath(expectedPath, currentPath)
+    })
+    if (needsFilenameMigration) {
+      writeNotes(scope, storedNotes)
+      collection = collectNoteFilesFromRoot(rootPath)
+    }
+  }
   return {
     configured: !!activeLibrary,
     activeLibraryId: activeLibrary?.id || null,
@@ -856,6 +1394,24 @@ function switchNotesLibrary(scope, libraryId) {
   return notesLibraryInfo(scope)
 }
 
+function removeUnavailableNotesLibrary(scope, libraryId) {
+  validateNoteScope(scope)
+  if (typeof libraryId !== 'string' || !libraryId) fail('笔记库编号无效')
+  const config = readNotesLibraryConfig(scope)
+  const target = config?.libraries.find(library => library.id === libraryId)
+  if (!config || !target) fail('找不到要移除的笔记库')
+  if (isUsableNotesLibraryRoot(target.rootPath)) fail('该笔记库仍可用，请先切换到其他笔记库')
+
+  config.libraries = config.libraries.filter(library => library.id !== libraryId)
+  if (config.activeId === libraryId
+    || !config.libraries.some(library => library.id === config.activeId && isUsableNotesLibraryRoot(library.rootPath))) {
+    config.activeId = config.libraries.find(library => isUsableNotesLibraryRoot(library.rootPath))?.id || null
+  }
+  writeNotesLibraryConfig(scope, config)
+  console.info('[笔记库] 已从列表移除不可用笔记库：' + target.rootPath)
+  return notesLibraryInfo(scope)
+}
+
 function createNotesFolder(scope, folderPath) {
   validateNoteScope(scope)
   const root = libraryRoot(scope)
@@ -876,10 +1432,6 @@ function renameNotesFolder(scope, oldPath, newPath) {
   const from = normalizeFolderPath(oldPath)
   const to = normalizeFolderPath(newPath)
   if (!from || !to || from === to) fail('文件夹路径无效')
-  const fromTopLevel = topLevelFolderPath(from)
-  const toTopLevel = topLevelFolderPath(to)
-  const renamingTopLevelFolder = from === fromTopLevel && to === toTopLevel
-  if (fromTopLevel !== toTopLevel && !renamingTopLevelFolder) fail('不能把文件夹移动到其他最外层文件夹')
   const source = resolveLibraryDirectory(root, from)
   const target = resolveLibraryDirectory(root, to)
   if (isPathWithin(source, target) && !samePath(source, target)) fail('不能把文件夹移入自身子文件夹')
@@ -903,8 +1455,130 @@ function renameNotesFolder(scope, oldPath, newPath) {
     })
     writeTags(scope, tags)
   }
+  const config = readNotesLibraryConfig(scope)
+  const libraryId = config?.libraries.find(item => samePath(item.rootPath, root))?.id
+  if (libraryId) {
+    const favorites = readFavoriteFolderPaths(scope, libraryId)
+    const remapped = favorites.map(folderPath => folderPath === from || folderPath.startsWith(from + '/')
+      ? to + folderPath.slice(from.length)
+      : folderPath)
+    if (JSON.stringify(remapped) !== JSON.stringify(favorites)) writeFavoriteFolderPaths(scope, libraryId, remapped)
+  }
+  const trashState = readNotesTrashState(root)
+  const trashedNotes = trashState.notes
+  const remappedTrash = trashedNotes.map(note => {
+    const folderPath = normalizeFolderPath(note.folderPath)
+    return folderPath === from || folderPath.startsWith(from + '/')
+      ? { ...note, folderPath: to + folderPath.slice(from.length) }
+      : note
+  })
+  if (JSON.stringify(remappedTrash) !== JSON.stringify(trashedNotes)) writeNotesTrash(root, remappedTrash, trashState.systemItems)
   writeNotes(scope, readNotes(scope))
   return notesLibraryInfo(scope)
+}
+
+function duplicateNotesFolder(scope, sourcePath, targetPath) {
+  validateNoteScope(scope)
+  const root = libraryRoot(scope)
+  if (!root) fail('请先选择笔记库文件夹')
+  if (!isUsableNotesLibraryRoot(root)) fail('笔记库文件夹已不可用，请重新选择笔记库位置')
+  const from = normalizeFolderPath(sourcePath)
+  const to = normalizeFolderPath(targetPath)
+  if (!from || !to || from === to) fail('文件夹路径无效')
+  const sourceDirectory = resolveLibraryDirectory(root, from)
+  const targetDirectory = resolveLibraryDirectory(root, to)
+  if (!fs.existsSync(sourceDirectory)) fail('文件夹不存在')
+  if (isPathWithin(sourceDirectory, targetDirectory)) fail('不能把文件夹副本创建到源文件夹内部')
+  if (fs.existsSync(targetDirectory)) fail('目标文件夹已存在')
+
+  const tagIndex = normalizeStoredTags(readTags(scope).value || [])
+  const collection = collectNoteFilesFromRoot(root)
+  const sourceEntries = collection.entries.filter(({ note }) => note.folderPath === from || note.folderPath.startsWith(from + '/'))
+  const sourceFolders = collection.folders.filter(folder => folder === from || folder.startsWith(from + '/'))
+  const sourceTags = tagIndex.filter(tag => tag.folderPath === from || tag.folderPath.startsWith(from + '/'))
+  const usedTagIds = new Set(tagIndex.map(tag => tag.id))
+  const tagIdMap = new Map()
+  const mapFolder = folderPath => to + folderPath.slice(from.length)
+  const clonedTags = sourceTags.map(tag => {
+    let id = ''
+    do { id = 'tag_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16) } while (usedTagIds.has(id))
+    usedTagIds.add(id)
+    tagIdMap.set(tag.id, id)
+    return { ...tag, id, folderPath: mapFolder(tag.folderPath), order: tag.order }
+  })
+  const clonedNotes = sourceEntries.map(({ note }) => ({
+    ...note,
+    id: crypto.randomUUID(),
+    folderPath: mapFolder(note.folderPath),
+    tagIds: (note.tagIds || []).map(id => tagIdMap.get(id)).filter(id => !!id),
+    pinned: false,
+    _storageOrder: undefined,
+  }))
+  const existingNotes = readNotes(scope)
+  const originalTags = tagIndex
+  try {
+    fs.mkdirSync(targetDirectory, { recursive: true })
+    for (const folder of sourceFolders) resolveLibraryDirectory(root, mapFolder(folder), true)
+    writeTags(scope, [...tagIndex, ...clonedTags])
+    writeNotes(scope, [...existingNotes, ...clonedNotes])
+  } catch (error) {
+    try { writeTags(scope, originalTags) } catch {}
+    try { fs.rmSync(targetDirectory, { recursive: true, force: true }) } catch {}
+    throw error
+  }
+  return notesLibraryInfo(scope)
+}
+
+function resolveActiveLibraryPath(scope, relativePath) {
+  validateNoteScope(scope)
+  const root = libraryRoot(scope)
+  if (!root || !isUsableNotesLibraryRoot(root)) fail('笔记库文件夹不可用')
+  if (typeof relativePath !== 'string' || relativePath.length > 2048 || path.isAbsolute(relativePath)) fail('笔记库相对路径无效')
+  const normalized = relativePath.replace(/\\/g, '/')
+  const target = path.resolve(root, ...normalized.split('/').filter(Boolean))
+  if (!isPathWithin(root, target)) fail('文件路径超出笔记库')
+  let current = root
+  for (const segment of path.relative(root, target).split(path.sep).filter(Boolean)) {
+    current = path.join(current, segment)
+    const stat = fs.lstatSync(current)
+    if (stat.isSymbolicLink()) fail('笔记库不能通过符号链接访问文件')
+  }
+  return target
+}
+
+function getNoteLibraryNotePath(scope, noteId) {
+  validateNoteScope(scope)
+  const root = libraryRoot(scope)
+  if (!root || !isUsableNotesLibraryRoot(root)) fail('笔记库文件夹不可用')
+  const id = String(noteId || '')
+  const entry = collectNoteFilesFromRoot(root).entries.find(item => item.note.id === id)
+  if (!entry) fail('笔记文件不存在或已移入回收站', 404)
+  return path.relative(root, entry.filePath).replace(/\\/g, '/')
+}
+
+function launchPath(pathValue, reveal = false) {
+  const target = path.resolve(pathValue)
+  const stat = fs.statSync(target)
+  if (process.platform === 'win32') {
+    const command = path.join(process.env.WINDIR || 'C:\\Windows', 'explorer.exe')
+    const args = reveal
+      ? stat.isDirectory() ? [target] : ['/select,', target]
+      : [target]
+    const child = spawn(command, args, { detached: true, stdio: 'ignore' })
+    return new Promise((resolve, reject) => {
+      child.once('error', error => reject(new Error(`无法${reveal ? '在系统资源管理器中显示' : '使用默认应用打开'}：${error.message}`)))
+      child.once('spawn', () => { child.unref(); resolve(true) })
+    })
+  }
+  const command = process.platform === 'darwin' ? 'open' : 'xdg-open'
+  const args = reveal && !stat.isDirectory() && process.platform === 'darwin'
+    ? ['-R', target]
+    : [reveal && !stat.isDirectory() ? path.dirname(target) : target]
+  const child = spawn(command, args, { detached: true, stdio: 'ignore' })
+  return new Promise((resolve, reject) => {
+    child.once('error', reject)
+    child.once('spawn', () => { child.unref(); resolve(true) })
+  })
 }
 
 function deleteNotesFolder(scope, folderPath) {
@@ -921,6 +1595,13 @@ function deleteNotesFolder(scope, folderPath) {
     if (error.code === 'ENOENT') fail('文件夹不存在')
     if (error.code === 'ENOTEMPTY' || error.code === 'EEXIST') fail('文件夹中还有子文件或子文件夹，请先清理')
     throw error
+  }
+  const config = readNotesLibraryConfig(scope)
+  const libraryId = config?.libraries.find(item => samePath(item.rootPath, root))?.id
+  if (libraryId) {
+    const favorites = readFavoriteFolderPaths(scope, libraryId)
+    const next = favorites.filter(item => item !== normalized && !item.startsWith(normalized + '/'))
+    if (next.length !== favorites.length) writeFavoriteFolderPaths(scope, libraryId, next)
   }
   const tagIndex = readTags(scope)
   if (tagIndex.found) {
@@ -1043,6 +1724,9 @@ function removeData(key) {
     const root = libraryRoot(scope)
     const files = root && fs.existsSync(root) ? collectNoteFilesFromRoot(root).entries : collectLegacyNoteFiles(scope)
     for (const entry of files) fs.unlinkSync(entry.filePath)
+    if (isUsableNotesLibraryRoot(root)) {
+      try { fs.unlinkSync(notesTrashManifestPath(root)) } catch (error) { if (error.code !== 'ENOENT') throw error }
+    }
     pruneUnreferencedMedia(scope)
     return true
   }
@@ -1089,7 +1773,7 @@ function collectRecords(scope) {
   if (scope !== 'global') {
     const root = libraryRoot(scope)
     if (root && fs.existsSync(root)) {
-      for (const { note } of collectNoteFilesFromRoot(root).entries) output.push({ key: `${scope}:notes:note:${note.id}`, value: note })
+      for (const note of readNotes(scope)) output.push({ key: `${scope}:notes:note:${note.id}`, value: note })
     }
     const tags = readTags(scope)
     if (tags.found) output.push({ key: `${scope}:notes:tags`, value: tags.value })
@@ -1277,11 +1961,21 @@ async function invoke(method, args) {
       return collectRecords(scope).map(record => record.key).filter(key => key.startsWith(prefix))
     }
     case 'notes-library-info': return notesLibraryInfo(String(args[0] || ''))
+    case 'read-pinned-note-tab-ids': return readPinnedNoteTabIds(String(args[0] || ''), args[1])
+    case 'write-pinned-note-tab-ids': return await enqueueWrite(() => writePinnedNoteTabIds(String(args[0] || ''), args[1], args[2]))
+    case 'read-favorite-note-folder-paths': return readFavoriteFolderPaths(String(args[0] || ''), args[1])
+    case 'write-favorite-note-folder-paths': return await enqueueWrite(() => writeFavoriteFolderPaths(String(args[0] || ''), args[1], args[2]))
     case 'select-notes-library-folder': return await enqueueWrite(() => selectNotesLibraryFolder(String(args[0] || '')))
     case 'switch-notes-library': return await enqueueWrite(() => switchNotesLibrary(String(args[0] || ''), args[1]))
+    case 'remove-unavailable-notes-library': return await enqueueWrite(() => removeUnavailableNotesLibrary(String(args[0] || ''), args[1]))
     case 'create-notes-folder': return await enqueueWrite(() => createNotesFolder(String(args[0] || ''), args[1]))
     case 'rename-notes-folder': return await enqueueWrite(() => renameNotesFolder(String(args[0] || ''), args[1], args[2]))
+    case 'duplicate-notes-folder': return await enqueueWrite(() => duplicateNotesFolder(String(args[0] || ''), args[1], args[2]))
     case 'delete-notes-folder': return await enqueueWrite(() => deleteNotesFolder(String(args[0] || ''), args[1]))
+    case 'open-note-library-path': return launchPath(resolveActiveLibraryPath(String(args[0] || ''), args[1]))
+    case 'reveal-note-library-path': return launchPath(resolveActiveLibraryPath(String(args[0] || ''), args[1]), true)
+    case 'get-note-library-note-path': return getNoteLibraryNotePath(String(args[0] || ''), args[1])
+    case 'export-note-pdf': return await exportNotesPdf(args[0], args[1], args[2])
     case 'update-local-media-asset-metadata': {
       const [scope, assetId, patch] = args
       if (!/^[A-Za-z0-9_-]{1,128}$/.test(scope || '') || !/^[A-Za-z0-9_-]{1,128}$/.test(assetId || '')) fail('本地媒体数据键无效')

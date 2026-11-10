@@ -15,8 +15,7 @@
 // 「双重转义」兼容（重要）：
 //  富文本里手敲 \(x\) 时，PM 文本是单反斜杠形态；但 Cream 序列化
 // （remark-stringify）会把 `\` 保守地再转义一层，产出 \\(x\\)。
-//  因此进编辑器方向的转换必须同时识别 \(…\) 与 \\(…\\) 两种形态，
-//  统一折算成单反斜杠后再转 $…$；否则手敲的公式永远无法渲染。
+//  进编辑器方向只折叠被多转义的定界符，再转为 $…$；公式正文保持原样。
 //
 // 安全性：正则严格要求成对定界符，单个 `\(` 或 `$` 不会被改写；
 // 表达式内部的反斜杠（\leq 等）原样保留。
@@ -30,27 +29,46 @@ import { parse, postprocess, preprocess } from 'micromark'
  * CommonMark 可转义 ASCII 标点集（!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~）中的字符，
  * 经 remark-stringify 序列化用户已有的 `\X` 转义序列时会把 `\` 再转义一层，
  * 产出 `\\X`——渲染时显示字面反斜杠（如 `\*\*` 出现在正文中）。
- * 这里统一折叠全部标点的双转义；公式定界符 \( \) \[ \] 自然被覆盖。
+ * 这里处理公式外普通文本；公式定界符与公式正文由单独逻辑处理。
  */
 const ESCAPABLE_PUNCTUATION = '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'
 // 正则源：匹配两个连续反斜杠 + 一个可转义标点（单遍扫描，无重叠问题）
 const DOUBLE_ESCAPE_PATTERN = new RegExp('\\\\\\\\([' + ESCAPABLE_PUNCTUATION.replace(/[\\\]^-]/g, '\\$&') + '])', 'g')
 const BACKSLASH_CHAR = '\\'
-const SINGLE_ESCAPE_PATTERN = new RegExp('\\\\([' + ESCAPABLE_PUNCTUATION.replace(/[\\\]^-]/g, '\\$&') + '])', 'g')
 
 function normalizeDoubleEscapes(markdown: string): string {
-  // \\X → \X：一遍扫描同时处理连续序列（如 \\*\\* 两段相邻）
+  // 仅供公式外的 Markdown 文本使用；公式正文里的反斜杠不能按标点转义规则折叠。
   return (markdown || '').replace(DOUBLE_ESCAPE_PATTERN, (_match, ch: string) => BACKSLASH_CHAR + ch)
 }
 
-/** \X → X：去掉 markdown 单层转义（用于把正文里的字面量还原成公式源码） */
-function unescapeMarkdownPunctuation(text: string): string {
-  return (text || '').replace(SINGLE_ESCAPE_PATTERN, (_match, ch: string) => ch)
+/** 只归一化被序列化多转义的公式定界符，不触碰定界符之间的 LaTeX 正文。 */
+function normalizeDoubleMathDelimiters(markdown: string): string {
+  return (markdown || '')
+    .replace(/(?<!\\)\\\\\(/g, '\\(')
+    .replace(/(?<!\\)\\\\\)/g, '\\)')
+    .replace(/(?<!\\)\\\\\[/g, '\\[')
+    .replace(/(?<!\\)\\\\\]/g, '\\]')
+}
+
+// 保留公式源码，只在公式区间之外处理 remark-stringify 对普通 Markdown 转义的加倍。
+const MATH_SOURCE_PATTERN = /\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$\$[\s\S]*?\$\$|(?<!\\)\$(?!\$)[^\n]*?(?<!\\)\$(?!\$)/g
+
+function normalizeDoubleEscapesOutsideMath(markdown: string): string {
+  const source = markdown || ''
+  let cursor = 0
+  let output = ''
+  for (const match of source.matchAll(MATH_SOURCE_PATTERN)) {
+    const start = match.index ?? cursor
+    output += normalizeDoubleEscapes(source.slice(cursor, start))
+    output += match[0]
+    cursor = start + match[0].length
+  }
+  return output + normalizeDoubleEscapes(source.slice(cursor))
 }
 
 /** 行内：\( … \) → $ … $（进编辑器方向） */
 export function convertInlineDelimitersToDollars(markdown: string): string {
-  return normalizeDoubleEscapes(markdown || '').replace(/\\\(([^\\]|\\[^)])*?\\\)/g, match => {
+  return normalizeDoubleMathDelimiters(markdown || '').replace(/\\\(([^\\]|\\[^)])*?\\\)/g, match => {
     const inner = match.slice(2, -2)
     // 表达式里含 $ 时不转（避免与 remark-math 定界冲突），保持原文由用户修正
     if (inner.includes('$')) return match
@@ -87,7 +105,8 @@ export function needsLegacyBlockRepair(markdown: string): boolean {
 function repairLegacyBrokenBlocks(markdown: string): string {
   if (!markdown || (!markdown.includes('\\[') && !markdown.includes('$$'))) return markdown
   return markdown.replace(LEGACY_BROKEN_BLOCK_PATTERN, (match, indent: string, inner: string) => {
-    const body = unescapeMarkdownPunctuation(inner).trim()
+    // 历史块即使带有公式外层 Markdown 转义，正文也必须按 LaTeX 原样保留。
+    const body = inner.trim()
     if (!body) return match
     return [indent + '$$', indent + body, indent + '$$'].join('\n')
   })
@@ -105,7 +124,7 @@ function repairLegacyBrokenBlocks(markdown: string): string {
  * 行内公式 $…$，保证至少能渲染成公式而不是字面括号。
  */
 export function convertBlockDelimitersToDollars(markdown: string): string {
-  return normalizeDoubleEscapes(markdown || '').replace(
+  return normalizeDoubleMathDelimiters(markdown || '').replace(
     /\\\[([\s\S]*?)\\\]/g,
     (match, inner: string, offset: number, whole: string) => {
       if (inner.includes('$')) return match
@@ -184,12 +203,20 @@ function outsideLiteralMarkdown(markdown: string, transform: (text: string) => s
 
 /** 进编辑器前的完整转换（历史损坏修复 + 行内 + 块级） */
 export function mathDelimitersToEditor(markdown: string): string {
-  return outsideLiteralMarkdown(markdown || '', text => convertBlockDelimitersToDollars(convertInlineDelimitersToDollars(repairLegacyBrokenBlocks(text))))
+  return outsideLiteralMarkdown(markdown || '', text => {
+    const withCanonicalDelimiters = normalizeDoubleMathDelimiters(text)
+    const repaired = repairLegacyBrokenBlocks(withCanonicalDelimiters)
+    const normalizedText = normalizeDoubleEscapesOutsideMath(repaired)
+    return convertBlockDelimitersToDollars(convertInlineDelimitersToDollars(normalizedText))
+  })
 }
 
 /** 出编辑器后的完整还原（行内 + 块级） */
 export function mathEditorToDelimiters(markdown: string): string {
-  return outsideLiteralMarkdown(markdown || '', text => normalizeDoubleEscapes(convertBlockDollarsToDelimiters(convertInlineDollarsToDelimiters(text))))
+  return outsideLiteralMarkdown(markdown || '', text => {
+    const converted = convertBlockDollarsToDelimiters(convertInlineDollarsToDelimiters(text))
+    return normalizeDoubleEscapesOutsideMath(normalizeDoubleMathDelimiters(converted))
+  })
 }
 
 // Milkdown 包装（保持与 wikiLink/editorSearch 一致的注册形态）：

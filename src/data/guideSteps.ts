@@ -146,7 +146,7 @@ export const guideSteps: GuideStep[] = [
     route: '/notes',
     selector: '.np-nav',
     title: '笔记页面 - 侧边导航',
-    description: '侧边导航可切换全部笔记、收藏和回收站；标签树支持按标签筛选笔记。',
+    description: '侧边导航可切换文件列表、搜索、标签和收藏；标签树支持按标签筛选笔记。',
     onActivate: showAllNotes
   },
   {
@@ -170,7 +170,7 @@ export const guideSteps: GuideStep[] = [
     route: '/notes',
     selector: '.np-item',
     title: '笔记页面 - 笔记条目',
-    description: '选择条目会在右侧打开笔记。普通视图下可从条目操作收藏或删除，回收站中则可恢复或彻底删除。',
+    description: '选择条目会在右侧打开笔记。可从条目操作收藏或永久删除；删除笔记无法恢复。',
     fallbackSelector: '.np-list-scroll',
     fallbackTitle: '笔记页面 - 笔记列表',
     fallbackDescription: '当前视图没有笔记条目。创建笔记后会显示在这里。',

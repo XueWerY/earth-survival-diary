@@ -280,7 +280,7 @@ defineExpose({ open: openPanel, close: closePanel })
   width: 100%;
   padding: 8px 10px;
   font-size: 13px;
-  color: #e2e8f0;
+  color: var(--chalk-white-90, #e2e8f0);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
@@ -289,10 +289,10 @@ defineExpose({ open: openPanel, close: closePanel })
   transition: border-color 0.16s, background 0.16s;
 }
 
-.esd-select-trigger:hover:not(:disabled) { background: rgba(102, 126, 234, 0.14); }
+.esd-select-trigger:hover:not(:disabled) { background: rgba(139, 92, 246, 0.13); }
 .esd-select.is-open .esd-select-trigger {
-  border-color: rgba(102, 126, 234, 0.55);
-  background: rgba(102, 126, 234, 0.16);
+  border-color: rgba(167, 139, 250, 0.58);
+  background: rgba(139, 92, 246, 0.16);
 }
 .esd-select-trigger:disabled { opacity: 0.5; cursor: not-allowed; }
 
@@ -307,7 +307,7 @@ defineExpose({ open: openPanel, close: closePanel })
 .esd-select-arrow {
   flex-shrink: 0;
   font-size: 10px;
-  color: rgba(148, 163, 184, 0.9);
+  color: var(--chalk-white-60, rgba(148, 163, 184, 0.9));
   transition: transform 0.16s;
 }
 .esd-select.is-open .esd-select-arrow { transform: rotate(180deg); }
@@ -321,8 +321,8 @@ defineExpose({ open: openPanel, close: closePanel })
   flex-direction: column;
   box-sizing: border-box;
   padding: 6px;
-  background: rgba(23, 22, 48, 0.98);
-  border: 1px solid rgba(102, 126, 234, 0.35);
+  background: var(--chalk-card, rgba(23, 22, 48, 0.98));
+  border: 1px solid rgba(196, 181, 253, 0.26);
   border-radius: 10px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(12px);
@@ -336,14 +336,14 @@ defineExpose({ open: openPanel, close: closePanel })
   box-sizing: border-box;
   padding: 6px 8px;
   font-size: 12px;
-  color: #e2e8f0;
+  color: var(--chalk-white-90, #e2e8f0);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   outline: none;
 }
-.esd-select-search-input:focus { border-color: rgba(102, 126, 234, 0.5); }
-.esd-select-search-input::placeholder { color: rgba(148, 163, 184, 0.6); }
+.esd-select-search-input:focus { border-color: rgba(167, 139, 250, 0.55); }
+.esd-select-search-input::placeholder { color: var(--chalk-white-50, rgba(148, 163, 184, 0.6)); }
 
 /* 列表自身 overflow-y:auto —— 项目 ScrollbarManager 会自动挂上自定义滚动条 */
 .esd-select-list {
@@ -360,7 +360,7 @@ defineExpose({ open: openPanel, close: closePanel })
   width: 100%;
   padding: 6px 8px;
   font-size: 13px;
-  color: #cbd5e1;
+  color: var(--chalk-white-80, #cbd5e1);
   background: transparent;
   border: none;
   border-radius: 6px;
@@ -368,12 +368,12 @@ defineExpose({ open: openPanel, close: closePanel })
   text-align: left;
 }
 
-.esd-select-option.is-hover { background: rgba(102, 126, 234, 0.22); }
+.esd-select-option.is-hover { background: rgba(139, 92, 246, 0.22); }
 
 .esd-select-option.is-active {
-  color: #e0e7ff;
+  color: var(--chalk-white-95, #e0e7ff);
   font-weight: 600;
-  background: rgba(102, 126, 234, 0.32);
+  background: rgba(139, 92, 246, 0.3);
 }
 
 .esd-select-badge {

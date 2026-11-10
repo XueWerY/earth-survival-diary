@@ -1,23 +1,19 @@
 <template>
-  <div class="editor-wrap" @contextmenu.prevent>
+  <div ref="editorWrapRef" class="editor-wrap" @contextmenu.prevent>
     <!-- 主容器 -->
     <div class="editor-main">
 
-      <!-- 顶部多分页菜单栏：文件 / 样式 / 插入 / 视图 -->
-      <div class="editor-menubar">
-        <div class="editor-menubar-tabs" role="tablist">
-          <button
-            v-for="tab in visibleMenubarTabs"
-            :key="tab.key"
-            type="button"
-            class="editor-menubar-tab"
-            :class="{ on: menubarTab === tab.key }"
-            role="tab"
-            :aria-selected="menubarTab === tab.key"
-            @click="menubarTab = tab.key"
-          >{{ tab.label }}</button>
-        </div>
-
+      <!-- 左侧切换工具分类，右侧显示当前分类的单行命令栏 -->
+      <div class="editor-menubar" @click.stop>
+        <div class="editor-primary-toolbar" role="toolbar" aria-label="编辑工具">
+          <div class="editor-menu-categories">
+            <button v-for="tab in visibleMenubarTabs" :key="tab.key" type="button" class="primary-tool category-tool"
+              :class="{ on: menubarTab === tab.key }" :title="tab.label" :aria-label="tab.label"
+              :aria-pressed="menubarTab === tab.key" @click="menubarTab = tab.key">
+              <el-icon><FileText v-if="tab.key === 'file'" /><Type v-else-if="tab.key === 'style'" /><ImagePlus v-else-if="tab.key === 'insert'" /><Keyboard v-else /></el-icon>
+            </button>
+          </div>
+          <div class="editor-secondary-toolbar" role="toolbar" :aria-label="tab.label" v-for="tab in visibleMenubarTabs" v-show="menubarTab === tab.key" :key="'commands-' + tab.key">
         <!-- 文件页 -->
         <div v-if="menubarTab === 'file'" class="editor-menubar-page">
           <button
@@ -183,20 +179,6 @@
           </button>
         </div>
 
-        <!-- 视图页 -->
-        <div v-else-if="menubarTab === 'view'" class="editor-menubar-page">
-          <button type="button" class="menubar-btn" :class="{ on: sourceMode }" :title="withShortcut(sourceMode ? '切换到所见即所得' : '切换到 Markdown 源码', 'toggleSource')" @click="emit('toggleSourceMode')">
-            <el-icon><Code v-if="!sourceMode" /><PenLine v-else /></el-icon><span>{{ sourceMode ? '富文本' : '源码' }}</span>
-          </button>
-          <button type="button" class="menubar-btn" :class="{ on: outlineHoverOpen }" :title="withShortcut('大纲（编辑区左上角悬浮）', 'outline')" @click="toggleOutlinePanel">
-            <el-icon><ListTree /></el-icon><span>大纲</span>
-          </button>
-          <span class="menubar-sep"></span>
-          <button type="button" class="menubar-btn" :class="{ on: fullscreenEdit }" :title="withShortcut(fullscreenEdit ? '退出全屏编辑' : '全屏编辑', 'fullscreen')" @click="emit('toggleFullscreenEdit')">
-            <el-icon><Minimize2 v-if="fullscreenEdit" /><Maximize2 v-else /></el-icon><span>{{ fullscreenEdit ? '退出全屏' : '全屏编辑' }}</span>
-          </button>
-        </div>
-
         <!-- 帮助分页 -->
         <div v-else-if="menubarTab === 'help'" class="editor-menubar-page">
           <button type="button" class="menubar-btn" title="查看并自定义所有快捷键（支持冲突检测与录制）" @click="shortcutDialogVisible = true">
@@ -204,6 +186,8 @@
           </button>
           <span class="menubar-sep"></span>
           <span class="menubar-hint">点「快捷键」可录制新组合，并查看冲突与系统保留键</span>
+        </div>
+            </div>
         </div>
       </div>
       <!-- 主内容区 -->
@@ -213,12 +197,7 @@
           <div
             class="outline-float"
             :class="{ open: outlineHoverOpen }"
-            @mouseenter="onOutlinePointerEnter"
-            @mouseleave="onOutlinePointerLeave"
           >
-            <button type="button" class="outline-float-btn" title="大纲" @click="toggleOutlinePanel">
-              <el-icon><ListTree /></el-icon>
-            </button>
             <div v-if="outlineHoverOpen" class="outline-float-panel">
               <div class="outline-float-head">大纲</div>
               <ul v-if="outline.length > 0" class="outline-float-list">
@@ -384,25 +363,12 @@
     <ShortcutSettingsDialog v-model:visible="shortcutDialogVisible" :blocked-reason="blockedShortcutReason" />
 
 
-    <!-- 底部状态栏 -->
-    <div class="editor-status-bar">
-      <div class="editor-status-left">
-        <span>全文字数: {{ totalWordCount }}</span>
-        <span class="editor-status-sep">|</span>
-        <span>创建于 {{ formatTime(note?.createdAt) }}</span>
-        <span class="editor-status-sep">|</span>
-        <span>更新于 {{ formatTime(note?.updatedAt) }}</span>
-      </div>
-      <div class="editor-status-right">
-        <span v-if="savedAtText" class="editor-autosave">已自动保存 {{ savedAtText }}</span>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount, watch as watchNoteTitleFallback } from 'vue'
-import { Code, Link2, ListTree, Maximize2, Minimize2, PenLine, Star, Search, ArrowUp, ArrowDown, X, FileDown, FileCode2, ImagePlus, Clapperboard, Music, Keyboard, Replace } from '@lucide/vue'
+import { Link2, Star, Search, ArrowUp, ArrowDown, X, FileDown, FileCode2, FileText, ImagePlus, Clapperboard, Music, Keyboard, Replace, Type } from '@lucide/vue'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
 import type { Note, MdOutlineItem } from '../../stores/noteStore'
@@ -439,12 +405,10 @@ import {
 const props = withDefaults(defineProps<{
   note: Note | null
   sourceMode?: boolean
-  fullscreenEdit?: boolean
   /** 可跳转的其它笔记标题（用于「链接到其它笔记」） */
   noteTitles?: string[]
 }>(), {
   sourceMode: false,
-  fullscreenEdit: false,
   noteTitles: () => []
 })
 
@@ -452,12 +416,18 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   (e: 'save', data: { id: string; title: string; content: string; pinned: boolean }): void
   (e: 'togglePin'): void
-  (e: 'toggleFullscreenEdit'): void
   (e: 'toggleSourceMode'): void
+  (e: 'status-change', data: { wordCount: number; savedAtText: string }): void
   (e: 'export', command: string | number | object): void
   (e: 'openWikiLink', payload: { target: string }): void
 }>()
 
+const editorWrapRef = ref<HTMLElement | null>(null)
+const eventBelongsToThisEditor = (event: Event) => {
+  const root = editorWrapRef.value
+  const target = event.target
+  return !!root && target instanceof Node && root.contains(target)
+}
 const noteTitle = ref('')
 const editorContent = ref('')
 const sourceProjection = computed(() => {
@@ -1246,7 +1216,6 @@ const MENUBAR_TABS = [
   { key: 'file', label: '文件' },
   { key: 'style', label: '样式' },
   { key: 'insert', label: '插入' },
-  { key: 'view', label: '视图' },
   { key: 'help', label: '帮助' },
 ] as const
 type MenubarTab = typeof MENUBAR_TABS[number]['key']
@@ -1263,7 +1232,7 @@ const shortcutDialogVisible = ref(false)
  * 富文本的行内/块级插入与样式按钮都作用于 ProseMirror 选区，在这里没有语义，
  * 留着只会让用户点了没反应；隐藏后菜单栏只保留真正能用的分页。
  */
-const SOURCE_MODE_TABS: MenubarTab[] = ['file', 'view', 'help']
+const SOURCE_MODE_TABS: MenubarTab[] = ['file', 'help']
 const visibleMenubarTabs = computed(() =>
   props.sourceMode
     ? MENUBAR_TABS.filter(tab => SOURCE_MODE_TABS.includes(tab.key))
@@ -1274,7 +1243,7 @@ const visibleMenubarTabs = computed(() =>
 watch(() => props.sourceMode, (source) => {
   if (!source) return
   if (!SOURCE_MODE_TABS.includes(menubarTab.value)) {
-    menubarTab.value = 'view'
+    menubarTab.value = 'file'
   }
 }, { immediate: true })
 
@@ -1846,7 +1815,6 @@ const registerShortcutRunners = () => {
     // 若返回 false 会造成假失败记录。
     return outlineHoverOpen.value !== before
   })
-  registerRunner('fullscreen', () => { emit('toggleFullscreenEdit'); return true })
 
   /*
     ⚠️ 格式类 runner 必须诚实返回是否真的生效
@@ -1915,13 +1883,12 @@ const registerShortcutRunners = () => {
   registerProbe('replace', () => true)
   registerProbe('toggleSource', () => true)
   registerProbe('outline', () => true)
-  registerProbe('fullscreen', () => true)
   registerProbe('link', () => true)
 }
 
 /** 组件卸载时注销，避免悬挂引用 */
 const UNREGISTERABLE_RUNNER_IDS = [
-  'search', 'replace', 'toggleSource', 'outline', 'fullscreen',
+  'search', 'replace', 'toggleSource', 'outline',
   'bold', 'italic', 'underline', 'superscript', 'subscript', 'strike', 'code', 'quote', 'highlight',
   'unordered', 'ordered', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'body',
   'link',
@@ -1966,6 +1933,7 @@ const blockedShortcutReason = ref<{ actionId: string; reason: string } | null>(n
  * 这样「按键到底有没有到达页面」是可判定的，而不是靠推测。
  */
 const onGlobalShortcutKeydownCapture = (event: KeyboardEvent) => {
+  if (!eventBelongsToThisEditor(event)) return
   const rawKey = String(event.key || '')
   const hasModifier = event.ctrlKey || event.altKey || event.metaKey
 
@@ -2102,6 +2070,7 @@ const onGlobalShortcutKeydownCapture = (event: KeyboardEvent) => {
 }
 
 const onSelectionMenuKeydown = (event: KeyboardEvent) => {
+  if (!eventBelongsToThisEditor(event)) return
   // 媒体插入弹窗：Esc 取消（Enter 由弹窗输入框自行处理，这里不再重复触发确认）
   if (mediaSizeDialog.value.visible) {
     if (event.key === 'Escape') {
@@ -2186,6 +2155,10 @@ const totalWordCount = computed(() => {
   const text = getMdPlainText(editorContent.value)
   return text.replace(/\s+/g, '').replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '').length
 })
+watch([totalWordCount, savedAtText], () => emit('status-change', {
+  wordCount: totalWordCount.value,
+  savedAtText: savedAtText.value,
+}), { immediate: true })
 
 // 大纲
 const outline = ref<MdOutlineItem[]>([])
@@ -2416,12 +2389,6 @@ watch(() => props.note, (note, oldNote) => {
   savedContent = note.content || ''
   nextTick(refreshOutline)
 }, { immediate: true })
-
-const formatTime = (date?: string): string => {
-  if (!date) return ''
-  const d = dayjs(date)
-  return d.isValid() ? d.format('YYYY-MM-DD HH:mm') : ''
-}
 
 const forwardExportCommand = (command: string | number | object) => emit('export', command)
 
@@ -2909,7 +2876,7 @@ const renderMarkdownForExport = (markdown: string): HTMLElement | null =>
 
 const getMarkdownForExport = (): string => mdEditorRef.value?.getValue() ?? editorContent.value
 
-defineExpose({ setNoteTitle, sidebarCollapsed, toggleSidebar, renderMarkdownForExport, getMarkdownForExport })
+defineExpose({ setNoteTitle, sidebarCollapsed, toggleSidebar, toggleOutlinePanel, renderMarkdownForExport, getMarkdownForExport })
 
 let lastFallbackNoteId: unknown = Symbol('initial-note')
 watchNoteTitleFallback(
@@ -3169,7 +3136,7 @@ watchNoteTitleFallback(
   min-width: 0;
   min-height: 0;
   /* 左右外边距取代原 editor-wrap 的水平内边距 */
-  margin: 0 16px;
+  margin: 0 8px;
   display: flex;
   flex-direction: column;
 }
@@ -3188,100 +3155,6 @@ watchNoteTitleFallback(
 .editor-body {
   flex: 1;
   overflow: hidden;
-}
-
-/* ====== 底部状态栏 ====== */
-.editor-status-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px;
-  /* 原 editor-wrap 的底部/水平外边距下移到这里（底部与面板共用变量） */
-  margin: var(--editor-outer-gap, 16px) 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
-  /* 同 .editor-menubar：flex 项 + flex-shrink:0 时必须配 min-width:0，
-     否则 min-content 宽度会阻止收缩、把卡片撑出父容器而被裁（见该规则注释）。 */
-  flex-shrink: 0;
-  min-width: 0;
-  font-size: 12px;
-  color: var(--chalk-muted);
-}
-
-.editor-status-left {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-}
-
-.editor-status-right {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.editor-status-sep {
-  color: rgba(255, 255, 255, 0.1);
-}
-
-.editor-action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  height: 26px;
-  padding: 0 9px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--chalk-muted);
-  cursor: pointer;
-  font-size: 12px;
-  font-family: inherit;
-  flex-shrink: 0;
-  transition: all 0.15s;
-}
-
-.editor-action-btn:hover {
-  color: #93c5fd;
-  background: rgba(102, 126, 234, 0.12);
-  border-color: rgba(102, 126, 234, 0.45);
-}
-
-.editor-action-btn.outline-toggle {
-  border-color: rgba(167, 139, 250, 0.5);
-  background: rgba(167, 139, 250, 0.15);
-  color: #d8b4fe;
-}
-
-.editor-action-btn.outline-toggle:hover {
-  background: rgba(167, 139, 250, 0.3);
-  color: #ede9fe;
-}
-
-.editor-action-btn.on {
-  border-color: rgba(167, 139, 250, 0.45);
-  background: rgba(167, 139, 250, 0.12);
-  color: #d8b4fe;
-}
-
-.editor-action-btn.favorite.on {
-  color: var(--chalk-amber);
-}
-
-.editor-action-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.editor-status-right :deep(.el-dropdown) {
-  display: inline-flex;
 }
 
 /* ====== 编辑器内搜索浮层 ====== */
@@ -3634,27 +3507,6 @@ watchNoteTitleFallback(
   .editor-sidebar-nav a::before,
   .editor-sidebar-nav a::after { display: none; }
 
-  .editor-status-bar { padding: 6px 10px; font-size: 11px; flex-wrap: wrap; gap: 4px; }
-  .editor-status-left { gap: 6px; }
-}
-
-/* 全屏编辑按钮（状态栏右侧） */
-.editor-fs-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid rgba(167, 139, 250, 0.4);
-  border-radius: 8px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.6);
-  cursor: pointer;
-}
-.editor-fs-btn:hover {
-  border-color: rgba(167, 139, 250, 0.6);
-  background: rgba(167, 139, 250, 0.12);
-  color: #d8b4fe;
 }
 
 /* 收起大纲按钮：紫系圆形（重设计） */
@@ -3926,68 +3778,79 @@ watchNoteTitleFallback(
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* ====== 顶部多分页菜单栏 ====== */
+/* ====== 单行主工具栏 ====== */
 .editor-menubar {
+  position: relative;
+  z-index: 60;
   flex-shrink: 0;
-  /*
-    ⚠️ 必须 min-width:0 + 允许横向收缩。
-    用户报告「编辑页三个区域容器与窗口右边界没有间距、直接被遮挡」。
-    根因：本元素是 flex 项且 flex-shrink:0，但没有 min-width:0，
-    于是它的 **min-content 宽度**（工具栏一整行的最小宽度）成为不可压缩下限。
-    全屏编辑时窗口较窄 → 该下限超过可用宽度 → 卡片被撑到父容器之外，
-    父级 .np-editor 的 overflow:hidden 再把右侧裁掉，
-    看起来就是「卡片右边缘贴住窗口、内容被遮挡」。
-    min-width:0 解除该下限，让卡片能收缩到容器宽度内（内部工具栏自己换行/滚动）。
-  */
   min-width: 0;
-  /* 顶部外边距与反向链接面板共用同一变量，保证两者上边界对齐 */
-  margin: var(--editor-outer-gap, 16px) 16px 26px;
-  /* 与底部状态栏同款容器质感 */
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
-  padding: 6px 10px 8px;
+  margin: 4px 8px 2px;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
-.editor-menubar-tabs {
+.editor-primary-toolbar {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 0 0 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  margin-bottom: 6px;
+  gap: 8px;
+  min-width: 0;
+  height: 36px;
+  overflow: hidden;
 }
 
-.editor-menubar-tab {
+.primary-tool {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 29px;
   height: 28px;
-  padding: 0 14px;
-  border: none;
-  border-radius: 8px 8px 0 0;
-  color: rgba(226, 221, 245, 0.55);
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   background: transparent;
-  font-size: 12px;
-  font-family: inherit;
+  color: rgba(226, 221, 245, 0.78);
+  font: inherit;
+  font-size: 13px;
   cursor: pointer;
-  transition: all 0.15s ease;
 }
 
-.editor-menubar-tab:hover {
-  color: #ede9fe;
-  background: rgba(255, 255, 255, 0.06);
-}
+.primary-tool:hover { border-color: rgba(167,139,250,.35); background: rgba(139,92,246,.12); color: #ede9fe; }
+.primary-tool .el-icon { font-size: 15px; }
+.primary-tool.more-tool { padding: 0 10px; font-size: 11px; }
+.editor-menu-categories { position:relative; display:flex; flex:0 0 144px; align-items:center; gap:3px; height:100%; padding-right:7px; border-right:1px solid rgba(255,255,255,.1); }
+.primary-tool.category-tool { width:30px; min-width:30px; padding:0; color:rgba(242,239,255,.78); font-size:11px; }
+.primary-tool.category-tool.on { border-color:rgba(167,139,250,.38); background:rgba(139,92,246,.18); color:#f5f3ff; }
 
-.editor-menubar-tab.on {
-  color: #d8b4fe;
-  background: rgba(139, 92, 246, 0.16);
+.editor-secondary-toolbar {
+  display:flex;
+  flex:1 1 auto;
+  align-items:center;
+  min-width:0;
+  height:100%;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+  scrollbar-width:thin;
 }
 
 .editor-menubar-page {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
   padding: 0;
   min-height: 30px;
+  width:max-content;
+  min-width:100%;
 }
 
 .menubar-btn {
@@ -4247,11 +4110,10 @@ watchNoteTitleFallback(
 /* ====== 大纲悬浮（编辑区左上角）====== */
 .outline-float {
   position: absolute;
-  top: 12px;
-  left: 14px;
+  top: 6px;
+  right: 10px;
   z-index: 45;
-  display: flex;
-  justify-content: flex-start;
+  pointer-events: none;
 }
 
 .outline-float-btn {
@@ -4285,8 +4147,9 @@ watchNoteTitleFallback(
 .outline-float-panel {
   position: absolute;
   top: 0;
-  left: 0;
-  right: auto;
+  right: 0;
+  left: auto;
+  pointer-events: auto;
   width: min(300px, calc(100vw - 48px));
   max-height: min(460px, calc(100vh - 220px));
   overflow-y: auto;

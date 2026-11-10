@@ -19,11 +19,30 @@ declare global {
       openFileDialog: (options?: any) => Promise<string | null>
       openDirectory: () => Promise<string | null>
       getNotesLibraryInfo: (scope: string) => Promise<{ configured: boolean; activeLibraryId: string | null; rootPath: string | null; rootExists: boolean; noteCount: number; folders: string[]; libraries: Array<{ id: string; name: string; rootPath: string; rootExists: boolean }>; legacyNoteCount: number }>
+      readPinnedNoteTabIds?: (scope: string, libraryId: string) => Promise<string[]>
+      removeUnavailableNotesLibrary?: (scope: string, libraryId: string) => Promise<{
+        configured: boolean
+        activeLibraryId: string | null
+        rootPath: string | null
+        rootExists: boolean
+        noteCount: number
+        folders: string[]
+        libraries: Array<{ id: string; name: string; rootPath: string; rootExists: boolean }>
+        legacyNoteCount: number
+      }>
+      writePinnedNoteTabIds?: (scope: string, libraryId: string, ids: string[]) => Promise<boolean>
+      readFavoriteNoteFolderPaths?: (scope: string, libraryId: string) => Promise<string[]>
+      writeFavoriteNoteFolderPaths?: (scope: string, libraryId: string, paths: string[]) => Promise<boolean>
       selectNotesLibraryFolder: (scope: string) => Promise<{ configured: boolean; activeLibraryId: string | null; rootPath: string | null; rootExists: boolean; noteCount: number; folders: string[]; libraries: Array<{ id: string; name: string; rootPath: string; rootExists: boolean }>; legacyNoteCount: number } | null>
       switchNotesLibrary: (scope: string, libraryId: string) => Promise<{ configured: boolean; activeLibraryId: string | null; rootPath: string | null; rootExists: boolean; noteCount: number; folders: string[]; libraries: Array<{ id: string; name: string; rootPath: string; rootExists: boolean }>; legacyNoteCount: number }>
       createNotesFolder: (scope: string, folderPath: string) => Promise<{ configured: boolean; activeLibraryId: string | null; rootPath: string | null; rootExists: boolean; noteCount: number; folders: string[]; libraries: Array<{ id: string; name: string; rootPath: string; rootExists: boolean }>; legacyNoteCount: number }>
       renameNotesFolder: (scope: string, oldPath: string, newPath: string) => Promise<{ configured: boolean; activeLibraryId: string | null; rootPath: string | null; rootExists: boolean; noteCount: number; folders: string[]; libraries: Array<{ id: string; name: string; rootPath: string; rootExists: boolean }>; legacyNoteCount: number }>
+      duplicateNotesFolder: (scope: string, sourcePath: string, targetPath: string) => Promise<{ configured: boolean; activeLibraryId: string | null; rootPath: string | null; rootExists: boolean; noteCount: number; folders: string[]; libraries: Array<{ id: string; name: string; rootPath: string; rootExists: boolean }>; legacyNoteCount: number }>
       deleteNotesFolder: (scope: string, folderPath: string) => Promise<{ configured: boolean; activeLibraryId: string | null; rootPath: string | null; rootExists: boolean; noteCount: number; folders: string[]; libraries: Array<{ id: string; name: string; rootPath: string; rootExists: boolean }>; legacyNoteCount: number }>
+      openNoteLibraryPath: (scope: string, relativePath: string) => Promise<boolean>
+      revealNoteLibraryPath: (scope: string, relativePath: string) => Promise<boolean>
+      getNoteLibraryNotePath?: (scope: string, noteId: string) => Promise<string>
+      exportNotePdf?: (title: string, html: string, settings: Record<string, unknown>) => Promise<string>
       readFile: (filePath: string) => Promise<string | null>
       writeFile: (filePath: string, content: string) => Promise<boolean>
       readBinaryFile: (filePath: string) => Promise<string | null>
